@@ -107,32 +107,55 @@ export class SsoLoginService {
     return this.startOidc(provider, returnTo);
   }
 
-  async issueLinkToken(providerId: string, sessionToken?: string): Promise<string | null> {
-    if (!sessionToken) return null;
-    try {
-      const payload = await this.oauthService.verifySessionToken(sessionToken);
-      if (payload.orgScope || !payload.sessionId) return null;
-      if (!(await this.sessionsService.validateSession(payload.sessionId))) return null;
-      return await new SignJWT({ type: 'sso_link', providerId })
-        .setProtectedHeader({ alg: 'HS256' })
-        .setSubject(payload.sub)
-        .setIssuedAt()
-        .setExpirationTime('10m')
-        .sign(this.oauthService.getJwtSecret());
-    } catch {
-      return null;
-    }
+  async issueStartToken(
+    providerId: string,
+    authorizeUrl: string,
+    sessionToken?: string
+  ): Promise<string> {
+    return new SignJWT({
+      type: 'sso_start',
+      providerId,
+      state: new URL(authorizeUrl).searchParams.get('state') ?? undefined,
+      linkedUserId: await this.signedInUser(sessionToken)
+    })
+      .setProtectedHeader({ alg: 'HS256' })
+      .setIssuedAt()
+      .setExpirationTime('10m')
+      .sign(this.oauthService.getJwtSecret());
   }
 
-  async linkedUserId(providerId: string, linkToken?: string): Promise<string | undefined> {
-    if (!linkToken) return undefined;
+  private async signedInUser(sessionToken?: string): Promise<string | undefined> {
+    if (!sessionToken) return undefined;
     try {
-      const { payload } = await jwtVerify(linkToken, this.oauthService.getJwtSecret());
-      if (payload.type !== 'sso_link' || payload.providerId !== providerId) return undefined;
+      const payload = await this.oauthService.verifySessionToken(sessionToken);
+      if (payload.orgScope || !payload.sessionId) return undefined;
+      if (!(await this.sessionsService.validateSession(payload.sessionId))) return undefined;
       return payload.sub;
     } catch {
       return undefined;
     }
+  }
+
+  async readStartToken(
+    providerId: string,
+    token: string | undefined,
+    state?: string
+  ): Promise<{ linkedUserId?: string }> {
+    if (!token) throw new UnauthorizedException('SSO sign-in was not started in this browser');
+    let payload: Record<string, unknown>;
+    try {
+      ({ payload } = await jwtVerify(token, this.oauthService.getJwtSecret()));
+    } catch {
+      throw new UnauthorizedException('SSO sign-in was not started in this browser');
+    }
+    if (
+      payload.type !== 'sso_start' ||
+      payload.providerId !== providerId ||
+      (state !== undefined && payload.state !== state)
+    ) {
+      throw new UnauthorizedException('SSO sign-in was not started in this browser');
+    }
+    return { linkedUserId: payload.linkedUserId as string | undefined };
   }
 
   private newState() {

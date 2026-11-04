@@ -18,10 +18,11 @@ import { SsoService } from './sso.service';
 import { SsoLoginService, SsoLoginResult } from './sso-login.service';
 import { Public } from '../auth/decorators';
 import {
-  clearSsoLinkCookie,
+  clearSsoStartCookie,
+  isSessionCookieSecure,
   setSessionCookie,
-  setSsoLinkCookie,
-  ssoLinkCookie
+  setSsoStartCookie,
+  ssoStartCookie
 } from '../auth/cookies';
 
 @Public()
@@ -83,9 +84,10 @@ export class SsoController {
   ) {
     try {
       const url = await this.login.startLogin(providerId, returnTo);
-      const linkToken = await this.login.issueLinkToken(providerId, req.cookies?.session_token);
-      if (linkToken) setSsoLinkCookie(res, linkToken);
-      else clearSsoLinkCookie(res);
+      setSsoStartCookie(
+        res,
+        await this.login.issueStartToken(providerId, url, req.cookies?.session_token)
+      );
       return res.redirect(url);
     } catch (err) {
       this.logger.warn(`SSO start failed for ${providerId}: ${(err as Error).message}`);
@@ -103,6 +105,7 @@ export class SsoController {
       const provider = await this.login.loadLoginProvider(providerId);
       const state = req.query.state as string;
       if (!state) throw new HttpException('Missing state parameter', HttpStatus.BAD_REQUEST);
+      const start = await this.login.readStartToken(providerId, ssoStartCookie(req), state);
 
       const result =
         provider.protocol === SsoProtocol.oauth2
@@ -110,13 +113,13 @@ export class SsoController {
               providerId,
               req.query.code as string,
               state,
-              await this.login.linkedUserId(providerId, ssoLinkCookie(req))
+              start.linkedUserId
             )
           : await this.login.handleOidcCallback(
               providerId,
               this.requestUrl(req),
               state,
-              await this.login.linkedUserId(providerId, ssoLinkCookie(req))
+              start.linkedUserId
             );
 
       return this.finish(res, result);
@@ -140,7 +143,7 @@ export class SsoController {
         providerId,
         samlResponse,
         relayState,
-        await this.login.linkedUserId(providerId, ssoLinkCookie(req))
+        await this.samlLinkedUser(providerId, req)
       );
       return this.finish(res, result);
     } catch (err) {
@@ -180,11 +183,12 @@ export class SsoController {
       const state = req.query.state as string;
       if (!state) throw new HttpException('Missing state parameter', HttpStatus.BAD_REQUEST);
       const provider = await this.login.findLegacyProvider(orgId, SsoProtocol.oidc);
+      const start = await this.login.readStartToken(provider.id, ssoStartCookie(req), state);
       const result = await this.login.handleOidcCallback(
         provider.id,
         this.requestUrl(req),
         state,
-        await this.login.linkedUserId(provider.id, ssoLinkCookie(req))
+        start.linkedUserId
       );
       return this.finish(res, result);
     } catch (err) {
@@ -207,7 +211,7 @@ export class SsoController {
         provider.id,
         samlResponse,
         relayState,
-        await this.login.linkedUserId(provider.id, ssoLinkCookie(req))
+        await this.samlLinkedUser(provider.id, req)
       );
       return this.finish(res, result);
     } catch (err) {
@@ -215,12 +219,18 @@ export class SsoController {
     }
   }
 
+  private async samlLinkedUser(providerId: string, req: Request): Promise<string | undefined> {
+    const cookie = ssoStartCookie(req);
+    if (!cookie && !isSessionCookieSecure()) return undefined;
+    return (await this.login.readStartToken(providerId, cookie)).linkedUserId;
+  }
+
   private requestUrl(req: Request): URL {
     return new URL(`${req.protocol}://${req.get('host')}${req.originalUrl}`);
   }
 
   private finish(res: Response, result: SsoLoginResult) {
-    clearSsoLinkCookie(res);
+    clearSsoStartCookie(res);
     setSessionCookie(res, result.token);
     return res.redirect(result.redirectTo);
   }

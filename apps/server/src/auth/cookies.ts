@@ -7,7 +7,7 @@ import type { Response } from 'express';
 
 const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
-function isSessionCookieSecure(): boolean {
+export function isSessionCookieSecure(): boolean {
   const override = process.env.SESSION_COOKIE_SECURE?.toLowerCase();
   if (override === 'true') return true;
   if (override === 'false') return false;
@@ -70,29 +70,21 @@ export function clearGitOauthStateCookie(res: Response): void {
   res.clearCookie(GIT_OAUTH_STATE_COOKIE, { path: GIT_OAUTH_STATE_PATH });
 }
 
-const SSO_LINK_COOKIE = 'sso_link';
+const SSO_START_COOKIE = 'sso_start';
 
-export function setSsoLinkCookie(res: Response, token: string): void {
-  const secure = process.env.NODE_ENV === 'production';
-  res.cookie(SSO_LINK_COOKIE, token, {
-    httpOnly: true,
-    secure,
-    sameSite: secure ? 'none' : 'lax',
-    path: '/',
-    maxAge: 10 * 60 * 1000
-  });
+function ssoStartCookieOptions() {
+  const secure = isSessionCookieSecure();
+  return { httpOnly: true, secure, sameSite: secure ? 'none' : 'lax', path: '/' } as const;
 }
 
-export function clearSsoLinkCookie(res: Response): void {
-  const secure = process.env.NODE_ENV === 'production';
-  res.clearCookie(SSO_LINK_COOKIE, {
-    httpOnly: true,
-    secure,
-    sameSite: secure ? 'none' : 'lax',
-    path: '/'
-  });
+export function setSsoStartCookie(res: Response, token: string): void {
+  res.cookie(SSO_START_COOKIE, token, { ...ssoStartCookieOptions(), maxAge: TEN_MINUTES_MS });
 }
 
-export function ssoLinkCookie(req: { cookies?: Record<string, string> }): string | undefined {
-  return req.cookies?.[SSO_LINK_COOKIE];
+export function clearSsoStartCookie(res: Response): void {
+  res.clearCookie(SSO_START_COOKIE, ssoStartCookieOptions());
+}
+
+export function ssoStartCookie(req: { cookies?: Record<string, string> }): string | undefined {
+  return req.cookies?.[SSO_START_COOKIE];
 }
