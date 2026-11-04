@@ -593,6 +593,7 @@
   "POST /jobs/:id/runs": "authenticated",
   "POST /organizations/:id/avatar": "authenticated",
   "POST /organizations/:id/invitations/:invitationId/resend": "authenticated",
+  "POST /organizations/:id/leave": "authenticated",
   "POST /organizations/:id/members": "authenticated",
   "POST /organizations/:id/members/join": "authenticated",
   "POST /organizations/:id/metric-alerts": "authenticated",

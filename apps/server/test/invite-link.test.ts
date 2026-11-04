@@ -179,7 +179,6 @@ function setup(
     {},
     {},
     {},
-    {},
     rateLimit
   ) as OrganizationsService;
   return { service, state };

@@ -63,6 +63,12 @@ Owners can change roles.
 
 Use the role filter above the table to list **Owners**, **Admins**, **Members**, or **Guests**.
 
+## Leave an organization
+
+To leave, go to **Organization settings** > **Members** and select **Leave organization**. If the organization requires single sign-on, the same button is on the page that asks you to sign in.
+
+Leaving removes your memberships in the organization and its projects. Your account and your other organizations do not change. Owners must transfer ownership first, and you cannot leave an organization whose identity provider manages your membership on its verified domain.
+
 ## Add registry credentials
 
 Use organization registry credentials to let every project in the organization pull private images and build from them. Owners and admins can manage these credentials. The instance must have [`SECRETS_ENCRYPTION_KEY`](/operate/production/#1-check-your-secrets) set.

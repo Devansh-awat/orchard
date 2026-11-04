@@ -479,6 +479,7 @@ export const routes: GeneratedRoute[] = [
   { method: 'GET', path: '/organizations/:id/invitations', auth: 'authenticated' },
   { method: 'DELETE', path: '/organizations/:id/invitations/:invitationId', auth: 'authenticated' },
   { method: 'POST', path: '/organizations/:id/invitations/:invitationId/resend', auth: 'authenticated' },
+  { method: 'POST', path: '/organizations/:id/leave', auth: 'authenticated' },
   { method: 'GET', path: '/organizations/:id/members', auth: 'authenticated' },
   { method: 'POST', path: '/organizations/:id/members', auth: 'authenticated' },
   { method: 'DELETE', path: '/organizations/:id/members/:memberId', auth: 'authenticated' },

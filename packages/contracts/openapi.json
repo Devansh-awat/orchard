@@ -50470,6 +50470,57 @@
         ]
       }
     },
+    "/organizations/{id}/leave": {
+      "post": {
+        "description": "Auth: authenticated",
+        "operationId": "organizations_leave",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "POST /organizations/:id/leave",
+        "tags": [
+          "organizations"
+        ]
+      }
+    },
     "/organizations/{id}/members": {
       "get": {
         "description": "Auth: authenticated",

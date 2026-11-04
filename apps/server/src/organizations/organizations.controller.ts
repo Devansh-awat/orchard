@@ -250,6 +250,17 @@ export class OrganizationsController {
     });
   }
 
+  @Post(':id/leave')
+  async leaveOrganization(@Param('id') organizationId: string, @Request() req) {
+    return this.organizationsService.leaveOrganization(organizationId, req.user.sub, {
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
+    });
+  }
+
   @Delete(':id/members/:memberId')
   async removeMemberFromOrganization(
     @Param('id') organizationId: string,

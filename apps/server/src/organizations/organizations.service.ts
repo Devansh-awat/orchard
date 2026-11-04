@@ -16,7 +16,6 @@ import { EmailService } from '../email/email.service';
 import { AuditService } from '../audit/audit.service';
 import { AuthorizationService } from '../auth/authorization.service';
 import { MembershipCacheService } from '../auth/membership-cache.service';
-import { SessionsService } from '../auth/sessions.service';
 import { requestAuthStorage } from '../auth/request-context';
 import { TailscaleService } from '../tailscale/tailscale.service';
 import { InstanceConfigService } from '../instance-config/instance-config.service';
@@ -57,7 +56,6 @@ export class OrganizationsService {
     private readonly audit: AuditService,
     private readonly authz: AuthorizationService,
     private readonly membershipCache: MembershipCacheService,
-    private readonly sessions: SessionsService,
     private readonly tailscale: TailscaleService,
     private readonly instanceConfig: InstanceConfigService,
     private readonly crypto: SecretCryptoService,
@@ -140,11 +138,22 @@ export class OrganizationsService {
       select: { organizationId: true, role: true }
     });
     const roleByOrg = new Map(memberships.map((m) => [m.organizationId, m.role]));
+    const ssoBlocked = new Set(await this.authz.ssoBlockedOrgIds(user.id));
 
-    return orgs.map((o) => ({
-      ...this.scrubOrgSecrets(o as any),
-      myRole: roleByOrg.get(o.id) ?? (isSuperAdmin ? 'owner' : null)
-    }));
+    return orgs.map((o) =>
+      ssoBlocked.has(o.id)
+        ? {
+            id: o.id,
+            name: o.name,
+            slug: o.slug,
+            myRole: roleByOrg.get(o.id) ?? null,
+            ssoRequired: true
+          }
+        : {
+            ...this.scrubOrgSecrets(o as any),
+            myRole: roleByOrg.get(o.id) ?? (isSuperAdmin ? 'owner' : null)
+          }
+    );
   }
 
   // Backup credentials are write-only over the API. We never return the access key
@@ -1783,6 +1792,75 @@ export class OrganizationsService {
       throw new ForbiddenException('Only the organization owner can remove an admin');
     }
 
+    await this.detachMember(member, organizationId);
+
+    void this.audit.log({
+      action: 'org.member.removed',
+      actorUserId: remover.id,
+      actorEmail: remover.email,
+      organizationId,
+      targetType: 'user',
+      targetId: member.userId,
+      targetLabel: member.user.email,
+      metadata: { role: member.role }
+    });
+
+    return { success: true, message: 'Member removed from organization' };
+  }
+
+  async leaveOrganization(organizationId: string, clerkId: string, userData?: any) {
+    const ctx = requestAuthStorage.getStore();
+    if (!ctx?.browserSession) {
+      throw new ForbiddenException('Leave an organization from a signed-in browser');
+    }
+    if (ctx.sessionOrgId && ctx.sessionOrgId !== organizationId) {
+      throw new NotFoundException('Organization not found');
+    }
+    const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
+    if (!user) throw new NotFoundException('User not found');
+
+    const member = await this.prisma.organizationMember.findUnique({
+      where: { organizationId_userId: { organizationId, userId: user.id } },
+      include: { user: true }
+    });
+    if (!member) throw new NotFoundException('Organization not found');
+    if (member.role === 'owner') {
+      throw new BadRequestException('Transfer ownership before you leave this organization');
+    }
+    if (member.scimManaged) {
+      const domain = user.email.split('@')[1]?.toLowerCase() ?? '';
+      const owned = await this.prisma.orgDomain.findFirst({
+        where: { organizationId, domain, verifiedAt: { not: null } },
+        select: { id: true }
+      });
+      if (owned) {
+        throw new ForbiddenException(
+          "This organization's identity provider manages your membership. Ask an owner to remove you."
+        );
+      }
+    }
+
+    await this.detachMember(member, organizationId);
+
+    void this.audit.log({
+      action: 'org.member.left',
+      actorUserId: user.id,
+      actorEmail: user.email,
+      organizationId,
+      targetType: 'user',
+      targetId: user.id,
+      targetLabel: user.email,
+      metadata: { role: member.role }
+    });
+
+    return { success: true };
+  }
+
+  private async detachMember(
+    member: { id: string; userId: string },
+    organizationId: string
+  ): Promise<void> {
+    const memberId = member.id;
     // Remove org membership AND all project memberships in this org atomically
     // to prevent stale ProjectMember rows from reactivating if the user is later
     // re-invited (e.g. as a guest, they'd inherit their old project admin roles).
@@ -1820,11 +1898,6 @@ export class OrganizationsService {
     }
 
     this.membershipCache.invalidateInternalUserId(member.userId);
-    // The session JWT carries no role claim today, but downstream callers can
-    // still hit user-scoped endpoints with a token that pre-dates the removal.
-    // Force re-auth so the next request goes through a fresh authz lookup.
-    await this.sessions.revokeUserSessions(member.userId).catch(() => {});
-
     // H4: revoke Tailscale exposure for deployments this user exposed in THIS org.
     // We do NOT delete their global TailscaleConnection (they may still belong to other orgs).
     // Best-effort: failures to remove the k8s sidecar must not block membership removal.
@@ -1871,17 +1944,6 @@ export class OrganizationsService {
       );
     }
 
-    void this.audit.log({
-      action: 'org.member.removed',
-      actorUserId: remover.id,
-      actorEmail: remover.email,
-      organizationId,
-      targetType: 'user',
-      targetId: member.userId,
-      targetLabel: member.user.email,
-      metadata: { role: member.role }
-    });
-
     // If user no longer belongs to any organization, reset their setup
     const remainingMemberships = await this.prisma.organizationMember.count({
       where: { userId: member.userId }
@@ -1893,8 +1955,6 @@ export class OrganizationsService {
         data: { setupCompleted: false }
       });
     }
-
-    return { success: true, message: 'Member removed from organization' };
   }
 
   async updateMemberRole(
@@ -1966,14 +2026,6 @@ export class OrganizationsService {
       }
     });
 
-    // Revoke sessions FIRST (M-1), then invalidate the cache. If we invalidate
-    // first, a concurrent request from the (still-authenticated) user can
-    // re-populate the cache with stale-relative-to-revoke state before the
-    // session dies. Revoking first kills the active session; the subsequent
-    // invalidate then forces any new session to read fresh from DB.
-    if (member.role !== newRole) {
-      await this.sessions.revokeUserSessions(member.userId).catch(() => {});
-    }
     // Invalidate AFTER the write commits. Pre-write invalidation races: a concurrent
     // request can read the OLD role from DB and repopulate the cache during the
     // update window, leaving the user with their previous role for up to the TTL.
