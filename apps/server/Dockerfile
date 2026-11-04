@@ -70,6 +70,7 @@ RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
 
 WORKDIR /app/apps/server
 RUN pnpm dlx prisma@6.18.0 generate
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 
 # Host commands for self-hosted installs. They live in the image so that
 # `orchardctl update` can refresh them from whatever release it just deployed,

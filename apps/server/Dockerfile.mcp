@@ -34,6 +34,7 @@ COPY LICENSE apps/server/THIRD_PARTY_NOTICES.txt /app/
 
 WORKDIR /app/apps/server
 RUN pnpm prisma:generate
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 
 EXPOSE 3100
 
