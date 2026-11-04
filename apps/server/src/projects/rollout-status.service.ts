@@ -6,6 +6,7 @@ import { PodLogCaptureService } from '../kubernetes/pod-log-capture.service';
 import { OrgEventsService } from '../events/org-events.service';
 import { summarizeBuildFailure } from '../docker/build-summary';
 import { scrubIngress } from './projects.utils';
+import { portRefused } from './port-refused';
 import {
   deriveRolloutPhase,
   type FailingPod,
@@ -115,6 +116,8 @@ function withTimeout<T>(p: Promise<T>, ms: number, fallback: T): Promise<T> {
 
 @Injectable()
 export class RolloutStatusService {
+  private readonly refused = portRefused;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly k8sWorkload: K8sWorkloadService,
@@ -300,12 +303,15 @@ export class RolloutStatusService {
     canEdit: boolean
   ): Promise<RolloutStatus> {
     const v = snap.verdict;
-    const [url, buildTail, podTails] = await Promise.all([
+    const [url, buildTail, podTails, portHint] = await Promise.all([
       this.primaryUrl(deploymentId),
       canEdit ? this.buildLogTail(deploymentId) : Promise.resolve(''),
       canEdit && v.failing.length > 0
         ? this.podLogTails(deploymentId, snap.namespace, v.failing.slice(0, MAX_POD_TAILS))
-        : Promise.resolve(new Map<string, string[]>())
+        : Promise.resolve(new Map<string, string[]>()),
+      canEdit && v.phase === 'live'
+        ? this.silentPortHint(deploymentId, snap.namespace)
+        : Promise.resolve(null)
     ]);
     const failed = (snap.buildStatus ?? '').toLowerCase() === 'failed';
     const error = canEdit
@@ -327,8 +333,22 @@ export class RolloutStatusService {
         ready: v.ready,
         failing: v.failing.map((f) => ({ ...f, logTail: podTails.get(f.pod) ?? [] }))
       },
-      hint: v.hint ?? pendingBuildHint(v.phase, buildTail)
+      hint: v.hint ?? pendingBuildHint(v.phase, buildTail) ?? portHint
     };
+  }
+
+  private async silentPortHint(deploymentId: string, namespace: string): Promise<string | null> {
+    const rows = await this.prisma.ingress.findMany({
+      where: { deploymentId, redirectTarget: null },
+      orderBy: { createdAt: 'asc' },
+      include: { service: { select: { name: true, port: true, protocol: true } } }
+    });
+    const routed = rows.find((row) => row.service);
+    if (!routed?.service || routed.service.protocol !== 'TCP') return null;
+    const port = routed.servicePort ?? routed.service.port;
+    const host = `${routed.service.name}.${namespace}.svc.cluster.local`;
+    if (!(await this.refused(host, port))) return null;
+    return `Nothing is listening on port ${port} yet, so the URL returns 502. If the app listens on another port, change it under Network in the dashboard, or with: orchard service update`;
   }
 
   private async primaryUrl(deploymentId: string): Promise<string | null> {

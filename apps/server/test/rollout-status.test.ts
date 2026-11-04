@@ -1,3 +1,6 @@
+import { createServer, type AddressInfo } from 'node:net';
+import { once } from 'node:events';
+import { portRefused } from '../src/projects/port-refused';
 import 'reflect-metadata';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -346,4 +349,61 @@ test('a build stuck waiting for a node says why while it waits', () => {
   );
   assert.equal(pendingBuildHint('building', `${line}\n[INFO] Pod started\n`), null);
   assert.equal(pendingBuildHint('live', line), null);
+});
+
+test('a live app with nothing on its routed port gets a hint, and only then', async () => {
+  const route = {
+    host: 'web.example.dev',
+    path: '/',
+    tlsSecretName: 'web-tls',
+    tlsHosts: ['web.example.dev'],
+    entrypoints: [],
+    servicePort: 1234,
+    service: { name: 'web', port: 1234, protocol: 'TCP' }
+  };
+  const world = makeWorld({
+    releases: [{ id: RELEASE_ID, createdAt: new Date(), image: 'x', status: 'live', reason: null }],
+    ingresses: [route]
+  });
+  const { service } = makeService(world);
+  const dialed: string[] = [];
+  (service as any).refused = async (host: string, port: number) => {
+    dialed.push(`${host}:${port}`);
+    return true;
+  };
+
+  const refused = await service.rollout(DEPLOYMENT_ID, {
+    canEdit: true,
+    wait: false,
+    timeoutMs: 1_000
+  });
+  assert.equal(refused.phase, 'live');
+  assert.match(refused.hint ?? '', /Nothing is listening on port 1234/);
+  assert.match(dialed[0], /^web\..*\.svc\.cluster\.local:1234$/);
+
+  const viewer = await service.rollout(DEPLOYMENT_ID, {
+    canEdit: false,
+    wait: false,
+    timeoutMs: 1_000
+  });
+  assert.equal(viewer.hint, null);
+
+  (service as any).refused = async () => false;
+  const listening = await service.rollout(DEPLOYMENT_ID, {
+    canEdit: true,
+    wait: false,
+    timeoutMs: 1_000
+  });
+  assert.equal(listening.hint, null);
+});
+
+test('only a refused connection counts as nothing listening', async () => {
+  const open = createServer().listen(0, '127.0.0.1');
+  await once(open, 'listening');
+  const { port } = open.address() as AddressInfo;
+  assert.equal(await portRefused('127.0.0.1', port, { attempts: 1 }), false);
+  open.close();
+  await once(open, 'close');
+  assert.equal(await portRefused('127.0.0.1', port, { attempts: 2, pauseMs: 1 }), true);
+  assert.equal(await portRefused('host.invalid', port, { attempts: 1 }), false);
 });
