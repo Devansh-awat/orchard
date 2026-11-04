@@ -44,28 +44,29 @@ are filled in, and it happens once, so turning something back off sticks.
 
 ## What it asks
 
-The installer asks how traffic reaches the machine and, outside `lan` mode, which domain to use. In `tunnel` mode it also asks for the tunnel token. It works out everything else: architecture, memory, free disk, free ports, and whether the machine is behind NAT.
+The installer asks one question at a time, and each has a default. Press Enter to accept it. It installs nothing until you confirm your answers on a review screen, where you can also change any answer or cancel.
 
-To try Orchard before you point a domain at the machine, select `public` mode and press Enter at the domain question. The installer then uses an `sslip.io` name for this IP address, and you do not need to add DNS records. Use this for trials only. Let's Encrypt limits the certificates issued for each registered domain, and `sslip.io` is not on the Public Suffix List, so all its users share one limit. Its operators report a raised limit of 250,000 certificates, and they also say that requests can be rate limited. If the limit applies, the dashboard shows a browser warning until cert-manager succeeds on a later retry, and the installer reports this when it finishes. A self-signed certificate is not the default, because browsers refuse passkeys on one and MCP clients refuse to connect.
+1. **Mode**: `public`, `tunnel` or `lan`, with a recommendation from what it detects. In `tunnel` mode it also asks for the tunnel token.
+2. **Public IP**: the detected address. It covers machines with several interfaces, 1:1 NAT, IPv6 only, and none detected. `none` leaves it blank, and public ports and databases stay unavailable until you set it.
+3. **Dashboard domain**: an `sslip.io` name by default in `public` mode, which needs no DNS records. All `sslip.io` users share one Let's Encrypt limit, so use it for trials only.
+4. **Apps domain**: `apps.<parent of your domain>`. It needs a wildcard record.
+5. **Custom domains target**: what people CNAME their own domains to. The dashboard domain by default, or `<tunnel-id>.cfargotunnel.com` in `tunnel` mode.
+6. **MCP**: on or off, then its hostname, `mcp.<parent of your domain>` by default. Any name works. A name directly under the apps domain needs no record of its own, and Orchard reserves it so no app can take it.
+7. **Let's Encrypt email**: optional, `public` mode only.
+8. **Updates**: `manual` by default, or `automatic` for nightly.
+9. **S3 storage**: optional. Refer to [S3 storage](#s3-storage).
 
-To move to your own domain later, run the installer again with `--domain orchard.example.com`. It updates the dashboard URL, the app domain, and the MCP hostname. Apps that you already deployed keep their `sslip.io` URLs.
+The review screen also has resource limits. By default the setup page in the dashboard asks. Setting them here locks the value.
 
-The installer sets these values for you:
+It then prints the DNS records to create, computed from your answers, and checks them against public resolvers. Each record shows `resolves`, `waiting`, `wrong value`, `proxied` or `not checked`, with a plain explanation of what it found. You can check again, continue anyway, skip for now, or go back and change an answer. It never waits in silence and never stops the install over DNS. The docs list each case: [Add DNS records](../apps/docs/src/content/docs/start/install.md#add-dns-records).
 
-| Value                 | Default                                                                                           | To change it          |
-| --------------------- | ------------------------------------------------------------------------------------------------- | --------------------- |
-| App domain            | `apps.<parent of your domain>`                                                                    | `--app-domain`        |
-| MCP hostname          | `mcp.<app domain>`, which the wildcard record for your apps covers, so it needs no record         | `--mcp-domain`        |
-| Update policy         | `manual`                                                                                          | `--updates automatic` |
-| Let's Encrypt contact | None. Let's Encrypt stopped sending expiry emails in June 2025, and cert-manager does not need it | `--email`             |
-| Public IP             | This IP address, in `public` mode on a machine with a routable address                            | The admin panel       |
-| Custom domain target  | The dashboard domain in `public` mode. Refer to the note on `tunnel` mode below                   | `INGRESS_CNAME`       |
+The summary at the end says what is configured, what is still pending, what the setup page in the dashboard will ask next, and how to change each setting later.
 
-In `tunnel` mode, the custom domain target is `<tunnel-id>.cfargotunnel.com`, read from the tunnel token. Each custom domain also needs a route in the tunnel, and Cloudflare hides proxied records, so Orchard can confirm only that the hostname resolves.
+The public IP and the custom domains target are saved to the database, so **Instance admin** > **Configuration** can edit them. `sudo orchardctl public-ip set <ip> --apply` and `sudo orchardctl env set INGRESS_CNAME <host> --apply` pin them and lock those fields.
 
-To change the public IP, go to **Instance admin** > **Configuration** > **Public exposure**. The field stays editable. `sudo orchardctl public-ip set <ip> --apply` pins the value and locks the field.
+Every answer has a flag and an environment variable. `--yes` never prompts and never waits for DNS. It uses flags first, then current settings, then defaults, and an answer with no default stops the run and names its flag.
 
-Running the installer again reads `/etc/orchard/values.yaml` first, so it keeps your ingress mode, domains, MCP hostname, secrets, and update policy, and does not ask for them. A flag changes only the setting it names.
+Running the installer again reads your current settings and goes straight to the review screen. Anything you leave alone does not change, and `--yes` keeps it too. A changed answer shows what it affects: for example, a new apps domain applies to new apps only, and deployed apps keep their URLs, including after a redeploy.
 
 `public` and `lan` mode need ports 80 and 443 free; `tunnel` mode binds neither.
 In `public` mode, 80 carries the Let's Encrypt HTTP-01 challenge for every
@@ -117,7 +118,7 @@ To answer without a prompt:
 ```bash
 export ORCHARD_S3_SECRET_KEY='<secret key>'
 sudo --preserve-env=ORCHARD_S3_SECRET_KEY ./install.sh --yes \
-  --mode public --domain orchard.example.com --email you@example.com \
+  --mode public --domain orchard.example.com \
   --s3-endpoint https://s3.eu-west-1.amazonaws.com \
   --s3-bucket my-orchard-bucket \
   --s3-region eu-west-1 \

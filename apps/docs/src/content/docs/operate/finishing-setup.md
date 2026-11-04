@@ -109,7 +109,7 @@ For per-organization providers, refer to [Set up SSO](/teams/sso/).
 
 ## Set the ingress CNAME
 
-The ingress CNAME is the hostname that people point their own domains at. The installer sets `INGRESS_CNAME` for you. In `public` mode, it uses the dashboard domain. In `tunnel` mode, it uses `<tunnel-id>.cfargotunnel.com`. In `lan` mode, it uses an `sslip.io` name for the machine's address. On other installs, set it in **Instance admin** > **Configuration** > **Custom domains**.
+The ingress CNAME is the hostname that people point their own domains at. The installer asks for it and saves it, so you can change it at **Instance admin** > **Configuration** > **Custom domains**. The default depends on the mode. In `public` mode, it uses the dashboard domain. In `tunnel` mode, it uses `<tunnel-id>.cfargotunnel.com`. In `lan` mode, it uses an `sslip.io` name for the machine's address. On other installs, set it in **Instance admin** > **Configuration** > **Custom domains**.
 
 In `tunnel` mode, each custom domain also needs a route in the tunnel. Cloudflare hides proxied records, so Orchard can confirm only that the hostname resolves.
 
@@ -136,7 +136,7 @@ Raw TCP and UDP ports, and public databases, are published on an external addres
 This organization does not have a public IP configured
 ```
 
-In `public` mode on a machine with a routable address, the installer saves this address for you. The checklist lists this item only on an installer host that has no address. An organization that sets its own address at **Organization settings** > **Database defaults** overrides the default.
+The installer asks for this address and saves it. The checklist lists this item only on an installer host that has no address. An organization that sets its own address at **Organization settings** > **Database defaults** overrides the default.
 
 Set the default in **Instance admin** > **Configuration** > **Public exposure**. To pin it with `PUBLIC_EXPOSURE_IP`, which locks the field, run the following command on an installer host:
 
@@ -175,7 +175,7 @@ The page then shows which hostnames are routed through the tunnel, and has a con
 
 ## Turn the MCP endpoint on or off
 
-Orchard includes a [Model Context Protocol (MCP) server](/mcp/) for agents. The endpoint is at the root of `mcp.<app domain>`, which the wildcard record for your apps covers. The installer publishes it, and sets the OAuth issuer, the URL in the dashboard, and the credential that the MCP server uses to call the API.
+Orchard includes a [Model Context Protocol (MCP) server](/mcp/) for agents. The endpoint is at the root of the hostname you gave the installer. The installer publishes it, and sets the OAuth issuer, the URL in the dashboard, and the credential that the MCP server uses to call the API.
 
 Two settings control MCP.
 

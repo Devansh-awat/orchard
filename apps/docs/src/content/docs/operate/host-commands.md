@@ -190,7 +190,7 @@ sudo orchardctl mcp enable mcp.example.com --apply
 sudo orchardctl mcp disable --apply
 ```
 
-Turns the MCP endpoint on or off and sets its hostname. A new install already has one at `mcp.<app domain>`.
+Turns the MCP endpoint on or off and sets its hostname. A new install has one at the hostname you gave the installer, unless you turned it off.
 
 `enable` with no hostname uses the one in values. Otherwise, it uses `mcp.<app domain>`, which the wildcard record for your apps covers. For any other hostname, create an A record first.
 
