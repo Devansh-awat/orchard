@@ -27,11 +27,11 @@
 		user,
 		selectedOrganization,
 		subscribeOrgEvents,
-		sseStatusFor
+		sseStatusFor,
+		earlyAccessFlag
 	} from '$lib/stores';
 	import { env } from '$env/dynamic/public';
 	import { invalidate } from '$app/navigation';
-	import { featureFlag } from '$lib/posthog';
 	import { focusDeployment, watchBuild } from '$lib/utils/sound';
 	import { fetchAlertStates } from '$lib/components/notifications/alerts';
 	import { registerShortcut } from '$lib/utils/shortcuts';
@@ -596,7 +596,7 @@
 	let persistentBuildCache = $state(false);
 	let builderOverride = $state<'' | 'firecracker' | 'kubernetes'>('');
 
-	const tailscaleEnabled = featureFlag('tailscale-integration');
+	const tailscaleEnabled = earlyAccessFlag('tailscale-integration');
 	const tailscale = new TailscaleController({
 		deploymentId: () => deploymentId,
 		isExposed: () => !!deployment?.tailscaleExposed,

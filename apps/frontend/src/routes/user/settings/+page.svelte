@@ -20,7 +20,6 @@
 		loadEarlyAccessFeatures,
 		setEarlyAccessFeatureEnrollment,
 		isFeatureEnabledNow,
-		featureFlag,
 		type EarlyAccessFeature
 	} from '$lib/posthog';
 	import { page } from '$app/stores';
@@ -129,7 +128,7 @@
 	let backendVersion = $state<string | null>(null);
 	const frontendVersion = __APP_VERSION__;
 
-	const tailscaleEnabled = featureFlag('tailscale-integration');
+	const tailscaleEnabled = earlyAccessFlag('tailscale-integration');
 	const notificationsEnabled = earlyAccessFlag('notifications');
 
 	let tailscaleChecked = false;
