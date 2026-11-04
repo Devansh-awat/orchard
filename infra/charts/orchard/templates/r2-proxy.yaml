@@ -79,6 +79,8 @@ spec:
       app.kubernetes.io/instance: {{ .Release.Name }}
   template:
     metadata:
+      annotations:
+        checksum/upstream: {{ dict "upstream" .Values.r2Proxy.upstream "defaultBucket" .Values.r2Proxy.defaultBucket "objectStorage" .Values.objectStorage | toJson | sha256sum }}
       labels:
         app.kubernetes.io/name: r2-proxy
         app.kubernetes.io/instance: {{ .Release.Name }}
