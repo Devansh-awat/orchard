@@ -31,7 +31,7 @@ Aliases: `alerts`
 
 ### `orchard alert create`
 
-Add a rule: --metric cpu_percent --above 85 --for 300
+Add a rule: --metric cpu_percent --threshold 85 --for 300
 
 ```bash
 orchard alert create
@@ -1467,7 +1467,7 @@ orchard deploy create
 
 | Flag | Type | Default | Description |
 | --- | --- | --- | --- |
-| `--auto-url` | bool | `true` | generate a URL for the deployment (protected by default) |
+| `--auto-url` | bool | `true` | generate a URL when the port is known (protected by default) |
 | `--build-cmd` | string |  | override the detected build command |
 | `--build-root` | bool | `false` | use the repo root as the build context |
 | `--cpu` | int | `0` | CPU request in millicores (e.g. 500) |
