@@ -402,6 +402,9 @@ true
             {{- if .Values.r2Proxy.upstream.endpoint }}
             - { name: BACKUP_PROXY_CHART_UPSTREAM, value: "true" }
             {{- end }}
+            {{- if and (ne .Values.r2Proxy.namespace "orchard-r2-proxy") (not (include "orchard.serverEnvHas" (dict "root" . "key" "PLATFORM_R2_PROXY_NAMESPACE"))) }}
+            - { name: PLATFORM_R2_PROXY_NAMESPACE, value: {{ .Values.r2Proxy.namespace | quote }} }
+            {{- end }}
             - name: BACKUP_PROXY_ENDPOINT
               value: {{ default (printf "http://r2-proxy.%s.svc.cluster.local:9000" .Values.r2Proxy.namespace) .Values.r2Proxy.serviceUrl | quote }}
             {{- end }}
