@@ -5,7 +5,7 @@ sidebar:
   order: 6
 ---
 
-Prepare each new worktree and start your app with one action. A new worktree has your tracked files only. It has no installed dependencies and no untracked files such as `.env`.
+To prepare each new worktree and start your app with one action, add a configuration file to your repository. A new worktree has your tracked files only. It has no installed dependencies and no untracked files such as `.env`.
 
 ## 1. Add the configuration file
 

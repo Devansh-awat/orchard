@@ -1,11 +1,11 @@
 ---
 title: Workspace
-description: Reference for the Greenhouse workspace, including its layout, settings, chat controls, slash commands, right panel, terminal dock, and keyboard shortcuts.
+description: Review the layout, settings, chat controls, slash commands, right panel, terminal dock, and keyboard shortcuts of the Greenhouse workspace.
 sidebar:
   order: 4
 ---
 
-The workspace opens when you open a machine. This page lists what each part of it does.
+The workspace opens when you open a machine. It has a title bar, a sidebar, a center area, a right panel, and a terminal dock.
 
 ## Layout
 
@@ -54,7 +54,7 @@ A repository icon is stored in the repository's git config as `orchard.icon`. Ev
 
 ## Settings
 
-Select the gear icon in the sidebar, or press **⌘,**.
+Select the gear icon in the sidebar, or press `CMD + ,`.
 
 | Group   | Section      | Contents                                                                                                                                  |
 | ------- | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
@@ -182,40 +182,40 @@ Each person has their own terminals, with their own git identity and GitHub cred
 
 ## Keyboard shortcuts
 
-On Windows and Linux, use **Ctrl** for **⌘**, and **Alt** for **⌥**.
+On Windows and Linux, use `CTRL` for `CMD`, and `ALT` for `OPT`.
 
 | Shortcut        | Action                                     |
 | --------------- | ------------------------------------------ |
-| **⌘N**          | New session in the current repository      |
-| **⌘K**          | Search sessions, files, and commands       |
-| **⌘B**          | Show or hide the sidebar                   |
-| **⌘⌥B**         | Show or hide the right panel               |
-| **⌘⇧G**         | Open the **Changes** tab                   |
-| **⌘,**          | Open settings                              |
-| **Enter**       | Send the prompt                            |
-| **Shift+Enter** | New line in the prompt                     |
-| **⌘Enter**      | Steer instead of queueing                  |
-| **Esc**         | Stop the agent while it is working         |
-| **/**, **Tab**  | Complete a command                         |
-| **Ctrl+O**      | Expand or collapse tool calls              |
-| **⌘⇧E**         | Fast mode, when the model has one          |
-| **⌘⇧/**         | Cycle reasoning effort                     |
-| **⌘P**          | Find a file                                |
-| **⌘S**          | Save the open file                         |
-| **⌘F**          | Find in the file                           |
-| **⌘`**          | Focus the terminal                         |
-| **⌘J**          | Collapse or expand the dock                |
-| **⌘+**, **⌘−**, **⌘0** | Change or reset the code size in a terminal |
+| `CMD + N`          | New session in the current repository      |
+| `CMD + K`          | Search sessions, files, and commands       |
+| `CMD + B`          | Show or hide the sidebar                   |
+| `CMD + OPT + B`         | Show or hide the right panel               |
+| `CMD + SHIFT + G`         | Open the **Changes** tab                   |
+| `CMD + ,`          | Open settings                              |
+| `ENTER`       | Send the prompt                            |
+| `SHIFT + ENTER` | New line in the prompt                     |
+| `CMD + ENTER`      | Steer instead of queueing                  |
+| `ESC`         | Stop the agent while it is working         |
+| `/`, `TAB`  | Complete a command                         |
+| `CTRL + O`      | Expand or collapse tool calls              |
+| `CMD + SHIFT + E`         | Fast mode, when the model has one          |
+| `CMD + SHIFT + /`         | Cycle reasoning effort                     |
+| `CMD + P`          | Find a file                                |
+| `CMD + S`          | Save the open file                         |
+| `CMD + F`          | Find in the file                           |
+| `` CMD + ` ``          | Focus the terminal                         |
+| `CMD + J`          | Collapse or expand the dock                |
+| `CMD + +`, `CMD + −`, `CMD + 0` | Change or reset the code size in a terminal |
 
 On a focused permission or question card:
 
 | Shortcut   | Action                             |
 | ---------- | ---------------------------------- |
-| **Enter**  | Allow, or submit the answer        |
-| **⌘Enter** | Always allow                       |
-| **Esc**    | Deny, then press **Enter** to send |
-| **1** to **9** | Select an option               |
+| `ENTER`  | Allow, or submit the answer        |
+| `CMD + ENTER` | Always allow                       |
+| `ESC`    | Deny, then press `ENTER` to send |
+| `1` to `9` | Select an option               |
 
-In the **Changes** tab and in diff comments, **⌘Enter** commits or posts.
+In the **Changes** tab and in diff comments, `CMD + ENTER` commits or posts.
 
 The **Send messages with** preference changes the send and new-line keys. **Settings** > **Shortcuts** shows the current keys.

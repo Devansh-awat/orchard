@@ -5,16 +5,16 @@ sidebar:
   order: 5
 ---
 
-Open a Greenhouse session in a desktop editor. The connection goes through the Orchard server, so the machine does not need to accept connections from the internet.
+To open a Greenhouse session in a desktop editor, connect over SSH. The connection goes through the Orchard server, so the machine does not need to accept connections from the internet.
 
 Your SSH client runs `orchard sandbox proxy` as its `ProxyCommand`. That command carries the connection over an authenticated WebSocket to the Orchard server, and from there to the machine.
 
 ## Prerequisites
 
-- You are the host of the machine. The server refuses this connection for guests, because the machine holds the host's credentials. Superadmins can also connect.
-- The machine is running.
-- The [Orchard CLI](/cli/) is installed, and you are signed in.
-- If the CLI authenticates with an API token, the token has the `exec` scope. To create one, run `orchard auth token create --scope exec`.
+- Host access to the machine. The server refuses this connection for guests, because the machine holds the host's credentials. Superadmins can also connect.
+- A running machine.
+- The [Orchard CLI](/cli/), installed and signed in.
+- If the CLI authenticates with an API token, the `exec` scope on that token. To create one, run `orchard auth token create --scope exec`.
 
 ## 1. Configure SSH
 
@@ -48,7 +48,8 @@ The command makes these changes. You can run it more than once.
 To open the current session in an editor:
 
 1. In the workspace title bar, select the editor button. It shows the editor you used last.
-2. To choose another editor, open the menu next to the button and select **VS Code**, **Cursor**, or **Zed**. The **Terminal** item gives you the `ssh` command to copy.
+2. To choose another editor, open the menu next to the button.
+3. Select **VS Code**, **Cursor**, or **Zed**. The **Terminal** item gives you the `ssh` command to copy.
 
 The editor opens the session's worktree, for example `/persist/home/.worktrees/app/fix-login-a1b2c3`. VS Code requires the Remote - SSH extension.
 

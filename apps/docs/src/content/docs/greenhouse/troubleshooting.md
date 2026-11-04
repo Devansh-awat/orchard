@@ -5,7 +5,7 @@ sidebar:
   order: 13
 ---
 
-Find the symptom you see, then follow the fix.
+Use this page to fix common failures with Greenhouse. Each entry lists the symptom, the cause, and the fix.
 
 ## Greenhouse is not in the sidebar
 
@@ -21,7 +21,7 @@ Sandbox feature is not enabled for your account
 
 **Cause:** The instance has PostHog configured, and your account does not have the `greenhouse` feature flag. Greenhouse is also missing from the sidebar in this case.
 
-**Fix:** Ask an admin to enable the flag for your account.
+**Fix:** Ask an operator to enable the flag for your account.
 
 ## The machine takes a long time to start
 
@@ -63,7 +63,7 @@ Sandbox resource never appeared in the cluster
 
 **Cause:** Orchard carries out starts, stops, deletes, and credential syncs through a queue. A worker retries a failed change up to ten times, with increasing delays. Transient errors clear without action. After the last attempt, the error stays on the machine.
 
-**Fix:** Fix the cause, then queue the failed changes again. The host or an org admin can select **Retry** in the machine menu, or run:
+**Fix:** Fix the cause, then queue the failed changes again. The host or an organization admin can select **Retry** in the machine menu, or run the following command:
 
 ```bash
 orchard sandbox retry my-machine
@@ -126,7 +126,7 @@ Permission denied (publickey)
 
 **Cause:** None of your SSH identities matches the key your client offered.
 
-**Fix:** Run `orchard sandbox ssh-config --install`, or add your key in **User settings** > **Greenhouse** > **SSH identities**.
+**Fix:** Run `orchard sandbox ssh-config --install`, or add your key in **Account settings** > **Greenhouse** > **SSH identities**.
 
 ## Link GitHub to push
 
@@ -134,7 +134,7 @@ The pull request button reads **Link GitHub to push**, or an action fails with `
 
 **Cause:** Your account has no linked GitHub account. Pushes, pull requests, and merges use your own account.
 
-**Fix:** Link it in **User settings** > **GitHub and Tailscale**. You can commit without it.
+**Fix:** Link it in **Account settings** > **GitHub and Tailscale**. You can commit without it.
 
 ## No GitHub account is linked to read checks
 
@@ -144,7 +144,7 @@ No GitHub account is linked to read checks
 
 **Cause:** Neither you nor the host has linked GitHub.
 
-**Fix:** Link it in **User settings** > **GitHub and Tailscale**.
+**Fix:** Link it in **Account settings** > **GitHub and Tailscale**.
 
 ## A session does not start
 
@@ -181,7 +181,7 @@ No GitHub account is linked to read checks
 | `This machine has no home volume to copy yet`                                       | Start the machine once before forking it.                         |
 | `Only the machine's owner can fork it: ...`                                         | The copy contains the host's home directory and credentials.      |
 | `Forking needs Vercel drive forks, which this team's plan doesn't have`             | The operator's Vercel plan does not include drive forks.          |
-| `Sandbox limit reached (...)`                                                       | A fork counts against your machine limit. Ask an admin to raise it. |
+| `Sandbox limit reached (...)`                                                       | A fork counts against your machine limit. Ask a superadmin to raise it. |
 
 ## Still stuck?
 

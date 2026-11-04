@@ -7,23 +7,24 @@ sidebar:
 
 import { Tabs, TabItem } from '@astrojs/starlight/components';
 
-Give a machine the configuration that your deployed app uses. Attaching a project writes one of its environments into the machine as an env file that shells load.
+To give a machine the configuration that your deployed app uses, attach a project. Orchard writes one of its environments into the machine as an env file that shells load.
 
 ## Prerequisites
 
-- You are the host of the machine.
-- You have edit access to the project.
-- The project belongs to the machine's organization.
+- Host access to the machine.
+- Edit access to the project.
+- A project that belongs to the machine's organization.
 
 ## Attach a project
 
-<Tabs syncKey="interface">
+<Tabs syncKey="dashPlusCli">
 <TabItem label="Dashboard">
 
-1. Open the machine menu and select **Machine settings**.
-2. Under **Projects**, select **Attach**.
-3. Select a **Project** and an **Environment**.
-4. Select **Attach** to confirm.
+1. Open the machine menu.
+2. Select **Machine settings**.
+3. Under **Projects**, select **Attach**.
+4. Select a **Project** and an **Environment**.
+5. Select **Attach** to confirm.
 
 </TabItem>
 <TabItem label="CLI">
@@ -80,11 +81,12 @@ If the person who attached a project loses edit access to it, Orchard stops writ
 
 ## Detach a project
 
-<Tabs syncKey="interface">
+<Tabs syncKey="dashPlusCli">
 <TabItem label="Dashboard">
 
-1. Open the machine menu and select **Machine settings**.
-2. Under **Projects**, select the **X** next to the project.
+1. Open the machine menu.
+2. Select **Machine settings**.
+3. Under **Projects**, select the **X** next to the project.
 
 </TabItem>
 <TabItem label="CLI">

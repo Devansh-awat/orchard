@@ -6,9 +6,7 @@ sidebar:
   label: Overview
 ---
 
-Run coding agents on cloud machines that your Orchard instance manages.
-
-Greenhouse is a first-party [graft](/grafts/overview/) for Orchard. It gives you an isolated Linux machine with your repositories on it. Each agent session works on its own branch in its own git worktree, so several sessions can run on one machine at the same time. You review the changes in a browser workspace, or in a desktop editor over SSH.
+Greenhouse runs coding agents on cloud machines that your Orchard instance manages. It is a first-party [graft](/grafts/overview/) that gives you an isolated Linux machine with your repositories on it. Each agent session works on its own branch in its own git worktree, so several sessions can run on one machine at the same time. You review the changes in a browser workspace, or in a desktop editor over SSH.
 
 Greenhouse is for writing code. To serve traffic, deploy the code to Orchard as an app.
 

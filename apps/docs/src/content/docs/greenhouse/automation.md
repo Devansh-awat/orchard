@@ -5,7 +5,7 @@ sidebar:
   order: 12
 ---
 
-Control machines and sessions from an agent or a script. The [MCP server](/mcp/), the [CLI](/cli/), and the [API](/api/) act as you, with the same roles as the dashboard. For example, a guest can prompt an agent over MCP, and a read-only guest cannot.
+To control machines and sessions from an agent or a script, use the [MCP server](/mcp/), the [CLI](/cli/), or the [API](/api/). Each one acts as you, with the same roles as the dashboard. For example, a guest can prompt an agent over MCP, and a read-only guest cannot.
 
 ## Use MCP tools
 
@@ -15,8 +15,8 @@ An agent connected to Orchard's Model Context Protocol (MCP) server can use thes
 | -------------------------------- | ----------------------------------------------------------------------------------------------------- | ----------------- |
 | `list_sandboxes`                 | Lists machines you host or were invited to, your machine limit, and the runners.                      | Any               |
 | `get_sandbox`                    | Returns one machine's status, desired state, runner, image, owner, and your role.                     | Any               |
-| `start_sandbox`                  | Starts a stopped machine. Returns `starting` immediately. Poll `get_sandbox` until it is running.      | Guest, host, or org admin |
-| `stop_sandbox`                   | Stops a machine. Its disk is kept.                                                                    | Host or org admin |
+| `start_sandbox`                  | Starts a stopped machine. Returns `starting` immediately. Poll `get_sandbox` until it is running.      | Guest, host, or organization admin |
+| `stop_sandbox`                   | Stops a machine. Its disk is kept.                                                                    | Host or organization admin |
 | `list_sandbox_sessions`          | Lists sessions with branch, diffstat, activity, and pull request.                                     | Read-only guest or higher |
 | `create_sandbox_session`         | Creates a session on a running machine, optionally with a first prompt.                               | Guest or host     |
 | `prompt_sandbox_session`         | Sends a prompt to a session's agent, attributed to you.                                               | Guest or host     |

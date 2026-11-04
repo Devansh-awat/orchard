@@ -5,11 +5,11 @@ sidebar:
   order: 8
 ---
 
-Commit a session's changes, open a pull request, and merge it from the workspace.
+To get a session's changes into your repository, commit them, open a pull request, and merge it from the workspace.
 
 ## Prerequisites
 
-- A GitHub account linked to Orchard. Link it in **User settings** > **GitHub and Tailscale**. Until you link it, the pull request button reads **Link GitHub to push**. You can still commit.
+- A GitHub account linked to Orchard. Link it in **Account settings** > **GitHub and Tailscale**. Until you link it, the pull request button reads **Link GitHub to push**. You can still commit.
 - Host or guest access to the machine. Read-only guests cannot commit or push.
 
 Pushes, pull requests, and merges use your own GitHub account, on any machine you can edit.
@@ -18,7 +18,7 @@ Pushes, pull requests, and merges use your own GitHub account, on any machine yo
 
 1. In the right panel, select **Changes**.
 2. Enter a commit message.
-3. Select **Commit**, or press **⌘Enter**. This commits all changes in the session's worktree.
+3. Select **Commit**, or press `CMD + ENTER`. This commits all changes in the session's worktree.
 
 To amend the last commit, open the menu next to **Commit** and select **Amend last commit**.
 

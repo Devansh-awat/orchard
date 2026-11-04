@@ -5,20 +5,20 @@ sidebar:
   order: 11
 ---
 
-Start a Greenhouse session from an issue or a chat message. Greenhouse creates the session on a machine you host, sends your request to the agent, and replies with a link.
+To start a Greenhouse session without opening the workspace, comment on an issue or send a chat message. Greenhouse creates the session on a machine you host, sends your request to the agent, and replies with a link.
 
 ## Prerequisites
 
 - A running machine that you host. These integrations do not use machines you were invited to, and they do not start a stopped machine.
-- The integration is set up on your instance. For the operator steps, refer to [Run Greenhouse](/operate/greenhouse/#set-up-integrations).
-- Your account on the other service is linked to your Orchard account. Orchard does not match accounts by email address.
+- The integration set up on your instance. For the operator steps, refer to [Run Greenhouse](/operate/greenhouse/#set-up-integrations).
+- Your account on the other service linked to your Orchard account. Orchard does not match accounts by email address.
 
 ## Link your accounts
 
 | Service | How to link it                                                                                                                                              |
 | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| GitHub  | In **User settings** > **GitHub and Tailscale**, sign in with GitHub.                                                                                        |
-| Linear  | In **User settings** > **Greenhouse** > **Connected accounts**, select **Connect** next to **Linear** and paste a personal API key. In Linear, create the key under **Settings**, **Security and access**, **Personal API keys**. Read access is enough to pick issues. |
+| GitHub  | In **Account settings** > **GitHub and Tailscale**, sign in with GitHub.                                                                                        |
+| Linear  | In **Account settings** > **Greenhouse** > **Connected accounts**, select **Connect** next to **Linear** and paste a personal API key. In Linear, create the key under **Settings** > **Security and access** > **Personal API keys**. Read access is enough to pick issues. |
 | Slack   | In Slack, run `/greenhouse link`. Open the link that Slack shows you while signed in to Orchard, and confirm. The link works once and expires after 10 minutes. |
 
 A Linear or Slack account can be linked to one Orchard user. To unlink Slack, run `/greenhouse unlink`, or select **Unlink** in **Settings** > **Integrations**. To disconnect Linear, select **Disconnect** in **Connected accounts**.
@@ -84,7 +84,7 @@ Run the slash command:
 /greenhouse add rate limiting to the login endpoint in acme/api
 ```
 
-Or mention the app in a channel or thread:
+You can also mention the app in a channel or thread:
 
 ```text
 @Greenhouse the export button is broken on Safari, can you look at storefront?

@@ -16,9 +16,9 @@ You can view a session's work in two ways:
 
 ### Prerequisites
 
-- The machine is running.
-- A process listens on a port that Greenhouse can preview, and it is bound to `0.0.0.0`.
-- On the Kubernetes runner, the operator has set a preview domain.
+- A running machine.
+- A process that is bound to `0.0.0.0` and listens on a port that Greenhouse can preview.
+- On the Kubernetes runner, a preview domain set by the operator.
 
 These ports can always be previewed:
 
@@ -57,19 +57,20 @@ Do not serve anything on a preview port of a Vercel machine that you would not p
 
 ### Prerequisites
 
-- You are the host of the machine.
-- You have edit access to the target project, and the project belongs to the machine's organization.
-- The project has a deployment that builds the same GitHub repository.
+- Host access to the machine.
+- Edit access to the target project, which must belong to the machine's organization.
+- An app in the project that builds the same GitHub repository.
 
 ### Steps
 
-<Tabs syncKey="interface">
+<Tabs syncKey="dashPlusCli">
 <TabItem label="Dashboard">
 
-1. Open the session menu in the title bar and select **Deploy preview**. The pull request menu has the same item.
-2. Select a **Project**.
-3. (Optional) Under **Copy settings from**, select the deployment to copy. The default is the deployment that builds the repository.
-4. Select **Deploy preview**.
+1. Open the session menu in the title bar.
+2. Select **Deploy preview**. The pull request menu has the same item.
+3. Select a **Project**.
+4. (Optional) Under **Copy settings from**, select the app to copy. The default is the app that builds the repository.
+5. Select **Deploy preview**.
 
 </TabItem>
 <TabItem label="CLI">
@@ -78,7 +79,7 @@ Do not serve anything on a preview port of a Vercel machine that you would not p
 orchard sandbox session preview my-machine fix-login --project storefront
 ```
 
-To select the deployment to copy, add `--deployment <deployment-id>`.
+To select the app to copy, add `--deployment <deployment-id>`.
 
 </TabItem>
 </Tabs>
@@ -87,7 +88,7 @@ Greenhouse then does the following:
 
 1. It pushes the session's branch to GitHub.
 2. It creates an environment named `gh-<slug>` in the project, or reuses the one that this session already has.
-3. It copies the settings of the source deployment. Without a selection, it prefers a deployment in the project's default environment, then in its production environment.
+3. It copies the settings of the source app. Without a selection, it prefers an app in the project's default environment, then in its production environment.
 4. It deploys the branch with one replica.
 
 The session then shows the preview's status and URL.
@@ -98,11 +99,12 @@ To deploy the latest commit again, repeat the steps. The button then reads **Red
 
 ## Remove a preview environment
 
-<Tabs syncKey="interface">
+<Tabs syncKey="dashPlusCli">
 <TabItem label="Dashboard">
 
-1. Open the session menu and select **Preview deploy**.
-2. Select **Remove preview**.
+1. Open the session menu.
+2. Select **Preview deploy**.
+3. Select **Remove preview**.
 
 </TabItem>
 <TabItem label="CLI">

@@ -60,7 +60,7 @@ Repositories live in the home directory as `~/<name>`. The home directory is `/p
 
 To add a repository, select **Add repository** in the sidebar. The sheet has three modes: **Clone**, **New**, and **Open folder**. Only the host can use it. Guests can start a new empty repository from the home page.
 
-To add a repository from the CLI, run:
+To add a repository from the CLI, run the following command:
 
 ```bash
 orchard sandbox repo add my-machine https://github.com/acme/api
@@ -84,7 +84,7 @@ Some sign-ins stay on one machine instead of your account. These are the ChatGPT
 
 ## Actions by role
 
-| Action | Host | Guest | Read-only guest | Org admin |
+| Action | Host | Guest | Read-only guest | Organization admin |
 | ------ | ---- | ----- | --------------- | --------- |
 | Start  | Yes  | Yes   | No              | Yes       |
 | Stop   | Yes  | No    | No              | Yes       |
@@ -108,7 +108,7 @@ Only the host can fork a machine, because the copy contains the host's home dire
 | Kubernetes | A volume snapshot of the home volume, restored into the volume of the new machine. A forked machine has 30 minutes to start, instead of 10. |
 | Vercel     | A fork of the last saved snapshot and a fork of the drive. Stop the machine first to include recent changes.                                |
 
-To fork a machine, open the machine menu and select **Fork machine**. From the CLI, run:
+To fork a machine, open the machine menu and select **Fork machine**. From the CLI, run the following command:
 
 ```bash
 orchard sandbox fork my-machine --name my-machine-experiment
@@ -122,7 +122,7 @@ The operator sets these limits. The following values are the defaults.
 
 | Limit               | Default    | Behavior                                                                                                                       |
 | ------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| Machines per person | 1          | Creating or forking past the limit fails. Instance admins can change the limit per person. Superadmins have no limit.           |
+| Machines per person | 1          | Creating or forking past the limit fails. Superadmins can change the limit per person, and have no limit themselves.           |
 | Idle stop           | 60 minutes | Orchard stops a running machine with no terminal or SSH activity for this long. A working agent counts as activity.             |
 | Maximum lifetime    | 168 hours  | Orchard stops a machine this long after its last start, whether or not it is active. Orchard does not delete it.               |
 | People per machine  | 50         | Fixed.                                                                                                                         |

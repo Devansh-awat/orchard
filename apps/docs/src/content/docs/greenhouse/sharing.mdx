@@ -7,13 +7,13 @@ sidebar:
 
 import { Tabs, TabItem } from '@astrojs/starlight/components';
 
-Work with other people on a machine, or show them a session's work. You can share in two ways:
+To work with other people on a machine, or to show them a session's work, share it in one of two ways:
 
 - **Invite someone to the machine** as a guest or a read-only guest. They open the workspace and work alongside you.
 - **Create a read-only link** to one session or to every session. The person sees the transcript and the diff, and has no other access to the machine.
 
 :::caution
-A guest with a terminal can read every credential on the machine. These include your agent tokens and the agent's Orchard token. Refer to [What sharing gives your guests](#what-sharing-gives-your-guests) before you invite anyone.
+A guest with a terminal can read every credential on the machine. These include your agent tokens and the agent's Orchard token. Before you invite anyone, refer to [What sharing gives your guests](#what-sharing-gives-your-guests).
 :::
 
 ## Roles
@@ -23,13 +23,13 @@ A guest with a terminal can read every credential on the machine. These include 
 | Host            | **Host**               | The person who created the machine. Superadmins have the same access.                    |
 | Guest           | **Guest**              | Someone the host invited with **Collaborate** access.                                    |
 | Read-only guest | **Read only**          | Someone the host invited with **Watch** access.                                          |
-| Org admin       | None                   | An admin of the machine's organization who was not invited.                              |
+| Organization admin       | None                   | An admin of the machine's organization who was not invited.                              |
 
-An org admin who is also invited has the invited role, and can also start, stop, and delete the machine.
+An organization admin who is also invited has the invited role, and can also start, stop, and delete the machine.
 
 ### What each role can do
 
-| Action                                                                  | Host | Guest | Read-only guest | Org admin |
+| Action                                                                  | Host | Guest | Read-only guest | Organization admin |
 | ----------------------------------------------------------------------- | :--: | :---: | :-------------: | :-------: |
 | See the machine in lists: name, status, runner, owner                   | Yes  |  Yes  |       Yes       |    Yes    |
 | See sessions, transcripts, comments, diffs, files, and who is here      | Yes  |  Yes  |       Yes       |    No     |
@@ -79,7 +79,7 @@ To change a role or remove someone, select **Share**, then open the menu next to
 - **Terminals can be watched.** The host and guests can watch each other's terminals.
 - **The agent's Orchard access is the host's.** The agent holds an Orchard MCP token for the host, limited to the machine's organization. A guest can read this token and act as the host in that organization until the token changes.
 - **A guest's GitHub token is used on the host's machine.** A push from the workspace receives the token for that one command. In a guest's own terminal, the token stays in the shell's environment while the terminal is open. The host, other guests, and the agent can read it there.
-- **Org admins cannot look in.** An org admin can see that the machine exists, and can start, stop, or delete it. An org admin cannot see its sessions, transcripts, files, diffs, terminals, previews, or members without an invitation. Superadmins have host access.
+- **Organization admins cannot read a machine's contents.** An organization admin can see that the machine exists, and can start, stop, or delete it. An organization admin cannot see its sessions, transcripts, files, diffs, terminals, previews, or members without an invitation. Superadmins have host access.
 
 When you remove a guest or make them read-only, Orchard does the following:
 
@@ -117,7 +117,7 @@ A read-only link shows the latest messages of a session's agent chat, its change
 
 You must be the host. The person who opens the link must be signed in to Orchard and be a member of the machine's organization. Organization guests cannot open it.
 
-<Tabs syncKey="interface">
+<Tabs syncKey="dashPlusCli">
 <TabItem label="Dashboard">
 
 1. In the workspace title bar, select **Share**.
@@ -137,7 +137,7 @@ orchard sandbox share create my-machine --session fix-login --expires-in 48
 
 `--expires-in` is a number of hours from 1 to 720. The default is 168. Omit `--session` to share every active session.
 
-To list and revoke links, run:
+To list and revoke links, run the following commands:
 
 ```bash
 orchard sandbox share list my-machine
