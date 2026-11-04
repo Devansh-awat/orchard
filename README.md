@@ -20,7 +20,7 @@ Install Orchard, connect a GitHub repo, and your app is live on your own server.
 sudo bash -c "$(curl -fsSL https://assets.orchard.my/install.sh)"
 ```
 
-You need a Linux server with at least 4 GB of RAM and 20 GB of free disk. Everything else comes with it.
+You need a Linux server with at least 4 GB of RAM and 20 GB of free disk.
 
 | Mode     | Use it when                                 | HTTPS                                 |
 | -------- | ------------------------------------------- | ------------------------------------- |
