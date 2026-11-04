@@ -37,7 +37,7 @@ orchard db storage expand <id> --size 20Gi
 </TabItem>
 </Tabs>
 
-## Paused writes
+## Resume paused writes
 
 Orchard pauses writes when the volume reaches 92% full. Reads continue. The **Storage** card shows `Writes are paused because the volume is full`.
 
@@ -50,10 +50,10 @@ The events **Writes paused (disk full)** and **Writes resumed** are available as
 
 ## WAL archiving failures
 
-If write-ahead log (WAL) archiving fails, WAL files continue to fill the volume. The **Storage** card shows `WAL archiving is failing`. Growing the volume adds time, but it does not fix the cause. To resolve the failure, check the backup storage configuration. For more information, refer to [Backups and restore](/data/backups/).
+If write-ahead log (WAL) archiving fails, WAL files continue to fill the volume. The **Storage** card shows `WAL archiving is failing`. Growing the volume adds time, but it does not fix the cause. To resolve the failure, check the backup storage configuration. For more information, refer to [Back up and restore a database](/data/backups/).
 
 ## Related resources
 
-- [Databases](/data/databases/)
-- [Backups and restore](/data/backups/)
+- [Create and manage a database](/data/databases/)
+- [Back up and restore a database](/data/backups/)
 - [`orchard db storage` reference](/reference/cli/#db)

@@ -9,13 +9,13 @@ To install Orchard, select the method that matches your environment.
 
 | Environment | Method |
 | --- | --- |
-| A Linux machine with no cluster on it | [One-command installer](#a-bare-linux-box) |
-| A Kubernetes cluster you already operate | [Helm chart](#an-existing-cluster) |
-| A laptop, for a local trial | [Quickstart script](#trying-it-on-a-laptop) |
+| A Linux machine with no cluster on it | [One-command installer](#install-on-a-linux-machine) |
+| A Kubernetes cluster you already operate | [Helm chart](#install-on-an-existing-cluster) |
+| A laptop, for a local trial | [Quickstart script](#try-orchard-on-a-laptop) |
 
-After you install Orchard, [claim the instance](#claiming-the-instance).
+After you install Orchard, [claim the instance](#claim-the-instance).
 
-## A bare Linux box
+## Install on a Linux machine
 
 The installer creates a single-node k3s cluster. It then installs Traefik, CloudNativePG, cert-manager, a zot registry, and Orchard. If the machine can already reach another Kubernetes cluster, the installer warns you and leaves that cluster alone.
 
@@ -86,7 +86,7 @@ For `tunnel` mode, the installer prints the hostnames to route to your tunnel in
 
 4. Copy the claim link that the installer prints when it finishes.
 
-The installer writes its settings to `/etc/orchard/values.yaml`. Next, [claim the instance](#claiming-the-instance).
+The installer writes its settings to `/etc/orchard/values.yaml`. Next, [claim the instance](#claim-the-instance).
 
 :::note
 Use `bash -c` as shown. If you pipe the script into `sudo bash` with no flags, the installer cannot read your answers, so it stops before it installs anything.
@@ -129,14 +129,14 @@ To list every flag and variable, run the script with `--help`.
 
 | Component | What runs | Flag to leave it out | Refer to |
 | --- | --- | --- | --- |
-| Metrics | VictoriaMetrics, vmagent, and exporters | `--metrics false` | [Metrics and anomalies](/run/observability/) |
-| Log search and request data | VictoriaLogs, Vector, and the Traefik JSON access log | `--logs false` | [Logs and request data](/operate/logs/) |
-| Image scanning | The Orchard scanner (Trivy), which reads images from zot | `--image-scanning false` | [Image scanning](/operate/image-scanning/) |
-| Database backups | A local S3 store (versitygw) and the backup proxy | `--object-storage false` | [Backups and restore](/data/backups/) |
-| MCP | The endpoint agents connect to | `--mcp false` | [MCP](/mcp/) |
+| Metrics | VictoriaMetrics, vmagent, and exporters | `--metrics false` | [Metrics and alerts](/run/observability/) |
+| Log search and request data | VictoriaLogs, Vector, and the Traefik JSON access log | `--logs false` | [Configure logs and request data](/operate/logs/) |
+| Image scanning | The Orchard scanner (Trivy), which reads images from zot | `--image-scanning false` | [Set up image scanning](/operate/image-scanning/) |
+| Database backups | A local S3 store (versitygw) and the backup proxy | `--object-storage false` | [Back up and restore a database](/data/backups/) |
+| MCP | The endpoint agents connect to | `--mcp false` | [Connect an MCP client](/mcp/) |
 
 :::caution
-Backups in the local store sit on the same disk as your databases. They do not protect you if you lose the disk. For off-machine backups, refer to [Moving to real S3 or R2](/data/backups/#moving-to-real-s3-or-r2).
+Backups in the local store sit on the same disk as your databases. They do not protect you if you lose the disk. For off-machine backups, refer to [Move to S3 or R2](/data/backups/#move-to-s3-or-r2).
 :::
 
 A host installed before these defaults existed receives them on its next `sudo orchardctl update`. The MCP endpoint is the exception, because it needs a DNS record first. For more information, refer to [New defaults on an existing host](/operate/host-commands/#new-defaults-on-an-existing-host).
@@ -183,8 +183,8 @@ For the full list of commands, refer to [Host commands](/operate/host-commands/)
 | Sandboxed builds and tenant isolation | Install gVisor or Kata on the node, then set `tenantSandbox` and `builderSandbox` in `/etc/orchard/values.yaml`. Without them, image builds run with host-level privileges. |
 | DNS | Add the records yourself. To check them, go to **Instance admin** > **Networking**. For more information, refer to [Point DNS at this instance](/operate/finishing-setup/#point-dns-at-this-instance). |
 | Public IP for raw ports and public databases | Run `sudo orchardctl public-ip set <ip> --apply`. For more information, refer to [Set a default public IP](/operate/finishing-setup/#set-a-default-public-ip). |
-| Off-machine backups | Refer to [Moving to real S3 or R2](/data/backups/#moving-to-real-s3-or-r2). |
-| Multiple nodes, wildcard certificates, and public TCP or UDP in `tunnel` mode | Use the [Helm chart](#an-existing-cluster). |
+| Off-machine backups | Refer to [Move to S3 or R2](/data/backups/#move-to-s3-or-r2). |
+| Multiple nodes, wildcard certificates, and public TCP or UDP in `tunnel` mode | Use the [Helm chart](#install-on-an-existing-cluster). |
 
 The following values enable the sandboxes:
 
@@ -275,7 +275,7 @@ Decide these items before you start:
 
 Open the claim link yourself. The link signs you in as the superadmin, so treat it as a password. If you lose it, `sudo orchardctl claim` creates another.
 
-## An existing cluster
+## Install on an existing cluster
 
 The Helm chart installs Orchard's own components. It does not install cluster operators, so you provide them.
 
@@ -379,7 +379,7 @@ These steps were tested on k3s with the published chart, Helm 4.3.1, Traefik, ce
    kubectl -n orchard exec deploy/server -- node dist/scripts/mint-claim-link.js
    ```
 
-Next, [claim the instance](#claiming-the-instance).
+Next, [claim the instance](#claim-the-instance).
 
 If you keep `createNamespace: true`, the default, the chart creates `orchard` and any missing `network` namespace. In that case, pass `--create-namespace` and create the Secret after the install. The server waits for the Secret. The chart leaves an existing `network` namespace alone. A `network` namespace that the chart creates remains after `helm uninstall`.
 
@@ -405,7 +405,7 @@ To enable database backups, refer to [Backup storage for operators](/data/backup
 
 For every variable the server reads, refer to [Configuration](/reference/configuration/).
 
-## Claiming the instance
+## Claim the instance
 
 A new instance has no superadmin. The first person to redeem the claim link becomes the superadmin. The link works once. The token behind it is valid for 24 hours.
 
@@ -437,7 +437,7 @@ To claim the instance:
 Without SMTP, Orchard does not offer email codes on the sign-in page. Without SMTP or an identity provider, your passkey or password is the only way to sign in from a browser. If you lose access, run `sudo orchardctl login` to print a one-time sign-in link, or `sudo orchardctl password set` to set the superadmin password.
 :::
 
-## Trying it on a laptop
+## Try Orchard on a laptop
 
 To create a local trial cluster, run the following script from a clone of the Orchard repository. It needs Docker, k3d, kubectl, and Helm.
 
@@ -449,7 +449,7 @@ The script creates a k3d cluster, installs the prerequisites, and deploys the ch
 
 The quickstart turns off image builds, so deploy from a container image. Its secrets are public, so do not expose this cluster.
 
-## Checking what you install
+## Verify what you install
 
 GitHub Actions builds every Orchard release and signs a record of the commit and workflow. To verify a download, use the [GitHub CLI](https://cli.github.com).
 
@@ -469,7 +469,7 @@ gh attestation verify oci://ghcr.io/hackclub/orchard/server:2.69.0 --owner hackc
 
 CLI downloads include `attestation.sigstore.jsonl` on the release page. Orchard signs grafts in the Extension Marketplace with its own key and checks the signature on every install.
 
-## Uninstalling
+## Uninstall Orchard
 
 :::danger
 Uninstalling deletes every app, database, and volume on the instance. You cannot undo this action.
@@ -494,5 +494,5 @@ The release does not include the namespaces Orchard created for apps and databas
 ## Next steps
 
 - [Deploy your first app](/start/first-deploy/)
-- [Finish setting up the instance](/operate/finishing-setup/)
-- [Going to production](/operate/production/)
+- [Finish instance setup](/operate/finishing-setup/)
+- [Go to production](/operate/production/)

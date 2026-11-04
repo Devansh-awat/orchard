@@ -45,5 +45,5 @@ If your email address has a picture on Libravatar or Gravatar, Orchard imports a
 
 ## Related resources
 
-- [Sign-in and sessions](/account/security/)
+- [Manage sign-in and sessions](/account/security/)
 - [Manage API tokens](/account/tokens/)

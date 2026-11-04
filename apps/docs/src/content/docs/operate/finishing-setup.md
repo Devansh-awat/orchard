@@ -75,7 +75,7 @@ The checklist item is done when `R2_BACKUP_BUCKET`, an endpoint (`R2_ENDPOINT` o
 
 An organization can use its own bucket at **Settings** > **Backups**. That bucket takes precedence over the instance's.
 
-To confirm the setup, take a backup of a database, then run a restore test on it. For more information, refer to [Backups and restore](/data/backups/).
+To confirm the setup, take a backup of a database, then run a restore test on it. For more information, refer to [Back up and restore a database](/data/backups/).
 
 ## Set up email
 
@@ -223,7 +223,7 @@ During installation, if the MCP hostname does not resolve, the installer offers 
 
 Orchard does not require cert-manager. If the CRDs are absent, or the service account cannot read them, the certificate step shows **No certificate automation**. Terminate TLS at your load balancer or proxy, and ignore the wildcard item.
 
-## Using your own registry
+## Use your own registry
 
 To change the registry that Orchard pushes to, or to install Orchard in a cluster that has a registry, tell the builders where it is. Otherwise, builds finish and then fail at the push.
 
@@ -277,7 +277,7 @@ kubectl -n orchard-builders logs job/<BUILD_JOB_NAME> -c buildkit --tail=30
 
 If the registry's logs show no request from the builder, the policy dropped the traffic.
 
-## Letting the ingress controller reach apps
+## Let the ingress controller reach apps
 
 Every tenant namespace is default-deny, so the ingress controller's namespace must be listed. The default is `network,orchard`. A cluster that runs Traefik in the `traefik` namespace needs `traefik,orchard`. On k3s with its bundled Traefik, the namespace is `kube-system`.
 

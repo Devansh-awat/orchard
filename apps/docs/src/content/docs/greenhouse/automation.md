@@ -88,5 +88,5 @@ Live features use three WebSocket endpoints on the same host. They authenticate 
 
 ## Related resources
 
-- [MCP](/mcp/): Connect an MCP client to Orchard.
-- [API tokens](/account/tokens/): Create a token with the `exec` scope.
+- [Connect an MCP client](/mcp/)
+- [Manage API tokens](/account/tokens/)

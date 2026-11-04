@@ -39,7 +39,7 @@ With `open` on a public URL, anyone who finds the URL can create an account and 
 
 ## 3. Check your superadmins
 
-A new instance has a single-use setup token that is valid for 24 hours. Redeem it with the account that should own the instance. For more information, refer to [Install](/start/install/#claiming-the-instance).
+A new instance has a single-use setup token that is valid for 24 hours. Redeem it with the account that should own the instance. For more information, refer to [Install](/start/install/#claim-the-instance).
 
 After you claim the instance, go to **Instance admin** > **Users** and confirm that the list of superadmins is correct.
 
@@ -147,7 +147,7 @@ If anyone other than you can deploy, read [Security and isolation](/operate/secu
 
 ## 8. Set quotas
 
-Set organization caps and member allowances before people start to deploy. For more information, refer to [Quotas and usage](/teams/quotas/).
+Set organization caps and member allowances before people start to deploy. For more information, refer to [Set quotas](/teams/quotas/).
 
 ## 9. Set up email
 
@@ -187,4 +187,4 @@ The first command should print `invite_only` or `closed`. If the second command 
 
 - [Finish instance setup](/operate/finishing-setup/)
 - [Upgrade Orchard](/operate/upgrades/)
-- [Backups and restore](/data/backups/)
+- [Back up and restore a database](/data/backups/)

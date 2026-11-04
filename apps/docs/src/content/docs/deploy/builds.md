@@ -106,5 +106,5 @@ Orchard uses these keys only for `FROM` and `COPY --from` pulls. It does not pas
 
 ## Related resources
 
-- [Rollbacks](/deploy/rollbacks/)
+- [Roll back an app](/deploy/rollbacks/)
 - [Deploy from GitHub](/deploy/github/)

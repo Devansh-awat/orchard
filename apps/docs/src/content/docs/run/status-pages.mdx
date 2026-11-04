@@ -100,7 +100,7 @@ The page lists up to 20 incidents. Replica shortages and firing alerts change a 
 
 A host serves the page at `<host>.<your instance domain>`. When you save a host, Orchard creates an Ingress and requests a certificate through cert-manager.
 
-DNS for the host must point to your cluster. If you use a wildcard DNS record for your instance domain, no other DNS change is needed. For more information, refer to [Wildcard certificates](/operate/wildcard-certificates/).
+DNS for the host must point to your cluster. If you use a wildcard DNS record for your instance domain, no other DNS change is needed. For more information, refer to [Set up wildcard certificates](/operate/wildcard-certificates/).
 
 To remove a host from the CLI, run:
 
@@ -146,5 +146,5 @@ orchard status-page delete <pageId>
 ## Related resources
 
 - [Create alert rules](/run/alerts/)
-- [Domains and HTTPS](/deploy/domains/)
+- [Manage domains and HTTPS](/deploy/domains/)
 - [`orchard status-page` reference](/reference/cli/#status-page)

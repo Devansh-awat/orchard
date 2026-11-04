@@ -73,7 +73,7 @@ The taint is optional. To limit how many builds run at once, set `MAX_CONCURRENT
 
 ## Related resources
 
-- [Node pools](/operate/node-pools/)
-- [Quotas and usage](/teams/quotas/)
-- [Scaling and resources](/deploy/scaling/)
-- [Troubleshooting](/operate/troubleshooting/)
+- [Manage node pools](/operate/node-pools/)
+- [Set quotas](/teams/quotas/)
+- [Scale an app and set resources](/deploy/scaling/)
+- [Troubleshooting Orchard](/operate/troubleshooting/)

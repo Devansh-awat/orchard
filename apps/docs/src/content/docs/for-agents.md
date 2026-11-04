@@ -72,4 +72,4 @@ A retry with the same key and body replays the first response for 24 hours. The 
 
 - [Connect an MCP client](/mcp/)
 - [Code mode for agents](/agents-code-mode/)
-- [CLI](/cli/)
+- [Use the CLI](/cli/)

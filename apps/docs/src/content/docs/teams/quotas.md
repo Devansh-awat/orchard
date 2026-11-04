@@ -1,5 +1,5 @@
 ---
-title: Quotas and usage
+title: Set quotas
 description: Set Orchard organization caps and member allowances, read the Usage page, and transfer project ownership.
 sidebar:
   order: 5
@@ -83,5 +83,5 @@ When the recipient accepts, they become a project admin. The previous owner keep
 
 ## Related resources
 
-- [Scaling and resources](/deploy/scaling/)
-- [Nodes and pools](/operate/nodes/)
+- [Scale an app and set resources](/deploy/scaling/)
+- [Manage nodes and pools](/operate/nodes/)

@@ -15,8 +15,8 @@ The **Overview** page shows a setup checklist and the number of users, organizat
 
 | Page              | Use it to                                                                                        | More information                                             |
 | ----------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------ |
-| **Configuration** | Set object storage, email, custom domains, wildcard certificates, and other instance settings.    | [Finishing setup](/operate/finishing-setup/)                 |
-| **Networking**    | Check DNS for instance hostnames and manage Cloudflare Tunnel routes.                            | [Finishing setup](/operate/finishing-setup/)                 |
+| **Configuration** | Set object storage, email, custom domains, wildcard certificates, and other instance settings.    | [Finish instance setup](/operate/finishing-setup/)                 |
+| **Networking**    | Check DNS for instance hostnames and manage Cloudflare Tunnel routes.                            | [Finish instance setup](/operate/finishing-setup/)                 |
 | **Nodes**         | Sync nodes from the cluster, and manage taints, assignments, and node pools.                     | [Manage node pools](/operate/node-pools/)                    |
 | **Usage**         | Read CPU, memory, pods, and nodes for each organization.                                         | [Review usage](/teams/usage/)                                |
 | **Grafts**        | Read which grafts and taps are installed, and what each graft asked for.                         | [Install grafts](/grafts/install/)                           |
@@ -27,13 +27,13 @@ The **Overview** page shows a setup checklist and the number of users, organizat
 | ----------------- | --------------------------------------------------------------------- | -------------------------------------------------------- |
 | **Users**         | Edit users, grant the superadmin role, and delete users.              | [Manage users](/operate/manage-users/)                   |
 | **Organizations** | Create and delete organizations, and set resource quotas.             | [Manage organizations](/operate/manage-organizations/)   |
-| **Sign in**       | Add identity providers, and require single sign-on for the instance.  | [SSO](/teams/sso/)                                       |
+| **Sign in**       | Add identity providers, and require single sign-on for the instance.  | [Set up SSO](/teams/sso/)                                       |
 
 ## Maintenance
 
 | Page          | Use it to                                                | More information                                       |
 | ------------- | -------------------------------------------------------- | ------------------------------------------------------ |
-| **Audit log** | Read actions across the instance.                        | [Audit logs](/teams/audit-logs/)                       |
+| **Audit log** | Read actions across the instance.                        | [Read audit logs](/teams/audit-logs/)                       |
 | **Backfill**  | Set resource requests on older apps and databases.       | [Size older workloads](/operate/backfill/)             |
 
 ## Configuration sections
@@ -47,18 +47,18 @@ The **Configuration** page has these sections:
 | **Custom domains**            | Sets the hostname that people point their own domains at with a CNAME record.              |
 | **Wildcard certificate**      | Uses one certificate for every generated app URL.                                          |
 | **Public exposure**           | Sets the default address for raw TCP and UDP ports and public databases.                   |
-| **GitLab sign-in**            | Lets people connect a GitLab account. For more information, refer to [Deploy from GitLab, Gitea and others](/deploy/git-providers/). |
+| **GitLab sign-in**            | Lets people connect a GitLab account. For more information, refer to [Deploy from GitLab, Gitea, and others](/deploy/git-providers/). |
 | **Bitbucket sign-in**         | Lets people connect a Bitbucket Cloud account.                                             |
 | **Bot protection**            | Adds a Cloudflare Turnstile challenge. Refer to [Turn on bot protection](/operate/bot-protection/). |
-| **Model Context Protocol**    | Turns the MCP endpoint on or off. Refer to [MCP for agents](/mcp/).                        |
-| **Image scanning**            | Selects the vulnerability scanner. Refer to [Image scanning](/operate/image-scanning/).    |
+| **Model Context Protocol**    | Turns the MCP endpoint on or off. Refer to [Connect an MCP client](/mcp/).                        |
+| **Image scanning**            | Selects the vulnerability scanner. Refer to [Set up image scanning](/operate/image-scanning/).    |
 | **Databases**                 | Sets defaults for managed databases, such as weekly restore tests and the connection pooler. |
-| **Anonymous usage reports**   | Turns usage reports on or off. Refer to [Anonymous usage reports](/operate/telemetry/).    |
+| **Anonymous usage reports**   | Turns usage reports on or off. Refer to [Manage anonymous usage reports](/operate/telemetry/).    |
 
 A field that shows `Set by the environment` has a value from a server environment variable. Change the variable to change the value.
 
 ## Related resources
 
 - [Configuration](/operate/configuration/)
-- [Organizations and roles](/teams/organizations/)
+- [Manage organizations and roles](/teams/organizations/)
 - [Host commands](/operate/host-commands/)

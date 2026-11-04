@@ -82,5 +82,5 @@ Orchard wraps each mount. If a graft throws while mounting or updating, that ele
 
 ## Related resources
 
-- [Graft UI slots](/reference/graft-slots/): Review each slot and its props.
-- [graft.json](/grafts/build/manifest/): Declare screens.
+- [Graft UI slots](/reference/graft-slots/)
+- [graft.json](/grafts/build/manifest/)

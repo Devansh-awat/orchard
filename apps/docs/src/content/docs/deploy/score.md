@@ -75,4 +75,4 @@ When Orchard finds a Score file, the new app form shows the databases, ports, an
 ## Related resources
 
 - [Deploy from GitHub](/deploy/github/)
-- [Databases](/data/databases/)
+- [Create and manage a database](/data/databases/)

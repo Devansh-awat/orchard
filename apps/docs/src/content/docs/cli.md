@@ -1,5 +1,5 @@
 ---
-title: CLI
+title: Use the CLI
 description: Install the Orchard CLI, sign in to an instance, set a default project and script commands with JSON output.
 ---
 

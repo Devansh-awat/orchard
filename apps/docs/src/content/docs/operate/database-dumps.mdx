@@ -5,7 +5,7 @@ sidebar:
   order: 10
 ---
 
-The Helm chart can run `pg_dump` on a schedule and upload each dump to S3-compatible storage. Use this option for databases outside Orchard, such as the control-plane database. For managed databases, refer to [Backups and restore](/data/backups/).
+The Helm chart can run `pg_dump` on a schedule and upload each dump to S3-compatible storage. Use this option for databases outside Orchard, such as the control-plane database. For managed databases, refer to [Back up and restore a database](/data/backups/).
 
 The chart creates one CronJob for each target.
 
@@ -68,5 +68,5 @@ Each target needs `name`, `host`, `database`, `user`, and `passwordSecret.name`.
 
 ## Related resources
 
-- [Going to production](/operate/production/)
-- [Backups and restore](/data/backups/)
+- [Go to production](/operate/production/)
+- [Back up and restore a database](/data/backups/)

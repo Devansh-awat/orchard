@@ -1,5 +1,5 @@
 ---
-title: Scaling and resources
+title: Scale an app and set resources
 description: Change the replica count of an Orchard app, stop and start it, set its CPU and memory, and configure health checks.
 sidebar:
   order: 5
@@ -115,9 +115,9 @@ orchard deploy health-check set <id> --path /healthz --port 3000
 
 ## Quotas
 
-An organization can set resource caps, and each member can have an allowance inside those caps. The limit for a new app is the smaller of the amount left in your allowance and the amount left in the organization's cap. For more information, refer to [Quotas and usage](/teams/quotas/).
+An organization can set resource caps, and each member can have an allowance inside those caps. The limit for a new app is the smaller of the amount left in your allowance and the amount left in the organization's cap. For more information, refer to [Set quotas](/teams/quotas/).
 
 ## Related resources
 
-- [Metrics and anomalies](/run/observability/)
-- [Storage](/deploy/storage/)
+- [Metrics and alerts](/run/observability/)
+- [Attach storage to an app](/deploy/storage/)

@@ -130,5 +130,5 @@ A Python API:
 
 ## Related resources
 
-- [Machines](/greenhouse/machines/#setup-script): Configure the machine setup script.
-- [Preview a session](/greenhouse/previews/): Open the port that your run script serves on.
+- [Machines](/greenhouse/machines/#setup-script)
+- [Preview a session](/greenhouse/previews/)

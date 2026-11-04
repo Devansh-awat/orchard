@@ -33,7 +33,7 @@ Your trust policy controls which kinds can load. Refer to [Trust](/grafts/instal
 Orchard publishes these first-party grafts:
 
 - [Greenhouse](/greenhouse/) (`greenhouse`): Cloud machines with coding agents.
-- [The Grove](/run/grove/) (`forum`): A forum for the people on an instance.
+- [Run the Grove](/run/grove/) (`forum`): A forum for the people on an instance.
 - Announcements (`announcements`): Notices on project and app pages.
 
 ## Parts of a graft

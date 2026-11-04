@@ -1,5 +1,5 @@
 ---
-title: Audit logs
+title: Read audit logs
 description: Read Orchard audit logs at the app, organization and instance level to find who made a change and when.
 sidebar:
   order: 4

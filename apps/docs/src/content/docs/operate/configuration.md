@@ -111,4 +111,4 @@ To publish your own notes, point the setting at your own folder. `latest.json` n
 
 - [Finish instance setup](/operate/finishing-setup/)
 - [Host commands](/operate/host-commands/)
-- [Configuration reference](/reference/configuration/)
+- [Configuration](/reference/configuration/)

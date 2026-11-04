@@ -183,4 +183,4 @@ Check that `copyToTenants` is on, or that your replicator covers that namespace.
 ## Related resources
 
 - [Use a wildcard certificate](/operate/finishing-setup/#use-a-wildcard-certificate)
-- [Domains and HTTPS](/deploy/domains/)
+- [Manage domains and HTTPS](/deploy/domains/)

@@ -1,5 +1,5 @@
 ---
-title: Backups and restore
+title: Back up and restore a database
 description: Back up an Orchard managed database, take checkpoints, restore to a point in time, copy a database, recover a deleted database, and configure backup storage.
 sidebar:
   order: 2
@@ -168,7 +168,7 @@ orchard db ops undo <op-id> --wait
 </TabItem>
 </Tabs>
 
-## Deleted databases
+## Recover a deleted database
 
 A deleted database stays in **Recently deleted** for 30 days, and Orchard then purges it. You can bring it back only if it had at least one completed backup, because recovery replays that backup.
 
@@ -289,7 +289,7 @@ To install without the local store, pass `--object-storage false`. Databases the
 
 `orchardctl update` turns on the local store for an older host only when no object storage is configured in the values file, in `server.envFrom`, in `r2Proxy.upstream`, or under **Instance admin**.
 
-### Moving to real S3 or R2
+### Move to S3 or R2
 
 Each existing database's backup configuration names the bucket, and the proxy serves only the bucket it is configured with. Keep the bucket name, and copy the existing data before you switch. If you do not copy it, point-in-time restore loses everything from before the switch.
 
@@ -328,6 +328,6 @@ Each existing database's backup configuration names the bucket, and the proxy se
 
 ## Related resources
 
-- [Databases](/data/databases/)
+- [Create and manage a database](/data/databases/)
 - [Protect a database](/data/protection/)
-- [Rollbacks](/deploy/rollbacks/)
+- [Roll back an app](/deploy/rollbacks/)

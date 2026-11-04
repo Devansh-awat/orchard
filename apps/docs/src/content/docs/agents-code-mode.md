@@ -140,5 +140,5 @@ Each call is one turn for the model. Scripts in a shell need fewer turns for wor
 ## Related resources
 
 - [Connect an MCP client](/mcp/)
-- [CLI](/cli/)
+- [Use the CLI](/cli/)
 - [Docs for agents](/for-agents/)

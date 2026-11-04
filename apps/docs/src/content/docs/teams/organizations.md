@@ -77,10 +77,10 @@ Removing a project credential restores the organization credential. Removing an 
 
 A superadmin operates the instance. This role is separate from organization roles. A superadmin can administer every organization and manage instance settings, nodes and node pools at **Instance admin**.
 
-A new instance has no superadmin. The first superadmin claims the instance with a single-use setup token. For more information, refer to [Install](/start/install/#claiming-the-instance).
+A new instance has no superadmin. The first superadmin claims the instance with a single-use setup token. For more information, refer to [Install](/start/install/#claim-the-instance).
 
 ## Related resources
 
 - [Set up SSO](/teams/sso/)
-- [SCIM provisioning](/teams/scim/)
-- [Quotas and usage](/teams/quotas/)
+- [Set up SCIM provisioning](/teams/scim/)
+- [Set quotas](/teams/quotas/)

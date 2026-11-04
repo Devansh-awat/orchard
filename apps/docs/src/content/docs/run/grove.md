@@ -1,5 +1,5 @@
 ---
-title: The Grove
+title: Run the Grove
 description: Turn on the Grove, a discussion forum for the people on your Orchard instance, shipped as the forum graft.
 sidebar:
   order: 10

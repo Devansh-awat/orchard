@@ -90,5 +90,5 @@ Run the command when a graft is published and when your Orchard version changes,
 
 ## Related resources
 
-- [Install grafts](/grafts/install/): Add and remove grafts.
-- [Troubleshooting grafts](/grafts/troubleshooting/): Fix a failed upgrade.
+- [Install grafts](/grafts/install/)
+- [Troubleshooting grafts](/grafts/troubleshooting/)

@@ -1,5 +1,5 @@
 ---
-title: Domains and HTTPS
+title: Manage domains and HTTPS
 description: Use the generated HTTPS URL for an Orchard app, add a custom domain, configure DNS, and redirect a domain.
 sidebar:
   order: 4
@@ -95,9 +95,9 @@ orchard domain update <ingress-id> --host new.example.com
 | Installer, `public` mode | One certificate for each hostname, over HTTP-01 |
 | Installer, `lan` mode | Self-signed certificates |
 | Installer, `tunnel` mode | Cloudflare terminates TLS. Orchard does not use cert-manager. |
-| Helm chart with a DNS-01 issuer | A wildcard certificate. For more information, refer to [Wildcard certificates](/operate/wildcard-certificates/). |
+| Helm chart with a DNS-01 issuer | A wildcard certificate. For more information, refer to [Set up wildcard certificates](/operate/wildcard-certificates/). |
 
 ## Related resources
 
-- [Deployment protection](/deploy/protection/)
-- [Networking](/deploy/networking/)
+- [Protect an app](/deploy/protection/)
+- [Configure app networking](/deploy/networking/)

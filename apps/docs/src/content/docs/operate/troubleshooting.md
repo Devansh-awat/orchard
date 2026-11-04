@@ -17,7 +17,7 @@ Image builds need a container registry, but DOCKER_REGISTRY_PUSH and DOCKER_REGI
 
 **Cause:** The instance has no registry configured. This occurs on a Helm install without registry values.
 
-**Fix:** Set `DOCKER_REGISTRY_PUSH` and `DOCKER_REGISTRY_PULL` on the server. For more information, refer to [Using your own registry](/operate/finishing-setup/#using-your-own-registry).
+**Fix:** Set `DOCKER_REGISTRY_PUSH` and `DOCKER_REGISTRY_PULL` on the server. For more information, refer to [Use your own registry](/operate/finishing-setup/#use-your-own-registry).
 
 ### A build succeeds and then the push fails
 
@@ -27,7 +27,7 @@ dial tcp 203.0.113.10:443: connect: connection refused
 
 **Cause:** A network policy blocks the builder from reaching the registry. Builders can only reach DNS, public IP addresses on ports 80 and 443, and the destinations in `builders.registryEgress`.
 
-**Fix:** Add the registry to `builders.registryEgress`. For more information, refer to [Using your own registry](/operate/finishing-setup/#using-your-own-registry).
+**Fix:** Add the registry to `builders.registryEgress`. For more information, refer to [Use your own registry](/operate/finishing-setup/#use-your-own-registry).
 
 ### Build fails with a missing module or command
 
@@ -150,7 +150,7 @@ kubectl -n <NAMESPACE> get pods,pvc
 **Cause:** One of the following:
 
 - DNS does not resolve to the instance yet. Check [Point DNS at this instance](/operate/finishing-setup/#point-dns-at-this-instance).
-- The ingress controller cannot reach the ACME solver. Check [Letting the ingress controller reach apps](/operate/finishing-setup/#letting-the-ingress-controller-reach-apps).
+- The ingress controller cannot reach the ACME solver. Check [Let the ingress controller reach apps](/operate/finishing-setup/#let-the-ingress-controller-reach-apps).
 
 **Fix:** Correct the cause, then check the challenge:
 
@@ -162,7 +162,7 @@ kubectl get challenges -A
 
 **Cause:** The app is protected and the webhook path is not a public path.
 
-**Fix:** Add the path to the public paths list. For more information, refer to [Protection](/deploy/protection/).
+**Fix:** Add the path to the public paths list. For more information, refer to [Protect an app](/deploy/protection/).
 
 ## Sign-in
 
@@ -172,7 +172,7 @@ kubectl get challenges -A
 
 **Fix:** On the host, run `sudo orchardctl login` or `sudo orchardctl password set`. To add email, refer to [Set up email](/operate/finishing-setup/#set-up-email).
 
-## The platform
+## Control plane
 
 ### The dashboard returns a 404 at a name that resolves to the host
 

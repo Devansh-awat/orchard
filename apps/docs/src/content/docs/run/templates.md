@@ -1,5 +1,5 @@
 ---
-title: Templates
+title: Deploy and write templates
 description: Deploy an Orchard template that creates several resources together, write your own template in YAML, and publish it to the community registry.
 sidebar:
   order: 4
@@ -234,5 +234,5 @@ https://assets.orchard.my/registry/templates/<name>/latest/template.yaml
 
 ## Related resources
 
-- [Compose stacks](/run/compose/)
-- [Databases](/data/databases/)
+- [Deploy a compose stack](/run/compose/)
+- [Create and manage a database](/data/databases/)

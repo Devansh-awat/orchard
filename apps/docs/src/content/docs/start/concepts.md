@@ -67,4 +67,4 @@ Organizations and projects each have their own roles.
 | Member | Create and edit project resources. |
 | Viewer | Read-only access. |
 
-Superadmin is a separate role for the people who operate the instance. For more information, refer to [Organizations and roles](/teams/organizations/).
+Superadmin is a separate role for the people who operate the instance. For more information, refer to [Manage organizations and roles](/teams/organizations/).

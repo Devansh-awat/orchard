@@ -1,5 +1,5 @@
 ---
-title: Logs and request data
+title: Configure logs and request data
 description: Configure the Orchard log store and ingress access logs that power log search, the Requests view and attack signals.
 sidebar:
   order: 8
@@ -186,6 +186,6 @@ Behind a proxy or CDN, the client address is in a header. HAProxy can read one w
 
 ## Related resources
 
-- [Logs and shell](/run/logs/)
+- [Read logs and open a shell](/run/logs/)
 - [Metrics and alerts](/run/observability/)
 - [Host commands](/operate/host-commands/)

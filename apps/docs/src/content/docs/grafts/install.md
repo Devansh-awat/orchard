@@ -201,6 +201,6 @@ When the database runs out of connections, new requests fail until connections f
 
 ## Related resources
 
-- [Upgrade and roll back grafts](/grafts/upgrades/): Move between versions.
-- [Graft API versions](/reference/graft-api/): Review each door and its capability.
-- [Run Greenhouse](/operate/greenhouse/): Install and configure the Greenhouse graft.
+- [Upgrade and roll back grafts](/grafts/upgrades/)
+- [Graft API versions](/reference/graft-api/)
+- [Run Greenhouse](/operate/greenhouse/)

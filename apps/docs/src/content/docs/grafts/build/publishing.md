@@ -105,5 +105,5 @@ Each version lists the Orchard versions it works with in `engines.platform`. `or
 
 ## Related resources
 
-- [Install grafts](/grafts/install/): Review what operators see.
-- [Get started](/grafts/build/quickstart/): Scaffold a graft.
+- [Install grafts](/grafts/install/)
+- [Get started](/grafts/build/quickstart/)

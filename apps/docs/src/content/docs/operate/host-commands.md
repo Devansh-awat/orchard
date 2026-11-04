@@ -168,7 +168,7 @@ sudo orchardctl registry allow my-registry --label app=registry --port 5000
 sudo orchardctl registry remove my-registry
 ```
 
-Sets the registries that builds can reach. A build to an unlisted registry fails at the push. `allow` replaces any entry for the same namespace. For more information, refer to [Using your own registry](/operate/finishing-setup/#using-your-own-registry).
+Sets the registries that builds can reach. A build to an unlisted registry fails at the push. `allow` replaces any entry for the same namespace. For more information, refer to [Use your own registry](/operate/finishing-setup/#use-your-own-registry).
 
 ## policies
 
@@ -178,7 +178,7 @@ sudo orchardctl policies set traefik,orchard --apply
 sudo orchardctl policies reapply
 ```
 
-Sets the namespaces that can reach tenant apps. `reapply` restarts the server, which rewrites the policy in every managed namespace. For more information, refer to [Letting the ingress controller reach apps](/operate/finishing-setup/#letting-the-ingress-controller-reach-apps).
+Sets the namespaces that can reach tenant apps. `reapply` restarts the server, which rewrites the policy in every managed namespace. For more information, refer to [Let the ingress controller reach apps](/operate/finishing-setup/#let-the-ingress-controller-reach-apps).
 
 ## mcp
 
@@ -300,7 +300,7 @@ The command prompts for the password and turns off terminal echo, so the passwor
 On an instance served over plain HTTP, the password crosses the network in clear text at each sign-in. On an untrusted network, use `orchardctl login`.
 :::
 
-## stop, start and restart
+## stop, start, and restart
 
 ```bash
 sudo orchardctl stop
@@ -384,4 +384,4 @@ sudo orchardctl sync    # installs the binary and links the aliases
 
 - [Configuration](/operate/configuration/)
 - [Upgrade Orchard](/operate/upgrades/)
-- [CLI](/cli/)
+- [Use the CLI](/cli/)

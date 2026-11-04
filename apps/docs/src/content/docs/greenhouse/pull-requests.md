@@ -74,5 +74,5 @@ The commit endpoint, `POST /apiv1/sandboxes/:id/git/commit`, can also commit onl
 
 ## Related resources
 
-- [Share a machine](/greenhouse/sharing/#git-identity): Learn how Greenhouse attributes commits and pushes.
-- [Automate Greenhouse](/greenhouse/automation/): Open a pull request with `create_sandbox_session_pr`.
+- [Share a machine](/greenhouse/sharing/#git-identity)
+- [Automate Greenhouse](/greenhouse/automation/)

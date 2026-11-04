@@ -86,5 +86,5 @@ When the proxy connects, the CLI fetches the machine's current host keys from Or
 
 ## Related resources
 
-- [SSH identities](/account/ssh-identities/): Manage the keys on your account.
-- [Troubleshooting Greenhouse](/greenhouse/troubleshooting/#ssh-reports-that-the-host-key-changed): Fix SSH errors.
+- [Manage SSH identities](/account/ssh-identities/)
+- [Troubleshooting Greenhouse](/greenhouse/troubleshooting/#ssh-reports-that-the-host-key-changed)

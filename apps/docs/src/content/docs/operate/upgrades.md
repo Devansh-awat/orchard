@@ -54,4 +54,4 @@ You can roll back the release with `helm rollback`. If the new version migrated 
 ## Related resources
 
 - [Host commands](/operate/host-commands/)
-- [Going to production](/operate/production/)
+- [Go to production](/operate/production/)

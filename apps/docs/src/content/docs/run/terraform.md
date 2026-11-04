@@ -1,5 +1,5 @@
 ---
-title: Terraform and OpenTofu
+title: Manage Orchard with Terraform and OpenTofu
 description: Manage Orchard projects, apps, databases, domains, variables, and jobs from HCL with the hackclub/orchard provider for Terraform and OpenTofu.
 sidebar:
   order: 9
@@ -137,5 +137,5 @@ tofu import orchard_ingress.www <project id>:<ingress id>
 
 ## Related resources
 
-- [API tokens](/account/tokens/)
-- [CLI](/cli/)
+- [Manage API tokens](/account/tokens/)
+- [Use the CLI](/cli/)

@@ -113,6 +113,6 @@ if (this.flags.configured && !(await this.flags.isEnabled('notes', userId))) {
 
 ## Related resources
 
-- [graft.json](/grafts/build/manifest/): Declare capabilities and public routes.
-- [Use the database](/grafts/build/database/): Query the graft's schema.
-- [Graft API versions](/reference/graft-api/): Review every door.
+- [graft.json](/grafts/build/manifest/)
+- [Use the database](/grafts/build/database/)
+- [Graft API versions](/reference/graft-api/)

@@ -1,5 +1,5 @@
 ---
-title: SCIM provisioning
+title: Set up SCIM provisioning
 description: Connect an identity provider to Orchard with SCIM 2.0 to add, update and deactivate organization members automatically.
 sidebar:
   order: 3

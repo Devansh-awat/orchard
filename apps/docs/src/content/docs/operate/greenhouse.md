@@ -302,7 +302,7 @@ Orchard records each delivery and ignores a repeat. Each person can start up to 
 
 ## Settings reference
 
-### Admin settings
+### Instance admin settings
 
 These settings are in **Instance admin** > **Configuration**. Setting the environment variable locks the field. Saved changes reach every replica within 30 seconds.
 
@@ -471,6 +471,6 @@ Greenhouse records these actions under `sandbox.`: `create`, `start`, `stop`, `d
 
 ## Related resources
 
-- [Greenhouse](/greenhouse/): The user guide.
-- [Install grafts](/grafts/install/): Manage trust policy and graft settings.
-- [Troubleshooting Greenhouse](/greenhouse/troubleshooting/): Fix common failures by symptom.
+- [Greenhouse](/greenhouse/)
+- [Install grafts](/grafts/install/)
+- [Troubleshooting Greenhouse](/greenhouse/troubleshooting/)

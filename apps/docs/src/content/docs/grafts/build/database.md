@@ -76,5 +76,5 @@ Operators can override the size with `orchardctl graft pool`. Orchard checks the
 
 ## Related resources
 
-- [graft.json](/grafts/build/manifest/): Declare core reads and adopted tables.
-- [Upgrade and roll back grafts](/grafts/upgrades/): Learn how migrations run on an upgrade.
+- [graft.json](/grafts/build/manifest/)
+- [Upgrade and roll back grafts](/grafts/upgrades/)

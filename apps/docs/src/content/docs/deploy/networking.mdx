@@ -1,5 +1,5 @@
 ---
-title: Networking
+title: Configure app networking
 description: Set how an Orchard app is reached, connect apps with internal addresses, publish raw TCP or UDP ports, and read client details from request headers.
 sidebar:
   order: 4
@@ -92,7 +92,7 @@ orchard service port public enable <service-id> <port-id> --deployment <id>
 </Tabs>
 
 :::caution
-Public TCP and UDP traffic skips the HTTP layer, so [Deployment protection](/deploy/protection/) does not apply. The service must handle its own authentication.
+Public TCP and UDP traffic skips the HTTP layer, so [Protect an app](/deploy/protection/) does not apply. The service must handle its own authentication.
 :::
 
 ## Outbound traffic
@@ -124,5 +124,5 @@ Managed databases are reachable inside the cluster by default. To publish one, r
 
 ## Related resources
 
-- [Domains and HTTPS](/deploy/domains/)
-- [Deployment protection](/deploy/protection/)
+- [Manage domains and HTTPS](/deploy/domains/)
+- [Protect an app](/deploy/protection/)

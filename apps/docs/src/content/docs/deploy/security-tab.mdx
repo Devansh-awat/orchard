@@ -23,7 +23,7 @@ When there are no findings, the card shows **Nothing to flag**.
 
 ## Image scan
 
-The **Image scan** card lists known vulnerabilities in the app's container image. A superadmin must set up a scanner on the instance. For more information, refer to [Image scanning](/operate/image-scanning/).
+The **Image scan** card lists known vulnerabilities in the app's container image. A superadmin must set up a scanner on the instance. For more information, refer to [Set up image scanning](/operate/image-scanning/).
 
 To run a scan, select **Scan now** or **Scan again**.
 
@@ -50,12 +50,12 @@ The **Attack attempts** chart and the **Top sources** list show suspicious reque
 | **Password guessing** | One client address receives at least 21 `401` or `403` responses from one path within 5 minutes.                                        |
 | **Floods**          | One client address sends at least 300 requests, and more than 10 times the median of all clients. This check needs at least 5 client addresses. |
 
-If the card shows `Requests aren't recorded yet`, the log store has no access logs for the app. To set up access logs, refer to [Logs and request data](/operate/logs/).
+If the card shows `Requests aren't recorded yet`, the log store has no access logs for the app. To set up access logs, refer to [Configure logs and request data](/operate/logs/).
 
-The **Top sources** list can show the row **Hidden by the load balancer**. This row groups private and cluster addresses. For more information, refer to [Logs and request data](/operate/logs/).
+The **Top sources** list can show the row **Hidden by the load balancer**. This row groups private and cluster addresses. For more information, refer to [Configure logs and request data](/operate/logs/).
 
 ## Related resources
 
-- [Image scanning](/operate/image-scanning/)
-- [Environments and variables](/run/environments/)
-- [Deployment protection](/deploy/protection/)
+- [Set up image scanning](/operate/image-scanning/)
+- [Manage variables and environments](/run/environments/)
+- [Protect an app](/deploy/protection/)

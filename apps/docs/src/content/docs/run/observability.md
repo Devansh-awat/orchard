@@ -11,7 +11,7 @@ Orchard reports app and database health in three places: metrics over time, a li
 
 Each app shows CPU and memory as a current value and over time on its **Observe** tab. Databases add size, connections, and activity. For the panels on each tab, refer to [Monitor an app](/run/monitor-an-app/) and [Monitor a database](/data/monitoring/).
 
-When you size an app, read the range. `kubectl top` reports one instant, which can mislead you on a workload with spikes. For suggestions based on recent use, refer to [Resource suggestions](/deploy/resource-suggestions/).
+When you size an app, read the range. `kubectl top` reports one instant, which can mislead you on a workload with spikes. For suggestions based on recent use, refer to [Apply resource suggestions](/deploy/resource-suggestions/).
 
 ## Current problems
 
@@ -30,7 +30,7 @@ A project's **Overview** tab, and the top of each app and database page, show a 
 
 Each row names the resource, shows how long the problem has existed, and links to the action that helps.
 
-## Deployment alerts
+## App alerts
 
 Alerts above an app's tabs reflect the current state of the cluster. They include a failing build, a crash-looping pod, resource pressure, and a lost live connection. An alert clears when its condition clears. Short grace windows apply where state can flap, so a single restart does not leave a permanent banner.
 

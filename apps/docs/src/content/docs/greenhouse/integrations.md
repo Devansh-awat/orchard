@@ -110,5 +110,5 @@ You can start up to five sessions per minute from these integrations. Greenhouse
 
 ## Related resources
 
-- [Automate Greenhouse](/greenhouse/automation/): Start sessions from MCP and the CLI.
-- [Share a machine](/greenhouse/sharing/): Learn how Greenhouse attributes prompts.
+- [Automate Greenhouse](/greenhouse/automation/)
+- [Share a machine](/greenhouse/sharing/)

@@ -69,7 +69,7 @@ Test a connection before you turn this on. A provider that fails blocks every me
 
 Superadmins can still sign in without SSO, so that a broken provider does not lock the instance.
 
-## Customize the login page
+## Customize the sign-in page
 
 1. In **Login page**, enter a **Logo** URL, **Heading** and **Subheading**.
 2. Select the **Accent** and **Background** colors.
@@ -85,7 +85,7 @@ A vanity address sends visitors at `<subdomain>.<base domain>` to your sign-in p
 
 Orchard creates an Ingress and a certificate for the host. If the organization has no working SSO connection, visitors to the address go to the normal login page.
 
-## Set up platform providers
+## Set up instance providers
 
 A superadmin can offer a provider on the instance login page for everyone. To do this, go to **Instance admin** > **Sign in**. The same page has **Require single sign-on for everyone**, which stops email codes, passkeys and the superadmin password for everyone except superadmins.
 
@@ -93,6 +93,6 @@ To set a provider through environment variables, refer to [Add an identity provi
 
 ## Related resources
 
-- [SCIM provisioning](/teams/scim/)
+- [Set up SCIM provisioning](/teams/scim/)
 - [Manage organizations and roles](/teams/organizations/)
 - [Configuration](/operate/configuration/#base-domain)
