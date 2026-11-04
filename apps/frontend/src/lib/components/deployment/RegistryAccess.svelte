@@ -52,11 +52,11 @@
 			});
 			if (!res.ok) {
 				const d = await res.json().catch(() => ({}));
-				throw new Error(d.message || 'Failed to save credential');
+				throw new Error(d.message || "Couldn't save credential");
 			}
 			toasts.add({
 				title: `Pulling from ${host} as ${username.trim()}`,
-				description: 'Pods are rolling to pick up the credential.',
+				description: 'Your app is restarting to use the credential.',
 				color: 'success'
 			});
 			editing = false;
@@ -64,7 +64,7 @@
 			await load();
 		} catch (e) {
 			toasts.add({
-				title: e instanceof Error ? e.message : 'Failed to save credential',
+				title: e instanceof Error ? e.message : "Couldn't save credential",
 				color: 'error'
 			});
 		} finally {
@@ -81,13 +81,13 @@
 			});
 			if (!res.ok) {
 				const d = await res.json().catch(() => ({}));
-				throw new Error(d.message || 'Failed to remove credential');
+				throw new Error(d.message || "Couldn't remove credential");
 			}
 			toasts.add({ title: `Removed ${host} credential`, color: 'success' });
 			await load();
 		} catch (e) {
 			toasts.add({
-				title: e instanceof Error ? e.message : 'Failed to remove credential',
+				title: e instanceof Error ? e.message : "Couldn't remove credential",
 				color: 'error'
 			});
 		} finally {

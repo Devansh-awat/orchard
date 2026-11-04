@@ -97,7 +97,7 @@ const RULES: Rule[] = [
 	},
 	{
 		test: /failed to compute cache key[^\n]*"\/?([^"]+)": not found|"\/?([^"]+)": not found/i,
-		title: (m) => `${code(m[1] ?? m[2])} is not in the build`,
+		title: (m) => `${code(m[1] ?? m[2])} isn't in the build`,
 		fix: () => 'Commit it, or take it out of .dockerignore if it is listed there.'
 	},
 	{
@@ -152,7 +152,7 @@ const RULES: Rule[] = [
 	},
 	{
 		test: /exit code: 127/,
-		title: () => 'A command in this step is not installed',
+		title: () => "A command in this step isn't installed",
 		fix: () => 'Install it in an earlier RUN, or start FROM an image that has it.'
 	},
 	{
@@ -166,7 +166,7 @@ const RULES: Rule[] = [
 		test: /Repository not found|could not read Username|Authentication failed for|Permission denied \(publickey\)/i,
 		phase: 'clone',
 		title: () => "Orchard can't read the repository",
-		fix: () => 'Check that the Orchard GitHub app still has access to it.'
+		fix: () => 'Check that the Orchard GitHub App still has access to it.'
 	},
 	{
 		test: /exceeded the maximum runtime/i,
@@ -177,7 +177,7 @@ const RULES: Rule[] = [
 		test: /did not start within|could not be resumed or requeued|Recovery failed/i,
 		phase: 'queue',
 		title: () => "Orchard couldn't start a builder",
-		fix: () => 'This is on Orchard, not your code. Redeploy to try again.'
+		fix: () => "Your code didn't cause this. Redeploy to try again."
 	}
 ];
 
@@ -308,7 +308,7 @@ export function diagnoseBuild(input: {
 			phase: 'push',
 			step,
 			title: 'Pushing the image failed',
-			fix: 'This is on Orchard, not your code. Redeploy to try again.',
+			fix: "Your code didn't cause this. Redeploy to try again.",
 			setting: null,
 			evidence: step ? stepEvidence(step) : errorEvidence(parsed, error)
 		};

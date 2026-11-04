@@ -149,7 +149,7 @@ test('who did it prefers the account, then the git author, then the recorded ema
 
 	const platform = entry({ id: 'audit:2', kind: 'audit', meta: { actorEmail: null } });
 	assert.equal(originLabel(platform), 'by the platform');
-	assert.equal(originLabel(entry({ id: 'pod:1', kind: 'pod' })), 'from the cluster');
+	assert.equal(originLabel(entry({ id: 'pod:1', kind: 'pod' })), 'from Kubernetes');
 });
 
 test('the synthetic building row yields to a real build entry when the feed already has one', () => {

@@ -126,10 +126,10 @@
 				repositories = Array.isArray(data) ? data : (data.repositories ?? []);
 			} else {
 				const body = await response.json().catch(() => null);
-				reposError = body?.message || 'Could not load your repositories.';
+				reposError = body?.message || "Couldn't load your repositories.";
 			}
 		} catch {
-			reposError = 'Could not load your repositories.';
+			reposError = "Couldn't load your repositories.";
 		} finally {
 			loadingRepos = false;
 		}
@@ -259,7 +259,7 @@
 			});
 			if (!response.ok) {
 				const data = await response.json().catch(() => ({}));
-				throw new Error(data.message || 'Failed to update repository');
+				throw new Error(data.message || "Couldn't update repository");
 			}
 			const updated = await response.json();
 			onUpdated(updated);
@@ -267,13 +267,13 @@
 			justSaved = true;
 			toasts.add({
 				title: 'Repository updated',
-				description: 'Future builds will use the new source',
+				description: 'Future builds use the new source',
 				color: 'success'
 			});
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to update repository',
+				title: "Couldn't update repository",
+				description: e instanceof Error ? e.message : "Couldn't update repository",
 				color: 'error'
 			});
 		} finally {

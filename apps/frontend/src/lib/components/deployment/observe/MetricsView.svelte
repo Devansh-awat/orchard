@@ -796,7 +796,7 @@
 			<Disclosure
 				title="Traffic and errors"
 				size="lg"
-				note={source ? `Measured at the ${source} ingress` : undefined}
+				note={source ? `Measured at ${source}` : undefined}
 				bind:open={open.traffic}
 			>
 				<div class="grid">
@@ -861,7 +861,7 @@
 						title="Response time"
 						info={percentiles
 							? 'Half of requests finish faster than typical; 1 in 20 is slower than slow, 1 in 100 slower than worst.'
-							: 'Average and slowest response per interval; this ingress does not record percentiles.'}
+							: "Average and slowest response per interval. Percentiles aren't recorded."}
 						series={series.lat}
 						from={metrics.from}
 						to={metrics.to}
@@ -959,7 +959,7 @@
 				<MetricPanel
 					focus={metrics.focus}
 					title="Memory"
-					info="Memory used against the limit. At the limit the container is killed (OOMKilled)."
+					info="Memory used against the limit. At the limit, the container is killed."
 					series={memSeries}
 					from={metrics.from}
 					to={forecastEnd ?? metrics.to}

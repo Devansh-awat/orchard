@@ -58,12 +58,12 @@
 	];
 	const CONFLICT_REASONS: Record<string, string> = {
 		reference: 'Changed in Kubernetes, but its value comes from a reference. Edit it here.',
-		'foreign-source': 'Read from a ConfigMap or Secret Orchard does not manage.',
+		'foreign-source': "Read from a ConfigMap or Secret Orchard doesn't manage.",
 		'orphan-secret-ref': 'Points at a secret Orchard has no variable for.',
 		'removed-secret':
-			'Removed in Kubernetes. Orchard kept its value; delete it here if that was intended.',
+			'Removed in Kubernetes. Orchard kept its value. If that was intended, delete it here.',
 		'mass-removal':
-			'Disappeared from Kubernetes with most other variables. Orchard kept it; delete it here if that was intended.'
+			'Removed from Kubernetes with most other variables. Orchard kept it. If that was intended, delete it here.'
 	};
 
 	type Pick = { kind: 'bound'; binding: Binding } | { kind: 'option'; option: BindingOption };
@@ -104,7 +104,7 @@
 			if (!KEY_RE.test(key))
 				add(key, {
 					tone: 'error',
-					text: 'Use letters, digits and underscores, and do not start with a digit.'
+					text: "Use letters, digits and underscores, and don't start with a digit."
 				});
 			if (seen.has(key)) add(key, { tone: 'error', text: 'This name is set more than once.' });
 			seen.add(key);

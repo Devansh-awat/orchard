@@ -84,7 +84,7 @@
 		try {
 			const response = await apiFetch(`/apiv1/pods/${podName}?namespace=${namespace}`);
 			if (!response.ok) {
-				throw new Error('Failed to fetch pod details');
+				throw new Error("Couldn't load pod details");
 			}
 			pod = await response.json();
 			if (pod?.spec?.containers?.length && !selectedContainer) {
@@ -92,7 +92,7 @@
 			}
 		} catch (e) {
 			if (!silent) {
-				error = e instanceof Error ? e.message : 'Failed to fetch pod details';
+				error = e instanceof Error ? e.message : "Couldn't load pod details";
 			}
 		} finally {
 			if (!silent) loading = false;
@@ -108,18 +108,18 @@
 			});
 			if (!res.ok) {
 				const d = await res.json().catch(() => ({}));
-				throw new Error(d.message || 'Failed to delete pod');
+				throw new Error(d.message || "Couldn't delete pod");
 			}
 			toasts.add({
 				title: 'Pod deleted',
-				description: 'A replacement pod will be scheduled automatically',
+				description: 'Kubernetes starts a replacement',
 				color: 'success'
 			});
 			window.history.back();
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to delete pod',
+				title: "Couldn't delete pod",
+				description: e instanceof Error ? e.message : "Couldn't delete pod",
 				color: 'error'
 			});
 		} finally {
@@ -182,7 +182,7 @@
 		<div class="flex justify-center py-12">
 			<div class="text-center">
 				<Loader2 class="mx-auto h-8 w-8 animate-spin text-primary-600" />
-				<p class="mt-2 text-sm text-muted">Loading pod details...</p>
+				<p class="mt-2 text-sm text-muted">Loading pod details…</p>
 			</div>
 		</div>
 	{:else if pod}
@@ -307,7 +307,7 @@
 <ConfirmModal
 	bind:open={showDeleteModal}
 	title="Delete pod"
-	description="The pod will be terminated and a replacement scheduled by its deployment."
+	description="The pod stops, and Kubernetes starts a replacement."
 	confirmLabel="Delete pod"
 	onconfirm={deletePod}
 	oncancel={() => {}}

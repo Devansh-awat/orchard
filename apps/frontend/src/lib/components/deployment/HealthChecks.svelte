@@ -155,12 +155,7 @@
 							<Swap key={healthCheckType}>
 								<SettingsList>
 									{#if healthCheckType === 'http'}
-										<SettingRow
-											label="Path"
-											hint="Should answer 2xx while healthy"
-											for="{uid}-path"
-											wide
-										>
+										<SettingRow label="Path" hint="Returns 2xx while healthy" for="{uid}-path" wide>
 											<Input
 												id="{uid}-path"
 												bind:value={healthCheckPath}

@@ -328,10 +328,7 @@
 		{#snippet actions()}
 			{@const moment = verdict ? verdictMoment(verdict) : null}
 			{#if moment}
-				<CopyButton
-					value={momentLink($page.url, moment)}
-					label="Copy a link to this deploy's moment"
-				/>
+				<CopyButton value={momentLink($page.url, moment)} label="Copy a link to this deploy" />
 			{/if}
 			{#if imageHistoryId}
 				{#if !entry.meta.isActive}

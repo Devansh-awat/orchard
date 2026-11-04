@@ -66,13 +66,13 @@ export class TailscaleController {
 			});
 			if (!response.ok) {
 				const data = await response.json().catch(() => ({}));
-				throw new Error(data.message || 'Failed to expose to Tailscale');
+				throw new Error(data.message || "Couldn't expose to Tailscale");
 			}
 			const data = await response.json();
 			this.hostname = data.hostname;
 			toasts.add({
 				title: 'Exposed to Tailscale',
-				description: 'Sidecar is starting — address will appear shortly',
+				description: 'The address appears once Tailscale connects.',
 				color: 'success'
 			});
 			this.#deps.refetch();
@@ -80,8 +80,8 @@ export class TailscaleController {
 			setTimeout(() => this.fetchDeploymentStatus(), 15000);
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to expose to Tailscale',
+				title: "Couldn't expose to Tailscale",
+				description: e instanceof Error ? e.message : "Couldn't expose to Tailscale",
 				color: 'error'
 			});
 		} finally {
@@ -97,7 +97,7 @@ export class TailscaleController {
 			});
 			if (!response.ok) {
 				const data = await response.json().catch(() => ({}));
-				throw new Error(data.message || 'Failed to remove Tailscale exposure');
+				throw new Error(data.message || "Couldn't remove Tailscale exposure");
 			}
 			this.hostname = null;
 			this.ip = null;
@@ -110,8 +110,8 @@ export class TailscaleController {
 			this.#deps.refetch();
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to remove Tailscale exposure',
+				title: "Couldn't remove Tailscale exposure",
+				description: e instanceof Error ? e.message : "Couldn't remove Tailscale exposure",
 				color: 'error'
 			});
 		} finally {

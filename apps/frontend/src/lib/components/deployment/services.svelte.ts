@@ -34,11 +34,11 @@ function buildPortPayloadFromForm(form: ServiceFormState) {
 		const servicePort = Number(port.servicePort);
 
 		if (!Number.isInteger(containerPort) || containerPort <= 0) {
-			return { error: `Port ${index + 1}: Container port must be a positive integer` };
+			return { error: `Port ${index + 1}: Enter a whole number above 0 for the container port` };
 		}
 
 		if (!Number.isInteger(servicePort) || servicePort <= 0) {
-			return { error: `Port ${index + 1}: Service port must be a positive integer` };
+			return { error: `Port ${index + 1}: Enter a whole number above 0 for the exposed port` };
 		}
 
 		const protocol =
@@ -174,8 +174,8 @@ export class ServicesController {
 	async copyInternalUrl(url: string | undefined, serviceId: string) {
 		if (!url) {
 			toasts.add({
-				title: 'Error',
-				description: 'No internal URL available',
+				title: "Couldn't copy the internal URL",
+				description: 'This port has no internal URL.',
 				color: 'error'
 			});
 			return;
@@ -205,14 +205,14 @@ export class ServicesController {
 			}, 2000);
 			toasts.add({
 				title: 'Copied',
-				description: 'Internal URL copied to clipboard',
+				description: 'Internal URL copied',
 				color: 'success'
 			});
 		} catch (error) {
-			console.error('Copy failed:', error);
+			console.error("Couldn't copy:", error);
 			toasts.add({
-				title: 'Error',
-				description: 'Failed to copy URL. Please select and copy manually.',
+				title: 'Select the URL and copy it yourself.',
+				description: 'Select the URL and copy it yourself.',
 				color: 'error'
 			});
 		}
@@ -263,7 +263,7 @@ export class ServicesController {
 
 			if (!response.ok) {
 				const data = await response.json().catch(() => ({}));
-				throw new Error(data.message || 'Failed to create service');
+				throw new Error(data.message || "Couldn't add port");
 			}
 
 			const updated = await response.json();
@@ -281,7 +281,7 @@ export class ServicesController {
 				this.isEditing = false;
 			}
 		} catch (e) {
-			this.formError = e instanceof Error ? e.message : 'Failed to create service';
+			this.formError = e instanceof Error ? e.message : "Couldn't add port";
 		} finally {
 			this.creating = false;
 		}
@@ -297,12 +297,12 @@ export class ServicesController {
 			);
 			if (!response.ok) {
 				const data = await response.json().catch(() => ({}));
-				throw new Error(data.message || 'Failed to toggle public exposure');
+				throw new Error(data.message || "Couldn't change public access");
 			}
 			const res = await response.json();
 			await this.#deps.refetch();
 			toasts.add({
-				title: currentlyEnabled ? 'Port unexposed' : 'Port exposed publicly',
+				title: currentlyEnabled ? 'Port is private' : 'Port is public',
 				description:
 					!currentlyEnabled && res?.host && res?.port
 						? `Reachable at ${res.host}:${res.port}`
@@ -311,8 +311,8 @@ export class ServicesController {
 			});
 		} catch (e) {
 			toasts.add({
-				title: 'Public exposure failed',
-				description: e instanceof Error ? e.message : 'Unknown error',
+				title: "Couldn't change public access",
+				description: e instanceof Error ? e.message : 'Try again.',
 				color: 'error'
 			});
 		} finally {
@@ -347,7 +347,7 @@ export class ServicesController {
 
 			if (!response.ok) {
 				const data = await response.json().catch(() => ({}));
-				throw new Error(data.message || 'Failed to update service');
+				throw new Error(data.message || "Couldn't update port");
 			}
 
 			const updated = await response.json();
@@ -364,13 +364,13 @@ export class ServicesController {
 
 			toasts.add({
 				title: 'Port updated',
-				description: 'Port configuration saved',
+
 				color: 'success'
 			});
 		} catch (e) {
 			this.editErrors = {
 				...this.editErrors,
-				[serviceId]: e instanceof Error ? e.message : 'Failed to update service'
+				[serviceId]: e instanceof Error ? e.message : "Couldn't update port"
 			};
 		} finally {
 			this.savingId = null;
@@ -391,7 +391,7 @@ export class ServicesController {
 
 			if (!response.ok) {
 				const data = await response.json().catch(() => ({}));
-				throw new Error(data.message || 'Failed to delete service');
+				throw new Error(data.message || "Couldn't remove port");
 			}
 
 			const updated = await response.json();
@@ -408,8 +408,8 @@ export class ServicesController {
 			this.editErrors = restErrors;
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to remove port',
+				title: "Couldn't remove port",
+				description: e instanceof Error ? e.message : "Couldn't remove port",
 				color: 'error'
 			});
 		} finally {

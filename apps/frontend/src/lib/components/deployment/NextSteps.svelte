@@ -44,7 +44,7 @@
 		},
 		resources: {
 			title: 'Set CPU and memory',
-			hint: 'Running on the org default',
+			hint: 'Using the organization default',
 			icon: Gauge,
 			settings: 'resources'
 		},

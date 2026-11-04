@@ -35,7 +35,7 @@ export const TIMELINE_FILTERS: { value: TimelineFilter; label: string; hint: str
 	{ value: 'deploys', label: 'Deploys', hint: 'Releases and builds' },
 	{ value: 'all', label: 'Everything', hint: 'Everything that happened to this app' },
 	{ value: 'changes', label: 'Changes', hint: 'Settings and actions by people' },
-	{ value: 'pods', label: 'Pods', hint: 'Pod lifecycle from the cluster' },
+	{ value: 'pods', label: 'Pods', hint: 'Pod lifecycle from Kubernetes' },
 	{ value: 'errors', label: 'Errors', hint: 'New error groups' }
 ];
 
@@ -409,7 +409,7 @@ export function actorLabel(entry: TimelineEntry): string | null {
 
 export function originLabel(entry: TimelineEntry): string {
 	const who = actorLabel(entry);
-	if (entry.kind === 'pod') return 'from the cluster';
+	if (entry.kind === 'pod') return 'from Kubernetes';
 	if (entry.kind === 'error') return 'first seen';
 	if (entry.kind === 'release' || entry.kind === 'build') {
 		if (entry.meta.triggerType === 'auto') return who ? `push by ${who}` : 'via GitHub';

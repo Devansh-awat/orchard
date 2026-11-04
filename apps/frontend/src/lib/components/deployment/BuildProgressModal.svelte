@@ -211,7 +211,7 @@
 		{:else}
 			<Button variant="danger" loading={cancelingBuild} onclick={onCancelBuild}>
 				{#if cancelingBuild}
-					Cancelling...
+					Canceling…
 				{:else}
 					<X size={14} />
 					Cancel deployment
@@ -313,7 +313,7 @@
 												? 'Creating app...'
 												: 'Building...'}
 							{:else if cardStatus === 'pending'}
-								Starting deployment...
+								Starting deployment…
 							{:else if cardStatus === 'failed'}
 								Deployment failed
 							{:else if cardStatus === 'running'}

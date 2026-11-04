@@ -32,22 +32,22 @@
 		off: 'Image scanning is off',
 		external_image: 'Harbor only scans images Orchard builds',
 		no_image: 'No image to scan yet',
-		not_scannable: 'This image cannot be scanned',
-		not_configured: 'Scanning is not set up on this instance',
+		not_scannable: "This image can't be scanned",
+		not_configured: "Scanning isn't set up on this instance",
 		unauthorized: 'The scanner refused Orchard',
 		not_found: 'This image is no longer in the registry',
-		unreachable: 'Cannot reach the scanner'
+		unreachable: "Can't reach the scanner"
 	};
 
 	const DETAILS: Record<string, string> = {
-		off: 'A superadmin can turn on Harbor or the Orchard scanner in Admin, Instance.',
+		off: 'A superadmin can turn on Harbor or the Orchard scanner in Instance admin, under Configuration.',
 		external_image: 'Build from a repository, or switch the instance to the Orchard scanner.',
 		not_found: 'Redeploy to build and scan it again.'
 	};
 
 	const NOT_CONFIGURED: Record<string, string> = {
 		harbor: 'Harbor is the chosen scanner, but its API credentials are missing.',
-		trivy: 'The Orchard scanner is chosen, but its Trivy server is not deployed.'
+		trivy: "The Orchard scanner is chosen, but its Trivy server isn't deployed."
 	};
 
 	const PROVIDERS: Record<string, string> = {
@@ -139,7 +139,7 @@
 			<div class="reading">
 				{#if status}<span class="dot"><StatusDot meta={status} /></span>{/if}
 				{#if loadError}
-					<span class="headline">Could not load the security report</span>
+					<span class="headline">Couldn't load the security report</span>
 				{:else if scan && state === 'vulnerable'}
 					<span class="value">{scan.counts.total}</span>
 					<span class="of"

@@ -235,9 +235,9 @@ export function explainExitCode(
 		case 2:
 			return { short: 'Start command was rejected as malformed', severity: 'error' };
 		case 126:
-			return { short: 'Start command is not executable', severity: 'error' };
+			return { short: "Start command isn't executable", severity: 'error' };
 		case 127:
-			return { short: 'Start command was not found in the image', severity: 'error' };
+			return { short: "Start command wasn't found in the image", severity: 'error' };
 		case 139:
 			return { short: 'Segfaulted on invalid memory access', severity: 'critical' };
 		case 143:
@@ -278,7 +278,7 @@ export function humanizeWarning(msg: string): HumanizedWarning | null {
 	if (/evicted/i.test(m)) {
 		return {
 			title: 'Pod evicted',
-			hint: 'The node ran out of resources and kicked this pod. It should reschedule automatically. If it keeps happening, reduce resource usage.',
+			hint: 'The node ran out of resources and removed this pod. Kubernetes moves it to another node. If this keeps happening, reduce resource usage.',
 			severity: 'critical'
 		};
 	}
@@ -353,14 +353,14 @@ export function humanizeWarning(msg: string): HumanizedWarning | null {
 		) {
 			return {
 				title: 'Waiting for storage',
-				hint: 'The pod is waiting on a volume that has not been created or bound yet. This usually clears on its own once the volume is ready.',
+				hint: "The pod is waiting on a volume that hasn't been created or bound yet. This usually clears on its own once the volume is ready.",
 				severity: 'warning'
 			};
 		}
 		if (/volume node affinity conflict/i.test(m)) {
 			return {
 				title: 'Volume is on another node',
-				hint: 'The pod can only run on the node holding its volume, and that node cannot take it. Free capacity there, or recreate the volume.',
+				hint: "The pod can only run on the node holding its volume, and that node can't take it. Free capacity there, or recreate the volume.",
 				severity: 'error'
 			};
 		}
@@ -381,14 +381,14 @@ export function humanizeWarning(msg: string): HumanizedWarning | null {
 		}
 		return {
 			title: "Couldn't place the pod on a node",
-			hint: 'Kubernetes will keep retrying. The event text below says which constraint it could not satisfy.',
+			hint: "Kubernetes keeps retrying. The event text below says which constraint it couldn't satisfy.",
 			severity: 'error'
 		};
 	}
 	if (/multi-attach error/i.test(m)) {
 		return {
 			title: 'Volume still attached elsewhere',
-			hint: 'The volume can only be mounted by one pod at a time and the previous pod has not released it yet. It usually clears within a minute.',
+			hint: "The volume can only be mounted by one pod at a time and the previous pod hasn't released it yet. It usually clears within a minute.",
 			severity: 'warning'
 		};
 	}
@@ -402,7 +402,7 @@ export function humanizeWarning(msg: string): HumanizedWarning | null {
 	if (/containercreating/i.test(m) && /timeout/i.test(m)) {
 		return {
 			title: 'Container stuck creating',
-			hint: 'The container is taking an unusually long time to start. Could be a slow image pull or volume mount.',
+			hint: 'The container is taking an unusually long time to start. This can be a slow image pull or volume mount.',
 			severity: 'error'
 		};
 	}
@@ -453,14 +453,14 @@ export function humanizeWarning(msg: string): HumanizedWarning | null {
 	if (/preempt/i.test(m)) {
 		return {
 			title: 'Pod preempted',
-			hint: "A higher-priority workload needed this pod's resources. It will be rescheduled automatically.",
+			hint: "A higher-priority workload needed this pod's resources. Kubernetes moves it automatically.",
 			severity: 'warning'
 		};
 	}
 	if (/insufficient cpu/i.test(m)) {
 		return {
 			title: 'Not enough CPU available',
-			hint: "The cluster doesn't have enough CPU to schedule this pod. Try lowering the CPU request.",
+			hint: 'No node has enough CPU to run this pod. Try lowering the CPU request.',
 			severity: 'warning',
 			action: 'Check resources'
 		};
@@ -468,7 +468,7 @@ export function humanizeWarning(msg: string): HumanizedWarning | null {
 	if (/insufficient memory/i.test(m)) {
 		return {
 			title: 'Not enough memory available',
-			hint: "The cluster doesn't have enough memory to schedule this pod. Try lowering the memory request.",
+			hint: 'No node has enough memory to run this pod. Try lowering the memory request.',
 			severity: 'warning',
 			action: 'Check resources'
 		};
@@ -483,7 +483,7 @@ export function humanizeWarning(msg: string): HumanizedWarning | null {
 	if (/network.*not ready|cni/i.test(m)) {
 		return {
 			title: 'Network not ready',
-			hint: "The pod's network interface isn't configured yet. Usually transient during node startup.",
+			hint: "The pod's network interface isn't configured yet. This usually clears once the node finishes starting.",
 			severity: 'warning'
 		};
 	}
@@ -499,7 +499,7 @@ export function humanizeWarning(msg: string): HumanizedWarning | null {
 	}
 	if (/successfully pulled/i.test(m)) {
 		return {
-			title: 'Image pulled successfully',
+			title: 'Image pulled',
 			hint: 'The container image was downloaded and is ready to start.',
 			severity: 'info'
 		};
@@ -507,14 +507,14 @@ export function humanizeWarning(msg: string): HumanizedWarning | null {
 	if (/created container|started container/i.test(m)) {
 		return {
 			title: 'Container starting',
-			hint: 'The container has been created and is booting up.',
+			hint: 'The container is starting.',
 			severity: 'info'
 		};
 	}
 	if (/killing.*container.*with.*signal/i.test(m) || /stopping container/i.test(m)) {
 		return {
 			title: 'Container shutting down',
-			hint: 'The container is being gracefully stopped. This is normal during deploys and restarts.',
+			hint: 'The container is stopping. This is normal during deploys and restarts.',
 			severity: 'info'
 		};
 	}

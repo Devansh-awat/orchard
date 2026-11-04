@@ -110,7 +110,7 @@
 	</form>
 
 	{#if newUrl && newlyCreatedToken}
-		<Alert tone="success" title="Copy this now, it is only shown once">
+		<Alert tone="success" title="Copy this now. You only see it once.">
 			{#snippet icon()}<KeyRound size={16} />{/snippet}
 			{#snippet actions()}
 				<Button variant="ghost" size="sm" onclick={() => (newlyCreatedToken = null)}>Done</Button>

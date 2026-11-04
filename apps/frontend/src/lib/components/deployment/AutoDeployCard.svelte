@@ -142,7 +142,8 @@
 					</Alert>
 				{:else if problem === 'unlinked'}
 					<Alert tone="warning" title="Auto-deploy is on but not connected">
-						Pushes never reach this app. Reconnect to bind it; branch and watch paths are kept.
+						Pushes don't reach this app. Reconnect to fix this. Orchard keeps the branch and watch
+						paths.
 						{#snippet actions()}
 							<Button
 								size="sm"
@@ -182,7 +183,7 @@
 									>
 								{/if}
 							{:else}
-								<span class="ad-hook-note">The secret is with whoever linked {provider.name}.</span>
+								<span class="ad-hook-note">Whoever linked {provider.name}.</span>
 							{/if}
 						</div>
 						{#snippet actions()}
@@ -234,7 +235,7 @@
 				label="Watch paths"
 				for="{uid}-paths"
 				stack
-				hint="One glob per line. A line starting with ! ignores matches; empty builds every push."
+				hint="One glob per line. Start a line with ! to ignore matches. If empty, every push builds."
 			>
 				<Textarea
 					id="{uid}-paths"

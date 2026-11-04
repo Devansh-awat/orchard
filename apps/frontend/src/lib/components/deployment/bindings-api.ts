@@ -8,13 +8,13 @@ async function readError(res: Response, fallback: string): Promise<never> {
 
 export async function fetchBindings(deploymentId: string): Promise<Binding[]> {
 	const res = await apiFetch(`/apiv1/deployments/${deploymentId}/bindings`);
-	if (!res.ok) return readError(res, 'Could not load bindings');
+	if (!res.ok) return readError(res, "Couldn't load bindings");
 	return res.json();
 }
 
 export async function fetchBindingOptions(deploymentId: string): Promise<BindingOption[]> {
 	const res = await apiFetch(`/apiv1/deployments/${deploymentId}/bindings/options`);
-	if (!res.ok) return readError(res, 'Could not load databases');
+	if (!res.ok) return readError(res, "Couldn't load databases");
 	return res.json();
 }
 
@@ -27,7 +27,7 @@ export async function createBinding(
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify(input)
 	});
-	if (!res.ok) return readError(res, 'Could not bind the database');
+	if (!res.ok) return readError(res, "Couldn't bind the database");
 	return res.json();
 }
 
@@ -35,5 +35,5 @@ export async function deleteBinding(deploymentId: string, bindingId: string): Pr
 	const res = await apiFetch(`/apiv1/deployments/${deploymentId}/bindings/${bindingId}`, {
 		method: 'DELETE'
 	});
-	if (!res.ok) return readError(res, 'Could not remove the binding');
+	if (!res.ok) return readError(res, "Couldn't remove the binding");
 }

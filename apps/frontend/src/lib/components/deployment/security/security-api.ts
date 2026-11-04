@@ -69,7 +69,7 @@ async function readError(res: Response, fallback: string): Promise<never> {
 
 export async function fetchSecurity(deploymentId: string): Promise<DeploymentSecurity> {
 	const res = await apiFetch(`/apiv1/deployments/${encodeURIComponent(deploymentId)}/security`);
-	if (!res.ok) return readError(res, 'Could not load the security report');
+	if (!res.ok) return readError(res, "Couldn't load the security report");
 	return res.json();
 }
 
@@ -78,6 +78,6 @@ export async function requestScan(deploymentId: string): Promise<DeploymentSecur
 		`/apiv1/deployments/${encodeURIComponent(deploymentId)}/security/scan`,
 		{ method: 'POST' }
 	);
-	if (!res.ok) return readError(res, 'Could not start a scan');
+	if (!res.ok) return readError(res, "Couldn't start a scan");
 	return res.json();
 }

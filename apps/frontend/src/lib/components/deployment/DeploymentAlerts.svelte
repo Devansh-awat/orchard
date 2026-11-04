@@ -183,7 +183,7 @@
 			items.push({
 				id: 'apply-error',
 				severity: 'error',
-				title: 'Change not applied to the cluster',
+				title: 'Change not applied',
 				hint: applyError.split('\n')[0].slice(0, 200),
 				action: onRetryApply ? 'Retry' : undefined,
 				onAction: onRetryApply,
@@ -201,7 +201,7 @@
 				id: 'resource-pressure',
 				severity: resourcePressure.memNear ? 'error' : 'warning',
 				title: 'Near resource limits',
-				hint: `${parts.join(' · ')} of allocated limits. ${resourcePressure.memNear ? 'Pods may be killed (OOMKilled) if memory exceeds the limit.' : 'Performance may degrade.'}`,
+				hint: `${parts.join(' · ')} of allocated limits. ${resourcePressure.memNear ? 'Pods restart if they use more than the memory limit.' : 'The app may slow down.'}`,
 				action: 'Adjust resources',
 				onAction: onGoToResources
 			});

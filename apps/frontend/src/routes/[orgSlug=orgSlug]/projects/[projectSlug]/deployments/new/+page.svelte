@@ -99,25 +99,25 @@
 		{
 			value: 'link',
 			label: 'Private link',
-			description: 'HTTPS ingress behind Orchard sign-in',
+			description: 'HTTPS, behind Orchard sign-in',
 			icon: ShieldCheck
 		},
 		{
 			value: 'public-link',
 			label: 'Public link',
-			description: 'HTTPS ingress, open to anyone',
+			description: 'HTTPS, open to anyone',
 			icon: Globe
 		},
 		{
 			value: 'port',
 			label: 'Public port',
-			description: 'Raw TCP or UDP on a node port',
+			description: 'TCP or UDP on a public port',
 			icon: Radio
 		},
 		{
 			value: 'internal',
 			label: 'Internal',
-			description: 'ClusterIP, only apps in this project',
+			description: 'Only apps in this project',
 			icon: Network
 		}
 	];
@@ -302,7 +302,7 @@
 		try {
 			project = await fetchProjectContext({ orgSlug, projectSlug, wsSlug });
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed to load project';
+			error = e instanceof Error ? e.message : "Couldn't load project";
 		} finally {
 			loading = false;
 		}
@@ -798,7 +798,7 @@
 			return null;
 		}
 		const listing = await apiFetch(`/apiv1/projects?orgId=${orgId}`);
-		if (!listing.ok) throw new Error('Could not load your projects');
+		if (!listing.ok) throw new Error("Couldn't load your projects");
 		const existing = findProjectByName<{ id: string; name: string; slug: string }>(
 			await listing.json(),
 			pendingProjectName
@@ -811,7 +811,7 @@
 		});
 		const data = await res.json().catch(() => ({}));
 		if (!res.ok) {
-			throw new Error(data?.message || 'Failed to create project');
+			throw new Error(data?.message || "Couldn't create project");
 		}
 		return data;
 	}
@@ -823,30 +823,30 @@
 		}
 
 		if (!name.trim()) {
-			formError = 'App name is required';
+			formError = 'Enter an app name';
 			return;
 		}
 
 		if (deploymentSource === 'image' && !image.trim()) {
-			formError = 'Docker image is required';
+			formError = 'Enter a Docker image';
 			return;
 		}
 
 		if (deploymentSource === 'git' && !gitSelection) {
-			formError = 'Pick a repository and branch';
+			formError = 'Choose a repository and branch';
 			return;
 		}
 		if (deploymentSource === 'github' || deploymentSource === 'git') {
 			if (!repoUrl.trim()) {
-				formError = 'Repository is required';
+				formError = 'Choose a repository';
 				return;
 			}
 			if (!branch.trim()) {
-				formError = 'Branch is required';
+				formError = 'Choose a branch';
 				return;
 			}
 			if (buildType === 'dockerfile' && !dockerfilePath.trim()) {
-				formError = 'Dockerfile path is required for Dockerfile builds';
+				formError = 'Enter the Dockerfile path';
 				return;
 			}
 		}
@@ -862,7 +862,7 @@
 			}));
 
 		if (validPorts.length === 0) {
-			formError = 'At least one valid port is required';
+			formError = 'Add at least one valid port';
 			return;
 		}
 
@@ -931,7 +931,7 @@
 			if (selectedEnvId) body.environmentId = selectedEnvId;
 
 			if (deploymentSource === 'git') {
-				if (!gitSelection) throw new Error('Pick a repository and branch');
+				if (!gitSelection) throw new Error('Choose a repository and branch');
 				body.gitConnectionId = gitSelection.connectionId;
 				body.externalRepoId = gitSelection.externalRepoId;
 			}
@@ -971,7 +971,7 @@
 
 			if (!response.ok) {
 				const data = await response.json().catch(() => ({}));
-				throw new Error(data.message || 'Failed to create app');
+				throw new Error(data.message || "Couldn't create app");
 			}
 
 			const deployment = await response.json();
@@ -989,7 +989,7 @@
 				goto(`/${orgSlug}/deployments/${deployment.id}`);
 			}
 		} catch (e) {
-			formError = e instanceof Error ? e.message : 'Failed to create app';
+			formError = e instanceof Error ? e.message : "Couldn't create app";
 		} finally {
 			submitting = false;
 		}
@@ -1085,7 +1085,7 @@
 		repoResults.error instanceof RepoSearchError
 			? repoResults.error
 			: repoResults.error
-				? new RepoSearchError('Could not search your repositories.', null, null)
+				? new RepoSearchError("Couldn't search your repositories.", null, null)
 				: null
 	);
 	const listedRepos = $derived.by((): Repository[] => {
@@ -1607,7 +1607,7 @@
 								</Field>
 								{#if imagePullPolicy === 'IfNotPresent' && isMutableTag(image)}
 									<Alert tone="warning" title="This tag can move">
-										Pushing over it will not show up on a restart. Automatic handles this.
+										A new push to this tag doesn't appear on restart. Automatic handles this.
 									</Alert>
 								{/if}
 							</Disclosure>

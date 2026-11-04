@@ -278,8 +278,7 @@ Three-level hierarchy: **Org cap** → **Member allowance** → **Deployment req
   domain or redirect with its status, the port it serves only when the app has more than one web port, an
   "Add protection" button (or a green chip naming the protection) and open/more. Ports (`PortsCard`): one
   row per port with protocol, private address (public address once public) and a Public switch, plus a
-  Tailscale row; turning Public on confirms with "This port will be accessible to anyone on the
-  internet". Adding a domain is one address field with a "Point to this app / Redirect" switch, then
+  Tailscale row; turning Public on confirms with "Anyone on the internet can reach this port". Adding a domain is one address field with a "Point to this app / Redirect" switch, then
   "Set up DNS" with the exact records from `POST /projects/ingresses/validate-dns` (CNAME for
   subdomains, A records for roots) and a check that polls until connected. Protection is a "Protection
   type" radio list (None, Password, Username and password, Project members). No explaining copy in these

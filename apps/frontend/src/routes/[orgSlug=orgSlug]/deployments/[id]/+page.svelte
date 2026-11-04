@@ -378,7 +378,7 @@
 			return created;
 		} catch (e) {
 			toasts.add({
-				title: 'Could not connect',
+				title: "Couldn't connect",
 				description: e instanceof Error ? e.message : '',
 				color: 'error'
 			});
@@ -564,14 +564,14 @@
 			});
 			if (!res.ok) {
 				const d = await res.json().catch(() => ({}));
-				throw new Error(d.message || 'Failed to delete pod');
+				throw new Error(d.message || "Couldn't delete pod");
 			}
 			toasts.add({ title: 'Pod deleted', description: podName, color: 'success' });
 			await fetchDeployment();
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to delete pod',
+				title: "Couldn't delete pod",
+				description: e instanceof Error ? e.message : "Couldn't delete pod",
 				color: 'error'
 			});
 		} finally {
@@ -710,7 +710,7 @@
 		if (!deployment || savingStrategy || next === strategyValue) return;
 		if (hasPvcVolume && next !== 'recreate') {
 			toasts.add({
-				title: 'A PVC volume needs recreate',
+				title: 'Apps with volumes must use Recreate',
 				color: 'warning'
 			});
 			return;
@@ -726,15 +726,15 @@
 			});
 			if (!res.ok) {
 				const data = await res.json().catch(() => null);
-				throw new Error(data?.message || 'Failed to update strategy');
+				throw new Error(data?.message || "Couldn't update strategy");
 			}
 			toasts.add({ title: 'Strategy updated', color: 'success' });
 			await fetchDeployment();
 		} catch (e) {
 			strategyValue = previous;
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed',
+				title: "Couldn't update strategy",
+				description: e instanceof Error ? e.message : undefined,
 				color: 'error'
 			});
 		} finally {
@@ -765,14 +765,14 @@
 			});
 			if (!res.ok) {
 				const data = await res.json().catch(() => null);
-				throw new Error(data?.message || 'Failed to update disruption budget');
+				throw new Error(data?.message || "Couldn't update disruption budget");
 			}
 			toasts.add({ title: 'Disruption budget updated', color: 'success' });
 			await fetchDeployment();
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed',
+				title: "Couldn't update disruption budget",
+				description: e instanceof Error ? e.message : undefined,
 				color: 'error'
 			});
 		} finally {
@@ -797,7 +797,7 @@
 			});
 			if (!res.ok) {
 				const data = await res.json().catch(() => null);
-				throw new Error(data?.message || 'Failed to update pull policy');
+				throw new Error(data?.message || "Couldn't update pull policy");
 			}
 			toasts.add({
 				title:
@@ -818,8 +818,8 @@
 		} catch (e) {
 			pullPolicy = previous;
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed',
+				title: "Couldn't update pull policy",
+				description: e instanceof Error ? e.message : undefined,
 				color: 'error'
 			});
 		} finally {
@@ -848,18 +848,18 @@
 			});
 			if (!res.ok) {
 				const data = await res.json().catch(() => null);
-				throw new Error(data?.message || 'Failed to update image');
+				throw new Error(data?.message || "Couldn't update image");
 			}
 			toasts.add({
 				title: 'Image updated',
-				description: 'Pods will roll to pull the new image.',
+				description: 'Your app restarts with the new image.',
 				color: 'success'
 			});
 			await fetchDeployment();
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed',
+				title: "Couldn't update image",
+				description: e instanceof Error ? e.message : undefined,
 				color: 'error'
 			});
 		} finally {
@@ -891,19 +891,19 @@
 			});
 			if (!res.ok) {
 				const data = await res.json().catch(() => null);
-				throw new Error(data?.message || 'Failed to update resources');
+				throw new Error(data?.message || "Couldn't update resources");
 			}
 			toasts.add({
 				title: 'Resources updated',
-				description: 'Pods will roll to pick up the new values.',
+				description: 'Your app restarts with the new values.',
 				color: 'success'
 			});
 			resourcesDirty = false;
 			await fetchDeployment();
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed',
+				title: "Couldn't update resources",
+				description: e instanceof Error ? e.message : undefined,
 				color: 'error'
 			});
 		} finally {
@@ -1156,11 +1156,11 @@
 			});
 			if (!response.ok) {
 				const data = await response.json().catch(() => ({}));
-				throw new Error(data.message || 'Failed to cancel deployment');
+				throw new Error(data.message || "Couldn't cancel deployment");
 			}
 			toasts.add({
-				title: 'Deployment cancelled',
-				description: 'The deployment has been cancelled successfully',
+				title: 'Deployment canceled',
+
 				color: 'success'
 			});
 			stopBuildPolling();
@@ -1171,8 +1171,8 @@
 			await fetchDeployment();
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to cancel deployment',
+				title: "Couldn't cancel deployment",
+				description: e instanceof Error ? e.message : "Couldn't cancel deployment",
 				color: 'error'
 			});
 		} finally {
@@ -1325,7 +1325,7 @@
 		untrack(() => {
 			if (qPending && !lastQueryData) return; // still loading initial
 			if (qError && !deployment) {
-				error = qError instanceof Error ? qError.message : 'Failed to fetch app';
+				error = qError instanceof Error ? qError.message : "Couldn't load app";
 				loading = false;
 				return;
 			}
@@ -1499,21 +1499,21 @@
 				method: 'POST'
 			});
 			if (!response.ok) {
-				throw new Error('Failed to restart app');
+				throw new Error("Couldn't restart app");
 			}
 			toasts.add({
 				title: 'App restarting',
 				description:
 					deployment?.deployStrategy === 'recreate'
-						? 'Recreate restart initiated'
-						: 'Rolling restart initiated',
+						? 'Stops everything, then starts again'
+						: 'New pods start before old ones stop',
 				color: 'success'
 			});
 			fetchDeployment();
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to restart',
+				title: "Couldn't restart",
+				description: e instanceof Error ? e.message : "Couldn't restart",
 				color: 'error'
 			});
 		} finally {
@@ -1533,23 +1533,23 @@
 			});
 			if (!response.ok) {
 				const data = await response.json().catch(() => ({}));
-				throw new Error(data.message || `Failed to ${kind} app`);
+				throw new Error(data.message || `Couldn't ${kind} app`);
 			}
 			toasts.add({
 				title: kind === 'stop' ? 'App stopping' : build ? 'Building latest push' : 'App starting',
 				description:
 					kind === 'stop'
-						? 'All replicas are being spun down'
+						? 'All replicas are stopping'
 						: build
-							? 'The app starts when the build lands'
+							? 'The app starts when the build finishes'
 							: `Restoring ${deployment?.replicas ?? 1} replica(s)`,
 				color: 'success'
 			});
 			await fetchDeployment();
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : `Failed to ${kind} app`,
+				title: `Couldn't ${kind} app`,
+				description: e instanceof Error ? e.message : `Couldn't ${kind} app`,
 				color: 'error'
 			});
 		} finally {
@@ -1568,12 +1568,12 @@
 			});
 			const data = await response.json().catch(() => null);
 			if (!response.ok) {
-				throw new Error(data?.message || 'Failed to scale app');
+				throw new Error(data?.message || "Couldn't scale app");
 			}
 			toasts.add({
 				title: data?.stopped ? 'App stopping' : 'App scaled',
 				description: data?.stopped
-					? 'All replicas are being spun down'
+					? 'All replicas are stopping'
 					: `Scaled to ${data?.replicas ?? scaleReplicas} replica(s)`,
 				color: 'success'
 			});
@@ -1582,8 +1582,8 @@
 			fetchDeployment();
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to scale',
+				title: "Couldn't scale",
+				description: e instanceof Error ? e.message : "Couldn't scale",
 				color: 'error'
 			});
 		} finally {
@@ -1600,7 +1600,7 @@
 			});
 			if (!response.ok) {
 				const data = await response.json().catch(() => ({}));
-				throw new Error(data.message || 'Failed to redeploy');
+				throw new Error(data.message || "Couldn't redeploy");
 			}
 			watchBuild(deploymentId);
 			toasts.add({
@@ -1625,8 +1625,8 @@
 			}
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to redeploy',
+				title: "Couldn't redeploy",
+				description: e instanceof Error ? e.message : "Couldn't redeploy",
 				color: 'error'
 			});
 		} finally {
@@ -1643,7 +1643,7 @@
 			});
 			if (!response.ok) {
 				const data = await response.json().catch(() => ({}));
-				throw new Error(data.message || 'Failed to delete app');
+				throw new Error(data.message || "Couldn't delete app");
 			}
 			toasts.add({
 				title: 'App deleted',
@@ -1656,8 +1656,8 @@
 			}
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to delete',
+				title: "Couldn't delete",
+				description: e instanceof Error ? e.message : "Couldn't delete",
 				color: 'error'
 			});
 		} finally {
@@ -1693,19 +1693,19 @@
 			});
 			if (!response.ok) {
 				const data = await response.json().catch(() => ({}));
-				throw new Error(data.message || 'Failed to update environment variables');
+				throw new Error(data.message || "Couldn't update environment variables");
 			}
 			toasts.add({
-				title: 'Environment updated',
-				description: 'Pods will restart with new variables',
+				title: 'Variables updated',
+				description: 'Your app restarts with the new variables',
 				color: 'success'
 			});
 			fetchDeployment();
 		} catch (e) {
 			isEditingEnv = true;
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to update env',
+				title: "Couldn't update variables",
+				description: e instanceof Error ? e.message : "Couldn't update variables",
 				color: 'error'
 			});
 		} finally {
@@ -1750,15 +1750,15 @@
 			);
 			if (!response.ok) {
 				const data = await response.json().catch(() => ({}));
-				throw new Error(data.message || 'Failed to remove domain');
+				throw new Error(data.message || "Couldn't remove domain");
 			}
 			toasts.add({ title: 'Domain removed', color: 'success' });
 			await fetchDeployment();
 			await fetchProjectIngresses();
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to remove domain',
+				title: "Couldn't remove domain",
+				description: e instanceof Error ? e.message : "Couldn't remove domain",
 				color: 'error'
 			});
 		} finally {
@@ -1786,7 +1786,7 @@
 			);
 			if (!response.ok) {
 				const data = await response.json().catch(() => ({}));
-				throw new Error(data.message || 'Failed to update protection');
+				throw new Error(data.message || "Couldn't update protection");
 			}
 			toasts.add({
 				title: mode === 'none' ? 'Protection disabled' : 'Protection enabled',
@@ -1795,8 +1795,8 @@
 			await fetchDeployment();
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to update protection',
+				title: "Couldn't update protection",
+				description: e instanceof Error ? e.message : "Couldn't update protection",
 				color: 'error'
 			});
 			throw e;
@@ -1827,15 +1827,15 @@
 			);
 			if (!response.ok) {
 				const body = await response.json().catch(() => ({}));
-				throw new Error(body.message || 'Failed to update redirect');
+				throw new Error(body.message || "Couldn't update redirect");
 			}
 			toasts.add({ title: 'Redirect updated', description: data.host, color: 'success' });
 			await fetchDeployment();
 			await fetchProjectIngresses();
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to update redirect',
+				title: "Couldn't update redirect",
+				description: e instanceof Error ? e.message : "Couldn't update redirect",
 				color: 'error'
 			});
 			throw e;
@@ -1921,7 +1921,7 @@
 			body: JSON.stringify({ projectId: deployment.project.id, domain })
 		});
 		const data = await response.json().catch(() => ({}));
-		if (!response.ok) throw new Error(data.message || 'Failed to check DNS');
+		if (!response.ok) throw new Error(data.message || "Couldn't check DNS");
 		return {
 			valid: !!data.valid,
 			message: data.message || '',
@@ -1932,7 +1932,7 @@
 	async function createDomain(): Promise<boolean> {
 		if (!deployment?.project?.id) return false;
 		if (!newDomainNormalizedHost) {
-			domainFormError = 'Domain is required';
+			domainFormError = 'Enter a domain';
 			return false;
 		}
 		if (newDomainConflict?.pathCollision) {
@@ -1941,11 +1941,11 @@
 		}
 		const option = domainServiceOptions.find((o) => o.key === newDomainServiceKey);
 		if (newDomainRoutingMode === 'service' && !option) {
-			domainFormError = 'Select a service';
+			domainFormError = 'Select a port';
 			return false;
 		}
 		if (newDomainRoutingMode === 'redirect' && !newDomainRedirectTarget.trim()) {
-			domainFormError = 'Redirect destination is required';
+			domainFormError = 'Enter a redirect destination';
 			return false;
 		}
 
@@ -1981,7 +1981,7 @@
 
 			if (!response.ok) {
 				const data = await response.json().catch(() => ({}));
-				throw new Error(data.message || 'Failed to add domain');
+				throw new Error(data.message || "Couldn't add domain");
 			}
 
 			toasts.add({
@@ -2000,7 +2000,7 @@
 			await fetchProjectIngresses();
 			return true;
 		} catch (e) {
-			domainFormError = e instanceof Error ? e.message : 'Failed to add domain';
+			domainFormError = e instanceof Error ? e.message : "Couldn't add domain";
 			return false;
 		} finally {
 			creatingDomain = false;
@@ -2025,7 +2025,7 @@
 			const response = await apiFetch(
 				`/apiv1/deployments/${deploymentId}/image-history/${historyId}/logs`
 			);
-			if (!response.ok) throw new Error('Failed to fetch deployment logs');
+			if (!response.ok) throw new Error("Couldn't load deployment logs");
 			const data = await response.json();
 			const logs = data.logs || '';
 			buildLogCache[historyId] = logs;
@@ -2076,12 +2076,12 @@
 			});
 			if (!response.ok) {
 				const data = await response.json().catch(() => null);
-				throw new Error(data?.message || 'Failed to rollback');
+				throw new Error(data?.message || "Couldn't roll back");
 			}
 			const result = await response.json().catch(() => null);
 			const restores = Array.isArray(result?.databaseRestores) ? result.databaseRestores.length : 0;
 			toasts.add({
-				title: 'Rollback initiated',
+				title: 'Rollback started',
 				description: restoreDatabases
 					? restores > 0
 						? `${restores} ${restores === 1 ? 'database is' : 'databases are'} going back to before that deploy.`
@@ -2092,8 +2092,8 @@
 			fetchDeployment();
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to rollback',
+				title: "Couldn't roll back",
+				description: e instanceof Error ? e.message : "Couldn't roll back",
 				color: 'error'
 			});
 		} finally {
@@ -2125,20 +2125,20 @@
 			});
 			if (!response.ok) {
 				const data = await response.json().catch(() => ({}));
-				throw new Error(data.message || 'Failed to update build settings');
+				throw new Error(data.message || "Couldn't update build settings");
 			}
 			const updated = await response.json();
 			if (deployment) mergeInto(deployment, updated);
 			else deployment = updated;
 			toasts.add({
 				title: 'Build settings updated',
-				description: 'They will apply on the next build',
+				description: 'They apply on the next build',
 				color: 'success'
 			});
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to update build settings',
+				title: "Couldn't update build settings",
+				description: e instanceof Error ? e.message : "Couldn't update build settings",
 				color: 'error'
 			});
 		} finally {
@@ -2164,7 +2164,7 @@
 
 			if (!response.ok) {
 				const data = await response.json().catch(() => ({}));
-				throw new Error(data.message || 'Failed to update build settings');
+				throw new Error(data.message || "Couldn't update build settings");
 			}
 
 			const updated = await response.json();
@@ -2174,14 +2174,14 @@
 
 			toasts.add({
 				title: 'Settings updated',
-				description: 'Build settings have been updated',
+
 				color: 'success'
 			});
 		} catch (e) {
 			isEditingBuildOptions = true;
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to update build settings',
+				title: "Couldn't update build settings",
+				description: e instanceof Error ? e.message : "Couldn't update build settings",
 				color: 'error'
 			});
 		} finally {
@@ -2200,7 +2200,7 @@
 			});
 			if (!response.ok) {
 				const data = await response.json().catch(() => ({}));
-				throw new Error(data.message || 'Failed to rename');
+				throw new Error(data.message || "Couldn't rename");
 			}
 			const updated = await response.json();
 			deployment.displayName = updated.displayName ?? null;
@@ -2208,8 +2208,8 @@
 			toasts.add({ title: 'App renamed', color: 'success' });
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to rename',
+				title: "Couldn't rename",
+				description: e instanceof Error ? e.message : "Couldn't rename",
 				color: 'error'
 			});
 		} finally {
@@ -2258,7 +2258,7 @@
 
 			if (!response.ok) {
 				const data = await response.json().catch(() => ({}));
-				throw new Error(data.message || 'Failed to update health check settings');
+				throw new Error(data.message || "Couldn't update health check settings");
 			}
 
 			const updated = await response.json();
@@ -2268,13 +2268,13 @@
 
 			toasts.add({
 				title: 'Settings updated',
-				description: 'Health check configuration has been updated',
+
 				color: 'success'
 			});
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to update health check settings',
+				title: "Couldn't update health check settings",
+				description: e instanceof Error ? e.message : "Couldn't update health check settings",
 				color: 'error'
 			});
 		} finally {
@@ -2363,7 +2363,7 @@
 
 			if (!response.ok) {
 				const data = await response.json().catch(() => ({}));
-				throw new Error(data.message || 'Failed to save watch paths');
+				throw new Error(data.message || "Couldn't save watch paths");
 			}
 
 			const result = await response.json();
@@ -2375,16 +2375,16 @@
 			toasts.add({
 				title: 'Watch paths saved',
 				description: result.autoDeployPaths?.length
-					? 'Only pushes changing these paths will build'
-					: 'Every push to the branch will build',
+					? 'Only pushes that change these paths build'
+					: 'Every push to the branch builds',
 				color: 'success'
 			});
 
 			await loadAutoDeployStatus();
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to save watch paths',
+				title: "Couldn't save watch paths",
+				description: e instanceof Error ? e.message : "Couldn't save watch paths",
 				color: 'error'
 			});
 		} finally {
@@ -2408,7 +2408,7 @@
 
 			if (!response.ok) {
 				const data = await response.json().catch(() => ({}));
-				throw new Error(data.message || 'Failed to enable auto-deploy');
+				throw new Error(data.message || "Couldn't enable auto-deploy");
 			}
 
 			const result = await response.json();
@@ -2416,16 +2416,16 @@
 			else deployment = result;
 
 			toasts.add({
-				title: 'Auto-deploy enabled',
-				description: `Deployments will be triggered on push to ${autoDeployBranch}`,
+				title: 'Auto-deploy on',
+				description: `Pushes to ${autoDeployBranch} now deploy`,
 				color: 'success'
 			});
 
 			await loadAutoDeployStatus();
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to enable auto-deploy',
+				title: "Couldn't enable auto-deploy",
+				description: e instanceof Error ? e.message : "Couldn't enable auto-deploy",
 				color: 'error'
 			});
 		} finally {
@@ -2444,7 +2444,7 @@
 
 			if (!response.ok) {
 				const data = await response.json().catch(() => ({}));
-				throw new Error(data.message || 'Failed to disable auto-deploy');
+				throw new Error(data.message || "Couldn't disable auto-deploy");
 			}
 
 			const result = await response.json();
@@ -2453,16 +2453,16 @@
 			autoDeployStatus = null;
 
 			toasts.add({
-				title: 'Auto-deploy disabled',
-				description: 'Automatic deployments have been disabled',
+				title: 'Auto-deploy off',
+				description: 'Pushes no longer deploy',
 				color: 'success'
 			});
 
 			await loadAutoDeployStatus();
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to disable auto-deploy',
+				title: "Couldn't disable auto-deploy",
+				description: e instanceof Error ? e.message : "Couldn't disable auto-deploy",
 				color: 'error'
 			});
 		} finally {
@@ -2525,12 +2525,12 @@
 
 			if (!response.ok) {
 				const data = await response.json().catch(() => ({}));
-				throw new Error(data?.message || 'Failed to update volumes');
+				throw new Error(data?.message || "Couldn't update volumes");
 			}
 
 			toasts.add({
 				title: 'Storage updated',
-				description: 'Your app will restart with the new storage configuration.',
+				description: 'Your app restarts with the new storage.',
 				color: 'success'
 			});
 
@@ -2538,8 +2538,8 @@
 		} catch (e) {
 			isEditingVolumes = true;
 			toasts.add({
-				title: 'Failed to update storage',
-				description: e instanceof Error ? e.message : 'Failed to update storage',
+				title: "Couldn't update storage",
+				description: e instanceof Error ? e.message : "Couldn't update storage",
 				color: 'error'
 			});
 		} finally {
@@ -2871,10 +2871,10 @@
 				await fetchWebhookTokens();
 				toasts.add({ title: 'Webhook token created', color: 'success' });
 			} else {
-				toasts.add({ title: 'Failed to create webhook token', color: 'error' });
+				toasts.add({ title: "Couldn't create webhook token", color: 'error' });
 			}
 		} catch {
-			toasts.add({ title: 'Failed to create webhook token', color: 'error' });
+			toasts.add({ title: "Couldn't create webhook token", color: 'error' });
 		} finally {
 			creatingWebhookToken = false;
 		}
@@ -2893,10 +2893,10 @@
 				await fetchWebhookTokens();
 				toasts.add({ title: 'Webhook token deleted', color: 'success' });
 			} else {
-				toasts.add({ title: 'Failed to delete webhook token', color: 'error' });
+				toasts.add({ title: "Couldn't delete webhook token", color: 'error' });
 			}
 		} catch {
-			toasts.add({ title: 'Failed to delete webhook token', color: 'error' });
+			toasts.add({ title: "Couldn't delete webhook token", color: 'error' });
 		} finally {
 			deletingWebhookTokenId = null;
 		}
@@ -3033,8 +3033,8 @@
 					<div class="sse-reload-body">
 						<span class="sse-reload-title">Live updates disconnected</span>
 						<span class="sse-reload-text"
-							>We lost the real-time connection and couldn't reconnect. What you're seeing may be
-							out of date — reload to get the latest.</span
+							>Orchard couldn't reconnect. What you see may be out of date. Reload to get the
+							latest.</span
 						>
 					</div>
 					<button class="sse-reload-btn" onclick={() => location.reload()}>
@@ -3435,7 +3435,7 @@
 	<ConfirmModal
 		bind:open={showStopModal}
 		title={`Stop "${deployment.displayName || deployment.name}"?`}
-		description={`All ${deployment.replicas} replica${deployment.replicas === 1 ? '' : 's'} will be spun down. You can start the app again with the same replica count.`}
+		description={`All ${deployment.replicas} replica${deployment.replicas === 1 ? '' : 's'} stop. You can start the app again with the same replica count.`}
 		confirmLabel="Stop app"
 		danger={false}
 		onconfirm={() => lifecycleAction('stop')}
@@ -3444,9 +3444,9 @@
 	<ConfirmModal
 		bind:open={showDeleteModal}
 		title={`Delete "${deployment.displayName || deployment.name}"?`}
-		description="This permanently deletes <strong>this app</strong>, its pods, domains and build history. Attached volumes and their data are deleted too. This cannot be undone."
+		description="This permanently deletes <strong>this app</strong>, its pods, domains and build history. Its volumes and their data are deleted too. You can't undo this."
 		html
-		confirmLabel="Delete App"
+		confirmLabel="Delete app"
 		onconfirm={deleteDeployment}
 		oncancel={() => {}}
 	/>
@@ -3456,7 +3456,7 @@
 	<ConfirmModal
 		bind:open={showRollbackModal}
 		title="Promote this image to production?"
-		description={`Pods will roll to the image tagged <strong>${rollbackTargetTag.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</strong>. The currently running image will be replaced.`}
+		description={`Your app restarts with the image tagged <strong>${rollbackTargetTag.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</strong>.`}
 		html
 		confirmLabel="Promote"
 		danger={false}

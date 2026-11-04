@@ -127,7 +127,7 @@
 				const thing = what[1].toLowerCase() === 'secret' ? 'secret' : 'config';
 				return {
 					label: `Missing ${thing}`,
-					hint: `Needs ${what[1].toLowerCase()} "${what[2]}", which does not exist.`,
+					hint: `Needs ${what[1].toLowerCase()} "${what[2]}", which doesn't exist.`,
 					meta: meta('error', `Missing ${thing}`)
 				};
 			}
@@ -388,7 +388,7 @@
 							variant="ghost"
 							size="sm"
 							icon={Trash2}
-							label="Delete pod, Kubernetes starts a fresh one"
+							label="Delete pod. Kubernetes starts a new one."
 							onclick={() => onDelete(r.pod.name)}
 						/>
 					</span>

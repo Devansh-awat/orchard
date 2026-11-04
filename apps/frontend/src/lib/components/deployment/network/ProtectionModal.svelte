@@ -143,7 +143,7 @@
 								<Field
 									label="Username"
 									for="{uid}-user"
-									error={username.includes(':') ? 'No colons.' : undefined}
+									error={username.includes(':') ? "Can't contain a colon." : undefined}
 								>
 									<Input id="{uid}-user" autocomplete="off" bind:value={username} />
 								</Field>

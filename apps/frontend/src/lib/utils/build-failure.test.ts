@@ -118,7 +118,7 @@ test('a COPY of a path that is not in the context names the path', () => {
 		'#6 [4/5] COPY dist ./dist',
 		'#6 ERROR: failed to calculate checksum of ref abc::xyz: "/dist": not found'
 	]);
-	assert.equal(f.title, '`dist` is not in the build');
+	assert.equal(f.title, "`dist` isn't in the build");
 });
 
 test('a missing binary and an out of memory kill', () => {

@@ -346,7 +346,7 @@
 			solid
 			title="Make port {openPortFor?.port.targetPort ?? ''} public"
 		/>
-		<Alert tone="warning">This port will be accessible to anyone on the internet.</Alert>
+		<Alert tone="warning">Anyone on the internet can reach this port.</Alert>
 	</div>
 	{#snippet footer()}
 		<Button variant="ghost" onclick={() => (openPortOpen = false)}>Cancel</Button>

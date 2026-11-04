@@ -55,7 +55,7 @@
 			});
 			if (!res.ok) {
 				const err = await res.json().catch(() => ({}));
-				throw new Error(err.message || 'Failed to update pool');
+				throw new Error(err.message || "Couldn't update pool");
 			}
 			const updated = await res.json().catch(() => null);
 			if (updated) onSaved?.(updated);

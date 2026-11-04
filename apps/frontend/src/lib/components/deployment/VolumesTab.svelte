@@ -28,7 +28,7 @@
 	function observed(volume: VolumeEntry): { text: string; tone: ObservedTone } | null {
 		if (!volume.observedAt && !volume.phase) return null;
 		if (volume.phase === 'Missing') {
-			return { text: 'Not found in the cluster. It is created on the next deploy.', tone: 'bad' };
+			return { text: 'Not found. Orchard creates it on the next deploy.', tone: 'bad' };
 		}
 		if (volume.resizeState === 'failed') {
 			return {
@@ -52,7 +52,7 @@
 			return { text: 'Waiting for storage to be provisioned', tone: 'busy' };
 		}
 		if (volume.phase === 'Lost') {
-			return { text: 'The underlying volume was lost', tone: 'bad' };
+			return { text: 'The volume was lost', tone: 'bad' };
 		}
 		if (volume.observedCapacity) {
 			return { text: `${volume.observedCapacity} provisioned`, tone: 'ok' };

@@ -36,7 +36,7 @@
 
 <Widget title="Configuration" meta={head} class="posture">
 	{#if failed}
-		<p class="failed">Could not load</p>
+		<p class="failed">Couldn't load</p>
 	{:else if findings === null}
 		<div class="loading" aria-busy="true">
 			<Skeleton width="70%" height="0.875rem" />

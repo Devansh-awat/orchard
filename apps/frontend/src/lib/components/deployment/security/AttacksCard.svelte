@@ -82,7 +82,7 @@
 		<Widget>
 			<EmptyState
 				title="Requests aren't recorded yet"
-				description="Attack attempts show up here once the ingress controller writes access logs to Orchard's log store."
+				description="Attack attempts appear here once access logs reach Orchard's log store."
 			>
 				{#snippet icon()}<ScrollText size={18} />{/snippet}
 				<Button href={ACCESS_LOGS_DOCS} target="_blank" rel="noreferrer">Set up access logs</Button>
@@ -117,7 +117,7 @@
 					{/each}
 				</List>
 			{:else}
-				<p class="empty">Nobody stands out.</p>
+				<p class="empty">No source stands out.</p>
 			{/if}
 		</Widget>
 	</div>

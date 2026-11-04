@@ -211,7 +211,7 @@
 	<div class="gs-loading"><Spinner size={16} label="Loading git providers" /></div>
 {:else if connections.length === 0}
 	<Alert tone="info" title="No git providers linked">
-		Link GitLab, Gitea, Codeberg, Bitbucket or any git host under
+		Link GitLab, Gitea, Codeberg, Bitbucket or any git host in
 		<a href="/user/settings?section=git">your settings</a>.
 	</Alert>
 {:else}

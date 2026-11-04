@@ -40,7 +40,7 @@
 		try {
 			const response = await apiFetch(`/apiv1/deployments/${deploymentId}`);
 			if (!response.ok) {
-				throw new Error('Failed to fetch app');
+				throw new Error("Couldn't load app");
 			}
 			const data = await response.json();
 
@@ -58,7 +58,7 @@
 			}
 		} catch (e) {
 			if (!deployment) {
-				error = e instanceof Error ? e.message : 'Failed to fetch app';
+				error = e instanceof Error ? e.message : "Couldn't load app";
 			}
 		} finally {
 			loading = false;
@@ -149,20 +149,20 @@
 
 			if (!response.ok) {
 				const data = await response.json().catch(() => ({}));
-				throw new Error(data.message || 'Failed to cancel deployment');
+				throw new Error(data.message || "Couldn't cancel deployment");
 			}
 
 			toasts.add({
-				title: 'Deployment cancelled',
-				description: 'The deployment has been cancelled successfully',
+				title: 'Deployment canceled',
+
 				color: 'success'
 			});
 
 			await fetchDeployment();
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to cancel deployment',
+				title: "Couldn't cancel deployment",
+				description: e instanceof Error ? e.message : "Couldn't cancel deployment",
 				color: 'error'
 			});
 		} finally {
@@ -207,7 +207,7 @@
 		{:else if loading}
 			<div class="flex flex-col items-center justify-center py-16">
 				<Loader2 class="h-12 w-12 animate-spin text-primary-600" />
-				<p class="mt-4 text-muted">Loading app...</p>
+				<p class="mt-4 text-muted">Loading app…</p>
 			</div>
 		{:else if deployment}
 			<SectionCard>
@@ -278,7 +278,7 @@
 						<Button variant="secondary" onclick={cancelBuild} disabled={canceling}>
 							{#if canceling}
 								<Loader2 class="h-4 w-4 animate-spin" />
-								Cancelling...
+								Canceling…
 							{:else}
 								<X class="h-4 w-4" />
 								Cancel deployment
@@ -297,7 +297,7 @@
 
 			{#if canCancel}
 				<div class="mt-6 text-center text-sm text-muted">
-					<p>You'll be redirected automatically when the app is ready.</p>
+					<p>Orchard redirects you when the app is ready.</p>
 				</div>
 			{/if}
 		{/if}

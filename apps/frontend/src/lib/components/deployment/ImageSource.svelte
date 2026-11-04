@@ -45,7 +45,7 @@
 		}
 		if (pullPolicy === 'Always') return 'Every start pulls the image again';
 		return tagCanMove
-			? 'Restarts will not pick up a new push to this tag'
+			? "Restarts won't pick up a new push to this tag"
 			: 'Pods reuse the image already on the node';
 	});
 </script>
@@ -63,7 +63,7 @@
 				/>
 			</SettingRow>
 		</SettingsList>
-		<FormActions hint="Saving rolls your pods onto the new image.">
+		<FormActions hint="Saving restarts your app with the new image.">
 			<Button
 				variant="ghost"
 				disabled={!imageDirty || savingImage}

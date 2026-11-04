@@ -83,7 +83,7 @@
 			</div>
 		</div>
 	{:else if rates}
-		<p class="none">This app is not serving web traffic, so there is no rate to show.</p>
+		<p class="none">This app isn't serving web traffic, so there is no rate to show.</p>
 	{:else if failed}
 		<div class="waiting">
 			<p class="none">The error rate didn't load.</p>

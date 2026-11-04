@@ -59,7 +59,7 @@
 			const next = await requestScan(deploymentId);
 			queryClient.setQueryData(key, next);
 		} catch (err) {
-			toasts.add({ title: (err as Error).message || 'Could not start a scan', color: 'error' });
+			toasts.add({ title: (err as Error).message || "Couldn't start a scan", color: 'error' });
 		} finally {
 			requesting = false;
 		}
