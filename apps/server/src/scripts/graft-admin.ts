@@ -21,7 +21,13 @@ import {
 } from '../grafts/integrity';
 import { graftsDir } from '../grafts/loader';
 import { parseManifest, type GraftManifest } from '../grafts/manifest';
-import { applyMigrations, graftRole, graftSchema, readMigrations } from '../grafts/migrations';
+import {
+  applyMigrations,
+  graftRole,
+  graftSchema,
+  planMigrations,
+  readMigrations
+} from '../grafts/migrations';
 import { satisfies } from '../grafts/semver';
 import {
   artifactUrl,
@@ -163,8 +169,13 @@ async function check(rawSpec: string, dryRun: boolean) {
     if (migrations.length) {
       await withDb(async (db) => {
         try {
-          const result = await applyMigrations(db, manifest.id, migrations, { dryRun: true });
-          migration = { pending: result.applied, dryRun: dryRun ? 'ok' : 'skipped' };
+          if (dryRun && !problems.length) {
+            const result = await applyMigrations(db, manifest.id, migrations, { dryRun: true });
+            migration = { pending: result.applied, dryRun: 'ok' };
+          } else {
+            const plan = await planMigrations(db, manifest.id, migrations);
+            migration = { pending: plan.pending.map((m) => m.name), dryRun: 'skipped' };
+          }
         } catch (err) {
           migration = { pending: [], dryRun: (err as Error).message };
           problems.push(`migrations would fail: ${(err as Error).message}`);

@@ -35,11 +35,11 @@ Only install grafts you trust. A graft runs with the same access as Orchard. `or
 
 1. It checks the download against its digest, and the signature against your [trust policy](#trust).
 2. It checks the graft against your Orchard version, the doors it uses, and the grafts it depends on.
-3. It rehearses the database migrations inside a transaction, then rolls them back.
+3. It lists the database migrations that would run. No graft SQL runs at this point.
 
 `orchardctl` then shows the graft's capabilities, the core tables it reads, its paths outside its own ID, and its routes open to anyone. It also checks that any CRDs the graft requires exist.
 
-After you confirm, `orchardctl` writes the graft into your values. `--apply` rolls Orchard out immediately. Without it, run `sudo orchardctl update` when you are ready.
+After you confirm, Orchard rehearses the migrations inside a transaction and rolls them back. If that passes, `orchardctl` writes the graft into your values. `--apply` rolls Orchard out immediately. Without it, run `sudo orchardctl update` when you are ready.
 
 ### Commands
 

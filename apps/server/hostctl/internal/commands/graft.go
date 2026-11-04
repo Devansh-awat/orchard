@@ -163,7 +163,7 @@ func Graft() *cli.Command {
 
 Flags for add and upgrade:
   --yes        skip the confirmation prompt
-  --dry-run    verify the graft and rehearse its database changes, change nothing
+  --dry-run    verify the graft and list its database changes, change nothing
   --apply      roll Orchard out afterwards (otherwise run orchardctl update)
 
 ` + graftTrustWarning + `
@@ -793,10 +793,14 @@ func resolveSpec(c *cli.Context, values *cli.Values, arg string) (graftSpec, []b
 	return spec, nil, nil
 }
 
-func checkSpec(c *cli.Context, values *cli.Values, spec graftSpec) (graftCheck, error) {
+func checkSpec(c *cli.Context, values *cli.Values, spec graftSpec, rehearse bool) (graftCheck, error) {
 	var report graftCheck
 	raw, _ := json.Marshal(spec)
-	out, err := serverExec(c, nil, graftTrustEnv(values), "check", string(raw), "--dry-run")
+	args := []string{"check", string(raw)}
+	if rehearse {
+		args = append(args, "--dry-run")
+	}
+	out, err := serverExec(c, nil, graftTrustEnv(values), args...)
 	if err != nil {
 		return report, err
 	}
@@ -848,7 +852,7 @@ func printCheck(c *cli.Context, values *cli.Values, spec graftSpec, report graft
 		c.Printf("  note: %s %s is already taken by %s and will be skipped\n", s.Kind, s.Value, s.ShadowedBy)
 	}
 	if len(report.Migrations.Pending) > 0 {
-		c.Printf("  database:        %d migrations rehearsed (%s)\n", len(report.Migrations.Pending), report.Migrations.DryRun)
+		c.Printf("  database:        %d migrations pending (rehearsal: %s)\n", len(report.Migrations.Pending), report.Migrations.DryRun)
 	}
 	if len(m.Requires.Kubernetes.Crds) > 0 {
 		c.Printf("  needs CRDs:      %s\n", strings.Join(m.Requires.Kubernetes.Crds, ", "))
@@ -1055,7 +1059,7 @@ func installSpec(c *cli.Context, values *cli.Values, spec graftSpec, archive []b
 		c.Printf("%s %s is already in your values\n", spec.ID, spec.Version)
 		return nil
 	}
-	report, err := checkSpec(c, values, spec)
+	report, err := checkSpec(c, values, spec, false)
 	if err != nil {
 		return err
 	}
@@ -1073,6 +1077,15 @@ func installSpec(c *cli.Context, values *cli.Values, spec graftSpec, archive []b
 	}
 	if !flags["yes"] && !confirm(c, fmt.Sprintf("%s %s?", map[bool]string{true: "Upgrade", false: "Install"}[prev != nil], report.Manifest.Name)) {
 		return errors.New("cancelled")
+	}
+	if len(report.Migrations.Pending) > 0 {
+		rehearsal, err := checkSpec(c, values, spec, true)
+		if err != nil {
+			return err
+		}
+		if len(rehearsal.Problems) > 0 {
+			return fmt.Errorf("not installing: %s", strings.Join(rehearsal.Problems, "; "))
+		}
 	}
 	snapshotDir := ""
 	if prev != nil && len(report.Migrations.Pending) > 0 && !flags["no-snapshot"] {
