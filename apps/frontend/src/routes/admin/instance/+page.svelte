@@ -118,7 +118,7 @@
 		turnstile: {
 			title: 'Bot protection',
 			description:
-				'A Cloudflare Turnstile challenge on the sign-in pages and on password-protected deployments. Off until both keys are set. Once set, a sign-in that cannot solve the challenge is refused, so set TURNSTILE_DISABLED=true on the server to get back in if the keys are wrong.',
+				'A Cloudflare Turnstile challenge on the sign-in pages and on password-protected deployments. Off until both keys are set. Once set, a sign-in that cannot solve the challenge is refused, so set TURNSTILE_ENABLED=false on the server to get back in if the keys are wrong.',
 			fields: {
 				siteKey: 'Site key',
 				secretKey: 'Secret key',
