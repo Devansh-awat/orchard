@@ -5530,6 +5530,11 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     });
     const ip = (org?.databasePublicIp || '').trim() || this.instanceConfig.defaultPublicIp();
     if (!ip) {
+      if (process.env.INSTALL_INGRESS_MODE === 'tunnel') {
+        throw new BadRequestException(
+          'A Cloudflare Tunnel carries HTTP only, so an app cannot have a public port on this instance.'
+        );
+      }
       throw new BadRequestException(
         'No public IP is configured. Set one in organization settings, or ask an instance admin to set an instance-wide default.'
       );
