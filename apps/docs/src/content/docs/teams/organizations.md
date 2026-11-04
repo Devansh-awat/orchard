@@ -1,69 +1,86 @@
 ---
-title: Organizations and roles
-description: Who can do what, and how access is scoped.
+title: Manage organizations and roles
+description: Invite members to an Orchard organization, assign organization and project roles, and share registry credentials across projects.
 sidebar:
   order: 1
 ---
 
-## Organizations
+To control who can access your Orchard resources, add people to an organization and assign them roles. An organization owns projects and holds members, quotas, SSO settings and audit logs. A person can belong to more than one organization.
 
-An organization owns projects, holds members, and is where quotas, SSO and audit
-logs are configured. People can belong to more than one and switch between them.
+## Organization roles
 
-## Roles
+| Role       | Permissions                                                                        |
+| ---------- | ---------------------------------------------------------------------------------- |
+| **Owner**  | Everything an admin can do. Owners also change SSO settings, manage SCIM and set the vanity address. |
+| **Admin**  | Manage members, organization settings and every project in the organization.       |
+| **Member** | Create projects. Open only the projects they create or are added to.               |
+| **Guest**  | Open only the projects they are added to. Guests cannot create projects.           |
 
-| Role       | Can                                                    |
-| ---------- | ------------------------------------------------------ |
-| **Owner**  | Everything, including deleting the organization        |
-| **Admin**  | Manage members, projects, quotas, domains and settings |
-| **Member** | Create and manage resources in projects they belong to |
-| **Viewer** | Read                                                   |
+## Project roles
 
-## Project membership is the real boundary
+Owners and admins can open every project. Members and guests need a project role for each project.
 
-Being in an organization does not give you every app in it. **Project membership
-gates access to the deployments inside that project.** Add someone to a project
-and they get its apps and databases; leave them out and they do not.
+| Role       | Permissions                                                         |
+| ---------- | ------------------------------------------------------------------- |
+| **Admin**  | Full control of the project, including deletion and members.        |
+| **Member** | Full control of the project, except adding members and deleting it. |
+| **Viewer** | Read only.                                                          |
 
-This is worth understanding because it explains two things that look
-inconsistent:
+Two people in the same organization can therefore see different lists of apps.
 
-- Two people in the same organization can see different lists of apps.
-- Two people in the same _project_ can see different **GitHub repositories**,
-  because repository access comes from each person's own GitHub link rather than
-  from the project.
+## Invite a member
 
-## Invitations
+Owners and admins can invite members.
 
-Invite by email. The invitation carries a role, and the person picks up the
-organization when they accept. Invitations can be revoked before they are used.
+1. In your organization, select **Settings** > **Members**.
+2. Select **Invite**.
+3. Enter the email address.
+4. Select **Member**, **Admin** or **Owner**.
+5. Select **Send invite**.
 
-## Superadmin
+The invitation appears under **Pending invitations**. If the instance has no email configured, the invitation is a link that you send yourself.
 
-Superadmin is an instance-level role for whoever operates the platform, separate
-from organization roles. It can see and administer every organization, manage
-nodes and node pools, and change instance settings.
+To resend or cancel an invitation, use the controls on its row. The person joins the organization when they accept the invitation.
 
-On a fresh install nobody is superadmin. The first one claims the instance with a
-single-use setup token; see [Install](/start/install/#claiming-the-instance).
+## Change a member's role
 
-## Registry credentials
+Owners can change roles.
 
-Owners and admins can open **Organization settings → Registry credentials** to
-save a Docker registry hostname, username and token. Choose **Docker Hardened
-Images (dhi.io)** to share a DHI login across all projects. Tokens are encrypted
-at rest and are never returned by the API; the instance must have
-`SECRETS_ENCRYPTION_KEY` configured.
+1. In your organization, select **Settings** > **Members**.
+2. In the member's row, select a new role.
 
-The defaults apply to builds and to private images used by apps and jobs in
-existing and new projects. For each registry, a project credential overrides
-the organization credential. Builds can override both with `DOCKER_AUTH_CONFIG`
-or, for `dhi.io`, a complete `DHI_USERNAME` and `DHI_TOKEN` pair in their resolved
-build environment. Setting only one DHI variable is an error. Registry tokens
-are kept out of build arguments and Railpack application secrets.
+Use the role filter above the table to list **Owners**, **Admins**, **Members** or **Guests**.
 
-Replace a credential by saving another login for the same registry, or remove
-it with the trash button. Changes update project image-pull secrets and apply
-to subsequent builds and image pulls. Running builds keep the credentials they
-started with. Removing a project override restores the organization default;
-removing the organization default keeps project overrides intact.
+## Add registry credentials
+
+Use organization registry credentials to let every project in the organization pull private images and build from them. Owners and admins can manage these credentials. The instance must have `SECRETS_ENCRYPTION_KEY` set.
+
+1. In your organization, select **Settings** > **Registry credentials**.
+2. Select **Add**.
+3. In **Registry**, select a registry. To share a Docker Hardened Images login, select **Docker Hardened Images (dhi.io)**.
+4. Enter the **Username** and token. For a custom registry, also enter the **Host**.
+5. Select **Add credential**.
+
+Orchard encrypts registry tokens at rest. The API never returns them.
+
+The following rules decide which credential applies to a registry:
+
+- A project credential overrides the organization credential for the same registry.
+- A build can override both with `DOCKER_AUTH_CONFIG` in its resolved build environment.
+- For `dhi.io`, a build can also override both with `DHI_USERNAME` and `DHI_TOKEN`. Setting only one of these variables is an error.
+
+To replace a credential, select **Replace** on its row. To delete it, select **Remove**. Changes apply to later builds and image pulls. A running build keeps the credentials it started with.
+
+Removing a project credential restores the organization credential. Removing an organization credential does not change project credentials.
+
+## Superadmins
+
+A superadmin operates the instance. This role is separate from organization roles. A superadmin can administer every organization and manage instance settings, nodes and node pools at **Instance admin**.
+
+A new instance has no superadmin. The first superadmin claims the instance with a single-use setup token. For more information, refer to [Install](/start/install/#claiming-the-instance).
+
+## Related resources
+
+- [Set up SSO](/teams/sso/)
+- [SCIM provisioning](/teams/scim/)
+- [Quotas and usage](/teams/quotas/)

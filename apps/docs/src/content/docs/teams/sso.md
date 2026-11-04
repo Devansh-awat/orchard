@@ -1,43 +1,98 @@
 ---
-title: SSO
-description: SAML and OIDC sign-in, configured per organization.
+title: Set up SSO
+description: Add an OIDC or SAML identity provider to an Orchard organization, verify email domains and require single sign-on.
 sidebar:
   order: 2
 ---
 
-Orchard supports **SAML** and **OIDC**, and an organization can configure more
-than one provider.
+To let members sign in with your identity provider, add a connection to your organization. Orchard supports OpenID Connect (OIDC) and Security Assertion Markup Language (SAML) 2.0. An organization can have more than one connection.
 
-**SSO is off by default.** It is enabled deliberately, per organization, by an
-admin of that organization.
+Sessions created through an organization's SSO connection can only reach that organization.
 
-## Per-organization login
+## Prerequisites
 
-An organization with SSO configured gets its **own login page**, so members go
-straight to their provider instead of picking from a list of every provider on
-the instance.
+- A superadmin has allowed SSO for your organization at **Instance admin** > **Sign in**. SSO is off for every organization until a superadmin allows it.
+- You are an organization owner. Admins can view SSO settings but cannot change them.
 
-Sessions created through SSO are **scoped to the tenant** they signed in for.
-An SSO session for one organization is not a session for another.
+## Add a connection
 
-## Verified domains
+1. In your organization, select **Settings** > **SSO**.
+2. In **Connections**, select **Add connection**.
+3. Select a provider. Orchard has presets for Google Workspace, Microsoft Entra ID, GitHub, GitLab, Okta, Auth0, Keycloak, Authentik, OneLogin and JumpCloud. For another provider, select **OpenID Connect** or **SAML 2.0**.
+4. Enter the provider details:
+   - For OIDC, enter the **Client ID** and **Client secret**, plus the **Issuer URL** or provider domain if the form asks for one.
+   - For SAML, enter the **IdP metadata URL**, or the **Sign-in URL**, **IdP entity ID** and **Signing certificate**.
+5. In **Who this lets in**, set the following options:
+   - **Create accounts on first sign-in**. When this is off, only people with an account or a pending invitation can use the connection.
+   - **Require a verified email**. Orchard rejects sign-ins where the provider does not vouch for the address.
+   - **Role for new members**. Select **Member**, **Admin** or **Guest**.
+   - **Email domains**. Leave this blank to accept any address.
+   - **Show on the login page**.
+6. Save the connection.
+7. Open the connection again and copy the values under **Give these to your identity provider** to your provider. OIDC uses the **Redirect URL**. SAML uses the **Entity ID** and **SP metadata**.
 
-An organization can verify a domain it owns through DNS. Verification proves
-ownership once, which is what lets an organization claim its email domain for
-sign-in rather than anyone being able to assert it.
+## Test the connection
 
-## Setting it up
+1. In **Connections**, select **More** on the connection row.
+2. Select **Test connection**.
 
-1. Verify your domain.
-2. Add the provider (SAML metadata, or OIDC issuer, client ID and secret).
-3. Set the callback URL your provider needs, shown during setup.
-4. Test with one account before enabling it for everyone.
+A successful test shows `Reached the provider`.
 
-Keep one non-SSO admin account until you have signed in successfully. A
-misconfigured provider with no way around it locks the organization out of its
-own instance.
+## Turn on single sign-on
 
-## Provisioning
+1. In **Single sign-on**, turn on **Use single sign-on**. The option is unavailable until a working connection is turned on.
+2. Copy the **Sign-in page** address and open it in a private browser window.
+3. Sign in with a test account.
 
-SSO handles authentication. For creating and deactivating accounts automatically,
-see [SCIM](/teams/scim/).
+The sign-in page shows your connections and branding, so members do not choose from every provider on the instance.
+
+## Verify an email domain
+
+Verified domains send work email addresses to your sign-in page and let your connections create accounts for new people. Until you verify a domain, people join by invitation.
+
+1. In **Email domains**, enter the domain in **Add a domain**, such as `example.com`.
+2. Select **Add**.
+3. Add the TXT record that Orchard shows at your DNS provider. The record name starts with `_orchard-challenge`.
+4. Select **Check DNS**.
+
+The domain status changes from **Pending** to **Verified**.
+
+## Require single sign-on
+
+Requiring single sign-on blocks email codes, passkeys and platform providers for members of the organization. Orchard also signs out members who signed in another way.
+
+:::caution
+Test a connection before you turn this on. A provider that fails blocks every member except superadmins.
+:::
+
+1. In **Single sign-on**, turn on **Require single sign-on**.
+
+Superadmins can still sign in without SSO, so that a broken provider does not lock the instance.
+
+## Customize the login page
+
+1. In **Login page**, enter a **Logo** URL, **Heading** and **Subheading**.
+2. Select the **Accent** and **Background** colors.
+3. Select **Save**.
+4. Select **Preview** to review the page.
+
+## Set a vanity address
+
+A vanity address sends visitors at `<subdomain>.<base domain>` to your sign-in page. The **Vanity address** section appears for owners when the instance has `BASE_DOMAIN` set.
+
+1. In **Vanity address**, enter a **Subdomain**.
+2. Select **Save**.
+
+Orchard creates an Ingress and a certificate for the host. If the organization has no working SSO connection, visitors to the address go to the normal login page.
+
+## Set up platform providers
+
+A superadmin can offer a provider on the instance login page for everyone. To do this, go to **Instance admin** > **Sign in**. The same page has **Require single sign-on for everyone**, which stops email codes, passkeys and the superadmin password for everyone except superadmins.
+
+To set a provider through environment variables, refer to [Add an identity provider](/operate/finishing-setup/#add-an-identity-provider).
+
+## Related resources
+
+- [SCIM provisioning](/teams/scim/)
+- [Manage organizations and roles](/teams/organizations/)
+- [Configuration](/operate/configuration/#base-domain)

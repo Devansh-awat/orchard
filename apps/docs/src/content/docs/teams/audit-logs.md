@@ -1,32 +1,35 @@
 ---
 title: Audit logs
-description: A record of who did what.
+description: Read Orchard audit logs at the app, organization and instance level to find who made a change and when.
 sidebar:
   order: 4
 ---
 
-Audit logs record actions taken in an organization: deploys, deletions, member
-and role changes, settings changes, database operations. Each entry has the
-actor, the action, the target and the time.
+Orchard audit logs record actions taken through Orchard, such as deploys, deletions, member and role changes, settings changes and database operations. Each entry has the actor, the action, the target and the time.
 
-They are readable at three levels:
+Orchard keeps audit log entries for 180 days and then deletes them. You cannot edit entries from the dashboard.
 
-| Level        | Shows                                          |
-| ------------ | ---------------------------------------------- |
-| Deployment   | Everything that happened to one app            |
-| Organization | Everything across the organization, for admins |
-| Instance     | Everything, for superadmins                    |
+## View audit logs
 
-## What they are for
+| Level        | Who can read it                 | Location                                                     |
+| ------------ | ------------------------------- | ------------------------------------------------------------ |
+| App          | Anyone who can view the project | The **History** tab of the app                               |
+| Organization | Owners and admins               | **Settings** > **Audit log**                                 |
+| Instance     | Superadmins                     | **Instance admin** > **Audit log**                           |
 
-Answering "when did this change and who changed it" without reconstructing it
-from memory. The most common real use is not compliance: it is working out which
-change preceded the thing that broke.
+To read an organization's audit log from a terminal, run the following command:
 
-## Notes
+```bash
+orchard audit list
+```
 
-Audit logs are append-only and are not editable from the dashboard.
+For flags and pagination, refer to the [CLI reference](/reference/cli/).
 
-They record actions taken **through Orchard**. Someone with direct `kubectl`
-access to the cluster is outside this record, which is a reason to keep cluster
-credentials narrower than Orchard accounts.
+## Limitations
+
+Audit logs do not record actions taken outside Orchard. A person who uses `kubectl` directly on the cluster does not appear in the log. Keep cluster credentials more restricted than Orchard accounts.
+
+## Related resources
+
+- [Manage organizations and roles](/teams/organizations/)
+- [Security and isolation](/operate/security/)
