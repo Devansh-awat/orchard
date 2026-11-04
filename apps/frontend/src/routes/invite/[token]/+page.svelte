@@ -11,13 +11,18 @@
 		pendingInvitations,
 		showOnboarding
 	} from '$lib/stores';
+	import type { User } from '$lib/stores';
 	import { Loader2, Building2, UserPlus, AlertCircle, LogOut } from 'lucide-svelte';
-	import { Badge, Button } from '$lib/components/ui';
+	import { Alert, Badge, Button, Field, Input } from '$lib/components/ui';
+	import { rememberReturnTo } from '$lib/utils/url-secrets';
+	import { passkeyErrorMessage, passkeysSupported, registerPasskey } from '$lib/utils/passkey';
+
+	const MIN_PASSWORD_LENGTH = 12;
+	let signedUp = $state<User | null>(null);
 
 	interface InvitationDetails {
-		id: string;
-		token: string;
-		email: string;
+		email?: string;
+		next?: 'sign_up' | 'sign_in' | 'sso' | 'closed';
 		role: 'owner' | 'admin' | 'member' | 'guest';
 		expiresAt: string;
 		organization: {
@@ -25,12 +30,6 @@
 			name: string;
 			slug: string;
 			avatarUrl?: string;
-		};
-		inviter: {
-			firstName?: string;
-			lastName?: string;
-			username?: string;
-			email: string;
 		};
 	}
 
@@ -41,21 +40,14 @@
 	let declining = $state(false);
 	let emailMismatch = $state(false);
 	let showLogoutWarning = $state(false);
+	let password = $state('');
+	let confirm = $state('');
+	let signUpError = $state<string | null>(null);
+	let signingUp = $state<'password' | 'passkey' | null>(null);
+	let passkeyAvailable = $state(false);
+	let needsPassword = $state(false);
 
 	const token = $derived($page.params.token);
-
-	function getInviterName(inviter: InvitationDetails['inviter']): string {
-		if (inviter.firstName && inviter.lastName) {
-			return `${inviter.firstName} ${inviter.lastName}`;
-		}
-		if (inviter.firstName) {
-			return inviter.firstName;
-		}
-		if (inviter.username) {
-			return inviter.username;
-		}
-		return inviter.email;
-	}
 
 	function getRoleTone(role: string): 'warning' | 'info' | 'neutral' {
 		switch (role) {
@@ -89,8 +81,7 @@
 
 			invitation = await response.json();
 
-			// Check if logged in user's email matches
-			if ($isSignedIn && $user && invitation) {
+			if ($isSignedIn && $user && invitation?.email) {
 				emailMismatch = $user.email?.toLowerCase() !== invitation.email.toLowerCase();
 			}
 		} catch {
@@ -178,14 +169,89 @@
 	}
 
 	function handleSignIn() {
-		// Store the current URL to redirect back after login
-		if (typeof window !== 'undefined') {
-			sessionStorage.setItem('inviteRedirect', window.location.pathname);
+		rememberReturnTo(window.location.pathname);
+		goto('/');
+	}
+
+	async function enterAfterSignUp(signedInUser: User) {
+		user.set(signedInUser);
+		const orgsResponse = await apiFetch('/apiv1/organizations/user');
+		if (orgsResponse.ok) {
+			organizations.set(await orgsResponse.json());
+			organizations.initializeSelected();
 		}
-		user.signIn();
+		await goto(signedInUser.setupCompleted === false ? '/setup' : '/', { replaceState: true });
+	}
+
+	async function signUp(body: { password: string } | { passkey: true }): Promise<User> {
+		const response = await apiFetch(`/apiv1/invitations/${token}/sign-up`, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify(body)
+		});
+		const data = await response.json().catch(() => ({}));
+		if (!response.ok) throw new Error(data?.message || "Couldn't create your account.");
+		return data.user;
+	}
+
+	async function signUpWithPassword() {
+		if (signingUp) return;
+		signUpError = null;
+		if (password.length < MIN_PASSWORD_LENGTH) {
+			signUpError = `A password needs at least ${MIN_PASSWORD_LENGTH} characters.`;
+			return;
+		}
+		if (password !== confirm) {
+			signUpError = "The passwords don't match.";
+			return;
+		}
+		signingUp = 'password';
+		try {
+			if (needsPassword) {
+				const response = await apiFetch('/apiv1/auth/password/set', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ password })
+				});
+				if (!response.ok) {
+					const data = await response.json().catch(() => ({}));
+					throw new Error(data?.message || "Couldn't set the password.");
+				}
+				await enterAfterSignUp(signedUp as User);
+				return;
+			}
+			await enterAfterSignUp(await signUp({ password }));
+		} catch (e) {
+			signUpError = e instanceof Error ? e.message : "Couldn't create your account.";
+		} finally {
+			signingUp = null;
+		}
+	}
+
+	async function signUpWithPasskey() {
+		if (signingUp) return;
+		signUpError = null;
+		signingUp = 'passkey';
+		try {
+			signedUp = await signUp({ passkey: true });
+		} catch (e) {
+			signUpError = e instanceof Error ? e.message : "Couldn't create your account.";
+			signingUp = null;
+			return;
+		}
+		try {
+			await registerPasskey();
+			await enterAfterSignUp(signedUp);
+		} catch (e) {
+			needsPassword = true;
+			signUpError = `${passkeyErrorMessage(e)} You joined, but you need a way to sign in again. Set a password.`;
+		} finally {
+			signingUp = null;
+		}
 	}
 
 	onMount(() => {
+		passkeyAvailable = passkeysSupported() && window.isSecureContext;
 		fetchInvitation();
 	});
 </script>
@@ -272,35 +338,97 @@
 					>
 						<div class="min-w-0">
 							<p class="text-xs uppercase tracking-wide" style="color: var(--surface-muted);">
-								Invited by
-							</p>
-							<p
-								class="font-medium truncate"
-								style="color: var(--center-channel-color);"
-								title={getInviterName(invitation.inviter)}
-							>
-								{getInviterName(invitation.inviter)}
-							</p>
-						</div>
-						<div class="shrink-0 text-right">
-							<p class="text-xs uppercase tracking-wide" style="color: var(--surface-muted);">
 								Role
 							</p>
 							<span class="inline-block capitalize">
 								<Badge tone={getRoleTone(invitation.role)}>{invitation.role}</Badge>
 							</span>
 						</div>
+						{#if invitation.email}
+							<div class="min-w-0 text-right">
+								<p class="text-xs uppercase tracking-wide" style="color: var(--surface-muted);">
+									Email
+								</p>
+								<p
+									class="font-medium truncate"
+									style="color: var(--center-channel-color);"
+									title={invitation.email}
+								>
+									{invitation.email}
+								</p>
+							</div>
+						{/if}
 					</div>
 
-					{#if !$isSignedIn}
-						<!-- Not logged in -->
+					{#if needsPassword || (!$isSignedIn && invitation.next === 'sign_up')}
+						<form
+							class="space-y-3"
+							onsubmit={(e) => {
+								e.preventDefault();
+								signUpWithPassword();
+							}}
+						>
+							{#if signUpError}
+								<Alert tone="error">{signUpError}</Alert>
+							{/if}
+							<Field label="Password" for="invite-password" hint="At least 12 characters.">
+								<Input
+									id="invite-password"
+									type="password"
+									autocomplete="new-password"
+									bind:value={password}
+								/>
+							</Field>
+							<Field label="Confirm password" for="invite-password-confirm">
+								<Input
+									id="invite-password-confirm"
+									type="password"
+									autocomplete="new-password"
+									bind:value={confirm}
+								/>
+							</Field>
+							<Button
+								type="submit"
+								variant="primary"
+								class="w-full"
+								loading={signingUp === 'password'}
+								disabled={signingUp !== null}
+							>
+								{needsPassword ? 'Set password' : 'Join with a password'}
+							</Button>
+							{#if passkeyAvailable && !needsPassword}
+								<Button
+									variant="secondary"
+									class="w-full"
+									onclick={signUpWithPasskey}
+									loading={signingUp === 'passkey'}
+									disabled={signingUp !== null}
+								>
+									Join with a passkey
+								</Button>
+							{/if}
+						</form>
+					{:else if !$isSignedIn && invitation.next === 'sso'}
+						<Alert tone="info"
+							>This organization requires single sign-on. Sign in with it to join.</Alert
+						>
+						<Button variant="primary" class="w-full" onclick={handleSignIn}>Go to sign in</Button>
+					{:else if !$isSignedIn && invitation.next === 'closed'}
+						<Alert tone="warning">
+							This instance doesn't allow new accounts. Ask an admin to change the signup mode.
+						</Alert>
+					{:else if !$isSignedIn}
 						<div
 							class="rounded-xl border-2 border-dashed p-4 text-center"
 							style="border-color: var(--surface-border);"
 						>
 							<UserPlus class="mx-auto h-8 w-8 text-primary-600" />
 							<p class="mt-2 text-sm wrap-anywhere" style="color: var(--surface-muted);">
-								Sign in with <strong>{invitation.email}</strong> to accept this invitation.
+								{#if invitation.email}
+									Sign in with <strong>{invitation.email}</strong> to accept this invitation.
+								{:else}
+									Sign in with the invited email address to accept this invitation.
+								{/if}
 							</p>
 						</div>
 						<Button variant="primary" class="w-full" onclick={handleSignIn}>

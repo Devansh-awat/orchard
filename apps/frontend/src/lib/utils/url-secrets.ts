@@ -78,11 +78,19 @@ export function takeReturnTo(): string | null {
 const TOKEN_PARAM = /([?&#](?:token|share_token|shareToken)=)[^&#\s"'<>]+/gi;
 const SHARE_PATH_TOKEN = /(\/share\/[a-z0-9][a-z0-9-]*\/)[A-Za-z0-9_~.%-]{16,}/g;
 const LINK_PATH_TOKEN = /(\/integrations\/[a-z0-9][a-z0-9-]*\/link\/)[A-Za-z0-9_~.%-]{16,}/g;
+const INVITE_PATH_TOKEN = /(\/(?:invite|invitations)\/)[a-f0-9]{32,}/g;
 const SHARE_FRAGMENT = /(\/share\/[a-z0-9][a-z0-9-]*[^\s"'<>#]*)#[^\s"'<>]*/g;
 
 export function scrubUrlSecrets(text: string): string {
-	if (!text.includes('token') && !text.includes('/share/') && !text.includes('/link/')) return text;
+	if (
+		!text.includes('token') &&
+		!text.includes('/share/') &&
+		!text.includes('/link/') &&
+		!text.includes('/invit')
+	)
+		return text;
 	return text
+		.replace(INVITE_PATH_TOKEN, '$1redacted')
 		.replace(TOKEN_PARAM, '$1redacted')
 		.replace(SHARE_PATH_TOKEN, '$1redacted')
 		.replace(LINK_PATH_TOKEN, '$1redacted')

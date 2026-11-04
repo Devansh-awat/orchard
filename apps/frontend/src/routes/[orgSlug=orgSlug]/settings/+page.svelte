@@ -11,6 +11,7 @@
 	import { Alert, Skeleton } from '$lib/components/ui';
 	import SettingsShell from '$lib/components/patterns/SettingsShell.svelte';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
+	import InviteLinkModal from '$lib/components/InviteLinkModal.svelte';
 	import {
 		OrgMembersTab,
 		OrgDatabaseTab,
@@ -52,6 +53,7 @@
 	}
 
 	interface Invitation {
+		delivery?: 'email' | 'link';
 		id: string;
 		email: string;
 		role: 'owner' | 'admin' | 'member' | 'guest';
@@ -85,6 +87,8 @@
 	let addingMember = $state(false);
 
 	let resendingInvitationId = $state<string | null>(null);
+	let inviteLinks = $state<{ email: string; link: string }[]>([]);
+	let reissuedLink = $state(false);
 	let cancellingInvitationId = $state<string | null>(null);
 	let removingMemberId = $state<string | null>(null);
 	let memberToRemove = $state<Member | null>(null);
@@ -560,7 +564,14 @@
 				const d = await r.json();
 				throw new Error(d.message || "Couldn't add member");
 			}
-			toasts.add({ title: 'Member added', color: 'success' });
+			const invitation = await r.json().catch(() => ({}));
+			if (invitation.inviteLink) {
+				inviteLinks = [{ email: invitation.email, link: invitation.inviteLink }];
+				reissuedLink = false;
+				toasts.add({ title: 'Invitation created', color: 'success' });
+			} else {
+				toasts.add({ title: `Invitation sent to ${invitation.email}`, color: 'success' });
+			}
 			newMemberEmail = '';
 			newMemberRole = 'member';
 			await fetchOrganization();
@@ -988,6 +999,7 @@
 				onResendInvitation={resendInvitation}
 				onCancelInvitation={cancelInvitation}
 			/>
+			<InviteLinkModal bind:links={inviteLinks} reissued={reissuedLink} />
 		{/if}
 		{#if activeTab === 'registries' && canEditOrg}
 			{#key organization.id}<RegistryCredentials

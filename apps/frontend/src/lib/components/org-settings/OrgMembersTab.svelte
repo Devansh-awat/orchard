@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { ChevronDown, ChevronsUpDown, Mail, Trash2, UserPlus, X } from 'lucide-svelte';
+	import { ChevronDown, ChevronsUpDown, Link2, Mail, Trash2, UserPlus, X } from 'lucide-svelte';
 	import {
 		Avatar,
 		ItemLabel,
@@ -43,6 +43,7 @@
 	}
 
 	interface Invitation {
+		delivery?: 'email' | 'link';
 		id: string;
 		email: string;
 		role: 'owner' | 'admin' | 'member' | 'guest';
@@ -413,8 +414,10 @@
 						<Button
 							variant="ghost"
 							size="sm"
-							icon={Mail}
-							label="Resend the invitation to {invitation.email}"
+							icon={invitation.delivery === 'link' ? Link2 : Mail}
+							label={invitation.delivery === 'link'
+								? `Create a new link for ${invitation.email}. The old link stops working`
+								: `Resend the invitation to ${invitation.email}`}
 							loading={resendingInvitationId === invitation.id}
 							disabled={resendingInvitationId === invitation.id}
 							onclick={() => onResendInvitation(invitation.id)}

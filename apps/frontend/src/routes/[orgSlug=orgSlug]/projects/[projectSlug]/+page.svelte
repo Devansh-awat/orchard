@@ -10,6 +10,7 @@
 	import type { PageData } from './$types';
 	import { Ellipsis, ExternalLink, Flag, Palette, Plus, RotateCw } from 'lucide-svelte';
 	import DeletedDatabases from '$lib/components/database/DeletedDatabases.svelte';
+	import InviteLinkModal from '$lib/components/InviteLinkModal.svelte';
 	import {
 		Alert,
 		Breadcrumbs,
@@ -357,11 +358,15 @@
 		}
 	}
 
+	let inviteLinks = $state<{ email: string; link: string }[]>([]);
+
 	async function addMembers(emails: string[], role: 'admin' | 'member' | 'viewer') {
 		if (!project || emails.length === 0) return false;
 		addingMember = true;
 		let added = 0;
 		let invited = 0;
+		let needsOrgAdmin = 0;
+		const links: { email: string; link: string }[] = [];
 		const failed: string[] = [];
 		for (const email of emails) {
 			try {
@@ -372,8 +377,14 @@
 				});
 				if (!response.ok) throw new Error();
 				const result = await response.json().catch(() => ({}));
-				if (result.invited) invited++;
-				else added++;
+				if (result.invited) {
+					invited++;
+					if (result.invitation?.inviteLink) {
+						links.push({ email, link: result.invitation.inviteLink });
+					} else if (result.invitation?.delivery === 'link') {
+						needsOrgAdmin++;
+					}
+				} else added++;
 			} catch {
 				failed.push(email);
 			}
@@ -386,6 +397,14 @@
 			].filter(Boolean);
 			toasts.add({ title: parts.join(', '), color: 'success' });
 			await fetchProject();
+		}
+		inviteLinks = links;
+		if (needsOrgAdmin) {
+			toasts.add({
+				title: 'Ask an organization admin for the invite link',
+				description: "This instance can't send email. They can create it in Organization settings.",
+				color: 'warning'
+			});
 		}
 		if (failed.length) {
 			toasts.add({
@@ -1141,6 +1160,7 @@
 						projectSlug={projectSlug ?? ''}
 					/>
 				{:else if activeTab === 'members'}
+					<InviteLinkModal bind:links={inviteLinks} />
 					<MembersTab
 						{projectMembers}
 						{pendingInvitations}
