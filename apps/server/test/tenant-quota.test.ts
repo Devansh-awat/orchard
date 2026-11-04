@@ -126,15 +126,20 @@ test('a default limit covers only the resources that the quota requires', () => 
   });
 });
 
-const deploymentWith = (resources: object, replicas?: number) => ({
+const deploymentWith = (resources: object, replicas?: number, annotations?: object) => ({
   kind: 'Deployment',
-  manifest: { spec: { replicas, template: { spec: { containers: [{ resources }] } } } }
+  manifest: {
+    metadata: { annotations },
+    spec: { replicas, template: { spec: { containers: [{ resources }] } } }
+  }
 });
 
 test('an app without limits gets the organization default', () => {
   const room = namespaceRoom(
     [
-      deploymentWith({ requests: { cpu: '50m', memory: '64Mi' } }, 2),
+      deploymentWith({ requests: { cpu: '50m', memory: '64Mi' } }, 2, {
+        'orchard.my/no-limits': 'true'
+      }),
       deploymentWith(
         { requests: { cpu: '100m', memory: '512Mi' }, limits: { cpu: '1', memory: '512Mi' } },
         1
@@ -146,6 +151,12 @@ test('an app without limits gets the organization default', () => {
   assert.deepEqual(room.defaultLimit, orgDefault);
   assert.equal(room.needed.memoryBytes, 2 * 200 * MiB + 512 * MiB);
   assert.equal(room.needed.cpuMilli, 2 * 200 + 1000);
+});
+
+test('an app someone set to unlimited does not raise the quota', () => {
+  const room = namespaceRoom([deploymentWith({ requests: { cpu: '50m' } }, 20)], orgDefault);
+  assert.equal(room.hasWorkloadWithoutLimits, false);
+  assert.deepEqual(room.defaultLimit, orgDefault);
 });
 
 test('a default limit is never below what a pod without limits reserves', () => {

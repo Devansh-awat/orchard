@@ -376,6 +376,7 @@ const bareRow = (namespace: string, replicas: number) => ({
   kind: 'Deployment',
   namespace,
   manifest: {
+    metadata: { annotations: { [NO_LIMITS_ANNOTATION]: 'true' } },
     spec: {
       replicas,
       template: {

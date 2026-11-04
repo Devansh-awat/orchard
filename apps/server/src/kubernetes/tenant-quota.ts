@@ -1,7 +1,7 @@
 import { MANAGED_DATABASE_MIN_MEMORY_BYTES } from './presets';
 import { parsePgMemory, SHARED_BUFFERS_FRACTION } from './db-tuning';
 import { parseCpu, parseMemory } from './quantity';
-import { NO_LIMITS_APP_REQUESTS } from './resource-spec';
+import { NO_LIMITS_ANNOTATION, NO_LIMITS_APP_REQUESTS } from './resource-spec';
 
 export interface TenantQuotaCaps {
   cpuLimitMilli?: number | null;
@@ -95,7 +95,12 @@ interface ContainerResources {
 
 function workloadPods(
   workload: MirroredWorkload
-): { containers: ContainerResources[]; copies: number; database: any | null } | null {
+): {
+  containers: ContainerResources[];
+  copies: number;
+  database: any | null;
+  limitsOffWorkload: boolean;
+} | null {
   const { kind, manifest } = workload;
   const resourcesOf = (spec: any): ContainerResources[] =>
     (spec?.containers ?? []).map((c: any) => c?.resources ?? {});
@@ -103,21 +108,24 @@ function workloadPods(
     return {
       containers: resourcesOf(manifest?.spec?.template?.spec),
       copies: manifest?.spec?.replicas ?? 1,
-      database: null
+      database: null,
+      limitsOffWorkload: manifest?.metadata?.annotations?.[NO_LIMITS_ANNOTATION] === 'true'
     };
   }
   if (kind === 'CronJob') {
     return {
       containers: resourcesOf(manifest?.spec?.jobTemplate?.spec?.template?.spec),
       copies: 1,
-      database: null
+      database: null,
+      limitsOffWorkload: false
     };
   }
   if (kind === 'Cluster') {
     return {
       containers: [manifest?.spec?.resources ?? {}],
       copies: manifest?.spec?.instances ?? 1,
-      database: manifest
+      database: manifest,
+      limitsOffWorkload: true
     };
   }
   return null;
@@ -143,13 +151,14 @@ export function namespaceRoom(workloads: MirroredWorkload[], defaults: PodDefaul
     for (const resources of pod.containers) {
       const cpuLimit = quantity(resources.limits?.cpu, parseCpu);
       const memoryLimit = quantity(resources.limits?.memory, parseMemory);
-      if (cpuLimit === null) {
+      if (pod.limitsOffWorkload && (cpuLimit === null || memoryLimit === null)) {
         hasWorkloadWithoutLimits = true;
+      }
+      if (cpuLimit === null) {
         const asked = quantity(resources.requests?.cpu, parseCpu) ?? 0;
         defaultLimit.cpuMilli = Math.max(defaultLimit.cpuMilli, asked);
       }
       if (memoryLimit === null) {
-        hasWorkloadWithoutLimits = true;
         const asked = quantity(resources.requests?.memory, parseMemory) ?? 0;
         const buffers = pod.database
           ? parsePgMemory(pod.database.spec?.postgresql?.parameters?.shared_buffers ?? '') /
