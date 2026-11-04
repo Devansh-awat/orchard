@@ -29,6 +29,16 @@ dial tcp 203.0.113.10:443: connect: connection refused
 
 **Fix:** Add the registry to `builders.registryEgress`. For more information, refer to [Use your own registry](/operate/finishing-setup/#use-your-own-registry).
 
+### `orchard up` fails at `context-fetch` with `Connection refused`
+
+```txt
+wget: can't connect to remote host (203.0.113.10): Connection refused
+```
+
+**Cause:** Your S3 storage runs on the same server or cluster, behind its own ingress. A build fetches its files from that address, and a hostname that resolves to a node loops back to the ingress controller, which a network policy blocks. Backups still work because they don't run in the builder.
+
+**Fix:** Re-run the installer, which allows Traefik on a current version. With Helm, add the ingress controller's pods to `builders.registryEgress`. Don't add the storage pods themselves, because a build should only reach storage the way the internet does.
+
 ### Build fails with a missing module or command
 
 **Cause:** The build targets the wrong stage. A multi-stage Dockerfile built at its first stage produces an image without the application.

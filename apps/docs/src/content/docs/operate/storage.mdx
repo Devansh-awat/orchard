@@ -144,6 +144,8 @@ Build pods download the directory, and their network policy only lets them reach
 
 To turn it off, set `LOCAL_DEPLOYS_ENABLED` to `false`. For more information, refer to [Deploy from your terminal](/deploy/deploy-from-terminal/).
 
+Builds fetch the uploaded files from your storage endpoint. If that endpoint is on the same server behind its own ingress, the installer already allows it. With Helm, add your ingress controller's pods to `builders.registryEgress`. For more information, refer to [Troubleshooting](/operate/troubleshooting/#orchard-up-fails-at-context-fetch-with-connection-refused).
+
 ## Serve uploads from a public URL
 
 Orchard serves uploads through its API by default. To serve them from your own domain or a CDN instead:
