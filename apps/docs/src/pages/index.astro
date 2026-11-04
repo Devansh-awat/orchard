@@ -10,6 +10,7 @@ import { HERO_TEXT, TABS_HEADING } from '../lib/home';
 <StarlightPage
   frontmatter={{
     title: 'Orchard Docs',
+    head: [{ tag: 'title', content: 'Orchard Docs' }],
     description: HERO_TEXT,
     tableOfContents: false,
     lastUpdated: false,
@@ -25,7 +26,7 @@ import { HERO_TEXT, TABS_HEADING } from '../lib/home';
       <h1>Orchard Docs</h1>
       <p>{HERO_TEXT}</p>
       <div class="actions">
-        <a class="o-btn o-btn-primary" href="/start/install/">Get started</a>
+        <a class="o-btn o-btn-primary" href="/start/what-is-orchard/">Get started</a>
         <CopyPromptButton />
       </div>
     </section>

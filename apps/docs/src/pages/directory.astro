@@ -88,7 +88,7 @@ const items = [...directory].sort((a, b) => a.title.localeCompare(b.title));
         if (visible) shown += 1;
       }
       if (empty) empty.hidden = shown > 0;
-      if (status) status.textContent = `${shown} results`;
+      if (status) status.textContent = shown === 1 ? '1 result' : `${shown} results`;
     };
 
     search?.addEventListener('input', apply);

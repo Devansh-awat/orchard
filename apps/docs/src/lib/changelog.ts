@@ -54,7 +54,50 @@ const SCOPES: Record<string, string> = {
 };
 
 const NOISE =
-  /\b(bump(s|ed)?|typecheck|oxlint|lint|flaky|snapshots?|playwright|smoke test|ci|cli parity|route parity|dependabot|prettier|oxfmt|format docs|commitlint|release-please|publish workflow|lockfile|tsconfig|moduleref|circular dep|mock|test_database_url|tests? no longer|lazy import|unused imports?|computehealth|packages\/health|buildqueue=)\b/i;
+  /\b(bump(s|ed)?|typecheck|oxlint|lint|flaky|snapshots?|playwright|smoke test|ci|cli parity|route parity|dependabot|prettier|oxfmt|format docs|commitlint|release-please|publish workflow|lockfile|tsconfig|moduleref|circular dep|mock|test_database_url|tests? no longer|lazy import|unused imports?|computehealth|packages\/health|buildqueue=|seed script|alpine|posthog|primitive|hackclubid|jwt claim|legacy|clerk|cleanup|dedupes?|redis|victoriametrics|apiserver|contributor docs|dev compose|first chunk|release builds|modulo|swatch(es)?|descenders|equal heights|tidy|hug|filler copy|agentd|kata|informer|apply queue|registration race|repository layout|rename transition)\b/i;
+
+const CODE_LIKE = /\b[a-z]+[A-Z][a-zA-Z]*\b|\b[A-Z][a-z]+[A-Z][a-zA-Z]*\b|\w+\/[A-Z]\w+/;
+
+const PROPER_NAMES: Record<string, string> = {
+  api: 'API',
+  apis: 'APIs',
+  cli: 'CLI',
+  cpu: 'CPU',
+  cve: 'CVE',
+  cves: 'CVEs',
+  discord: 'Discord',
+  dns: 'DNS',
+  docker: 'Docker',
+  dockerfile: 'Dockerfile',
+  dockerfiles: 'Dockerfiles',
+  firecracker: 'Firecracker',
+  github: 'GitHub',
+  gitlab: 'GitLab',
+  harbor: 'Harbor',
+  helm: 'Helm',
+  http: 'HTTP',
+  https: 'HTTPS',
+  json: 'JSON',
+  kubernetes: 'Kubernetes',
+  mcp: 'MCP',
+  oauth: 'OAuth',
+  oidc: 'OIDC',
+  otp: 'OTP',
+  postgres: 'PostgreSQL',
+  saml: 'SAML',
+  scim: 'SCIM',
+  slack: 'Slack',
+  ssh: 'SSH',
+  sso: 'SSO',
+  tailscale: 'Tailscale',
+  tls: 'TLS',
+  trivy: 'Trivy',
+  ui: 'UI',
+  url: 'URL',
+  urls: 'URLs',
+  vercel: 'Vercel',
+  yaml: 'YAML'
+};
 
 const NOISE_SCOPES = new Set(['ci', 'deps', 'test', 'tests', 'docs', 'chore']);
 
@@ -74,6 +117,12 @@ function clean(text: string): string {
     .replace(/\s*\(\[#\d+\]\([^)]*\)\)/g, '')
     .replace(/\s+/g, ' ')
     .replace(/\.$/, '')
+    .replace(/\b[a-z][a-z0-9]*\b/g, (word, index: number, text: string) => {
+      if (text[index - 1] === '-' || text[index - 1] === '/' || text[index - 1] === '.') return word;
+      const next = text[index + word.length];
+      if (next === '-' || next === '/' || next === '.') return word;
+      return PROPER_NAMES[word] ?? word;
+    })
     .trim();
   return trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
 }
@@ -139,7 +188,7 @@ function readReleaseChanges(): Change[] {
   const changes: Change[] = [];
   for (const [hash, item] of byHash) {
     if (item.scope && NOISE_SCOPES.has(item.scope)) continue;
-    if (NOISE.test(item.text)) continue;
+    if (NOISE.test(item.text) || CODE_LIKE.test(item.text)) continue;
     const fromScope = item.scope ? SCOPES[item.scope] : undefined;
     const component = fromScope ?? (item.labels.length > 1 ? 'Platform' : item.labels[0]);
     const versionLabel = item.versions.has(component) ? component : item.labels[0];

@@ -1,10 +1,11 @@
 ---
 import Breadcrumbs from '../components/Breadcrumbs.astro';
 import PageActions from '../components/PageActions.astro';
-import { isLanding } from '../lib/nav';
+import { isLanding, normalizePath } from '../lib/nav';
 
 const { entry } = Astro.locals.starlightRoute;
 const landing = isLanding(Astro.url.pathname);
+const title = normalizePath(Astro.url.pathname) === '/api/' ? 'API reference' : entry.data.title;
 ---
 
 {
@@ -12,8 +13,8 @@ const landing = isLanding(Astro.url.pathname);
     <span data-no-title hidden />
   ) : (
     <div class="article-head">
-      <Breadcrumbs />
-      <h1 id="_top">{entry.data.title}</h1>
+      <Breadcrumbs title={title} />
+      <h1 id="_top">{title}</h1>
       <PageActions />
     </div>
   )

@@ -1,12 +1,17 @@
 ---
 type SidebarEntry = NonNullable<App.Locals['starlightRoute']>['sidebar'][number];
 
+interface Props {
+  title: string;
+}
+
 interface Crumb {
   label: string;
   href?: string;
 }
 
-const { sidebar, entry } = Astro.locals.starlightRoute;
+const { sidebar } = Astro.locals.starlightRoute;
+const { title } = Astro.props;
 
 function firstLink(item: SidebarEntry): string | undefined {
   if (item.type === 'link') return item.href;
@@ -40,7 +45,6 @@ for (const section of sidebar) {
 }
 
 const crumbs: Crumb[] = [{ label: 'Home', href: '/' }, ...trail];
-const title = entry.data.title;
 ---
 
 <nav class="crumbs" aria-label="Breadcrumb" data-pagefind-ignore>
