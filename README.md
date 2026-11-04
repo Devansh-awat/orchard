@@ -20,9 +20,7 @@ Install Orchard, connect a GitHub repo, and your app is live on your own server.
 sudo bash -c "$(curl -fsSL https://assets.orchard.my/install.sh)"
 ```
 
-It asks for a domain and an email, then brings its own k3s, Traefik, CloudNativePG, cert-manager,
-registry, metrics, log search and image scanner. You need amd64 or arm64, at least 4 GB of RAM (8 GB is
-comfortable) and 20 GB of free disk (60 GB once you're building things).
+You need a Linux server with at least 4 GB of RAM and 20 GB of free disk. Everything else comes with it.
 
 | Mode     | Use it when                                 | HTTPS                                 |
 | -------- | ------------------------------------------- | ------------------------------------- |
