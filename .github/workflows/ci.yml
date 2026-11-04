@@ -267,6 +267,8 @@ jobs:
         run: pnpm --filter server exec tsx --test test/project-member-role.test.ts
       - name: MCP body limit test
         run: pnpm --filter server exec tsx --test test/mcp-body-limit.test.ts
+      - name: Security hardening tests
+        run: pnpm --filter server test:security-hardening
       - name: Setup gate test
         run: pnpm --filter server test:setup-state
       - name: Registry credential inheritance tests
