@@ -120,3 +120,27 @@ func TestPinFromMutationResponse(t *testing.T) {
 		t.Errorf("path = %q", path)
 	}
 }
+
+func TestWaitRolloutSurvivesADroppedConnection(t *testing.T) {
+	var calls atomic.Int64
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if calls.Add(1) == 1 {
+			conn, _, err := w.(http.Hijacker).Hijack()
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			conn.Close()
+			return
+		}
+		fmt.Fprint(w, `{"phase":"live","terminal":true,"url":"https://x.dev"}`)
+	}))
+	t.Cleanup(srv.Close)
+	r, err := New(srv.URL, "orch_test").WaitRollout(context.Background(), RolloutWaitSpec{DeploymentID: "d1", Timeout: 30 * time.Second})
+	if err != nil {
+		t.Fatalf("a dropped connection should be retried: %v", err)
+	}
+	if r.Phase != "live" || calls.Load() != 2 {
+		t.Fatalf("phase %q after %d calls", r.Phase, calls.Load())
+	}
+}

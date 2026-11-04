@@ -55,15 +55,19 @@ const maxRetries = 3
 
 // Do performs a request against /apiv1<path> and returns the raw response body.
 // body may be nil. It is used directly by the `orchard api` escape hatch.
-// GETs retry on 429 (honoring Retry-After) and 5xx; mutations never retry.
+// GETs retry on 429 (honoring Retry-After), 5xx and dropped connections;
+// mutations never retry.
 func (c *Client) Do(ctx context.Context, method, path string, body []byte) ([]byte, error) {
 	for attempt := 0; ; attempt++ {
 		data, err := c.once(ctx, method, path, body)
 		if err == nil || method != http.MethodGet || attempt >= maxRetries {
 			return data, err
 		}
+		if ctx.Err() != nil {
+			return data, err
+		}
 		apiErr, ok := err.(*APIError)
-		if !ok || (apiErr.Status != http.StatusTooManyRequests && apiErr.Status < 500) {
+		if ok && apiErr.Status != http.StatusTooManyRequests && apiErr.Status < 500 {
 			return data, err
 		}
 		select {
@@ -75,7 +79,7 @@ func (c *Client) Do(ctx context.Context, method, path string, body []byte) ([]by
 }
 
 func retryDelay(e *APIError, attempt int) time.Duration {
-	if e.retryAfter > 0 {
+	if e != nil && e.retryAfter > 0 {
 		return e.retryAfter
 	}
 	base := time.Second << attempt
