@@ -8,6 +8,12 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { fillTemplate } from './render-template';
 
+export interface OrganizationAddedEmailData {
+  recipientEmail: string;
+  recipientName: string;
+  organizationName: string;
+}
+
 export interface OrganizationInviteEmailData {
   recipientEmail: string;
   recipientName: string;
@@ -275,6 +281,30 @@ export class EmailService {
       return true;
     } catch (error) {
       console.error('[EmailService] Failed to send organization invite email:', error);
+      return false;
+    }
+  }
+
+  async sendOrganizationAddedEmail(data: OrganizationAddedEmailData): Promise<boolean> {
+    if (!this.isConfigured()) return false;
+
+    const html = await this.renderTemplate('organization-added', {
+      recipientEmail: data.recipientEmail,
+      recipientName: data.recipientName,
+      organizationName: data.organizationName,
+      frontendUrl: this.frontendUrl
+    });
+
+    try {
+      await this.transporter!.sendMail({
+        from: `"${this.fromName}" <${this.fromEmail}>`,
+        to: data.recipientEmail,
+        subject: `${data.organizationName} added you on Orchard`,
+        html
+      });
+      return true;
+    } catch (error) {
+      console.error('[EmailService] Failed to send organization added email:', error);
       return false;
     }
   }

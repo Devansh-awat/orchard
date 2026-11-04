@@ -10,7 +10,6 @@ To add and remove organization members from your identity provider, connect the 
 ## Prerequisites
 
 - The **Owner** [role](/teams/organizations/#organization-roles) in the organization. Only owners can open the SCIM tab or manage SCIM tokens.
-- A verified domain for each email domain you provision. Orchard refuses users whose address is outside the organization's verified domains.
 
 ## Connect your identity provider
 
@@ -36,7 +35,9 @@ To revoke a token, select **Revoke** on its row. Requests that use the token fai
 | Set `active` to false | Removes the membership. Orchard keeps the SCIM record, so the provider can reactivate the person with the same ID. |
 | Delete a user         | Removes the membership and the SCIM record.                                                                        |
 
-SCIM only changes the membership in this organization. The person's Orchard account stays, because they may belong to other organizations.
+SCIM only changes the membership in this organization. It cannot delete the person's Orchard account, change their profile, sign them out, or affect their other organizations.
+
+SCIM can add anyone's email address, including people outside your verified domains. Orchard emails the person to say which organization added them, and they can [leave the organization](/teams/organizations/#leave-an-organization) unless it manages their domain.
 
 Orchard refuses to deactivate, delete, or demote the last owner of an organization.
 

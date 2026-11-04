@@ -3,6 +3,8 @@ import { randomBytes } from 'crypto';
 import SCIMMY from 'scimmy';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { EmailService } from '../email/email.service';
+import { RateLimitService } from '../auth/rate-limit.service';
 import { ScimError } from './scim-error';
 import { ScimQuery, SCIM_MAX_RESULTS } from './scim-query';
 
@@ -131,7 +133,9 @@ export class ScimService implements OnModuleInit {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly audit: AuditService
+    private readonly audit: AuditService,
+    private readonly email: EmailService,
+    private readonly rateLimit: RateLimitService
   ) {}
 
   onModuleInit() {
@@ -386,6 +390,24 @@ export class ScimService implements OnModuleInit {
   // SCIM identity in a tombstone under the same id so the resource stays
   // readable and reactivatable. The global account is untouched: the person
   // may belong to other orgs.
+  private async notifyAdded(email: string, name: string, organizationId: string) {
+    try {
+      await this.rateLimit.checkRateLimit(email, 'email', 'invite');
+      const organization = await this.prisma.organization.findUnique({
+        where: { id: organizationId },
+        select: { name: true }
+      });
+      if (!organization) return;
+      await this.email.sendOrganizationAddedEmail({
+        recipientEmail: email,
+        recipientName: name,
+        organizationName: organization.name
+      });
+    } catch (err) {
+      this.logger.warn(`Skipped the added-to-organization email: ${(err as Error).message}`);
+    }
+  }
+
   private async deactivate(view: ScimMemberView, write: ScimWrite, ctx: Ctx) {
     await this.assertNotLastOwner(view, ctx, 'deactivate');
 
@@ -583,23 +605,6 @@ export class ScimService implements OnModuleInit {
       }
     }
 
-    const emailDomain = email.split('@')[1]?.toLowerCase() ?? '';
-    const domainVerified = await this.prisma.orgDomain.findFirst({
-      where: {
-        organizationId: ctx.organizationId,
-        domain: emailDomain,
-        verifiedAt: { not: null }
-      },
-      select: { id: true }
-    });
-    if (!domainVerified) {
-      throw ScimError(
-        403,
-        'invalidValue',
-        `Verify ${emailDomain} for this organization before provisioning its users`
-      );
-    }
-
     const result = await this.prisma.$transaction(async (tx) => {
       // Creating the account is the one and only time SCIM writes to `users`.
       // An account that already exists is linked as-is: this org's IdP has no
@@ -641,6 +646,12 @@ export class ScimService implements OnModuleInit {
       targetId: result.userId,
       targetLabel: `${result.user.email} as ${role}`
     });
+
+    await this.notifyAdded(
+      result.user.email,
+      result.user.firstName || result.user.username || result.user.email,
+      ctx.organizationId
+    );
 
     return this.toScimUser(this.viewFromMember(result));
   }

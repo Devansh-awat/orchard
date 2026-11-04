@@ -63,8 +63,6 @@ test('scim+json request bodies are parsed', async () => {
 });
 
 // Enough of the Prisma surface for the SCIM handlers to run against memory.
-const state = { domainVerified: true };
-
 function makeDb() {
   const users: any[] = [];
   const members: any[] = [];
@@ -119,6 +117,7 @@ function makeDb() {
   });
 
   const db: any = {
+    organization: { findUnique: async () => ({ name: 'Acme' }) },
     user: {
       ...collection(users, () => ({ id: randomUUID(), firstName: null, lastName: null })),
       findUnique: async ({ where }: any) =>
@@ -128,7 +127,6 @@ function makeDb() {
             (where.username && u.username === where.username)
         ) ?? null
     },
-    orgDomain: { findFirst: async () => (state.domainVerified ? { id: 'domain' } : null) },
     organizationMember: {
       ...collection(members, () => ({
         id: randomUUID(),
@@ -163,9 +161,17 @@ function makeDb() {
 function makeService() {
   const { db, members, tombstones, users } = makeDb();
   const audit = { log: async () => {} };
-  const service = new ScimService(db as any, audit as any);
+  const sent: string[] = [];
+  const email = {
+    sendOrganizationAddedEmail: async ({ recipientEmail }: any) => {
+      sent.push(recipientEmail);
+      return true;
+    }
+  };
+  const rateLimit = { checkRateLimit: async () => {} };
+  const service = new ScimService(db as any, audit as any, email as any, rateLimit as any);
   service.onModuleInit();
-  return { service, members, tombstones, users };
+  return { service, members, tombstones, users, sent };
 }
 
 const patchOp = (value: any) => ({
@@ -615,22 +621,28 @@ test('the SCIM catch-all registers behind every real endpoint', async () => {
   }
 });
 
-test("provisioning refuses an address outside the org's verified domains", async () => {
-  const { service } = makeService();
-  state.domainVerified = false;
-  try {
-    await assert.rejects(
-      () =>
-        service.createUser(
-          {
-            schemas: ['urn:ietf:params:scim:schemas:core:2.0:User'],
-            userName: 'ceo@bigcorp.example'
-          },
-          ctx
-        ),
-      /Verify bigcorp\.example/
-    );
-  } finally {
-    state.domainVerified = true;
-  }
+test('SCIM can add an outside address and never touches the account', async () => {
+  const { service, users, members, sent } = makeService();
+  users.push({
+    id: 'pepito',
+    email: 'pepito@gmail.example',
+    username: 'pepito',
+    firstName: 'Pepe'
+  });
+  const before = JSON.stringify(users);
+
+  const created: any = await service.createUser(
+    {
+      schemas: ['urn:ietf:params:scim:schemas:core:2.0:User'],
+      userName: 'pepito@gmail.example',
+      name: { givenName: 'Hostile', familyName: 'Rename' }
+    },
+    ctx
+  );
+  assert.equal(members.length, 1);
+  assert.deepEqual(sent, ['pepito@gmail.example']);
+
+  await service.deleteUser(created.id, ctx);
+  assert.equal(members.length, 0);
+  assert.equal(JSON.stringify(users), before);
 });
