@@ -2042,7 +2042,9 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
 
     await this.authz.requireProjectEdit(deployment.project.id, user.id, 'delete deployments');
 
-    if (deployment.buildStatus === 'building') {
+    // A finished build's job and pod stay around for an hour for its logs, so this
+    // can't depend on a build still running.
+    if (deployment.buildStatus !== 'none') {
       await this.dockerService
         .cancelBuildJobsByDeploymentId(deploymentId)
         .catch((err) =>
