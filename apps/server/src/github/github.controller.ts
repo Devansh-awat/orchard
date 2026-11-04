@@ -764,9 +764,14 @@ export class GitHubController {
 
     // Convert BigInt to string for JSON serialization
     return installations.map((inst) => ({
-      ...inst,
+      id: inst.id,
       installationId: inst.installationId.toString(),
-      accountId: inst.accountId.toString()
+      accountLogin: inst.accountLogin,
+      accountId: inst.accountId.toString(),
+      accountType: inst.accountType,
+      repositorySelection: inst.repositorySelection,
+      createdAt: inst.createdAt,
+      updatedAt: inst.updatedAt
     }));
   }
 }
