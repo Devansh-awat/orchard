@@ -1,24 +1,3 @@
-/*
- * Orchard docs theme.
- *
- * This does not re-skin Starlight, it rebuilds its shell to match the platform:
- * a neutral canvas with floating rounded panels, rather than full-bleed columns
- * separated by borders.
- *
- * Values are taken from apps/frontend/src/tokens.css and sampled from the real
- * dashboard screenshots, so they match the product rather than approximating it:
- *
- *   canvas   #f6f5f6 light / #0a0a0b dark
- *   raised   #ffffff light / #121214 dark
- *   panels   --radius-xl  1.125rem
- *   controls --radius-md  0.625rem
- *   elev-1   0 0 0 1px rule, 0 1px 2px rgb(0 0 0 / 0.04)
- *
- * House rules that shape the rest: headings semibold and tight, active nav is a
- * soft tint plus darker text (never a filled accent block), font-weight never
- * changes between nav states, hairlines over borders, no shadows in dark mode.
- */
-
 @font-face {
   font-family: 'Plus Jakarta Sans';
   src: url('/fonts/PlusJakartaSans-VariableFont_wght.ttf') format('truetype');
@@ -39,68 +18,84 @@
   --sl-font: 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif;
   --sl-font-mono: 'Space Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
 
-  /* Platform shell */
-  --o-canvas: #f6f5f6;
+  --o-canvas: #fbfafa;
   --o-raised: #ffffff;
+  --o-code: #f5f3f3;
   --o-ink: #2c1a1d;
-  --o-rule: color-mix(in srgb, var(--o-ink) 10%, transparent);
-  --o-rule-soft: color-mix(in srgb, var(--o-ink) 7%, transparent);
+  --o-muted: #6f5a5e;
+  --o-rule: color-mix(in srgb, var(--o-ink) 11%, transparent);
+  --o-rule-strong: color-mix(in srgb, var(--o-ink) 18%, transparent);
   --o-fill-quiet: color-mix(in srgb, var(--o-ink) 4%, transparent);
-  --o-elev-1: 0 0 0 1px var(--o-rule), 0 1px 2px rgb(0 0 0 / 0.04);
-
-  --o-radius-panel: 1.125rem;
-  --o-radius-control: 0.625rem;
-  --o-gap: 0.625rem;
+  --o-fill: color-mix(in srgb, var(--o-ink) 8%, transparent);
+  --o-dot: color-mix(in srgb, var(--o-ink) 22%, transparent);
+  --o-mark-ink: #ffffff;
 
   --o-accent: #c93a4f;
-  --o-accent-strong: #7a2430;
-  --o-accent-tint: color-mix(in srgb, var(--o-accent) 10%, transparent);
+  --o-accent-hover: #b02f43;
+  --o-accent-text: #b02f43;
+  --o-accent-tint: color-mix(in srgb, #c93a4f 9%, transparent);
+  --o-on-accent: #ffffff;
+
+  --o-page-pad: 1.25rem;
 
   --sl-color-accent-low: #fce8ea;
   --sl-color-accent: var(--o-accent);
-  --sl-color-accent-high: var(--o-accent-strong);
+  --sl-color-accent-high: #7a2430;
+  --sl-color-text-accent: var(--o-accent-text);
+  --sl-color-text-invert: #ffffff;
 
   --sl-color-white: #2c1a1d;
   --sl-color-gray-1: #3a2428;
-  --sl-color-gray-2: #5d3a3f;
-  --sl-color-gray-3: #8a6a6f;
+  --sl-color-gray-2: #5d474b;
+  --sl-color-gray-3: #6f5a5e;
   --sl-color-gray-4: #b09598;
-  --sl-color-gray-5: #e8d7da;
+  --sl-color-gray-5: #e6dcde;
   --sl-color-gray-6: #f2eff0;
   --sl-color-gray-7: #faf8f9;
   --sl-color-black: var(--o-raised);
 
   --sl-color-bg: var(--o-canvas);
-  --sl-color-bg-nav: transparent;
-  --sl-color-bg-sidebar: transparent;
+  --sl-color-bg-nav: var(--o-canvas);
+  --sl-color-bg-sidebar: var(--o-canvas);
   --sl-color-hairline: var(--o-rule);
-  --sl-color-hairline-light: var(--o-rule-soft);
-  --sl-color-hairline-shade: transparent;
+  --sl-color-hairline-light: var(--o-rule);
+  --sl-color-hairline-shade: var(--o-rule);
 
-  --sl-nav-height: 3.75rem;
-  --sl-content-width: 47rem;
-  --sl-sidebar-width: 17.5rem;
+  --sl-nav-height: 3.5rem;
+  --sl-nav-pad-x: 1.5rem;
+  --sl-content-width: 40.5rem;
+  --sl-sidebar-width: 18.75rem;
+  --sl-sidebar-pad-x: 1rem;
   --sl-text-code: 0.875rem;
 }
 
 :root[data-theme='dark'] {
-  --o-canvas: #0a0a0b;
-  --o-raised: #121214;
+  --o-canvas: #0d0d0e;
+  --o-raised: #141416;
+  --o-code: #0a0a0b;
   --o-ink: #f6eef0;
-  --o-rule: color-mix(in srgb, #ffffff 10%, transparent);
-  --o-rule-soft: color-mix(in srgb, #ffffff 7%, transparent);
+  --o-muted: #a39396;
+  --o-rule: color-mix(in srgb, #ffffff 11%, transparent);
+  --o-rule-strong: color-mix(in srgb, #ffffff 18%, transparent);
   --o-fill-quiet: color-mix(in srgb, #ffffff 5%, transparent);
-  --o-elev-1: 0 0 0 1px var(--o-rule);
+  --o-fill: color-mix(in srgb, #ffffff 10%, transparent);
+  --o-dot: color-mix(in srgb, #ffffff 20%, transparent);
+  --o-mark-ink: #0d0d0e;
 
-  --o-accent: #e2596d;
-  --o-accent-strong: #f3a8b2;
-  --o-accent-tint: color-mix(in srgb, var(--o-accent) 16%, transparent);
+  --o-accent: #c93a4f;
+  --o-accent-hover: #d84c61;
+  --o-accent-text: #f0788a;
+  --o-accent-tint: color-mix(in srgb, #e2596d 12%, transparent);
 
   --sl-color-accent-low: #3d1118;
+  --sl-color-accent-high: #f3a8b2;
+  --sl-color-text-accent: var(--o-accent-text);
+  --sl-color-text-invert: #ffffff;
+
   --sl-color-white: #f6eef0;
-  --sl-color-gray-1: #ecdfe2;
-  --sl-color-gray-2: #b9a7ab;
-  --sl-color-gray-3: #8f7d81;
+  --sl-color-gray-1: #e6dbdd;
+  --sl-color-gray-2: #bcadb0;
+  --sl-color-gray-3: #a39396;
   --sl-color-gray-4: #5d4a4e;
   --sl-color-gray-5: #332b2d;
   --sl-color-gray-6: #1c1c1f;
@@ -108,253 +103,387 @@
   --sl-color-black: var(--o-raised);
 }
 
-body,
-.page {
-  background: var(--o-canvas);
-}
-
-/* The header sits on the canvas, not in its own bordered bar. */
-header.header {
-  border: none;
-  background: transparent;
-  backdrop-filter: none;
-  box-shadow: none;
-  padding-inline: var(--o-gap);
-}
-
-site-title img {
-  height: 1.875rem;
-  width: auto;
-}
-
-/* Pill search, matching the dashboard's control shapes. */
-site-search button {
-  border-radius: 999px;
-  border: 1px solid var(--o-rule);
-  background: var(--o-raised);
-}
-
-site-search button:hover {
-  border-color: color-mix(in srgb, var(--o-accent) 35%, var(--o-rule));
-}
-
-/*
- * Starlight ships a full-bleed bordered column. The platform floats a rounded
- * card with a gap around it, so the pane becomes a panel and the border goes.
- */
-.sidebar-pane {
-  border: none;
-  background: var(--o-raised);
-  border-radius: var(--o-radius-panel);
-  box-shadow: var(--o-elev-1);
-  margin: 0 0 0 var(--o-gap);
-  padding: 0.5rem;
-  scrollbar-width: thin;
-  box-sizing: border-box;
-}
-
-@media (min-width: 50em) {
-  .sidebar-pane {
-    top: calc(var(--sl-nav-height) + var(--o-gap));
-    /*
-     * height already reserves the bottom gap, so the pane must not also carry a
-     * bottom margin: that stacks and pushes the last nav items off-screen.
-     */
-    height: calc(100dvh - var(--sl-nav-height) - var(--o-gap) * 2);
-    overflow-y: auto;
-    overscroll-behavior: contain;
+@media (min-width: 50rem) {
+  :root {
+    --o-page-pad: 3.625rem;
   }
 }
 
-.sidebar-content {
-  padding: 0.25rem;
-  gap: 0.125rem;
+html {
+  background: var(--o-canvas);
 }
 
-.sidebar-content summary,
-.sidebar-content .large {
-  font-size: 0.8125rem;
-  font-weight: 600;
-  color: var(--sl-color-gray-3);
-  padding-inline: 0.5rem;
+body,
+.page {
+  background: var(--o-canvas);
+  color: var(--sl-color-gray-1);
+  word-spacing: 0.06em;
 }
 
-.sidebar-content ul li a {
-  border-radius: var(--o-radius-control);
-  padding: 0.375rem 0.5rem;
+pre,
+code,
+kbd,
+.o-label {
+  word-spacing: normal;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  border: 0;
+  white-space: nowrap;
+}
+
+:focus-visible {
+  outline: 2px solid var(--o-accent-text);
+  outline-offset: 2px;
+}
+
+header.header {
+  background: var(--o-canvas);
+  border-bottom: 1px solid var(--o-rule);
+}
+
+site-search button[data-open-modal] {
+  width: 9.5rem;
+  height: 2.25rem;
+  border: 1px solid var(--o-rule-strong);
+  border-radius: 0.5rem;
+  background: transparent;
   color: var(--sl-color-gray-2);
-  font-weight: 500;
-  border-inline-start: none;
+  font-size: 0.875rem;
 }
 
-.sidebar-content ul li a:hover {
+site-search button[data-open-modal]:hover {
+  border-color: var(--o-muted);
+  color: var(--sl-color-white);
+}
+
+site-search button[data-open-modal] > kbd {
+  gap: 0.1875rem;
+  padding: 0;
+  background: none;
+  border: 0;
+}
+
+site-search button[data-open-modal] > kbd kbd {
+  display: grid;
+  place-items: center;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 0.25rem;
+  background: var(--o-fill);
+  color: var(--sl-color-gray-2);
+  font-family: var(--sl-font-mono);
+  font-size: 0.6875rem;
+}
+
+@media (max-width: 49.99rem) {
+  site-search button[data-open-modal] {
+    width: auto;
+    border: 0;
+    color: var(--sl-color-gray-1);
+    font-size: 1.25rem;
+  }
+}
+
+site-search dialog {
+  border: 1px solid var(--o-rule-strong);
+  border-radius: 0.75rem;
+  background: var(--o-raised);
+}
+
+starlight-menu-button button {
+  border: 1px solid var(--o-rule-strong);
+  border-radius: 0.5rem;
+  background: var(--o-canvas);
+  box-shadow: none;
+  color: var(--sl-color-white);
+}
+
+.sidebar-pane {
+  background: var(--o-canvas);
+  scrollbar-width: thin;
+  scrollbar-gutter: auto;
+}
+
+.sidebar-content {
+  gap: 0;
+  padding: 1.25rem 1rem 0;
+}
+
+@media (min-width: 72rem) {
+  .right-sidebar {
+    inset-inline-end: 0;
+    width: 16rem;
+    border-inline-start: 0;
+  }
+}
+
+.main-pane .content-panel {
+  padding-inline: var(--sl-content-pad-x);
+  padding-block: 0;
+  border: 0;
+}
+
+.main-pane .content-panel:first-of-type {
+  padding-block-start: 1.5rem;
+}
+
+.article-head {
+  padding-block-end: 1.25rem;
+  border-bottom: 1px solid var(--o-rule);
+}
+
+.main-pane .content-panel + .content-panel {
+  padding-block-start: 1.5rem;
+}
+
+.content-panel:has([data-no-title]) {
+  display: none;
+}
+
+html:has(.o-landing) main {
+  padding: 0;
+}
+
+html:has(.o-landing) .content-panel,
+html:has(.o-landing) .content-panel + .content-panel {
+  padding: 0;
+}
+
+html:has(.o-landing) .sl-container {
+  max-width: none;
+  margin: 0;
+}
+
+html:has(.o-landing) .sl-markdown-content {
+  margin: 0;
+}
+
+@media (min-width: 50rem) {
+  html[data-has-sidebar]:has(.o-wide) {
+    --sl-content-inline-start: 0rem;
+  }
+
+  html:has(.o-wide) .sidebar-pane {
+    display: none;
+  }
+}
+
+.o-mark {
+  position: absolute;
+  z-index: 3;
+  width: 0.8125rem;
+  height: 0.8125rem;
+  border: 1px solid var(--o-rule-strong);
+  border-radius: 0.1875rem;
+  background: var(--o-canvas);
+  pointer-events: none;
+}
+
+.o-mark-tl {
+  top: -0.4375rem;
+  left: -0.4375rem;
+}
+
+.o-mark-tr {
+  top: -0.4375rem;
+  right: -0.4375rem;
+}
+
+.o-mark-bl {
+  bottom: -0.4375rem;
+  left: -0.4375rem;
+}
+
+.o-mark-br {
+  bottom: -0.4375rem;
+  right: -0.4375rem;
+}
+
+.o-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 2.625rem;
+  padding: 0.4375rem 1rem;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-family: inherit;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  line-height: 1.2;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.o-btn-sm {
+  min-height: 2.25rem;
+  padding: 0.3125rem 0.875rem;
+  font-size: 0.875rem;
+}
+
+.o-btn-primary {
+  background: var(--o-accent);
+  color: var(--o-on-accent);
+}
+
+.o-btn-primary:hover {
+  background: var(--o-accent-hover);
+  color: var(--o-on-accent);
+}
+
+.o-btn-outline {
+  border-color: var(--o-rule-strong);
+  background: transparent;
+  color: var(--sl-color-white);
+}
+
+.o-btn-outline:hover {
   background: var(--o-fill-quiet);
   color: var(--sl-color-white);
 }
 
-/*
- * Active item: soft tint plus accent text. Never a filled accent block, and the
- * weight is identical across states so nothing shifts as you navigate.
- */
-.sidebar-content a[aria-current='page'],
-.sidebar-content a[aria-current='page']:hover,
-.sidebar-content a[aria-current='page']:focus {
-  background: var(--o-accent-tint);
-  color: var(--o-accent-strong);
-  font-weight: 500;
+.o-icon-button {
+  display: inline-grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border: 0;
+  border-radius: 0.5rem;
+  background: none;
+  color: var(--sl-color-gray-2);
+  cursor: pointer;
 }
 
-.sidebar-content ul ul {
-  border-inline-start: 1px solid var(--o-rule-soft);
-  margin-inline-start: 0.75rem;
-  padding-inline-start: 0.375rem;
-}
-
-/*
- * Starlight reserves space for the fixed sidebar with padding-inline-start on
- * .main-frame. Do not zero it: the sidebar would float over the article.
- * Widen it instead, to account for the gap the floating panel now sits in.
- */
-@media (min-width: 50em) {
-  .main-frame {
-    padding-inline-start: calc(var(--sl-sidebar-width) + var(--o-gap));
-  }
-}
-
-.main-pane {
-  background: transparent;
-}
-
-/* The article is a raised card on the canvas, like a dashboard section. */
-.content-panel {
-  border: none;
-  padding-inline: clamp(1.25rem, 4vw, 2.5rem);
-}
-
-.main-pane > div > article {
-  background: var(--o-raised);
-  border-radius: var(--o-radius-panel);
-  box-shadow: var(--o-elev-1);
-  margin: 0 var(--o-gap) var(--o-gap) var(--o-gap);
-  padding-block: 0.5rem 1.5rem;
-  overflow: hidden;
-}
-
-/* The first panel holds the title; drop Starlight's divider between panels. */
-.content-panel + .content-panel {
-  border-top: 1px solid var(--o-rule-soft);
-}
-
-.right-sidebar {
-  border: none;
-  background: transparent;
-}
-
-.right-sidebar-panel {
-  padding-inline-start: 1rem;
-}
-
-#starlight__on-this-page--current {
-  color: var(--o-accent-strong);
-}
-
-.sl-markdown-content :is(h1, h2, h3, h4, h5, h6) {
-  font-weight: 600;
-  letter-spacing: -0.02em;
+.o-icon-button:hover {
+  background: var(--o-fill-quiet);
   color: var(--sl-color-white);
 }
 
-.content-panel h1#_top {
-  font-size: clamp(1.875rem, 1.4rem + 1.8vw, 2.5rem);
-  font-weight: 600;
-  letter-spacing: -0.03em;
+.o-label {
+  color: var(--o-accent-text);
+  font-family: var(--sl-font-mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.o-dots {
+  background-image: radial-gradient(var(--o-dot) 1px, transparent 1px);
+  background-size: 0.5625rem 0.5625rem;
+}
+
+.sl-markdown-content {
+  color: var(--sl-color-gray-1);
+  font-size: 1rem;
+  line-height: 1.75;
+}
+
+.sl-markdown-content :is(h1, h2, h3, h4, h5, h6):not(:where(.not-content *)) {
+  color: var(--sl-color-white);
+  font-weight: 500;
+  letter-spacing: -0.015em;
+  line-height: 1.3;
   text-wrap: balance;
 }
 
-.sl-markdown-content :is(h2, h3) {
-  text-wrap: balance;
+.sl-markdown-content h2:not(:where(.not-content *)) {
+  font-size: 1.375rem;
 }
 
-/*
- * Starlight renders headings `display: inline` inside `.sl-heading-wrapper` so
- * the anchor link sits beside them. A border on the heading itself would only
- * be as wide as the text, so the section rule goes on the wrapper.
- */
+.sl-markdown-content h3:not(:where(.not-content *)) {
+  font-size: 1.125rem;
+}
+
+.sl-markdown-content h4:not(:where(.not-content *)) {
+  font-size: 1rem;
+}
+
 .sl-markdown-content .sl-heading-wrapper.level-h2 {
   margin-top: 2.5rem;
-  padding-top: 1.5rem;
-  border-top: 1px solid var(--o-rule-soft);
-}
-
-.sl-markdown-content h2 {
-  font-size: 1.3125rem;
 }
 
 .sl-markdown-content .sl-heading-wrapper.level-h3 {
   margin-top: 1.75rem;
 }
 
-.sl-markdown-content h3 {
-  font-size: 1.0625rem;
-}
-
-.sl-markdown-content p,
-.sl-markdown-content li {
+.sl-markdown-content :is(p, li):not(:where(.not-content *)) {
   text-wrap: pretty;
-  line-height: 1.7;
 }
 
 .sl-markdown-content a:not(:where(.not-content *)) {
-  text-decoration-color: color-mix(in srgb, var(--o-accent) 45%, transparent);
-  text-underline-offset: 0.25em;
+  color: var(--o-accent-text);
+  text-decoration-color: color-mix(in srgb, var(--o-accent-text) 55%, transparent);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
 }
 
 .sl-markdown-content a:hover:not(:where(.not-content *)) {
-  text-decoration-color: var(--o-accent);
+  text-decoration-color: currentColor;
 }
 
-.sl-markdown-content table {
-  font-size: 0.9375rem;
+.sl-markdown-content .sl-anchor-link {
+  margin-inline-start: 0.375rem;
+  align-items: center;
+  color: var(--o-muted);
 }
 
-.sl-markdown-content :is(th, td) {
-  border-color: var(--o-rule-soft);
+.sl-markdown-content .sl-anchor-link svg {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
+.sl-markdown-content table:not(:where(.not-content *)) {
+  font-size: 0.875rem;
+}
+
+.sl-markdown-content :is(th, td):not(:where(.not-content *)) {
+  border-color: var(--o-rule);
   padding-block: 0.625rem;
 }
 
-.sl-markdown-content th {
-  font-weight: 600;
-  color: var(--sl-color-gray-2);
+.sl-markdown-content th:not(:where(.not-content *)) {
+  color: var(--sl-color-white);
+  font-weight: 500;
 }
 
-.sl-markdown-content code:not(:where(.expressive-code *)) {
+.sl-markdown-content code:not(:where(.expressive-code *, .not-content *)) {
+  padding: 0.125em 0.375em;
+  border: 1px solid var(--o-rule);
+  border-radius: 0.3125rem;
   background: var(--o-fill-quiet);
-  border: 1px solid var(--o-rule-soft);
-  border-radius: 0.375rem;
-  padding: 0.1em 0.35em;
-  font-size: 0.875em;
+  color: var(--o-accent-text);
+  font-size: 0.8125em;
 }
 
-.expressive-code .frame {
-  border-radius: var(--o-radius-control);
+.sl-markdown-content a code:not(:where(.expressive-code *, .not-content *)) {
+  color: inherit;
 }
 
-.expressive-code .frame pre {
-  border-radius: var(--o-radius-control);
-  border-color: var(--o-rule);
+.sl-markdown-content details:not(:where(.not-content *)) {
+  border: 1px solid var(--o-rule);
+  border-radius: 0.5rem;
+  padding: 0.75rem 1rem;
 }
 
-/* Tinted fill plus a full hairline. Never a left accent bar. */
 .sl-markdown-content .starlight-aside {
   border: 1px solid var(--o-rule);
-  border-inline-start-width: 1px;
-  border-radius: var(--o-radius-control);
+  border-radius: 0.5rem;
   padding: 1rem 1.125rem;
 }
 
 .card,
 .sl-link-card {
-  border-radius: var(--o-radius-control);
+  border-radius: 0.5rem;
   border-color: var(--o-rule);
   background: var(--o-raised);
   box-shadow: none;
@@ -364,115 +493,42 @@ site-search button:hover {
   background: var(--o-fill-quiet);
 }
 
+.pagination-links {
+  margin-top: 2.5rem;
+}
+
 .pagination-links a {
-  border-radius: var(--o-radius-control);
+  border-radius: 0.5rem;
   border-color: var(--o-rule);
-  background: var(--o-raised);
+  background: transparent;
   box-shadow: none;
+  color: var(--sl-color-white);
 }
 
 .pagination-links a:hover {
   background: var(--o-fill-quiet);
-  border-color: color-mix(in srgb, var(--o-accent) 35%, transparent);
+  border-color: var(--o-rule-strong);
 }
 
-@media (max-width: 50em) {
-  .sidebar-pane {
-    margin: 0;
-    border-radius: 0;
-    box-shadow: none;
-    border-inline-end: 1px solid var(--o-rule);
-  }
-
-  .main-pane > div > article {
-    margin-inline: 0;
-    border-radius: 0;
-    box-shadow: none;
-  }
+mobile-starlight-toc nav {
+  background: var(--o-canvas);
+  border-color: var(--o-rule);
 }
 
 @media (prefers-reduced-motion: reduce) {
-  * {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
     scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
   }
 }
 
-/*
- * Starlight's header is a block wrapper around a flex row. Align the row and
- * line the logo up with the sidebar card's text, which sits at
- * gap + panel padding + content padding + link padding.
- */
-header.header > .header {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  height: 100%;
-}
-
-header.header .site-title,
-header.header a.site-title {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding-inline-start: calc(0.5rem + 0.25rem + 0.5rem);
-}
-
-/* The theme picker ships as a bare <select>; give it the platform's pill. */
-starlight-theme-select {
-  display: inline-flex;
-  align-items: center;
-  border: 1px solid var(--o-rule);
-  border-radius: 999px;
-  background: var(--o-raised);
-  padding-inline: 0.625rem;
-  height: 2rem;
-}
-
-starlight-theme-select:hover {
-  border-color: color-mix(in srgb, var(--o-accent) 35%, var(--o-rule));
-}
-
-starlight-theme-select label {
-  color: var(--sl-color-gray-2);
-  gap: 0.375rem;
-}
-
-starlight-theme-select select {
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: var(--sl-color-gray-2);
-  background: transparent;
-}
-
-starlight-theme-select .icon {
-  color: var(--sl-color-gray-3);
-}
-
-/* Social icons sit on the canvas, so match their weight to the pill. */
-header.header .social-icons a {
-  color: var(--sl-color-gray-2);
-}
-
-header.header .social-icons a:hover {
-  color: var(--sl-color-white);
-}
-
-/*
- * Heading anchor links are sized in `em`, so raising the heading sizes above
- * blew the icon up to ~29px and its negative margin dragged it over the text.
- * Pin it to a fixed size and align it to the text baseline.
- */
-.sl-markdown-content .sl-anchor-link {
-  margin-inline-start: 0.375rem;
-  align-items: center;
-  color: var(--sl-color-gray-4);
-}
-
-.sl-markdown-content .sl-anchor-link svg {
-  width: 0.875rem;
-  height: 0.875rem;
-}
-
-.sl-markdown-content .sl-anchor-link:hover {
-  color: var(--o-accent);
+@media print {
+  .o-mark,
+  .o-dots {
+    display: none;
+  }
 }

@@ -1,0 +1,77 @@
+---
+import MobileTableOfContents from '@astrojs/starlight/components/MobileTableOfContents.astro';
+import TableOfContents from '@astrojs/starlight/components/TableOfContents.astro';
+import PageLinks from '../components/PageLinks.astro';
+---
+
+{
+  Astro.locals.starlightRoute.toc && (
+    <>
+      <div class="lg:sl-hidden">
+        <MobileTableOfContents />
+      </div>
+      <div class="rail sl-hidden lg:sl-block">
+        <TableOfContents />
+        <div class="rule" />
+        <PageLinks />
+      </div>
+    </>
+  )
+}
+
+<style>
+  .rail {
+    padding: 1.5rem 1.5rem 2rem 0;
+  }
+
+  .rule {
+    height: 1px;
+    margin-block: 1.25rem;
+    background: var(--o-rule);
+  }
+
+  .rail :global(h2) {
+    margin-bottom: 0.625rem;
+    color: var(--sl-color-white);
+    font-size: 0.875rem;
+    font-weight: 500;
+  }
+
+  .rail :global(ul) {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .rail :global(ul ul) {
+    --depth: 1;
+  }
+
+  .rail :global(a) {
+    display: block;
+    color: var(--sl-color-gray-2);
+    font-size: 0.8125rem;
+    line-height: 1.4;
+    text-decoration: none;
+    overflow-wrap: anywhere;
+  }
+
+  .rail :global(starlight-toc a) {
+    padding-block: 0.3125rem;
+    padding-inline: calc(0.875rem * var(--depth, 0) + 0.875rem) 0;
+    border-inline-start: 2px solid var(--o-rule);
+  }
+
+  .rail :global(starlight-toc li ul a) {
+    padding-inline-start: 1.625rem;
+  }
+
+  .rail :global(a:hover) {
+    color: var(--sl-color-white);
+  }
+
+  .rail :global(starlight-toc a[aria-current='true']) {
+    border-inline-start-color: var(--o-accent-text);
+    color: var(--sl-color-white);
+  }
+</style>

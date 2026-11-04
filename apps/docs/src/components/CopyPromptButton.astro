@@ -1,0 +1,39 @@
+---
+import Icon from './Icon.astro';
+import { INSTALL_PROMPT } from '../lib/nav';
+
+interface Props {
+  prompt?: string;
+  label?: string;
+}
+
+const { prompt = INSTALL_PROMPT, label = 'Copy prompt' } = Astro.props;
+---
+
+<button type="button" class="o-btn o-btn-outline copy-prompt" data-copy={prompt} data-copied-text="Prompt copied">
+  <span class="marks" aria-hidden="true">
+    <Icon mark="claude" size={20} />
+    <Icon mark="codex" size={20} />
+    <Icon mark="cursor" size={20} />
+    <Icon mark="opencode" size={20} />
+  </span>
+  <span data-copy-label>{label}</span>
+</button>
+
+<script>
+  import '../lib/client/copy';
+</script>
+
+<style>
+  .copy-prompt {
+    cursor: copy;
+    gap: 0.75rem;
+    padding-inline: 1rem;
+  }
+
+  .marks {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.1875rem;
+  }
+</style>

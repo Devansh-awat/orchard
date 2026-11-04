@@ -1,0 +1,114 @@
+---
+import Icon from './Icon.astro';
+
+interface Props {
+  code: string;
+  label?: string;
+  title?: string;
+}
+
+const { code, label = 'Copy command', title } = Astro.props;
+const multiline = code.includes('\n');
+---
+
+<figure class:list={['o-command', { multiline }]}>
+  {title && <figcaption>{title}</figcaption>}
+  <div class="row">
+    <pre tabindex="0"><code>{code}</code></pre>
+    <button type="button" class="copy" data-copy={code} aria-label={label} title={label}>
+      <Icon name="copy" class="idle" />
+      <Icon name="check" class="done" />
+    </button>
+  </div>
+</figure>
+
+<script>
+  import '../lib/client/copy';
+</script>
+
+<style>
+  .o-command {
+    margin: 0;
+    border: 1px solid var(--o-rule);
+    border-radius: 0.375rem;
+    background: var(--o-code);
+    min-width: 0;
+  }
+
+  figcaption {
+    padding: 0.5rem 1rem;
+    border-bottom: 1px solid var(--o-rule);
+    color: var(--o-muted);
+    font-family: var(--sl-font-mono);
+    font-size: 0.75rem;
+  }
+
+  .row {
+    display: flex;
+    align-items: stretch;
+    min-width: 0;
+  }
+
+  pre {
+    flex: 1;
+    min-width: 0;
+    margin: 0;
+    padding: 0.8125rem 1rem;
+    overflow-x: auto;
+    background: none;
+    border: 0;
+    color: var(--sl-color-white);
+    font-family: var(--sl-font-mono);
+    font-size: 0.8125rem;
+    line-height: 1.6;
+  }
+
+  pre:focus-visible {
+    outline: 2px solid var(--o-accent-text);
+    outline-offset: -2px;
+  }
+
+  code {
+    all: unset;
+    white-space: pre;
+  }
+
+  .copy {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 2.5rem;
+    border: 0;
+    border-inline-start: 1px solid var(--o-rule);
+    background: none;
+    color: var(--o-muted);
+    cursor: copy;
+  }
+
+  .multiline .copy {
+    align-items: start;
+    padding-block-start: 0.875rem;
+  }
+
+  .copy:hover {
+    background: var(--o-fill-quiet);
+    color: var(--sl-color-white);
+  }
+
+  .copy:focus-visible {
+    outline: 2px solid var(--o-accent-text);
+    outline-offset: -2px;
+  }
+
+  .copy :global(.done) {
+    display: none;
+  }
+
+  .copy[data-copied='true'] :global(.done) {
+    display: block;
+  }
+
+  .copy[data-copied='true'] :global(.idle) {
+    display: none;
+  }
+</style>

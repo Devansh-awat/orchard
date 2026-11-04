@@ -1,0 +1,33 @@
+---
+import { icons, marks, type IconName, type MarkName } from '../lib/icons';
+
+interface Props {
+  name?: IconName;
+  mark?: MarkName;
+  size?: number;
+  class?: string;
+}
+
+const { name, mark, size = 16, class: className } = Astro.props;
+const body = mark ? marks[mark] : name ? icons[name] : '';
+---
+
+{
+  mark ? (
+    <svg class={className} width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" set:html={body} />
+  ) : (
+    <svg
+      class={className}
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.75"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      aria-hidden="true"
+      set:html={body}
+    />
+  )
+}

@@ -1,0 +1,38 @@
+---
+import Pagination from '@astrojs/starlight/components/Pagination.astro';
+import PageLinks from '../components/PageLinks.astro';
+import SiteFooter from '../components/SiteFooter.astro';
+import { isLanding } from '../lib/nav';
+
+const landing = isLanding(Astro.url.pathname);
+---
+
+{
+  landing ? (
+    <footer class="landing-foot">
+      <SiteFooter />
+    </footer>
+  ) : (
+    <footer class="article-foot">
+      <div class="mobile-links lg:sl-hidden">
+        <PageLinks />
+      </div>
+      <Pagination />
+      <SiteFooter />
+    </footer>
+  )
+}
+
+<style>
+  .article-foot {
+    margin-top: 3rem;
+  }
+
+  .mobile-links {
+    margin-bottom: 1.5rem;
+  }
+
+  .landing-foot {
+    padding-inline: var(--o-page-pad);
+  }
+</style>

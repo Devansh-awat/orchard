@@ -1,7 +1,32 @@
 ---
-import Default from "@astrojs/starlight/components/PageTitle.astro";
-import CopyPage from "../components/CopyPage.astro";
+import Breadcrumbs from '../components/Breadcrumbs.astro';
+import PageActions from '../components/PageActions.astro';
+import { isLanding } from '../lib/nav';
+
+const { entry } = Astro.locals.starlightRoute;
+const landing = isLanding(Astro.url.pathname);
 ---
 
-<Default><slot /></Default>
-<CopyPage />
+{
+  landing ? (
+    <span data-no-title hidden />
+  ) : (
+    <div class="article-head">
+      <Breadcrumbs />
+      <h1 id="_top">{entry.data.title}</h1>
+      <PageActions />
+    </div>
+  )
+}
+
+<style>
+  h1 {
+    margin: 1.125rem 0 0;
+    color: var(--sl-color-white);
+    font-size: clamp(1.875rem, 1.6rem + 1vw, 2.25rem);
+    font-weight: 500;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+    text-wrap: balance;
+  }
+</style>

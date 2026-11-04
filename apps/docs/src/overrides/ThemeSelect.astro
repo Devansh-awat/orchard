@@ -1,0 +1,44 @@
+---
+import Icon from '../components/Icon.astro';
+---
+
+<button type="button" class="o-icon-button theme-toggle" data-theme-toggle aria-label="Switch theme" title="Switch theme">
+  <Icon name="sun" size={18} class="sun" />
+  <Icon name="moon" size={18} class="moon" />
+</button>
+
+<script>
+  document.querySelectorAll<HTMLButtonElement>('[data-theme-toggle]').forEach((button) => {
+    const sync = () => {
+      const next = document.documentElement.dataset.theme === 'light' ? 'dark' : 'light';
+      button.setAttribute('aria-label', `Switch to ${next} theme`);
+      button.title = `Switch to ${next} theme`;
+    };
+    sync();
+    button.addEventListener('click', () => {
+      const next = document.documentElement.dataset.theme === 'light' ? 'dark' : 'light';
+      document.documentElement.dataset.theme = next;
+      try {
+        localStorage.setItem('starlight-theme', next);
+      } catch {}
+      document.querySelectorAll<HTMLButtonElement>('[data-theme-toggle]').forEach((other) => {
+        other.setAttribute('aria-label', `Switch to ${next === 'light' ? 'dark' : 'light'} theme`);
+        other.title = `Switch to ${next === 'light' ? 'dark' : 'light'} theme`;
+      });
+    });
+  });
+</script>
+
+<style>
+  .theme-toggle :global(.moon) {
+    display: none;
+  }
+
+  :global([data-theme='light']) .theme-toggle :global(.moon) {
+    display: block;
+  }
+
+  :global([data-theme='light']) .theme-toggle :global(.sun) {
+    display: none;
+  }
+</style>

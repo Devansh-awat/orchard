@@ -1,0 +1,92 @@
+---
+type SidebarEntry = NonNullable<App.Locals['starlightRoute']>['sidebar'][number];
+
+interface Crumb {
+  label: string;
+  href?: string;
+}
+
+const { sidebar, entry } = Astro.locals.starlightRoute;
+
+function firstLink(item: SidebarEntry): string | undefined {
+  if (item.type === 'link') return item.href;
+  for (const child of item.entries) {
+    const href = firstLink(child);
+    if (href) return href;
+  }
+  return undefined;
+}
+
+function walk(items: SidebarEntry[], trail: Crumb[]): Crumb[] | undefined {
+  for (const item of items) {
+    if (item.type === 'link') {
+      if (item.isCurrent) return trail;
+    } else {
+      const found = walk(item.entries, [...trail, { label: item.label, href: firstLink(item) }]);
+      if (found) return found;
+    }
+  }
+  return undefined;
+}
+
+let trail: Crumb[] = [];
+for (const section of sidebar) {
+  if (section.type !== 'group') continue;
+  const found = walk(section.entries, []);
+  if (found) {
+    trail = found;
+    break;
+  }
+}
+
+const crumbs: Crumb[] = [{ label: 'Home', href: '/' }, ...trail];
+const title = entry.data.title;
+---
+
+<nav class="crumbs" aria-label="Breadcrumb">
+  <ol>
+    {
+      crumbs.map((crumb) => (
+        <li>
+          {crumb.href ? <a href={crumb.href}>{crumb.label}</a> : <span>{crumb.label}</span>}
+          <span class="sep" aria-hidden="true">
+            /
+          </span>
+        </li>
+      ))
+    }
+    <li><span aria-current="page">{title}</span></li>
+  </ol>
+</nav>
+
+<style>
+  ol {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 0.4375rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    color: var(--o-muted);
+    font-size: 0.8125rem;
+    line-height: 1.5;
+  }
+
+  li {
+    display: flex;
+    gap: 0.4375rem;
+  }
+
+  a {
+    color: var(--sl-color-gray-2);
+    text-decoration: none;
+  }
+
+  a:hover {
+    color: var(--sl-color-white);
+  }
+
+  [aria-current='page'] {
+    color: var(--sl-color-white);
+  }
+</style>

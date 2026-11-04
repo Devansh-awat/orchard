@@ -1,0 +1,53 @@
+---
+import Icon from './Icon.astro';
+import { REPO_URL, SITE_URL, normalizePath } from '../lib/nav';
+
+const { editUrl, entry } = Astro.locals.starlightRoute;
+const path = normalizePath(Astro.url.pathname);
+const generated = entry.id.startsWith('reference/');
+const issueTitle = encodeURIComponent(`Docs: ${entry.data.title}`);
+const issueBody = encodeURIComponent(`Page: ${SITE_URL}${path}\n\n`);
+const issueUrl = `${REPO_URL}/issues/new?title=${issueTitle}&body=${issueBody}`;
+---
+
+<ul class="page-links print:hidden">
+  {
+    editUrl && !generated && (
+      <li>
+        <a href={editUrl}>
+          <Icon name="pencil" size={14} />
+          Edit page
+        </a>
+      </li>
+    )
+  }
+  <li>
+    <a href={issueUrl}>
+      <Icon mark="github" size={14} />
+      Report issue
+    </a>
+  </li>
+</ul>
+
+<style>
+  .page-links {
+    display: grid;
+    gap: 0.625rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  a {
+    display: inline-flex !important;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--sl-color-gray-2);
+    font-size: 0.8125rem;
+    text-decoration: none;
+  }
+
+  a:hover {
+    color: var(--sl-color-white);
+  }
+</style>

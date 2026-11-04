@@ -1,0 +1,71 @@
+---
+import { footerColumns } from '../lib/nav';
+---
+
+<div class="site-footer not-content">
+  <nav aria-label="Footer">
+    {
+      footerColumns.map((column) => (
+        <div>
+          <h2>{column.title}</h2>
+          <ul>
+            {column.links.map((link) => (
+              <li>
+                <a href={link.href}>{link.label}</a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))
+    }
+  </nav>
+  <p>Orchard is open source under the AGPL-3.0 license.</p>
+</div>
+
+<style>
+  .site-footer {
+    margin-top: 4rem;
+    padding-block: 2.5rem;
+    border-top: 1px solid var(--o-rule);
+  }
+
+  nav {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
+    gap: 2rem 1.5rem;
+  }
+
+  h2 {
+    margin: 0 0 0.75rem;
+    color: var(--o-muted);
+    font-family: var(--sl-font-mono);
+    font-size: 0.6875rem;
+    font-weight: 400;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  ul {
+    display: grid;
+    gap: 0.5rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  a {
+    color: var(--sl-color-gray-2);
+    font-size: 0.875rem;
+    text-decoration: none;
+  }
+
+  a:hover {
+    color: var(--sl-color-white);
+  }
+
+  p {
+    margin: 2rem 0 0;
+    color: var(--o-muted);
+    font-size: 0.8125rem;
+  }
+</style>

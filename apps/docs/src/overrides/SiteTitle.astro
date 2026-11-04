@@ -1,50 +1,43 @@
----
-/**
- * The docs are a section of the product site, not a separate one, so the logo
- * goes back to the landing page rather than to a docs home that no longer
- * exists.
- */
-const site = "https://orchard.my";
----
-
-<a href={site} class="site-home">
-  <img
-    src="/logo/logocolor.svg"
-    alt="Orchard"
-    width="132"
-    height="32"
-    class="logo-light"
-  />
-  <img
-    src="/logo/logocolordm.svg"
-    alt="Orchard"
-    width="132"
-    height="32"
-    class="logo-dark"
-  />
+<a href="/" class="site-home" aria-label="Orchard Docs home">
+  <img src="/logo/logocolor.svg" alt="" width="124" height="30" class="logo-light" />
+  <img src="/logo/logocolordm.svg" alt="" width="124" height="30" class="logo-dark" />
+  <span class="pill" aria-hidden="true">Docs</span>
 </a>
 
 <style>
   .site-home {
     display: flex;
     align-items: center;
+    gap: 0.625rem;
     text-decoration: none;
   }
 
-  .site-home img {
-    height: 1.875rem;
+  img {
+    height: 1.75rem;
     width: auto;
+  }
+
+  .pill {
+    padding: 0.0625rem 0.4375rem;
+    border: 1px solid var(--o-rule-strong);
+    border-radius: 0.3125rem;
+    color: var(--sl-color-gray-2);
+    font-family: var(--sl-font-mono);
+    font-size: 0.6875rem;
+    letter-spacing: 0.08em;
+    line-height: 1.25rem;
+    text-transform: uppercase;
   }
 
   .logo-dark {
     display: none;
   }
 
-  :global([data-theme="dark"]) .logo-light {
+  :global([data-theme='dark']) .logo-light {
     display: none;
   }
 
-  :global([data-theme="dark"]) .logo-dark {
+  :global([data-theme='dark']) .logo-dark {
     display: block;
   }
 </style>

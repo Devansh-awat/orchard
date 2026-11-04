@@ -1,0 +1,115 @@
+---
+import Search from '@astrojs/starlight/components/Search.astro';
+import Icon from '../components/Icon.astro';
+import SiteTitle from './SiteTitle.astro';
+import ThemeSelect from './ThemeSelect.astro';
+import { REPO_URL, normalizePath, topNav } from '../lib/nav';
+
+const path = normalizePath(Astro.url.pathname);
+---
+
+<div class="bar">
+  <div class="left">
+    <SiteTitle />
+    <span class="rule" aria-hidden="true"></span>
+    <nav class="top-nav" aria-label="Primary">
+      {
+        topNav.map((item) => (
+          <a href={item.href} aria-current={path.startsWith(item.href) ? 'page' : undefined}>
+            {item.label}
+          </a>
+        ))
+      }
+    </nav>
+  </div>
+  <div class="right print:hidden">
+    <Search />
+    <a class="o-icon-button github" href={REPO_URL} aria-label="GitHub" title="GitHub">
+      <Icon mark="github" size={18} />
+    </a>
+    <span class="theme"><ThemeSelect /></span>
+    <span class="rule install-rule" aria-hidden="true"></span>
+    <a class="o-btn o-btn-primary o-btn-sm install" href="/start/install/">Install</a>
+  </div>
+</div>
+
+<style>
+  .bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    height: 100%;
+  }
+
+  .left,
+  .right {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+  }
+
+  .left {
+    gap: 1.25rem;
+  }
+
+  .right {
+    gap: 0.75rem;
+  }
+
+  .rule {
+    width: 1px;
+    height: 1.5rem;
+    background: var(--o-rule-strong);
+  }
+
+  .top-nav {
+    display: flex;
+    gap: 0.25rem;
+  }
+
+  .top-nav a {
+    padding: 0.3125rem 0.5rem;
+    border-radius: 0.375rem;
+    color: var(--sl-color-gray-2);
+    font-size: 0.875rem;
+    text-decoration: none;
+  }
+
+  .top-nav a:hover {
+    color: var(--sl-color-white);
+  }
+
+  .top-nav a[aria-current='page'] {
+    background: var(--o-fill);
+    color: var(--sl-color-white);
+  }
+
+  .top-nav,
+  .left .rule,
+  .github,
+  .theme,
+  .install,
+  .install-rule {
+    display: none;
+  }
+
+  @media (min-width: 50rem) {
+    .github,
+    .theme,
+    .install,
+    .install-rule {
+      display: inline-flex;
+    }
+  }
+
+  @media (min-width: 66rem) {
+    .top-nav {
+      display: flex;
+    }
+
+    .left .rule {
+      display: block;
+    }
+  }
+</style>

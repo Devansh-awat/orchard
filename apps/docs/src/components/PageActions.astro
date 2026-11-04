@@ -1,0 +1,183 @@
+---
+import Icon from './Icon.astro';
+import { SITE_URL, markdownPath } from '../lib/nav';
+
+const { lastUpdated } = Astro.locals.starlightRoute;
+const mdPath = markdownPath(Astro.url.pathname);
+const ask = `Read ${SITE_URL}${mdPath} and answer my questions about it.`;
+const claude = `https://claude.ai/new?q=${encodeURIComponent(ask)}`;
+const chatgpt = `https://chatgpt.com/?q=${encodeURIComponent(ask)}`;
+const updated = lastUpdated?.toLocaleDateString('en-US', {
+  dateStyle: 'medium',
+  timeZone: 'UTC'
+});
+---
+
+<div class="meta print:hidden">
+  {
+    lastUpdated && (
+      <span class="cell">
+        <Icon name="history" size={14} />
+        <span>Last updated</span>
+        <time datetime={lastUpdated.toISOString()}>{updated}</time>
+      </span>
+    )
+  }
+  <button type="button" class="cell" data-copy-url={mdPath}>
+    <Icon name="copy" size={14} />
+    <span data-copy-label>Copy as Markdown</span>
+  </button>
+  <a class="cell" href={mdPath}>
+    <Icon name="markdown" size={14} />
+    <span>View as Markdown</span>
+  </a>
+  <a class="cell" href="/agent-setup/">
+    <Icon name="bot" size={14} />
+    <span>Agent setup</span>
+  </a>
+  <details class="cell more" data-page-menu>
+    <summary aria-label="More page actions" title="More page actions">
+      <Icon name="chevron-down" size={14} />
+    </summary>
+    <div class="menu">
+      <a href={claude} target="_blank" rel="noopener">
+        <Icon mark="claude" size={14} />
+        Open in Claude
+      </a>
+      <a href={chatgpt} target="_blank" rel="noopener">
+        <Icon name="external" size={14} />
+        Open in ChatGPT
+      </a>
+      <a href="/agent-setup/">
+        <Icon name="plug" size={14} />
+        Connect to MCP
+      </a>
+    </div>
+  </details>
+</div>
+
+<script>
+  import '../lib/client/copy';
+
+  document.querySelectorAll<HTMLDetailsElement>('[data-page-menu]').forEach((menu) => {
+    document.addEventListener('click', (event) => {
+      if (menu.open && !menu.contains(event.target as Node)) menu.open = false;
+    });
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && menu.open) {
+        menu.open = false;
+        menu.querySelector('summary')?.focus();
+      }
+    });
+  });
+</script>
+
+<style>
+  .meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    row-gap: 0.375rem;
+    margin-top: 0.875rem;
+    color: var(--sl-color-gray-2);
+    font-size: 0.78125rem;
+    line-height: 1.5;
+    word-spacing: 0.03em;
+  }
+
+  .cell {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding-inline: 0.5rem;
+    border: 0;
+    border-inline-start: 1px solid var(--o-rule);
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-decoration: none;
+  }
+
+  .cell:first-child {
+    padding-inline-start: 0;
+    border-inline-start: 0;
+  }
+
+  button.cell {
+    cursor: copy;
+  }
+
+  button.cell:hover,
+  a.cell:hover,
+  summary:hover {
+    color: var(--sl-color-white);
+  }
+
+  button.cell:focus-visible,
+  a.cell:focus-visible,
+  summary:focus-visible,
+  .menu a:focus-visible {
+    outline: 2px solid var(--o-accent-text);
+    outline-offset: 2px;
+    border-radius: 0.125rem;
+  }
+
+  time {
+    color: var(--sl-color-gray-2);
+  }
+
+  .more {
+    position: relative;
+  }
+
+  summary {
+    display: inline-flex;
+    padding: 0.125rem;
+    cursor: pointer;
+    list-style: none;
+  }
+
+  summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .more[open] summary {
+    color: var(--sl-color-white);
+  }
+
+  .menu {
+    position: absolute;
+    top: calc(100% + 0.5rem);
+    inset-inline-end: 0;
+    z-index: 30;
+    display: grid;
+    min-width: 11.5rem;
+    padding: 0.25rem;
+    border: 1px solid var(--o-rule-strong);
+    border-radius: 0.5rem;
+    background: var(--o-raised);
+  }
+
+  .menu a {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4375rem 0.5rem;
+    border-radius: 0.3125rem;
+    color: var(--sl-color-gray-1);
+    text-decoration: none;
+    white-space: nowrap;
+  }
+
+  .menu a:hover {
+    background: var(--o-fill);
+    color: var(--sl-color-white);
+  }
+
+  @media (max-width: 34rem) {
+    .more .menu {
+      inset-inline-end: auto;
+      inset-inline-start: 0;
+    }
+  }
+</style>
