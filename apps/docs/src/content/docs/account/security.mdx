@@ -1,0 +1,97 @@
+---
+title: Manage sign-in and sessions
+description: Choose how you sign in to Orchard, add passkeys, and sign out devices you no longer use.
+sidebar:
+  order: 2
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+To control access to your Orchard account, add sign-in methods and review the devices that are signed in.
+
+## Sign-in methods
+
+The methods available to you depend on how your instance is configured.
+
+| Method             | Availability                                                                                                 |
+| ------------------ | ------------------------------------------------------------------------------------------------------------ |
+| Email code         | The instance has email configured. Without email, Orchard hides this option.                                 |
+| Passkey            | The instance is served over HTTPS. Browsers do not offer passkeys over plain HTTP.                           |
+| Identity provider  | An instance administrator or your organization has added a provider.                                         |
+| Password           | Superadmin accounts only. An operator sets the password on the host.                                         |
+| One-time link      | An operator prints the link on the host. The link works once and expires after ten minutes.                 |
+
+If your organization [requires single sign-on](/teams/sso/#require-single-sign-on), other methods stop working for your account.
+
+## Add a passkey
+
+A passkey lets you sign in with Touch ID, Face ID, Windows Hello or a hardware key. A passkey only works on the site that created it, so a phishing page cannot use it.
+
+1. From the account menu, select **Account settings** > **Passkeys and devices**.
+2. Select **Add passkey**.
+3. Enter a name for the passkey, such as `MacBook`.
+4. Follow the prompts from your browser.
+
+Add more than one passkey if passkeys are your only sign-in method. If you lose your only passkey and your instance has no email, a superadmin must help you sign in.
+
+To rename or remove a passkey, select **Rename** or **Remove** on its row.
+
+## Sign in on an instance without email
+
+An instance without email has no email codes. If you operate the instance, use one of the following commands on the host:
+
+```bash
+sudo orchardctl login           # print a one-time sign-in link
+sudo orchardctl password set    # set a password on the superadmin account
+```
+
+For more information, refer to [`orchardctl login`](/operate/host-commands/#login) and [`orchardctl password`](/operate/host-commands/#password).
+
+## Review your devices
+
+The **Devices** list shows each session on your account, with its device name, location, IP address and last activity. A browser session expires after seven days.
+
+MCP connections also appear in this list, because each connection is a session on your account.
+
+1. From the account menu, select **Account settings** > **Passkeys and devices**.
+2. Review the **Devices** list.
+
+## Sign out of a device
+
+<Tabs>
+<TabItem label="Dashboard">
+
+To sign out one device:
+
+1. From the account menu, select **Account settings** > **Passkeys and devices**.
+2. In **Devices**, select **Sign out** on the device row.
+3. Confirm with **Sign out**.
+
+To sign out every device except this one:
+
+1. In **Devices**, select **Sign out others**.
+2. Confirm with **Sign out all**.
+
+</TabItem>
+<TabItem label="CLI">
+
+```bash
+orchard auth session list
+orchard auth session revoke <SESSION_ID>
+orchard auth session revoke-all
+```
+
+</TabItem>
+</Tabs>
+
+:::caution
+Signing out all other devices also deletes every [API token](/account/tokens/) on your account. Scripts and CI jobs that use those tokens stop working. Your current session stays signed in.
+:::
+
+Use this option if you lose a device or think that someone else has access to your account.
+
+## Related resources
+
+- [Manage API tokens](/account/tokens/)
+- [Set up SSO](/teams/sso/)
+- [Connect an MCP client](/mcp/)

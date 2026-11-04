@@ -1,0 +1,131 @@
+---
+title: Manage API tokens
+description: Create, use, rename and revoke Orchard personal API tokens for scripts, CI jobs and MCP clients.
+sidebar:
+  order: 3
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+To authenticate a script, CI job or MCP client without a browser, create a personal API token. A token acts as your account. It can only do what your account can do.
+
+:::note
+Interactive use of the [CLI](/cli/) does not need a token. `orchard auth login` creates and stores one for you.
+:::
+
+## Token access levels
+
+Each token has one access level. Each level includes the level before it.
+
+| Level    | Allows                                                                     |
+| -------- | -------------------------------------------------------------------------- |
+| `read`   | Most read requests. Some reads that return secrets require `deploy`.       |
+| `deploy` | `read`, plus requests that create, update, delete, scale or restart.       |
+| `exec`   | `deploy`, plus shells in pods and databases, and commands inside containers. |
+
+At any access level, a token cannot register a passkey, set a password, or call instance setup and admin routes.
+
+## Create a token
+
+<Tabs>
+<TabItem label="Dashboard">
+
+1. From the account menu, select **Account settings** > **API tokens**.
+2. Select **New token**.
+3. In **Name**, enter a name that describes where you will use the token.
+4. In **Access**, select **Read**, **Deploy** or **Exec**.
+5. Select **Create token**.
+6. Copy the token. Orchard does not show it again.
+7. Select **Done**.
+
+</TabItem>
+<TabItem label="CLI">
+
+Run the following command:
+
+```bash
+orchard auth token create --name ci --scope deploy
+```
+
+The command prints the token once. Copy it before you close the terminal.
+
+| Flag           | Description                                                      |
+| -------------- | ---------------------------------------------------------------- |
+| `--name`       | Token name. Required.                                            |
+| `--scope`      | `read`, `deploy` or `exec`. The default is `read`.               |
+| `--expires-in` | Lifetime, such as `30d` or `12h`. The default and maximum are `90d`. |
+| `--project`    | Restrict the token to a project ID or slug. You can repeat this flag. |
+
+</TabItem>
+</Tabs>
+
+A token expires after 90 days unless you set a shorter lifetime. The dashboard always uses 90 days. To set a shorter lifetime or restrict a token to specific projects, use the CLI.
+
+## Use a token
+
+Send the token in the `Authorization` header:
+
+```bash
+curl "https://orchard.example.com/apiv1/auth/me" \
+  --header "Authorization: Bearer <API_TOKEN>"
+```
+
+To use a token with the CLI, set the `ORCHARD_API_TOKEN` environment variable:
+
+```bash
+export ORCHARD_API_TOKEN=<API_TOKEN>
+```
+
+To use a token with an MCP client, refer to [Connect an MCP client](/mcp/#api-token-non-interactive).
+
+## Rename a token
+
+1. From the account menu, select **Account settings** > **API tokens**.
+2. On the token row, select **Rename**.
+3. Enter the new name and save.
+
+## Revoke a token
+
+Requests that use a revoked token fail immediately.
+
+<Tabs>
+<TabItem label="Dashboard">
+
+1. From the account menu, select **Account settings** > **API tokens**.
+2. On the token row, select **Revoke**.
+3. Select **Revoke token**.
+
+</TabItem>
+<TabItem label="CLI">
+
+1. List your tokens to find the token ID:
+
+   ```bash
+   orchard auth token list
+   ```
+
+2. Revoke the token:
+
+   ```bash
+   orchard auth token revoke <TOKEN_ID>
+   ```
+
+</TabItem>
+</Tabs>
+
+:::caution
+Signing out all other devices also deletes every API token on your account. For more information, refer to [Sign out of a device](/account/security/#sign-out-of-a-device).
+:::
+
+## Rotate a token
+
+1. Create a new token.
+2. Update the script, job or client to use the new token.
+3. Revoke the old token.
+
+## Related resources
+
+- [Sign-in and sessions](/account/security/)
+- [Webhooks](/run/webhooks/), for tokens that trigger one app's deploy
+- [SCIM provisioning](/teams/scim/), for tokens that your identity provider uses
+- [Connect an MCP client](/mcp/)

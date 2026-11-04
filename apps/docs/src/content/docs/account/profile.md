@@ -1,30 +1,49 @@
 ---
-title: Your profile
-description: Name, avatar, and how you appear to your team.
+title: Update your profile
+description: Change your Orchard name, username, profile photo and accessibility preferences.
 sidebar:
   order: 1
 ---
 
-Your profile is per instance, not per organization: one account, visible under
-whichever organizations you belong to.
+To change how you appear in Orchard, update your profile. Your profile belongs to your account, so the same profile appears in every organization you belong to.
 
-## Avatars
+## Change your name or username
 
-Everyone gets a **mascot** as a default profile picture, assigned automatically
-with hue variations so two people rarely end up looking identical.
+1. From the account menu, select **Account settings**.
+2. In the header, select **Edit**.
+3. Update **First name**, **Last name** or **Username**.
+4. Select **Save**.
 
-If your email has a **Gravatar**, Orchard imports it on sign-up. A picture you
-chose yourself is never overwritten by an imported one.
+Orchard uses your username in URLs and mentions.
 
-Upload your own at any time, or remove it to fall back to the mascot.
+You can also run `orchard user profile update`. For the available flags, refer to the [CLI reference](/reference/cli/).
 
-## Display name
+## Change your profile photo
 
-Your name is what appears on deploys, audit log entries, forum posts and the
-member list. Change it in user settings.
+1. From the account menu, select **Account settings**.
+2. In the header, select your photo.
+3. Choose an image file.
 
-## Preferences
+To remove the photo, use the remove control on the photo. Orchard does not import another picture after you remove one. To manage your photo from a terminal, use `orchard user avatar set` and `orchard user avatar delete`.
 
-User settings also hold interface preferences, including the **animation level**
-(full, reduced, or off) for anyone who finds motion distracting or is running on
-hardware where it costs more than it gives.
+Orchard generates a mascot for every account. The mascot appears until you have a photo.
+
+If your email address has a picture on Libravatar or Gravatar, Orchard imports a copy. Orchard fetches the picture from its server, so these services do not receive requests from your browser. A photo that you upload is not replaced by an imported picture.
+
+## Set accessibility preferences
+
+1. From the account menu, select **Account settings** > **Accessibility**.
+2. Change any of the following settings.
+
+| Setting                 | Options                                                                                    |
+| ----------------------- | ------------------------------------------------------------------------------------------ |
+| **Animation**           | **System** follows your system setting. Other options are **Full**, **Reduced** and **Off**. |
+| **Sound**               | Plays a cue when a build you are waiting on finishes.                                      |
+| **Text size**           | **Small**, **Default**, **Large** or **Largest**.                                          |
+| **Increase contrast**   | Uses darker text and visible borders.                                                      |
+| **Reduce transparency** | Uses solid panels instead of glass and blur.                                               |
+
+## Related resources
+
+- [Sign-in and sessions](/account/security/)
+- [Manage API tokens](/account/tokens/)

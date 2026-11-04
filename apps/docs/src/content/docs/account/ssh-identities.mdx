@@ -1,0 +1,97 @@
+---
+title: Manage SSH identities
+description: Add, import, rotate and remove the public SSH keys that give you access to your Greenhouse machines.
+sidebar:
+  order: 4
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+To connect to a [Greenhouse machine](/greenhouse/) from your own terminal or a local editor, add an SSH identity. An SSH identity is a named public key on your account. Orchard never receives your private key.
+
+## Prerequisites
+
+- The Greenhouse graft is [installed on your instance](/operate/greenhouse/#turning-it-on).
+
+## Generate a key with the CLI
+
+Use this option if you do not need a specific key. The following command generates a key for Orchard and registers it as an identity:
+
+```bash
+orchard sandbox ssh-config --install
+```
+
+For more information, refer to [Open in your editor](/greenhouse/editors/).
+
+## Add an identity
+
+<Tabs>
+<TabItem label="Dashboard">
+
+1. From the account menu, select **Account settings** > **Greenhouse**.
+2. In **SSH identities**, select **Add identity**.
+3. In **Name**, enter a name, such as `laptop`.
+4. In **Public key**, paste your public key.
+5. Select **Add identity**.
+
+</TabItem>
+<TabItem label="CLI">
+
+```bash
+orchard ssh-identity add laptop --key ~/.ssh/id_ed25519.pub
+```
+
+</TabItem>
+</Tabs>
+
+## Import keys from GitHub
+
+Orchard reads `https://github.com/<username>.keys` for your linked GitHub account and creates one identity for each key.
+
+<Tabs>
+<TabItem label="Dashboard">
+
+1. From the account menu, select **Account settings** > **Greenhouse**.
+2. In **SSH identities**, select **Import from GitHub**.
+
+</TabItem>
+<TabItem label="CLI">
+
+```bash
+orchard ssh-identity import-github
+```
+
+</TabItem>
+</Tabs>
+
+## Remove an identity
+
+Orchard refuses to remove an identity that is attached to a machine. The error names the machine:
+
+```txt
+Identity is attached to sandbox "my-machine"; detach it first
+```
+
+1. Attach another identity to the machine:
+
+   ```bash
+   orchard sandbox update <MACHINE_NAME> --identity <OTHER_IDENTITY>
+   ```
+
+2. Remove the identity:
+
+   ```bash
+   orchard ssh-identity remove <IDENTITY_NAME>
+   ```
+
+## Rotate a key
+
+1. Add the new key as a new identity.
+2. Attach the new identity to your machines.
+3. Confirm that you can connect with the new key.
+4. Remove the old identity.
+
+## Related resources
+
+- [Open in your editor](/greenhouse/editors/)
+- [Machines](/greenhouse/machines/)
