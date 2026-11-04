@@ -164,7 +164,7 @@ func upCmd() *cobra.Command {
 				}
 				var created map[string]any
 				if err := cl.Send(cmd.Context(), http.MethodPost, "/projects/"+url.PathEscape(projectID)+"/deployments/from-local", body, &created); err != nil {
-					return err
+					return localDeploysHint(err)
 				}
 				deploymentID = str(created["id"])
 				output.Successf("created deployment %s (%s build)", name, buildType)
@@ -194,7 +194,7 @@ func upCmd() *cobra.Command {
 			uploaded, uerr := cl.Upload(cmd.Context(), "/deployments/"+url.PathEscape(deploymentID)+"/build-context", "context", "context.tar.gz", bytes.NewReader(data))
 			sp.Stop()
 			if uerr != nil {
-				return uerr
+				return localDeploysHint(uerr)
 			}
 			output.Successf("uploaded %.1fMB (%d files), build started", float64(len(data))/1024/1024, files)
 			var uploadRaw map[string]any
@@ -261,6 +261,14 @@ func upCmd() *cobra.Command {
 	c.Flags().StringVar(&startCmd, "start-cmd", "", "override the detected start command")
 	c.Flags().StringVar(&outputDir, "output-dir", "", "directory of built static files; serves the app as a static site")
 	return c
+}
+
+func localDeploysHint(err error) error {
+	var apiErr *api.APIError
+	if !errors.As(err, &apiErr) || !strings.Contains(apiErr.Message, "Local deploys are disabled") {
+		return err
+	}
+	return fmt.Errorf("%w\norchard up is off on this server. An instance admin can turn it on: https://docs.orchard.my/deploy/deploy-from-terminal/#turn-on-local-deploys\nOr deploy from a repository: orchard import owner/repo", err)
 }
 
 func slugify(v string) string {
