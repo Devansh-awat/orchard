@@ -20,8 +20,9 @@ Install Orchard, connect a GitHub repo, and your app is live on your own server.
 sudo bash -c "$(curl -fsSL https://assets.orchard.my/install.sh)"
 ```
 
-You need a Linux server with at least 4 GB of RAM and 20 GB of free disk. Behind NAT or only on your LAN? The
-[install guide](https://docs.orchard.my/start/install/) covers that.
+You need a Linux server with at least 4 GB of RAM and 20 GB of free disk.
+
+For everything else, see the [install guide](https://docs.orchard.my/start/install/).
 
 > [!IMPORTANT]
 > Deployments are network isolated from each other and from the platform by default, but they **share
