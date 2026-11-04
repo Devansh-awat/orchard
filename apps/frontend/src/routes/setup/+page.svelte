@@ -11,6 +11,20 @@
 
 	let mode = $state<Mode>('checking');
 
+	async function confirmSuperAdmin(): Promise<boolean> {
+		if ($isSuperAdmin) return true;
+		try {
+			const response = await apiFetch('/apiv1/auth/me');
+			if (!response.ok) return false;
+			const me = await response.json();
+			if (me?.isSuperAdmin !== true) return false;
+			user.set(me);
+			return true;
+		} catch {
+			return false;
+		}
+	}
+
 	onMount(async () => {
 		if (!$isSignedIn) {
 			goto('/', { replaceState: true });
@@ -22,7 +36,7 @@
 			return;
 		}
 
-		if (!$isSuperAdmin) {
+		if (!(await confirmSuperAdmin())) {
 			mode = 'invitation';
 			return;
 		}
@@ -30,7 +44,7 @@
 		try {
 			const response = await apiFetch('/apiv1/setup/state');
 			if (!response.ok) {
-				mode = 'invitation';
+				mode = 'instance';
 				return;
 			}
 			const state = await response.json();
@@ -39,7 +53,7 @@
 				sessionStorage.getItem('orchard:instance-setup') !== null;
 			mode = state.complete && !resuming ? 'invitation' : 'instance';
 		} catch {
-			mode = 'invitation';
+			mode = 'instance';
 		}
 	});
 </script>
