@@ -200,6 +200,33 @@ const PROBLEM_COPY: Record<PodProblem, { title: string; deploy: string; hint: st
   }
 };
 
+const QUOTA_FAILURE = /exceeded quota|forbidden|must be less than or equal to/i;
+
+export function isQuotaFailure(reason: string | null | undefined): boolean {
+  return !!reason && QUOTA_FAILURE.test(reason);
+}
+
+export function quotaHint(reason: string | null | undefined, serving: number): string {
+  const prefix = serving > 0 ? "This app can't add pods" : "This app can't start";
+  const text = reason ?? '';
+  if (/must be less than or equal to/i.test(text)) {
+    return `${prefix}: it reserves more than the default limit of its project. Restart it to apply its own limits.`;
+  }
+  if (/must specify/i.test(text)) {
+    return `${prefix}: its project requires a limit on every pod. Restart it to apply its limits.`;
+  }
+  const exceeded = /requested: ([^ ]+)/i.exec(text)?.[1] ?? '';
+  const names = [
+    /memory/.test(exceeded) ? 'memory' : null,
+    /cpu/.test(exceeded) ? 'CPU' : null,
+    /pods/.test(exceeded) ? 'pod' : null
+  ].filter((name): name is string => name !== null);
+  if (names.length === 0) return `${prefix}: its project is over its resource limit.`;
+  const list = names.join(' and ');
+  const noun = names.length > 1 ? 'limits are' : 'limit is';
+  return `${prefix}: its project's ${list} ${noun} used up.`;
+}
+
 const FATAL: ReadonlySet<PodProblem> = new Set([
   'crash-loop',
   'out-of-memory',
@@ -472,7 +499,7 @@ export function computeHealth(input: HealthInput): Health {
   const desired = input.stopped ? 0 : input.replicas;
   const fresh = rolling ? live.filter((p) => p.version === 'new') : [];
   const settled = rolling ? live.filter((p) => p.version === 'old' || !p.version) : live;
-  const quota = !!rollout?.reason && /exceeded quota|forbidden/i.test(rollout.reason);
+  const quota = isQuotaFailure(rollout?.reason);
   const missing = desired > 0 && live.length < desired;
 
   const build: BuildState =
@@ -535,7 +562,9 @@ export function computeHealth(input: HealthInput): Health {
       serving > 0 ? `Still serving ${versionLabel(previous)}.` : 'Nothing is serving traffic.';
     const detail = leadPods.length
       ? hintFor(leadPods[0], leadPods, input.pods)
-      : (copy?.hint ?? '');
+      : kind === 'quota'
+        ? quotaHint(rollout?.reason, serving)
+        : (copy?.hint ?? '');
     problems.push({
       id: 'deploy',
       scope: 'deploy',
@@ -608,7 +637,7 @@ export function computeHealth(input: HealthInput): Health {
       scope: 'app',
       tone: 'error',
       title: "Your app is down: its pods can't be created",
-      hint: PROBLEM_COPY.quota.hint,
+      hint: quotaHint(rollout?.reason, serving),
       problem: 'quota'
     });
   } else if (!rolling && quota && missing && app !== 'down') {
@@ -617,7 +646,7 @@ export function computeHealth(input: HealthInput): Health {
       scope: 'app',
       tone: 'warning',
       title: `${plural(desired - live.length, 'pod')} of ${desired} ${PROBLEM_COPY.quota.title}`,
-      hint: PROBLEM_COPY.quota.hint,
+      hint: quotaHint(rollout?.reason, serving),
       problem: 'quota'
     });
   }

@@ -1,3 +1,9 @@
+import {
+  MANAGED_DATABASE_IMAGE,
+  podResourcesFor,
+  type OrgPodDefaults
+} from '../kubernetes/presets';
+
 export type AllowanceSource = 'explicit' | 'default' | 'unlimited';
 
 export interface MemberAllowanceRow {
@@ -190,4 +196,51 @@ export function groupByOwner<T extends { ownerId: string | null }>(rows: T[]): M
     else out.set(row.ownerId, [row]);
   }
   return out;
+}
+
+export interface ProjectWorkloads {
+  deployments: {
+    id: string;
+    image: string | null;
+    cpuRequestMilli: number | null;
+    memoryRequestBytes: bigint | number | null;
+    replicas: number | null;
+    stopped: boolean;
+  }[];
+  databases: {
+    status: string | null;
+    cpuRequestMilli: number | null;
+    memoryRequestBytes: bigint | number | null;
+    replicas: number | null;
+  }[];
+}
+
+export function declaredProjectUsage(
+  project: ProjectWorkloads,
+  org: OrgPodDefaults,
+  excludeDeploymentId?: string
+): { cpuMilli: number; memoryBytes: number; pods: number } {
+  const usage = { cpuMilli: 0, memoryBytes: 0, pods: 0 };
+  const add = (
+    image: string | null,
+    row: { cpuRequestMilli: number | null; memoryRequestBytes: bigint | number | null },
+    copies: number
+  ) => {
+    const size = podResourcesFor(image, org, {
+      cpuRequestMilli: row.cpuRequestMilli,
+      memoryRequestBytes: row.memoryRequestBytes == null ? null : Number(row.memoryRequestBytes)
+    });
+    usage.cpuMilli += size.cpuMilli * copies;
+    usage.memoryBytes += size.memoryBytes * copies;
+    usage.pods += copies;
+  };
+  for (const d of project.deployments) {
+    if (d.stopped || d.id === excludeDeploymentId) continue;
+    add(d.image, d, d.replicas ?? 1);
+  }
+  for (const db of project.databases) {
+    if (db.status === 'stopped') continue;
+    add(MANAGED_DATABASE_IMAGE, db, Math.max(1, db.replicas ?? 1));
+  }
+  return usage;
 }

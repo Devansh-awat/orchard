@@ -333,6 +333,127 @@ test('a mirror that cannot be read leaves the quota applied with a safe default'
   assert.equal(applied[0].defaultLimit.memoryBytes, 512 * MiB);
 });
 
+function cappedProject(
+  caps: { cpu?: number; memory?: number; pods?: number },
+  rows: { deployments?: any[]; databases?: any[]; live?: any } = {},
+  stored: string | null = null
+) {
+  const { quotas } = quotasWith(stored, {
+    project: {
+      findUnique: async () => ({
+        cpuLimitMilli: caps.cpu ?? null,
+        memoryLimitBytes: caps.memory ? BigInt(caps.memory) : null,
+        maxPods: caps.pods ?? null,
+        namespace: 'p',
+        environments: [{ namespace: 'p' }],
+        organization: { defaultPodCpuMilli: 200, defaultPodMemoryBytes: BigInt(200 * MiB) },
+        deployments: rows.deployments ?? [],
+        databases: rows.databases ?? []
+      })
+    }
+  });
+  (quotas as any).k8sNamespace.getOrgUsage = async () =>
+    rows.live ?? { cpuMilli: 0, memoryBytes: 0, pods: 0, services: 0 };
+  return quotas;
+}
+
+const defaultSizedApp = {
+  id: 'w1',
+  image: 'example/app:v1',
+  cpuRequestMilli: null,
+  memoryRequestBytes: null,
+  replicas: 1,
+  stopped: false
+};
+const need = (memoryMiB: number, pods = 1, cpuMilli = 1) => ({
+  cpuMilli,
+  memoryBytes: memoryMiB * MiB,
+  pods
+});
+
+test('a second app over the project cap is refused with a clear message', async () => {
+  const quotas = cappedProject({ memory: 300 * MiB }, { deployments: [defaultSizedApp] });
+  await assert.rejects(
+    quotas.enforceProjectCapForNewPod('p', need(200)),
+    (err: any) =>
+      err.getStatus() === 403 &&
+      /Project memory quota exceeded: need 400MiB, limit 300MiB/.test(err.message)
+  );
+});
+
+test('an app that fits under the project cap is allowed', async () => {
+  const quotas = cappedProject({ memory: 500 * MiB }, { deployments: [defaultSizedApp] });
+  await quotas.enforceProjectCapForNewPod('p', need(200));
+});
+
+test('a project with no cap of its own is not checked here', async () => {
+  const quotas = cappedProject({});
+  (quotas as any).k8sNamespace.getOrgUsage = async () => {
+    throw new Error('should not be read');
+  };
+  await quotas.enforceProjectCapForNewPod('p', need(99999));
+});
+
+test('live pods count when they use more than the rows say', async () => {
+  const quotas = cappedProject(
+    { memory: 300 * MiB },
+    { live: { cpuMilli: 0, memoryBytes: 250 * MiB, pods: 1, services: 0 } }
+  );
+  await assert.rejects(quotas.enforceProjectCapForNewPod('p', need(100)), /need 350MiB/);
+});
+
+test('a CPU cap and a pod cap are checked too', async () => {
+  const cpu = cappedProject({ cpu: 300 }, { deployments: [defaultSizedApp] });
+  await assert.rejects(
+    cpu.enforceProjectCapForNewPod('p', need(1, 1, 200)),
+    /Project CPU quota exceeded: need 400m, limit 300m/
+  );
+  const pods = cappedProject({ pods: 2 }, { deployments: [{ ...defaultSizedApp, replicas: 2 }] });
+  await assert.rejects(
+    pods.enforceProjectCapForNewPod('p', need(1)),
+    /Project pod count quota exceeded: 3\/2/
+  );
+});
+
+test('a stopped app takes no room, and a rebuild does not count the app twice', async () => {
+  const stopped = cappedProject(
+    { memory: 300 * MiB },
+    { deployments: [{ ...defaultSizedApp, stopped: true }] }
+  );
+  await stopped.enforceProjectCapForNewPod('p', need(200));
+  const rebuilt = cappedProject({ memory: 300 * MiB }, { deployments: [defaultSizedApp] });
+  await rebuilt.enforceProjectCapForNewPod('p', need(200), 'w1');
+});
+
+test('a database counts at its floor, and a stopped one takes no room', async () => {
+  const database = {
+    status: 'ready',
+    cpuRequestMilli: null,
+    memoryRequestBytes: null,
+    replicas: 1
+  };
+  const running = cappedProject({ memory: 600 * MiB }, { databases: [database] });
+  await assert.rejects(running.enforceProjectCapForNewPod('p', need(200)), /need 712MiB/);
+  const stopped = cappedProject(
+    { memory: 600 * MiB },
+    { databases: [{ ...database, status: 'stopped' }] }
+  );
+  await stopped.enforceProjectCapForNewPod('p', need(200));
+});
+
+test('a project already over its cap can still shrink and restart', async () => {
+  const quotas = cappedProject(
+    { memory: 100 * MiB, pods: 1 },
+    { deployments: [{ ...defaultSizedApp, replicas: 3 }] }
+  );
+  await quotas.enforceProjectCapForNewPod('p', { cpuMilli: 0, memoryBytes: 0, pods: 0 });
+});
+
+test('with limits off a project cap is not checked', async () => {
+  const quotas = cappedProject({ memory: 1 }, { deployments: [defaultSizedApp] }, 'off');
+  await quotas.enforceProjectCapForNewPod('p', need(99999));
+});
+
 function workloadService() {
   const patches: any[] = [];
   const api = {

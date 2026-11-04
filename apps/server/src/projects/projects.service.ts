@@ -388,6 +388,20 @@ export class ProjectsService {
       memoryBytes: resolved.memoryBytes * instances
     };
     await this.quotasService.enforceOrgCapForNewPod(database.project.organizationId, requested);
+    const current = await this.quotasService.resolvePodResources(
+      database.projectId,
+      {
+        cpuRequestMilli: database.cpuRequestMilli,
+        memoryRequestBytes:
+          database.memoryRequestBytes != null ? Number(database.memoryRequestBytes) : null
+      },
+      'postgres'
+    );
+    await this.quotasService.enforceProjectCapForNewPod(database.projectId, {
+      cpuMilli: Math.max(0, (resolved.cpuMilli - current.cpuMilli) * instances),
+      memoryBytes: Math.max(0, (resolved.memoryBytes - current.memoryBytes) * instances),
+      pods: 0
+    });
     await this.quotasService.enforceMemberAllowanceForNewPod(
       database.project.organizationId,
       database.project.ownerId,

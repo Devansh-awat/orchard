@@ -32,7 +32,13 @@ import {
 } from '../instance-settings/instance-settings.service';
 import { formatBytes } from '../projects/projects.utils';
 import { ownerLeftAllowance } from './owner-allowance';
-import { allowanceCommitment, groupByOwner, memberAllowance, ownedUsage } from './member-usage';
+import {
+  allowanceCommitment,
+  declaredProjectUsage,
+  groupByOwner,
+  memberAllowance,
+  ownedUsage
+} from './member-usage';
 
 const VIEW_SNAPSHOT = { staleMs: 60_000 };
 
@@ -140,7 +146,10 @@ export class QuotasService implements OnModuleInit {
   ): Promise<Map<string, MirroredWorkload[]> | null> {
     try {
       const rows = await this.prisma.k8sObject.findMany({
-        where: { kind: { in: ['Deployment', 'CronJob', 'Cluster'] }, namespace: { in: namespaces } },
+        where: {
+          kind: { in: ['Deployment', 'CronJob', 'Cluster'] },
+          namespace: { in: namespaces }
+        },
         select: { kind: true, namespace: true, manifest: true }
       });
       const out = new Map<string, MirroredWorkload[]>();
@@ -513,6 +522,65 @@ export class QuotasService implements OnModuleInit {
       throw new ForbiddenException(
         `Organization pod count quota exceeded: ${usage.pods}/${capPods}`
       );
+    }
+  }
+
+  async enforceProjectCapForNewPod(
+    projectId: string,
+    requested: { cpuMilli: number; memoryBytes: number; pods: number },
+    excludeDeploymentId?: string
+  ) {
+    if (await this.limitsOff()) return;
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+      select: {
+        cpuLimitMilli: true,
+        memoryLimitBytes: true,
+        maxPods: true,
+        namespace: true,
+        environments: { select: { namespace: true } },
+        organization: { select: { defaultPodCpuMilli: true, defaultPodMemoryBytes: true } },
+        deployments: {
+          select: {
+            id: true,
+            image: true,
+            cpuRequestMilli: true,
+            memoryRequestBytes: true,
+            replicas: true,
+            stopped: true
+          }
+        },
+        databases: {
+          select: { status: true, cpuRequestMilli: true, memoryRequestBytes: true, replicas: true }
+        }
+      }
+    });
+    if (!project) return;
+    const capCpu = project.cpuLimitMilli;
+    const capMem = project.memoryLimitBytes ? Number(project.memoryLimitBytes) : null;
+    const capPods = project.maxPods;
+    if (!capCpu && !capMem && !capPods) return;
+
+    const declared = declaredProjectUsage(project, project.organization, excludeDeploymentId);
+    const live = await this.k8sNamespace.getOrgUsage(
+      Array.from(new Set([project.namespace, ...project.environments.map((e) => e.namespace)]))
+    );
+    const needCpu = Math.max(declared.cpuMilli, live.cpuMilli) + requested.cpuMilli;
+    const needMem = Math.max(declared.memoryBytes, live.memoryBytes) + requested.memoryBytes;
+    const needPods = Math.max(declared.pods, live.pods) + requested.pods;
+
+    if (capCpu && requested.cpuMilli > 0 && needCpu > capCpu) {
+      throw new ForbiddenException(
+        `Project CPU quota exceeded: need ${needCpu}m, limit ${capCpu}m`
+      );
+    }
+    if (capMem && requested.memoryBytes > 0 && needMem > capMem) {
+      throw new ForbiddenException(
+        `Project memory quota exceeded: need ${formatBytes(needMem)}, limit ${formatBytes(capMem)}`
+      );
+    }
+    if (capPods && requested.pods > 0 && needPods > capPods) {
+      throw new ForbiddenException(`Project pod count quota exceeded: ${needPods}/${capPods}`);
     }
   }
 

@@ -50,6 +50,7 @@ function planHarness(kind: string, mode: string | null, options: { failPhase?: b
     podSizing: async () => ({ cpuMilli: 500, memoryBytes: 1024 }),
     limitsOff: async () => false,
     enforceOrgCapForNewPod: async () => {},
+    enforceProjectCapForNewPod: async () => {},
     enforceMemberAllowanceForNewPod: async () => {}
   };
   const service = new DatabaseOperationsService(

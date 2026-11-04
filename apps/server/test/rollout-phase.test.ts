@@ -5,6 +5,7 @@ import {
   describeFailingPod,
   PIN_GRACE_MS,
   INTENT_GRACE_MS,
+  QUOTA_PATIENCE_MS,
   type RolloutState
 } from '../src/projects/rollout-phase';
 
@@ -443,4 +444,83 @@ test('without build runs a failure is stale only if the row predates the pin', (
     })
   );
   assert.equal(stale.phase, 'live');
+});
+
+const quotaMessage =
+  'pods "web-x" is forbidden: exceeded quota: orchard-org-quota, requested: limits.memory=200Mi, used: limits.memory=300Mi, limited: limits.memory=375Mi';
+
+function quotaBlocked(since: Date, available = 0, replicas = 1) {
+  return workload({
+    replicas,
+    updated: available,
+    available,
+    total: available,
+    conditions: [
+      {
+        type: 'ReplicaFailure',
+        status: 'True',
+        reason: 'FailedCreate',
+        message: quotaMessage,
+        lastTransitionTime: since.toISOString()
+      }
+    ]
+  });
+}
+
+test('a pod blocked by the quota explains itself right away', () => {
+  const v = deriveRolloutPhase(
+    state({ pods: [], workload: { manifest: quotaBlocked(ago(5_000)), syncedAt: ago(5_000) } })
+  );
+  assert.equal(v.phase, 'deploying');
+  assert.equal(v.terminal, false);
+  assert.equal(v.hint, "This app can't start: its project's memory limit is used up.");
+});
+
+test('a pod still blocked by the quota after a minute ends the rollout', () => {
+  const v = deriveRolloutPhase(
+    state({
+      pods: [],
+      workload: { manifest: quotaBlocked(ago(QUOTA_PATIENCE_MS)), syncedAt: ago(5_000) }
+    })
+  );
+  assert.equal(v.phase, 'unhealthy');
+  assert.equal(v.terminal, true);
+  assert.match(v.hint ?? '', /memory limit is used up/);
+});
+
+test('a scale up blocked by the quota says the app keeps serving', () => {
+  const v = deriveRolloutPhase(
+    state({
+      deployment: { replicas: 3 },
+      pods: [readyPod('app-1')],
+      workload: { manifest: quotaBlocked(ago(5_000), 1, 3), syncedAt: ago(5_000) }
+    })
+  );
+  assert.equal(v.hint, "This app can't add pods: its project's memory limit is used up.");
+});
+
+test('a stale quota failure does not hold back an app that is fully up', () => {
+  const v = deriveRolloutPhase(
+    state({ workload: { manifest: quotaBlocked(ago(600_000), 1, 1), syncedAt: ago(5_000) } })
+  );
+  assert.equal(v.phase, 'live');
+});
+
+test('a replica failure that is not about the quota changes nothing', () => {
+  const manifest = workload({
+    updated: 0,
+    available: 0,
+    total: 0,
+    conditions: [
+      {
+        type: 'ReplicaFailure',
+        status: 'True',
+        message: 'node is on fire',
+        lastTransitionTime: ago(600_000).toISOString()
+      }
+    ]
+  });
+  const v = deriveRolloutPhase(state({ pods: [], workload: { manifest, syncedAt: ago(5_000) } }));
+  assert.equal(v.phase, 'deploying');
+  assert.equal(v.hint, null);
 });

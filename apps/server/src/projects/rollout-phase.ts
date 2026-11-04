@@ -1,4 +1,5 @@
 import { POD_BACKOFF_REASONS, computePodStatus } from '../engine/pod-status';
+import { isQuotaFailure, quotaHint } from '../health/health.generated';
 
 export type RolloutPhase =
   | 'queued'
@@ -21,6 +22,7 @@ export const TERMINAL_PHASES: ReadonlySet<RolloutPhase> = new Set([
 export const PIN_GRACE_MS = 20_000;
 export const INTENT_GRACE_MS = 120_000;
 const CRASH_RESTART_THRESHOLD = 5;
+export const QUOTA_PATIENCE_MS = 60_000;
 
 export interface RolloutDeploymentRow {
   stopped: boolean;
@@ -147,6 +149,17 @@ export function failureHint(failing: FailingPod[], pods: any[], serving: number)
   return `${prefix}The app keeps exiting${exit}. Read the log tail: common causes are a missing env var, a wrong start command, or a crash on boot.`;
 }
 
+function quotaFailure(manifest: any): { reason: string; sinceMs: number | null } | null {
+  const condition = (manifest?.status?.conditions ?? []).find(
+    (c: any) => c?.type === 'ReplicaFailure' && c?.status === 'True'
+  );
+  if (!condition || !isQuotaFailure(condition.message)) return null;
+  return {
+    reason: String(condition.message),
+    sinceMs: toDate(condition.lastTransitionTime)?.getTime() ?? null
+  };
+}
+
 function progressDeadlineExceeded(manifest: any): boolean {
   return (manifest?.status?.conditions ?? []).some(
     (c: any) =>
@@ -261,6 +274,18 @@ export function deriveRolloutPhase(s: RolloutState): RolloutVerdict {
       readyCount,
       failing,
       failureHint(failing, s.pods, serving)
+    );
+  }
+
+  const blocked = readyCount < desired ? quotaFailure(manifest) : null;
+  if (blocked) {
+    const lasting = blocked.sinceMs !== null && nowMs - blocked.sinceMs >= QUOTA_PATIENCE_MS;
+    return verdict(
+      lasting ? 'unhealthy' : 'deploying',
+      desired,
+      readyCount,
+      [],
+      quotaHint(blocked.reason, readyCount)
     );
   }
 

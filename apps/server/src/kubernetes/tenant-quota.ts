@@ -129,10 +129,7 @@ const quantity = (raw: unknown, parse: (value: string) => number): number | null
   return value > 0 ? value : null;
 };
 
-export function namespaceRoom(
-  workloads: MirroredWorkload[],
-  defaults: PodDefaults
-): NamespaceRoom {
+export function namespaceRoom(workloads: MirroredWorkload[], defaults: PodDefaults): NamespaceRoom {
   const defaultLimit = {
     cpuMilli: Math.max(defaults.cpuMilli, NO_LIMITS_APP_REQUESTS.cpuMilli),
     memoryBytes: Math.max(defaults.memoryBytes, NO_LIMITS_APP_REQUESTS.memoryBytes)

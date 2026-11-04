@@ -732,6 +732,10 @@ export class DatabasesService {
 
     try {
       await this.quotasService.enforceOrgCapForNewPod(project.organizationId, provisionTotal);
+      await this.quotasService.enforceProjectCapForNewPod(projectId, {
+        ...provisionTotal,
+        pods: replicas
+      });
       await this.quotasService.enforceMemberAllowanceForNewPod(
         project.organizationId,
         project.ownerId,
@@ -2004,6 +2008,10 @@ export class DatabasesService {
         memoryBytes: perInstance.memoryBytes * delta
       };
       await this.quotasService.enforceOrgCapForNewPod(database.project.organizationId, requested);
+      await this.quotasService.enforceProjectCapForNewPod(database.projectId, {
+        ...requested,
+        pods: delta
+      });
       await this.quotasService.enforceMemberAllowanceForNewPod(
         database.project.organizationId,
         database.project.ownerId,

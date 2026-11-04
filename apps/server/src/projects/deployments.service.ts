@@ -2338,6 +2338,10 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         memoryBytes: perPod.memoryBytes * delta
       };
       await this.quotasService.enforceOrgCapForNewPod(deployment.project.organizationId, requested);
+      await this.quotasService.enforceProjectCapForNewPod(deployment.projectId, {
+        ...requested,
+        pods: delta
+      });
       await this.quotasService.enforceMemberAllowanceForNewPod(
         deployment.project.organizationId,
         deployment.project.ownerId,
@@ -2576,6 +2580,10 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         memoryBytes: perPod.memoryBytes * replicas
       };
       await this.quotasService.enforceOrgCapForNewPod(deployment.project.organizationId, requested);
+      await this.quotasService.enforceProjectCapForNewPod(deployment.projectId, {
+        ...requested,
+        pods: replicas
+      });
       await this.quotasService.enforceMemberAllowanceForNewPod(
         deployment.project.organizationId,
         deployment.project.ownerId,
@@ -6530,6 +6538,10 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           deployment.project.organizationId,
           increase
         );
+        await this.quotasService.enforceProjectCapForNewPod(deployment.projectId, {
+          ...increase,
+          pods: 0
+        });
         // Per-user allowance check (charged to project owner).
         await this.quotasService.enforceMemberAllowanceForNewPod(
           deployment.project.organizationId,
@@ -6730,6 +6742,11 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     await this.quotasService.enforceOrgCapForNewPod(project.organizationId, {
       cpuMilli: podResources.cpuMilli * replicas,
       memoryBytes: podResources.memoryBytes * replicas
+    });
+    await this.quotasService.enforceProjectCapForNewPod(project.id, {
+      cpuMilli: podResources.cpuMilli * replicas,
+      memoryBytes: podResources.memoryBytes * replicas,
+      pods: replicas
     });
     await this.quotasService.enforceMemberAllowanceForNewPod(
       project.organizationId,
@@ -8475,6 +8492,15 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
               cpuMilli: rebuildResources.cpuMilli * (deploymentRow.replicas || 1),
               memoryBytes: rebuildResources.memoryBytes * (deploymentRow.replicas || 1)
             });
+            await this.quotasService.enforceProjectCapForNewPod(
+              deploymentRow.projectId,
+              {
+                cpuMilli: rebuildResources.cpuMilli * (deploymentRow.replicas || 1),
+                memoryBytes: rebuildResources.memoryBytes * (deploymentRow.replicas || 1),
+                pods: deploymentRow.replicas || 1
+              },
+              deploymentRow.id
+            );
             await this.quotasService.enforceMemberAllowanceForNewPod(
               deploymentRow.project.organizationId,
               deploymentRow.project.ownerId,

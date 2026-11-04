@@ -26,6 +26,7 @@ function base(row: Record<string, unknown>) {
     quotasService: {
       resolvePodResources: async () => ({ cpuMilli: 100, memoryBytes: 1 }),
       enforceOrgCapForNewPod: async () => {},
+      enforceProjectCapForNewPod: async () => {},
       enforceMemberAllowanceForNewPod: async () => {}
     },
     applyPipelineEnabled: () => true,

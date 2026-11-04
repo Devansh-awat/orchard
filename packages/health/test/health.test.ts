@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   computeHealth,
+  isQuotaFailure,
+  quotaHint,
   type ContainerFact,
   type HealthInput,
   type HealthPod,
@@ -528,4 +530,59 @@ test('pods without facts fall back to their status', () => {
   const h = computeHealth({ pods: [{ name: 'a', status: 'starting' }], replicas: 1, now: NOW });
   assert.equal(h.app, 'starting');
   assert.deepEqual(h.problems, []);
+});
+
+const memoryQuota =
+  'pods "web-x" is forbidden: exceeded quota: orchard-org-quota, requested: limits.memory=200Mi, used: limits.memory=300Mi, limited: limits.memory=375Mi';
+
+test('a pod blocked by the memory limit says which limit is used up', () => {
+  assert.equal(
+    quotaHint(memoryQuota, 0),
+    "This app can't start: its project's memory limit is used up."
+  );
+  assert.equal(
+    quotaHint(memoryQuota, 1),
+    "This app can't add pods: its project's memory limit is used up."
+  );
+});
+
+test('a pod blocked by several limits names each of them', () => {
+  assert.equal(
+    quotaHint(
+      'pods "x" is forbidden: exceeded quota: q, requested: limits.cpu=1,limits.memory=1Gi,pods=1, used: limits.cpu=1, limited: limits.cpu=1',
+      0
+    ),
+    "This app can't start: its project's memory and CPU and pod limits are used up."
+  );
+});
+
+test('other pod failures that Kubernetes refuses say what to do', () => {
+  const missing = 'pods "x" is forbidden: failed quota: q: must specify limits.cpu for: web';
+  assert.match(quotaHint(missing, 0), /requires a limit on every pod/);
+  const invalid =
+    'Pod "x" is invalid: spec.containers[0].resources.requests: Invalid value: "256Mi": must be less than or equal to memory limit';
+  assert.equal(isQuotaFailure(invalid), true);
+  assert.match(quotaHint(invalid, 0), /reserves more than the default limit/);
+  assert.equal(isQuotaFailure('some other failure'), false);
+  assert.equal(isQuotaFailure(null), false);
+});
+
+test('an app with no pods because of the quota is down and says why', () => {
+  const h = computeHealth({
+    pods: [],
+    replicas: 1,
+    now: NOW,
+    rollout: {
+      currentRevision: 'a',
+      revisions: [{ hash: 'a', number: 1, replicas: 0, ready: 0 }],
+      desired: 1,
+      updated: 0,
+      ready: 0,
+      available: 0,
+      state: 'stable',
+      reason: memoryQuota
+    }
+  });
+  assert.equal(h.app, 'down');
+  assert.equal(h.problems[0].hint, "This app can't start: its project's memory limit is used up.");
 });

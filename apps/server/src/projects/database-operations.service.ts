@@ -390,6 +390,10 @@ export class DatabaseOperationsService {
       memoryBytes: sized.memoryBytes * Math.max(1, src.replicas)
     };
     await this.quotas.enforceOrgCapForNewPod(project.organizationId, total);
+    await this.quotas.enforceProjectCapForNewPod(project.id, {
+      ...total,
+      pods: Math.max(1, src.replicas)
+    });
     await this.quotas.enforceMemberAllowanceForNewPod(
       project.organizationId,
       project.ownerId,
