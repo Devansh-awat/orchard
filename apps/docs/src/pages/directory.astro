@@ -1,0 +1,253 @@
+---
+import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro';
+import CenteredHeader from '../components/CenteredHeader.astro';
+import CornerMarks from '../components/CornerMarks.astro';
+import Icon from '../components/Icon.astro';
+import { DIRECTORY_TEXT, directory, directoryGroups } from '../lib/directory';
+
+const items = [...directory].sort((a, b) => a.title.localeCompare(b.title));
+---
+
+<StarlightPage
+  frontmatter={{
+    title: 'Directory',
+    description: DIRECTORY_TEXT,
+    tableOfContents: false,
+    lastUpdated: false,
+    prev: false,
+    next: false
+  }}
+>
+  <div class="o-landing o-wide o-page not-content" data-directory>
+    <CenteredHeader title="Directory" text={DIRECTORY_TEXT} />
+    <div class="layout">
+      <aside>
+        <div class="search">
+          <Icon name="search" size={15} />
+          <input
+            type="search"
+            placeholder="Search features..."
+            aria-label="Search features"
+            autocomplete="off"
+            spellcheck="false"
+            data-directory-search
+          />
+        </div>
+        <fieldset>
+          <legend>Filter by group</legend>
+          {
+            directoryGroups.map((group) => (
+              <label>
+                <input type="checkbox" value={group} data-directory-group />
+                <span>{group}</span>
+              </label>
+            ))
+          }
+        </fieldset>
+        <p class="sr-only" role="status" data-directory-status></p>
+      </aside>
+      <div>
+        <ul class="grid">
+          {
+            items.map((item) => (
+              <li data-group={item.group} data-search={`${item.title} ${item.text} ${item.group}`.toLowerCase()}>
+                <CornerMarks />
+                <a href={item.href}>
+                  <Icon name={item.icon} size={20} />
+                  <h2>{item.title}</h2>
+                  <p>{item.text}</p>
+                </a>
+              </li>
+            ))
+          }
+        </ul>
+        <p class="empty" data-directory-empty hidden>No results.</p>
+      </div>
+    </div>
+  </div>
+</StarlightPage>
+
+<script>
+  const root = document.querySelector<HTMLElement>('[data-directory]');
+  if (root) {
+    const search = root.querySelector<HTMLInputElement>('[data-directory-search]');
+    const boxes = [...root.querySelectorAll<HTMLInputElement>('[data-directory-group]')];
+    const cards = [...root.querySelectorAll<HTMLElement>('[data-search]')];
+    const empty = root.querySelector<HTMLElement>('[data-directory-empty]');
+    const status = root.querySelector<HTMLElement>('[data-directory-status]');
+
+    const apply = () => {
+      const query = search?.value.trim().toLowerCase() ?? '';
+      const groups = new Set(boxes.filter((box) => box.checked).map((box) => box.value));
+      let shown = 0;
+      for (const card of cards) {
+        const visible =
+          (groups.size === 0 || groups.has(card.dataset.group ?? '')) &&
+          (card.dataset.search ?? '').includes(query);
+        card.hidden = !visible;
+        if (visible) shown += 1;
+      }
+      if (empty) empty.hidden = shown > 0;
+      if (status) status.textContent = `${shown} results`;
+    };
+
+    search?.addEventListener('input', apply);
+    boxes.forEach((box) => box.addEventListener('change', apply));
+    apply();
+  }
+</script>
+
+<style>
+  .o-page {
+    max-width: 70.75rem;
+    margin-inline: auto;
+    padding-inline: var(--o-page-pad);
+  }
+
+  .layout {
+    display: grid;
+    gap: 1.5rem;
+  }
+
+  .search {
+    position: relative;
+    display: flex;
+    align-items: center;
+    color: var(--o-muted);
+  }
+
+  .search :global(svg) {
+    position: absolute;
+    inset-inline-start: 0.75rem;
+    pointer-events: none;
+  }
+
+  input[type='search'] {
+    width: 100%;
+    height: 2.5rem;
+    padding: 0 0.75rem 0 2.25rem;
+    border: 1px solid var(--o-rule-strong);
+    border-radius: 0.5rem;
+    background: transparent;
+    color: var(--sl-color-white);
+    font: inherit;
+    font-size: 0.9375rem;
+  }
+
+  input[type='search']::placeholder {
+    color: var(--o-muted);
+    opacity: 1;
+  }
+
+  fieldset {
+    margin: 1.25rem 0 0;
+    padding: 0;
+    border: 0;
+  }
+
+  legend {
+    margin-bottom: 0.5rem;
+    padding-inline-start: 0.5rem;
+    color: var(--o-muted);
+    font-family: var(--sl-font-mono);
+    font-size: 0.6875rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+
+  label {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    padding-block: 0.25rem;
+    color: var(--sl-color-gray-1);
+    font-size: 0.875rem;
+    cursor: pointer;
+  }
+
+  label:hover {
+    color: var(--sl-color-white);
+  }
+
+  input[type='checkbox'] {
+    width: 1rem;
+    height: 1rem;
+    margin: 0;
+    accent-color: var(--o-accent);
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 14rem), 1fr));
+    margin: 0;
+    padding: 0;
+    border-top: 1px solid var(--o-rule);
+    border-inline-start: 1px solid var(--o-rule);
+    list-style: none;
+  }
+
+  li {
+    position: relative;
+    border-inline-end: 1px solid var(--o-rule);
+    border-bottom: 1px solid var(--o-rule);
+    background: var(--o-raised);
+  }
+
+  li[hidden] {
+    display: none;
+  }
+
+  li a {
+    display: block;
+    height: 100%;
+    padding: 1.125rem 1.25rem 1.25rem;
+    color: var(--sl-color-gray-2);
+    text-decoration: none;
+  }
+
+  li a:hover {
+    background: color-mix(in srgb, var(--o-raised) 92%, var(--sl-color-white));
+  }
+
+  li a:focus-visible {
+    outline-offset: -2px;
+  }
+
+  li h2 {
+    margin: 0.625rem 0 0.25rem;
+    color: var(--sl-color-white);
+    font-size: 1rem;
+    font-weight: 500;
+    letter-spacing: -0.005em;
+    line-height: 1.3;
+  }
+
+  li p {
+    margin: 0;
+    font-size: 0.875rem;
+    line-height: 1.5;
+  }
+
+  .empty {
+    margin: 1.5rem 0 0;
+    color: var(--sl-color-gray-2);
+    text-align: center;
+  }
+
+  @media (min-width: 60rem) {
+    .layout {
+      grid-template-columns: 13rem minmax(0, 1fr);
+      gap: 2.5rem;
+    }
+
+    aside {
+      position: sticky;
+      top: calc(var(--sl-nav-height) + 1.25rem);
+      align-self: start;
+    }
+
+    .grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+  }
+</style>
