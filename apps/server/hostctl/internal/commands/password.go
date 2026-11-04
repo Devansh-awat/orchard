@@ -29,8 +29,9 @@ func Password() *cli.Command {
 
 Orchard signs people in with an email code, a passkey or an identity provider.
 An instance with none of those has no way back in once its claim link is used.
-Use this command in that case. It applies to the superadmin only. There is no
-reset email, so to reset the password, set it again here.
+Use this command in that case. There is no reset email, so to reset a password,
+set it again here. On an instance with no email, --email can also name someone
+who joined by invitation link.
 
 You type the password at a prompt, so it stays out of the shell history and the
 process list. With more than one superadmin, name the one you mean with --email.
