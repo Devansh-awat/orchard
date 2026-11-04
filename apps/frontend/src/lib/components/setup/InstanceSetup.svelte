@@ -284,7 +284,7 @@
 			{:else if phase === 'telemetry'}
 				<SetupTelemetryStep onDone={() => advanceFrom('telemetry')} />
 			{:else}
-				<SetupDoneStep items={overview?.items ?? []} onDone={finish} />
+				<SetupDoneStep {overview} onDone={finish} />
 			{/if}
 		</SetupCard>
 	{/if}

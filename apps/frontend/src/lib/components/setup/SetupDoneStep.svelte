@@ -1,14 +1,46 @@
 <script lang="ts">
 	import { telemetry } from '$lib/stores';
-	import type { SetupOverviewItem } from './setup-overview';
+	import { presence } from '$lib/utils/transitions';
+	import SettingCommand from './SettingCommand.svelte';
+	import { settingChanges, type SettingChange, type SettingChanges } from './setting-changes';
+	import type { SetupOverview, SetupOverviewItem } from './setup-overview';
 
 	let {
-		items,
+		overview,
 		onDone
 	}: {
-		items: SetupOverviewItem[];
+		overview: SetupOverview | null;
 		onDone: (href?: string) => Promise<void> | void;
 	} = $props();
+
+	const items = $derived(overview?.items ?? []);
+	const changes = $derived(settingChanges(overview));
+	const email = $derived<SetupOverviewItem | null>(
+		changes.letsencrypt
+			? {
+					id: 'letsencrypt',
+					title: changes.letsencrypt.title,
+					value: 'On the server',
+					state: 'configured',
+					detail: null,
+					href: '/admin/networking'
+				}
+			: null
+	);
+	const opened = $state<Record<string, boolean>>({});
+
+	function changeFor(item: SetupOverviewItem): SettingChange | undefined {
+		if (item.id === 'mcp' && overview?.mcp.deployed && !overview.mcp.enabled) return undefined;
+		return changes[item.id as keyof SettingChanges];
+	}
+
+	function change(item: SetupOverviewItem) {
+		if (changeFor(item)) {
+			opened[item.id] = !opened[item.id];
+			return;
+		}
+		onDone(item.href);
+	}
 
 	const url = $derived(typeof window === 'undefined' ? '' : window.location.origin);
 	const reports = $derived<SetupOverviewItem | null>(
@@ -23,10 +55,19 @@
 				}
 			: null
 	);
-	const all = $derived(reports ? [...items, reports] : items);
+	const all = $derived([...items, ...(email ? [email] : []), ...(reports ? [reports] : [])]);
 	const ready = $derived(all.filter((item) => item.state === 'configured'));
 	const open = $derived(all.filter((item) => item.state !== 'configured'));
 </script>
+
+{#snippet command(item: SetupOverviewItem)}
+	{@const setting = changeFor(item)}
+	{#if setting && opened[item.id]}
+		<div class="command" in:presence out:presence>
+			<SettingCommand change={setting} />
+		</div>
+	{/if}
+{/snippet}
 
 <section class="setup-step">
 	<h2>You're set</h2>
@@ -42,11 +83,16 @@
 						<div class="row">
 							<span class="name">{item.title}</span>
 							<span class="state">{item.state === 'skipped' ? 'Skipped' : item.value}</span>
-							<button class="change" onclick={() => onDone(item.href)}>Change</button>
+							<button
+								class="change"
+								aria-expanded={changeFor(item) ? !!opened[item.id] : undefined}
+								onclick={() => change(item)}>Change</button
+							>
 						</div>
 						{#if item.detail}
 							<p class="detail">{item.detail}</p>
 						{/if}
+						{@render command(item)}
 					</li>
 				{/each}
 			</ul>
@@ -60,8 +106,13 @@
 						<div class="row">
 							<span class="name">{item.title}</span>
 							<span class="state">{item.value}</span>
-							<button class="change" onclick={() => onDone(item.href)}>Change</button>
+							<button
+								class="change"
+								aria-expanded={changeFor(item) ? !!opened[item.id] : undefined}
+								onclick={() => change(item)}>Change</button
+							>
 						</div>
+						{@render command(item)}
 					</li>
 				{/each}
 			</ul>
@@ -135,6 +186,12 @@
 		outline: 2px solid var(--setup-crimson);
 		outline-offset: 2px;
 		border-radius: 0.25rem;
+	}
+
+	.command {
+		--change-ink: var(--setup-ink-faint);
+		--change-ink-strong: var(--setup-ink-soft);
+		padding-top: 0.45rem;
 	}
 
 	.setup-step p.detail {

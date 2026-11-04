@@ -4,12 +4,15 @@
 	import { motionStagger } from '$lib/utils/motion.svelte';
 	import DnsStatusCard from '$lib/components/admin/DnsStatusCard.svelte';
 	import TunnelCard from '$lib/components/admin/TunnelCard.svelte';
+	import AddressesCard from '$lib/components/admin/AddressesCard.svelte';
+	import type { SetupOverview } from '$lib/components/setup/setup-overview';
 	import type { DnsReport } from '$lib/components/admin/DnsStatusCard.svelte';
 	import type { TunnelSection, TunnelState } from '$lib/components/admin/TunnelCard.svelte';
 
 	let report = $state<DnsReport | null>(null);
 	let tunnel = $state<TunnelState | null>(null);
 	let section = $state<TunnelSection | null>(null);
+	let overview = $state<SetupOverview | null>(null);
 	let draft = $state<Record<string, string>>({});
 
 	let loading = $state(true);
@@ -22,6 +25,11 @@
 		draft = Object.fromEntries(
 			Object.entries(next.values).map(([name, value]) => [name, value ?? ''])
 		);
+	}
+
+	async function loadOverview() {
+		const response = await apiFetch('/apiv1/setup/overview');
+		if (response.ok) overview = await response.json();
 	}
 
 	async function loadDns(refresh = false) {
@@ -100,7 +108,7 @@
 	}
 
 	onMount(async () => {
-		await Promise.all([loadDns(), loadTunnel()]);
+		await Promise.all([loadDns(), loadTunnel(), loadOverview()]);
 		loading = false;
 	});
 </script>
@@ -110,6 +118,10 @@
 </div>
 
 <div {@attach motionStagger({ index: 1 })}>
+	<AddressesCard {overview} />
+</div>
+
+<div {@attach motionStagger({ index: 2 })}>
 	<TunnelCard
 		state={tunnel}
 		{section}

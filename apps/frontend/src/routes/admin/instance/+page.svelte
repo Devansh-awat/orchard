@@ -18,6 +18,13 @@
 	import DatabaseSettings from '$lib/components/admin/DatabaseSettings.svelte';
 	import ImageScanning from '$lib/components/admin/ImageScanning.svelte';
 	import TelemetryToggle from '$lib/components/admin/TelemetryToggle.svelte';
+	import SettingCommand from '$lib/components/setup/SettingCommand.svelte';
+	import {
+		settingChanges,
+		type SettingChange,
+		type SettingChanges
+	} from '$lib/components/setup/setting-changes';
+	import type { SetupOverview } from '$lib/components/setup/setup-overview';
 
 	type Section = {
 		id: string;
@@ -44,13 +51,25 @@
 		};
 	}
 
-	const LOCKED_HINTS: Record<string, string> = {
-		appDomain: 'Set by the installer. To change it, run the installer again with --app-domain.',
-		publicIp:
-			'Pinned by orchardctl public-ip. To edit it here, run: orchardctl public-ip unset --apply',
-		cname:
-			'Pinned in the values file. To edit it here, run: orchardctl env unset INGRESS_CNAME --apply'
+	const LOCKED_CHANGES: Record<string, keyof SettingChanges> = {
+		appDomain: 'apps',
+		publicIp: 'public-ip',
+		cname: 'custom-domains'
 	};
+
+	let overview = $state<SetupOverview | null>(null);
+	const changes = $derived(settingChanges(overview));
+
+	function lockedChanges(section: Section): SettingChange[] {
+		return section.lockedFields
+			.map((name) => changes[LOCKED_CHANGES[name]])
+			.filter((change): change is SettingChange => !!change);
+	}
+
+	async function loadOverview() {
+		const response = await apiFetch('/apiv1/setup/overview');
+		if (response.ok) overview = await response.json();
+	}
 
 	function hintFor(section: Section, name: string) {
 		return section.graft ? section.graft.fields[name]?.help : HINTS[name];
@@ -262,7 +281,7 @@
 	}
 
 	onMount(async () => {
-		await load();
+		await Promise.all([load(), loadOverview()]);
 		loading = false;
 		instanceFeatures.load(true).catch(() => undefined);
 		if (window.location.hash === '#storage') {
@@ -306,7 +325,7 @@
 						{/if}
 					</div>
 				{/if}
-				{#if allLocked}
+				{#if allLocked && lockedChanges(section).length === 0}
 					<Alert tone="info" title="Set by the environment">
 						Every field here comes from an environment variable, so it cannot be changed from the
 						browser. Edit your values file and restart to change it.
@@ -322,7 +341,9 @@
 								{label}
 								for="{section.id}-{name}"
 								hint={locked
-									? (LOCKED_HINTS[name] ?? 'Set by the environment')
+									? changes[LOCKED_CHANGES[name]]
+										? 'Cannot be edited here.'
+										: 'Set by the environment'
 									: hintFor(section, name)}
 							>
 								<Input
@@ -336,6 +357,12 @@
 						{/if}
 					{/each}
 				</div>
+
+				{#each lockedChanges(section) as change (change.title)}
+					<div class="locked-change">
+						<SettingCommand {change} />
+					</div>
+				{/each}
 
 				{#if section.boolFields.length > 0}
 					<div class="switches">
@@ -379,11 +406,11 @@
 	{/each}
 
 	<div {@attach motionStagger({ index: sections.length })}>
-		<ResourceLimitsSetting />
+		<ResourceLimitsSetting change={changes.limits} />
 	</div>
 
 	<div {@attach motionStagger({ index: sections.length + 1 })}>
-		<McpToggle />
+		<McpToggle change={changes.mcp} />
 	</div>
 
 	<div {@attach motionStagger({ index: sections.length + 2 })}>
@@ -404,6 +431,10 @@
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
 		gap: 0.85rem;
+	}
+
+	.locked-change {
+		margin-top: 1rem;
 	}
 
 	.switches {

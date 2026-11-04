@@ -2,6 +2,10 @@
 	import { onMount } from 'svelte';
 	import { apiFetch, instanceFeatures, toasts } from '$lib/stores';
 	import { SectionCard, ToggleRow, Badge } from '$lib/components/ui';
+	import SettingCommand from '$lib/components/setup/SettingCommand.svelte';
+	import type { SettingChange } from '$lib/components/setup/setting-changes';
+
+	let { change = undefined }: { change?: SettingChange } = $props();
 
 	interface State {
 		enabled: boolean;
@@ -61,6 +65,11 @@
 					back on.
 				</span>
 			</div>
+			{#if change && state.envOverride === false}
+				<div class="mcp-change">
+					<SettingCommand {change} />
+				</div>
+			{/if}
 		{:else}
 			<ToggleRow
 				checked={state.dbValue}
@@ -74,6 +83,10 @@
 {/if}
 
 <style>
+	.mcp-change {
+		margin-top: 1rem;
+	}
+
 	.mcp-locked {
 		display: flex;
 		align-items: center;

@@ -17,6 +17,10 @@
 		parseCpu,
 		parseMemory
 	} from '$lib/components/ResourcePicker.svelte';
+	import SettingCommand from '$lib/components/setup/SettingCommand.svelte';
+	import type { SettingChange } from '$lib/components/setup/setting-changes';
+
+	let { change = undefined }: { change?: SettingChange } = $props();
 
 	const MIB = 1024 ** 2;
 	const MIN_MEMORY_BYTES = 64 * MIB;
@@ -208,9 +212,12 @@
 					<Badge tone="neutral">env override</Badge>
 					<span>
 						Pinned to <span class="font-mono">{state.envOverride}</span> by the
-						<span class="font-mono">INSTANCE_RESOURCE_LIMITS</span> env var. Unset it to choose here.
+						<span class="font-mono">INSTANCE_RESOURCE_LIMITS</span> env var.
 					</span>
 				</div>
+				{#if change}
+					<SettingCommand {change} />
+				{/if}
 			{:else}
 				<ToggleRow
 					bind:checked={toggled}

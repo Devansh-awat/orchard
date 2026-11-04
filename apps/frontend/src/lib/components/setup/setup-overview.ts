@@ -28,7 +28,14 @@ export type SetupOverview = {
 	appDomain: string | null;
 	publicIp: string | null;
 	cname: string | null;
-	locked: { publicIp: boolean; cname: boolean; appDomain: boolean; email: boolean };
+	certIssuer: string | null;
+	locked: {
+		publicIp: boolean;
+		cname: boolean;
+		appDomain: boolean;
+		email: boolean;
+		limits: boolean;
+	};
 	mcp: { deployed: boolean; enabled: boolean; url: string | null; locked: boolean };
 	emailConfigured: boolean;
 	certificate: SetupCertificate;

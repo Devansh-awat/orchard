@@ -30,6 +30,35 @@ const mockSetup: {
 	skipped: []
 };
 
+const pinned = () => mockSetup.installer;
+
+const configSections = () => [
+	{
+		id: 'ingress',
+		configured: !!mockSetup.cname,
+		values: { cname: mockSetup.cname },
+		lockedFields: [],
+		secretFields: [],
+		boolFields: []
+	},
+	{
+		id: 'wildcard',
+		configured: !!mockSetup.appDomain,
+		values: { domains: '', appDomain: mockSetup.appDomain, sourceNamespace: '' },
+		lockedFields: ['appDomain'],
+		secretFields: [],
+		boolFields: []
+	},
+	{
+		id: 'network',
+		configured: !!mockSetup.publicIp,
+		values: { publicIp: mockSetup.publicIp },
+		lockedFields: pinned() ? ['publicIp'] : [],
+		secretFields: [],
+		boolFields: []
+	}
+];
+
 const mockCertificate = {
 	state: 'failed',
 	host: 'orchard.example.com',
@@ -157,7 +186,13 @@ export function shellRoutes(r: Router, { store, hub, log }: MockContext) {
 		grafts: [],
 		storage: storageFeatures
 	}));
-	r.get('/admin/instance-config', () => [storageSection]);
+	r.get('/admin/instance-config', () => [storageSection, ...configSections()]);
+	r.post('/__mock/setup', ({ body }) => {
+		for (const key of ['installer', 'publicIp', 'cname'] as const) {
+			if (key in (body ?? {})) (mockSetup as any)[key] = body[key];
+		}
+		return { installer: mockSetup.installer };
+	});
 	r.get('/admin/instance-config/storage', () => storageSection);
 	r.post('/admin/instance-config/storage/test', ({ body }) =>
 		body?.backupBucket === 'missing'
@@ -186,6 +221,23 @@ export function shellRoutes(r: Router, { store, hub, log }: MockContext) {
 		undelivered: 0
 	}));
 	r.get('/setup/state', () => ({ steps: [], complete: false }));
+	r.get('/admin/networking/dns', () => ({
+		checkedAt: new Date().toISOString(),
+		reference: ['203.0.113.10'],
+		rows: [
+			{
+				role: 'platform',
+				record: 'orchard.example.com',
+				probe: 'orchard.example.com',
+				label: 'Dashboard',
+				detail: 'Where people sign in.',
+				verdict: 'ok',
+				addresses: ['203.0.113.10'],
+				expected: ['203.0.113.10'],
+				message: 'Points at this instance.'
+			}
+		]
+	}));
 	r.get('/setup/github-app/status', () => ({ configured: false, lockedFields: [] }));
 	r.get('/setup/certificate', () => mockCertificate);
 	r.get('/setup/overview', () => {
@@ -198,7 +250,14 @@ export function shellRoutes(r: Router, { store, hub, log }: MockContext) {
 			appDomain: mockSetup.appDomain,
 			publicIp: mockSetup.publicIp,
 			cname: mockSetup.cname,
-			locked: { publicIp: false, cname: false, appDomain: false, email: false },
+			certIssuer: 'letsencrypt',
+			locked: {
+				publicIp: pinned() && !!mockSetup.publicIp,
+				cname: false,
+				appDomain: true,
+				email: false,
+				limits: false
+			},
 			mcp: { deployed: true, enabled: true, url: 'https://mcp.example.com', locked: false },
 			emailConfigured: mockSetup.email,
 			certificate: mockCertificate,
@@ -230,12 +289,20 @@ export function shellRoutes(r: Router, { store, hub, log }: MockContext) {
 					href: '/admin/instance'
 				},
 				{
-					id: 'domains',
-					title: 'Domains',
+					id: 'dashboard',
+					title: 'Dashboard domain',
 					value: 'orchard.example.com',
 					state: 'configured',
-					detail: mockSetup.appDomain ? `Apps at *.${mockSetup.appDomain}` : null,
+					detail: null,
 					href: '/admin/networking'
+				},
+				{
+					id: 'apps',
+					title: 'Apps domain',
+					value: mockSetup.appDomain ?? 'Not set',
+					state: mockSetup.appDomain ? 'configured' : 'pending',
+					detail: mockSetup.appDomain ? null : 'No apps domain, so apps get no URL.',
+					href: '/admin/instance#wildcard'
 				},
 				{
 					id: 'public-ip',

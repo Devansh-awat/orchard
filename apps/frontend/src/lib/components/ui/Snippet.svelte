@@ -5,16 +5,18 @@
 		command,
 		prompt = '$',
 		label = 'Copy command',
+		wrap = false,
 		class: className = ''
 	}: {
 		command: string;
 		prompt?: string;
 		label?: string;
+		wrap?: boolean;
 		class?: string;
 	} = $props();
 </script>
 
-<div class="snip {className}">
+<div class="snip {className}" class:snip--wrap={wrap}>
 	<div class="scroll">
 		<code class="cmd"
 			>{#if prompt}<span class="prompt" aria-hidden="true">{prompt}</span>{/if}<span class="text"
@@ -58,6 +60,20 @@
 		line-height: var(--lh-body);
 		color: var(--console-text);
 		white-space: pre;
+	}
+	.snip--wrap {
+		align-items: flex-start;
+		height: auto;
+		padding-block: 0.375rem;
+	}
+	.snip--wrap .scroll {
+		overflow-x: visible;
+		mask-image: none;
+	}
+	.snip--wrap .cmd {
+		padding-right: 0.5rem;
+		white-space: pre-wrap;
+		overflow-wrap: anywhere;
 	}
 	.prompt {
 		color: var(--text-faint);

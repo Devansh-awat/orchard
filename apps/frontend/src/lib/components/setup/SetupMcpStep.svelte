@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { apiFetch, instanceFeatures, toasts } from '$lib/stores';
-	import { dashboardHost, parentDomain, type SetupOverview } from './setup-overview';
+	import SettingCommand from './SettingCommand.svelte';
+	import { settingChanges } from './setting-changes';
+	import type { SetupOverview } from './setup-overview';
 
 	let {
 		overview,
@@ -10,8 +12,7 @@
 		onDone: () => Promise<void> | void;
 	} = $props();
 
-	const host = dashboardHost(overview);
-	const suggested = host ? `mcp.${parentDomain(host)}` : 'mcp.example.com';
+	const enable = $derived(settingChanges(overview).mcp);
 
 	let saving = $state(false);
 
@@ -57,15 +58,13 @@
 		</div>
 	{:else}
 		<h2>MCP endpoint is off</h2>
-		<p>
-			AI agents cannot connect. Pick any hostname, and run one of these where you deploy Orchard.
-		</p>
+		<p>AI agents cannot connect.</p>
 
-		<div class="setup-body setup-commands">
-			<code>sudo orchardctl mcp enable {suggested} --apply</code>
-			<code>helm upgrade orchard ... --set mcp.enabled=true --set mcp.ingress.host={suggested}</code
-			>
-		</div>
+		{#if enable}
+			<div class="setup-body">
+				<SettingCommand change={enable} />
+			</div>
+		{/if}
 
 		<div class="setup-acts">
 			<button class="setup-pill" onclick={onDone}>Continue without it</button>
