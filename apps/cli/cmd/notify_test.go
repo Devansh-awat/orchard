@@ -50,6 +50,14 @@ func notifyTestServer(t *testing.T, handle func(w http.ResponseWriter, r *http.R
 		if handle(w, r) {
 			return
 		}
+		if strings.HasSuffix(r.URL.Path, "/notification-rules") {
+			if r.Method == http.MethodGet {
+				io.WriteString(w, `[]`)
+			} else {
+				io.WriteString(w, `{"id":"r0"}`)
+			}
+			return
+		}
 		t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
 		w.WriteHeader(404)
 	}))
@@ -143,6 +151,67 @@ func TestNotifyChannelCreateEmailRecipients(t *testing.T) {
 	}
 	if _, present := gotBody["projectIds"]; present {
 		t.Errorf("body = %v, want projectIds omitted without --project", gotBody)
+	}
+}
+
+func TestNotifyChannelCreateAddsARuleSoTheChannelGetsEvents(t *testing.T) {
+	var rule map[string]any
+	srv := notifyTestServer(t, func(w http.ResponseWriter, r *http.Request) bool {
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/apiv1/organizations/o1/notification-channels":
+			io.WriteString(w, `{"id":"c9"}`)
+			return true
+		case r.Method == http.MethodPost && r.URL.Path == "/apiv1/organizations/o1/notification-rules":
+			rule = notifyDecodeBody(t, r)
+			io.WriteString(w, `{"id":"r1"}`)
+			return true
+		}
+		return false
+	})
+	defer srv.Close()
+
+	root := notifyTestRoot(t, srv.URL)
+	root.SetArgs([]string{
+		"notify", "channel", "create", "--org", "myorg",
+		"--type", "webhook", "--name", "hooky",
+		"--url", "https://example.com/hook",
+		"--events", "alert.firing",
+	})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("notify channel create: %v", err)
+	}
+	want := map[string]any{"channelId": "c9", "scopeType": "org", "events": []any{"alert.firing"}}
+	if !reflect.DeepEqual(rule, want) {
+		t.Errorf("rule = %v, want %v", rule, want)
+	}
+}
+
+func TestNotifyChannelUpdateChangesItsRules(t *testing.T) {
+	var patched map[string]any
+	srv := notifyTestServer(t, func(w http.ResponseWriter, r *http.Request) bool {
+		switch {
+		case r.Method == http.MethodPatch && r.URL.Path == "/apiv1/organizations/o1/notification-channels/c9":
+			io.WriteString(w, `{"id":"c9"}`)
+			return true
+		case r.Method == http.MethodGet && r.URL.Path == "/apiv1/organizations/o1/notification-rules":
+			io.WriteString(w, `[{"id":"r1","channelId":"c9"},{"id":"r2","channelId":"other"}]`)
+			return true
+		case r.Method == http.MethodPatch && r.URL.Path == "/apiv1/organizations/o1/notification-rules/r1":
+			patched = notifyDecodeBody(t, r)
+			io.WriteString(w, `{"id":"r1"}`)
+			return true
+		}
+		return false
+	})
+	defer srv.Close()
+
+	root := notifyTestRoot(t, srv.URL)
+	root.SetArgs([]string{"notify", "channel", "update", "c9", "--org", "myorg", "--events", "job.failed"})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("notify channel update: %v", err)
+	}
+	if !reflect.DeepEqual(patched["events"], []any{"job.failed"}) {
+		t.Errorf("rule patch = %v", patched)
 	}
 }
 

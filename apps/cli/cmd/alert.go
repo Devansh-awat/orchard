@@ -206,7 +206,7 @@ func alertCreateCmd() *cobra.Command {
 	var project, deployment *string
 	c := &cobra.Command{
 		Use:   "create",
-		Short: "Add a rule: --metric cpu_percent --above 85 --for 300",
+		Short: "Add a rule: --metric cpu_percent --threshold 85 --for 300",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cl, cfg, err := client()

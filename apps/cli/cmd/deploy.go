@@ -418,7 +418,7 @@ func deployCreateCmd() *cobra.Command {
 	c.Flags().StringVar(&buildCmd, "build-cmd", "", "override the detected build command")
 	c.Flags().StringVar(&startCmd, "start-cmd", "", "override the detected start command")
 	c.Flags().StringVar(&outputDir, "output-dir", "", "directory of built static files; serves the app as a static site")
-	c.Flags().BoolVar(&autoURL, "auto-url", true, "generate a URL for the deployment (protected by default)")
+	c.Flags().BoolVar(&autoURL, "auto-url", true, "generate a URL when the port is known (protected by default)")
 	c.Flags().IntVar(&port, "port", 0, "port the container listens on (default: the image's or Dockerfile's EXPOSE, else 80)")
 	c.Flags().IntVar(&replicas, "replicas", 0, "number of replicas (server default 1)")
 	c.Flags().StringArrayVar(&envs, "env", nil, "environment variable KEY=VAL (repeatable)")

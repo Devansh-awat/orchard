@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -9,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/hackclub/orchard/cli/internal/api"
 	"github.com/hackclub/orchard/cli/internal/output"
 	"github.com/spf13/cobra"
 )
@@ -18,12 +20,27 @@ var notifyChannelTypes = []string{"discord", "slack", "webhook", "email"}
 var notifyEvents = []string{
 	"deploy.succeeded",
 	"deploy.failed",
+	"deploy.regressed",
 	"pod.crashing",
 	"pod.recovered",
+	"alert.firing",
+	"alert.resolved",
 	"backup.completed",
 	"backup.failed",
+	"db.archiving_failing",
+	"db.archiving_recovered",
+	"db.storage_pressure",
+	"db.storage_recovered",
+	"db.read_only",
+	"db.writes_resumed",
+	"db.memory_raised",
+	"db.restore_test_failed",
+	"db.crashing",
+	"db.recovered",
 	"job.succeeded",
 	"job.failed",
+	"security.signed_in",
+	"security.app_authorized",
 }
 
 func notifyCmd() *cobra.Command {
@@ -134,6 +151,53 @@ const notifyEventsHelp = "Valid --events values:\n" +
 	"  backup.completed, backup.failed    database backup outcomes\n" +
 	"  job.succeeded, job.failed          scheduled job run outcomes"
 
+func notifyRulePath(orgID string, rest ...string) string {
+	p := "/organizations/" + url.PathEscape(orgID) + "/notification-rules"
+	for _, r := range rest {
+		p += "/" + url.PathEscape(r)
+	}
+	return p
+}
+
+func notifyCreateRules(ctx context.Context, cl *api.Client, orgID, channelID string, events, projects []string) error {
+	scopes := []map[string]any{{"scopeType": "org"}}
+	if len(projects) > 0 {
+		scopes = scopes[:0]
+		for _, project := range projects {
+			scopes = append(scopes, map[string]any{"scopeType": "project", "scopeId": project})
+		}
+	}
+	for _, scope := range scopes {
+		scope["channelId"] = channelID
+		scope["events"] = events
+		if err := cl.Send(ctx, http.MethodPost, notifyRulePath(orgID), scope, nil); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func notifySetRuleEvents(ctx context.Context, cl *api.Client, orgID, channelID string, events []string) error {
+	var rules any
+	if err := cl.GetJSON(ctx, notifyRulePath(orgID), &rules); err != nil {
+		return err
+	}
+	updated := false
+	for _, rule := range asList(rules) {
+		if str(rule["channelId"]) != channelID {
+			continue
+		}
+		updated = true
+		if err := cl.Send(ctx, http.MethodPatch, notifyRulePath(orgID, str(rule["id"])), map[string]any{"events": events}, nil); err != nil {
+			return err
+		}
+	}
+	if updated {
+		return nil
+	}
+	return notifyCreateRules(ctx, cl, orgID, channelID, events, nil)
+}
+
 func notifyValidateEvents(events []string) error {
 	bad := []string{}
 	for _, e := range events {
@@ -217,6 +281,9 @@ func notifyChannelCreateCmd() *cobra.Command {
 			if secret := str(raw["webhookSecret"]); secret != "" {
 				output.Warnf("webhook signing secret (shown only once): %s", secret)
 			}
+			if err := notifyCreateRules(cmd.Context(), cl, orgID, str(raw["id"]), events, projects); err != nil {
+				return fmt.Errorf("created channel %s, but no rule sends it events: %w", str(raw["id"]), err)
+			}
 			if fmtFlag() == output.FormatJSON {
 				return output.JSON(raw)
 			}
@@ -291,6 +358,11 @@ func notifyChannelUpdateCmd() *cobra.Command {
 			var raw map[string]any
 			if err := cl.Send(cmd.Context(), http.MethodPatch, notifyChannelPath(orgID, args[0]), body, &raw); err != nil {
 				return err
+			}
+			if f.Changed("events") {
+				if err := notifySetRuleEvents(cmd.Context(), cl, orgID, args[0], events); err != nil {
+					return fmt.Errorf("updated channel %s, but not its events: %w", args[0], err)
+				}
 			}
 			output.Successf("updated channel %s", args[0])
 			if fmtFlag() == output.FormatJSON {
