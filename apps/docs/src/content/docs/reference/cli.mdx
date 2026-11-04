@@ -34,7 +34,7 @@ Aliases: `alerts`
 Add a rule: --metric cpu_percent --above 85 --for 300
 
 ```bash
-orchard create
+orchard alert create
 ```
 
 | Flag | Type | Default | Description |
@@ -52,7 +52,7 @@ orchard create
 Delete a rule
 
 ```bash
-orchard delete <ruleId>
+orchard alert delete <ruleId>
 ```
 
 Aliases: `rm`
@@ -62,7 +62,7 @@ Aliases: `rm`
 List alert rules, including the ones inherited from above
 
 ```bash
-orchard list
+orchard alert list
 ```
 
 Aliases: `ls`
@@ -77,7 +77,7 @@ Aliases: `ls`
 The metrics a rule can watch
 
 ```bash
-orchard metrics
+orchard alert metrics
 ```
 
 ### `orchard alert status`
@@ -85,7 +85,7 @@ orchard metrics
 Every rule that applies to an app and whether it is firing
 
 ```bash
-orchard status <deploymentId>
+orchard alert status <deploymentId>
 ```
 
 ### `orchard alert update`
@@ -93,7 +93,7 @@ orchard status <deploymentId>
 Change a rule's threshold, window, or enabled state
 
 ```bash
-orchard update <ruleId>
+orchard alert update <ruleId>
 ```
 
 | Flag | Type | Default | Description |
@@ -125,7 +125,7 @@ orchard api <operationId | METHOD path>
 Show an operation's params, body and response schema
 
 ```bash
-orchard describe <operationId | METHOD path>
+orchard api describe <operationId | METHOD path>
 ```
 
 | Flag | Type | Default | Description |
@@ -137,7 +137,7 @@ orchard describe <operationId | METHOD path>
 Find API operations by keywords
 
 ```bash
-orchard search <query...>
+orchard api search <query...>
 ```
 
 | Flag | Type | Default | Description |
@@ -162,7 +162,7 @@ Aliases: `audit-log`, `audit-logs`
 List audit log entries for the org (or one deployment), newest first
 
 ```bash
-orchard list
+orchard audit list
 ```
 
 Aliases: `ls`
@@ -190,7 +190,7 @@ orchard auth
 Authenticate with Orchard
 
 ```bash
-orchard login
+orchard auth login
 ```
 
 | Flag | Type | Default | Description |
@@ -206,7 +206,7 @@ orchard login
 Remove the stored token
 
 ```bash
-orchard logout
+orchard auth logout
 ```
 
 ### `orchard auth session`
@@ -214,7 +214,7 @@ orchard logout
 Manage browser login sessions
 
 ```bash
-orchard session
+orchard auth session
 ```
 
 Aliases: `sessions`
@@ -224,7 +224,7 @@ Aliases: `sessions`
 List active browser sessions
 
 ```bash
-orchard list
+orchard auth session list
 ```
 
 Aliases: `ls`
@@ -234,7 +234,7 @@ Aliases: `ls`
 Revoke a browser session (logs that device out)
 
 ```bash
-orchard revoke <sessionId>
+orchard auth session revoke <sessionId>
 ```
 
 ### `orchard auth session revoke-all`
@@ -242,7 +242,7 @@ orchard revoke <sessionId>
 Sign out everywhere: revoke all sessions and delete every API token
 
 ```bash
-orchard revoke-all
+orchard auth session revoke-all
 ```
 
 ### `orchard auth status`
@@ -250,7 +250,7 @@ orchard revoke-all
 Show the current authentication state
 
 ```bash
-orchard status
+orchard auth status
 ```
 
 ### `orchard auth token`
@@ -258,7 +258,7 @@ orchard status
 Manage personal API tokens (orch_…)
 
 ```bash
-orchard token
+orchard auth token
 ```
 
 Aliases: `tokens`
@@ -268,7 +268,7 @@ Aliases: `tokens`
 Create a personal API token (the secret is shown only once)
 
 ```bash
-orchard create
+orchard auth token create
 ```
 
 | Flag | Type | Default | Description |
@@ -283,7 +283,7 @@ orchard create
 List your API tokens (secrets are never shown)
 
 ```bash
-orchard list
+orchard auth token list
 ```
 
 Aliases: `ls`
@@ -293,7 +293,7 @@ Aliases: `ls`
 Revoke an API token
 
 ```bash
-orchard revoke <tokenId>
+orchard auth token revoke <tokenId>
 ```
 
 Aliases: `delete`, `rm`
@@ -313,7 +313,7 @@ orchard claude
 Import your Claude Code setup (CLAUDE.md, agents, commands, skills, MCP servers)
 
 ```bash
-orchard import
+orchard claude import
 ```
 
 | Flag | Type | Default | Description |
@@ -328,7 +328,7 @@ orchard import
 List the Claude Code setup imported into your account
 
 ```bash
-orchard list
+orchard claude list
 ```
 
 Aliases: `ls`
@@ -338,7 +338,7 @@ Aliases: `ls`
 Remove one imported item from your account
 
 ```bash
-orchard remove <kind>/<name>
+orchard claude remove <kind>/<name>
 ```
 
 Aliases: `rm`
@@ -372,7 +372,7 @@ orchard completion
 Generate the autocompletion script for bash
 
 ```bash
-orchard bash
+orchard completion bash
 ```
 
 | Flag | Type | Default | Description |
@@ -384,7 +384,7 @@ orchard bash
 Generate the autocompletion script for fish
 
 ```bash
-orchard fish
+orchard completion fish
 ```
 
 | Flag | Type | Default | Description |
@@ -396,7 +396,7 @@ orchard fish
 Generate the autocompletion script for powershell
 
 ```bash
-orchard powershell
+orchard completion powershell
 ```
 
 | Flag | Type | Default | Description |
@@ -408,7 +408,7 @@ orchard powershell
 Generate the autocompletion script for zsh
 
 ```bash
-orchard zsh
+orchard completion zsh
 ```
 
 | Flag | Type | Default | Description |
@@ -432,7 +432,7 @@ Aliases: `compose-stack`, `compose-stacks`, `stack`, `stacks`
 Toggle push-to-deploy for a stack and its service deployments
 
 ```bash
-orchard auto-deploy
+orchard compose auto-deploy
 ```
 
 ### `orchard compose auto-deploy disable`
@@ -440,7 +440,7 @@ orchard auto-deploy
 Disable auto-deploy for the stack
 
 ```bash
-orchard disable <stackId>
+orchard compose auto-deploy disable <stackId>
 ```
 
 ### `orchard compose auto-deploy enable`
@@ -448,7 +448,7 @@ orchard disable <stackId>
 Enable auto-deploy for the stack
 
 ```bash
-orchard enable <stackId>
+orchard compose auto-deploy enable <stackId>
 ```
 
 ### `orchard compose delete`
@@ -456,7 +456,7 @@ orchard enable <stackId>
 Delete a compose stack and all of its service deployments
 
 ```bash
-orchard delete <stackId>
+orchard compose delete <stackId>
 ```
 
 Aliases: `rm`
@@ -466,7 +466,7 @@ Aliases: `rm`
 Deploy a compose stack from a GitHub repo's compose file
 
 ```bash
-orchard deploy
+orchard compose deploy
 ```
 
 | Flag | Type | Default | Description |
@@ -481,7 +481,7 @@ orchard deploy
 Show a compose stack and its service deployments
 
 ```bash
-orchard get <stackId>
+orchard compose get <stackId>
 ```
 
 ### `orchard compose list`
@@ -489,7 +489,7 @@ orchard get <stackId>
 List compose stacks in the current project
 
 ```bash
-orchard list
+orchard compose list
 ```
 
 Aliases: `ls`
@@ -499,7 +499,7 @@ Aliases: `ls`
 Re-pull the compose file and apply it to the stack's services
 
 ```bash
-orchard redeploy <stackId>
+orchard compose redeploy <stackId>
 ```
 
 ## console
@@ -534,7 +534,7 @@ orchard context
 Clear the default scope
 
 ```bash
-orchard clear
+orchard context clear
 ```
 
 ### `orchard context show`
@@ -542,7 +542,7 @@ orchard clear
 Show the current default scope
 
 ```bash
-orchard show
+orchard context show
 ```
 
 ## db
@@ -562,7 +562,7 @@ Aliases: `database`, `databases`
 Show open sessions and blocked queries (needs a deploy-scope token)
 
 ```bash
-orchard activity <dbId>
+orchard db activity <dbId>
 ```
 
 ### `orchard db backup`
@@ -570,7 +570,7 @@ orchard activity <dbId>
 Manage database backups
 
 ```bash
-orchard backup
+orchard db backup
 ```
 
 Aliases: `backups`
@@ -580,7 +580,7 @@ Aliases: `backups`
 Trigger a new backup (runs asynchronously)
 
 ```bash
-orchard create <id>
+orchard db backup create <id>
 ```
 
 | Flag | Type | Default | Description |
@@ -595,7 +595,7 @@ orchard create <id>
 List backups for a database
 
 ```bash
-orchard list <id>
+orchard db backup list <id>
 ```
 
 Aliases: `ls`
@@ -605,7 +605,7 @@ Aliases: `ls`
 Restore a database from a backup, a checkpoint or a point in time (latest when none is given)
 
 ```bash
-orchard restore <id> [backupId]
+orchard db backup restore <id> [backupId]
 ```
 
 | Flag | Type | Default | Description |
@@ -622,7 +622,7 @@ orchard restore <id> [backupId]
 Manage the automated backup schedule
 
 ```bash
-orchard backup-schedule
+orchard db backup-schedule
 ```
 
 Aliases: `schedule`
@@ -632,7 +632,7 @@ Aliases: `schedule`
 Disable automated backups and WAL archiving (backups already taken are kept)
 
 ```bash
-orchard clear <id>
+orchard db backup-schedule clear <id>
 ```
 
 ### `orchard db backup-schedule get`
@@ -640,7 +640,7 @@ orchard clear <id>
 Show the backup schedule
 
 ```bash
-orchard get <id>
+orchard db backup-schedule get <id>
 ```
 
 ### `orchard db backup-schedule set`
@@ -648,7 +648,7 @@ orchard get <id>
 Set the backup schedule (--cron, or a preset)
 
 ```bash
-orchard set <id>
+orchard db backup-schedule set <id>
 ```
 
 | Flag | Type | Default | Description |
@@ -663,7 +663,7 @@ orchard set <id>
 Manage checkpoints (named restore points you can roll back to)
 
 ```bash
-orchard checkpoint
+orchard db checkpoint
 ```
 
 Aliases: `checkpoints`, `cp`
@@ -673,7 +673,7 @@ Aliases: `checkpoints`, `cp`
 Take a checkpoint of one database, or of every database in the project or environment
 
 ```bash
-orchard create [dbId]
+orchard db checkpoint create [dbId]
 ```
 
 | Flag | Type | Default | Description |
@@ -685,7 +685,7 @@ orchard create [dbId]
 List the checkpoints taken together in one group
 
 ```bash
-orchard group <groupId>
+orchard db checkpoint group <groupId>
 ```
 
 ### `orchard db checkpoint list`
@@ -693,7 +693,7 @@ orchard group <groupId>
 List a database's checkpoints
 
 ```bash
-orchard list <dbId>
+orchard db checkpoint list <dbId>
 ```
 
 Aliases: `ls`
@@ -703,7 +703,7 @@ Aliases: `ls`
 Restore a database to a checkpoint (in place, or into a new database with --fork)
 
 ```bash
-orchard restore <checkpointId>
+orchard db checkpoint restore <checkpointId>
 ```
 
 | Flag | Type | Default | Description |
@@ -718,7 +718,7 @@ orchard restore <checkpointId>
 Restore every database in a checkpoint group to that group's checkpoints
 
 ```bash
-orchard restore-group <groupId>
+orchard db checkpoint restore-group <groupId>
 ```
 
 | Flag | Type | Default | Description |
@@ -732,7 +732,7 @@ orchard restore-group <groupId>
 Hide a checkpoint so it is no longer offered for restore
 
 ```bash
-orchard rm <checkpointId>
+orchard db checkpoint rm <checkpointId>
 ```
 
 Aliases: `delete`
@@ -742,7 +742,7 @@ Aliases: `delete`
 Show connection details and credentials (recorded in the audit log)
 
 ```bash
-orchard connection <id>
+orchard db connection <id>
 ```
 
 Aliases: `conn`
@@ -752,7 +752,7 @@ Aliases: `conn`
 Create a PostgreSQL database in the current project
 
 ```bash
-orchard create
+orchard db create
 ```
 
 | Flag | Type | Default | Description |
@@ -772,7 +772,7 @@ orchard create
 Delete a database (kept in the trash for 30 days when it has a backup)
 
 ```bash
-orchard delete <id>
+orchard db delete <id>
 ```
 
 Aliases: `rm`
@@ -782,7 +782,7 @@ Aliases: `rm`
 Explain a database's health in one call (exits 10 when it is down)
 
 ```bash
-orchard diagnose <dbId>
+orchard db diagnose <dbId>
 ```
 
 ### `orchard db extension`
@@ -790,7 +790,7 @@ orchard diagnose <dbId>
 Manage PostgreSQL extensions
 
 ```bash
-orchard extension
+orchard db extension
 ```
 
 Aliases: `extensions`, `ext`
@@ -800,7 +800,7 @@ Aliases: `extensions`, `ext`
 Install a PostgreSQL extension
 
 ```bash
-orchard install <id> <name>
+orchard db extension install <id> <name>
 ```
 
 | Flag | Type | Default | Description |
@@ -812,7 +812,7 @@ orchard install <id> <name>
 List available and installed extensions
 
 ```bash
-orchard list <id>
+orchard db extension list <id>
 ```
 
 Aliases: `ls`
@@ -822,7 +822,7 @@ Aliases: `ls`
 Drop a PostgreSQL extension (and objects depending on it)
 
 ```bash
-orchard uninstall <id> <name>
+orchard db extension uninstall <id> <name>
 ```
 
 | Flag | Type | Default | Description |
@@ -834,7 +834,7 @@ orchard uninstall <id> <name>
 Copy a database into a new one, from now, a backup, a checkpoint or a point in time
 
 ```bash
-orchard fork <id>
+orchard db fork <id>
 ```
 
 | Flag | Type | Default | Description |
@@ -851,7 +851,7 @@ orchard fork <id>
 Show a database
 
 ```bash
-orchard get <id>
+orchard db get <id>
 ```
 
 | Flag | Type | Default | Description |
@@ -863,7 +863,7 @@ orchard get <id>
 Inspect logs captured from killed database containers
 
 ```bash
-orchard killed
+orchard db killed
 ```
 
 ### `orchard db killed list`
@@ -871,7 +871,7 @@ orchard killed
 List killed-container log captures for a database
 
 ```bash
-orchard list <id>
+orchard db killed list <id>
 ```
 
 Aliases: `ls`
@@ -881,7 +881,7 @@ Aliases: `ls`
 Print the captured logs of a killed database container
 
 ```bash
-orchard logs <id> <entryId>
+orchard db killed logs <id> <entryId>
 ```
 
 ### `orchard db list`
@@ -889,7 +889,7 @@ orchard logs <id> <entryId>
 List databases (scoped to the current project or org when set)
 
 ```bash
-orchard list
+orchard db list
 ```
 
 Aliases: `ls`
@@ -899,7 +899,7 @@ Aliases: `ls`
 Fetch PostgreSQL logs from the database pod
 
 ```bash
-orchard logs <id>
+orchard db logs <id>
 ```
 
 | Flag | Type | Default | Description |
@@ -911,7 +911,7 @@ orchard logs <id>
 Show CPU/memory/network usage for the database pod
 
 ```bash
-orchard metrics <id>
+orchard db metrics <id>
 ```
 
 | Flag | Type | Default | Description |
@@ -925,7 +925,7 @@ orchard metrics <id>
 Inspect and control restore, fork, undelete, upgrade and restore test operations
 
 ```bash
-orchard ops
+orchard db ops
 ```
 
 Aliases: `op`, `operations`
@@ -935,7 +935,7 @@ Aliases: `op`, `operations`
 Cancel an operation that has not finished
 
 ```bash
-orchard cancel <opId>
+orchard db ops cancel <opId>
 ```
 
 ### `orchard db ops get`
@@ -943,7 +943,7 @@ orchard cancel <opId>
 Show an operation (--wait blocks until it succeeds or fails)
 
 ```bash
-orchard get <opId>
+orchard db ops get <opId>
 ```
 
 | Flag | Type | Default | Description |
@@ -956,7 +956,7 @@ orchard get <opId>
 List operations on a database, newest first
 
 ```bash
-orchard list <dbId>
+orchard db ops list <dbId>
 ```
 
 Aliases: `ls`
@@ -966,7 +966,7 @@ Aliases: `ls`
 Swap back to the copy from before an in-place restore (within 24 hours)
 
 ```bash
-orchard undo <opId>
+orchard db ops undo <opId>
 ```
 
 | Flag | Type | Default | Description |
@@ -979,7 +979,7 @@ orchard undo <opId>
 Manage the PgBouncer connection pooler in front of a database
 
 ```bash
-orchard pooler
+orchard db pooler
 ```
 
 ### `orchard db pooler get`
@@ -987,7 +987,7 @@ orchard pooler
 Show the pooler's settings and state
 
 ```bash
-orchard get <dbId>
+orchard db pooler get <dbId>
 ```
 
 ### `orchard db pooler set`
@@ -995,7 +995,7 @@ orchard get <dbId>
 Turn the pooler on or off and change its settings
 
 ```bash
-orchard set <dbId>
+orchard db pooler set <dbId>
 ```
 
 | Flag | Type | Default | Description |
@@ -1011,7 +1011,7 @@ orchard set <dbId>
 Show or change deletion protection, DDL checkpoints and scheduled restore tests
 
 ```bash
-orchard protect <dbId>
+orchard db protect <dbId>
 ```
 
 | Flag | Type | Default | Description |
@@ -1025,7 +1025,7 @@ orchard protect <dbId>
 Open an interactive psql session in the database pod
 
 ```bash
-orchard psql <id>
+orchard db psql <id>
 ```
 
 ### `orchard db public`
@@ -1033,7 +1033,7 @@ orchard psql <id>
 Manage public (internet) exposure
 
 ```bash
-orchard public
+orchard db public
 ```
 
 ### `orchard db public disable`
@@ -1041,7 +1041,7 @@ orchard public
 Stop exposing the database publicly
 
 ```bash
-orchard disable <id>
+orchard db public disable <id>
 ```
 
 ### `orchard db public enable`
@@ -1049,7 +1049,7 @@ orchard disable <id>
 Expose the database publicly with TLS
 
 ```bash
-orchard enable <id>
+orchard db public enable <id>
 ```
 
 ### `orchard db recovery`
@@ -1057,7 +1057,7 @@ orchard enable <id>
 Show how far back a database can be restored, and what it can be restored from
 
 ```bash
-orchard recovery <dbId>
+orchard db recovery <dbId>
 ```
 
 ### `orchard db replication`
@@ -1065,7 +1065,7 @@ orchard recovery <dbId>
 Show or change how standbys confirm writes (async, preferred or required)
 
 ```bash
-orchard replication
+orchard db replication
 ```
 
 ### `orchard db replication get`
@@ -1073,7 +1073,7 @@ orchard replication
 Show the replication mode
 
 ```bash
-orchard get <dbId>
+orchard db replication get <dbId>
 ```
 
 ### `orchard db replication set`
@@ -1081,7 +1081,7 @@ orchard get <dbId>
 Set the replication mode (preferred and required need at least 2 instances)
 
 ```bash
-orchard set <dbId>
+orchard db replication set <dbId>
 ```
 
 | Flag | Type | Default | Description |
@@ -1093,7 +1093,7 @@ orchard set <dbId>
 Manage CPU/memory requests
 
 ```bash
-orchard resources
+orchard db resources
 ```
 
 ### `orchard db resources set`
@@ -1101,7 +1101,7 @@ orchard resources
 Update CPU/memory requests (restarts the database pod)
 
 ```bash
-orchard set <id>
+orchard db resources set <id>
 ```
 
 | Flag | Type | Default | Description |
@@ -1114,7 +1114,7 @@ orchard set <id>
 Set a new password and push it to every bound app
 
 ```bash
-orchard rotate-password <id>
+orchard db rotate-password <id>
 ```
 
 | Flag | Type | Default | Description |
@@ -1126,7 +1126,7 @@ orchard rotate-password <id>
 Show the running Postgres version, known CVEs and what fixes them
 
 ```bash
-orchard security <dbId>
+orchard db security <dbId>
 ```
 
 ### `orchard db settings`
@@ -1134,7 +1134,7 @@ orchard security <dbId>
 Read or update PostgreSQL parameters
 
 ```bash
-orchard settings
+orchard db settings
 ```
 
 ### `orchard db settings get`
@@ -1142,7 +1142,7 @@ orchard settings
 Show configured PostgreSQL parameters
 
 ```bash
-orchard get <id>
+orchard db settings get <id>
 ```
 
 ### `orchard db settings set`
@@ -1150,7 +1150,7 @@ orchard get <id>
 Update PostgreSQL parameters (KEY= removes a parameter)
 
 ```bash
-orchard set <id> KEY=VAL...
+orchard db settings set <id> KEY=VAL...
 ```
 
 ### `orchard db storage`
@@ -1158,7 +1158,7 @@ orchard set <id> KEY=VAL...
 Manage the storage volume
 
 ```bash
-orchard storage
+orchard db storage
 ```
 
 ### `orchard db storage expand`
@@ -1166,7 +1166,7 @@ orchard storage
 Grow the storage volume (never shrinks)
 
 ```bash
-orchard expand <id>
+orchard db storage expand <id>
 ```
 
 | Flag | Type | Default | Description |
@@ -1178,7 +1178,7 @@ orchard expand <id>
 Prove backups restore: restore the latest one into a throwaway copy and check it
 
 ```bash
-orchard test-backup
+orchard db test-backup
 ```
 
 Aliases: `restore-test`, `restore-tests`
@@ -1188,7 +1188,7 @@ Aliases: `restore-test`, `restore-tests`
 List past restore tests and their results
 
 ```bash
-orchard list <dbId>
+orchard db test-backup list <dbId>
 ```
 
 Aliases: `ls`
@@ -1198,7 +1198,7 @@ Aliases: `ls`
 Start a restore test now (the throwaway copy is deleted afterwards)
 
 ```bash
-orchard run <dbId>
+orchard db test-backup run <dbId>
 ```
 
 | Flag | Type | Default | Description |
@@ -1211,7 +1211,7 @@ orchard run <dbId>
 List and bring back deleted databases (kept for 30 days)
 
 ```bash
-orchard trash
+orchard db trash
 ```
 
 ### `orchard db trash list`
@@ -1219,7 +1219,7 @@ orchard trash
 List deleted databases in the current project
 
 ```bash
-orchard list
+orchard db trash list
 ```
 
 Aliases: `ls`
@@ -1229,7 +1229,7 @@ Aliases: `ls`
 Bring a deleted database back from its backups
 
 ```bash
-orchard restore <deletedId>
+orchard db trash restore <deletedId>
 ```
 
 | Flag | Type | Default | Description |
@@ -1243,7 +1243,7 @@ orchard restore <deletedId>
 Upgrade a database to a newer Postgres major version
 
 ```bash
-orchard upgrade <dbId>
+orchard db upgrade <dbId>
 ```
 
 | Flag | Type | Default | Description |
@@ -1258,7 +1258,7 @@ orchard upgrade <dbId>
 Manage extra Postgres users with read or write access
 
 ```bash
-orchard user
+orchard db user
 ```
 
 Aliases: `users`
@@ -1268,7 +1268,7 @@ Aliases: `users`
 Create a user and print its password once (needs a deploy-scope token)
 
 ```bash
-orchard create <dbId> <name>
+orchard db user create <dbId> <name>
 ```
 
 | Flag | Type | Default | Description |
@@ -1280,7 +1280,7 @@ orchard create <dbId> <name>
 List the extra users of a database
 
 ```bash
-orchard list <dbId>
+orchard db user list <dbId>
 ```
 
 Aliases: `ls`
@@ -1290,7 +1290,7 @@ Aliases: `ls`
 Drop a user
 
 ```bash
-orchard rm <dbId> <name>
+orchard db user rm <dbId> <name>
 ```
 
 Aliases: `delete`
@@ -1300,7 +1300,7 @@ Aliases: `delete`
 List the Postgres major versions you can create or upgrade to
 
 ```bash
-orchard versions
+orchard db versions
 ```
 
 ## deploy
@@ -1320,7 +1320,7 @@ Aliases: `deployment`, `deployments`
 Manage push-to-deploy for GitHub deployments
 
 ```bash
-orchard auto-deploy
+orchard deploy auto-deploy
 ```
 
 ### `orchard deploy auto-deploy disable`
@@ -1328,7 +1328,7 @@ orchard auto-deploy
 Stop auto-deploying on pushes
 
 ```bash
-orchard disable <id>
+orchard deploy auto-deploy disable <id>
 ```
 
 ### `orchard deploy auto-deploy enable`
@@ -1336,7 +1336,7 @@ orchard disable <id>
 Rebuild automatically on pushes to a branch
 
 ```bash
-orchard enable <id>
+orchard deploy auto-deploy enable <id>
 ```
 
 | Flag | Type | Default | Description |
@@ -1349,7 +1349,7 @@ orchard enable <id>
 Show auto-deploy configuration
 
 ```bash
-orchard status <id>
+orchard deploy auto-deploy status <id>
 ```
 
 ### `orchard deploy bindings`
@@ -1357,7 +1357,7 @@ orchard status <id>
 Databases and apps this app is connected to
 
 ```bash
-orchard bindings
+orchard deploy bindings
 ```
 
 ### `orchard deploy bindings add`
@@ -1365,7 +1365,7 @@ orchard bindings
 Connect a database or another app and add the obvious variable
 
 ```bash
-orchard add <id> (--database <name|id> | --app <name|id>)
+orchard deploy bindings add <id> (--database <name|id> | --app <name|id>)
 ```
 
 | Flag | Type | Default | Description |
@@ -1381,7 +1381,7 @@ orchard add <id> (--database <name|id> | --app <name|id>)
 List bindings
 
 ```bash
-orchard list <id>
+orchard deploy bindings list <id>
 ```
 
 ### `orchard deploy bindings options`
@@ -1389,7 +1389,7 @@ orchard list <id>
 Databases and apps on the project that can still be connected
 
 ```bash
-orchard options <id>
+orchard deploy bindings options <id>
 ```
 
 ### `orchard deploy bindings remove`
@@ -1397,7 +1397,7 @@ orchard options <id>
 Disconnect a resource
 
 ```bash
-orchard remove <id> <name>
+orchard deploy bindings remove <id> <name>
 ```
 
 ### `orchard deploy build-config`
@@ -1405,7 +1405,7 @@ orchard remove <id> <name>
 Manage how a deployment is built
 
 ```bash
-orchard build-config
+orchard deploy build-config
 ```
 
 ### `orchard deploy build-config set`
@@ -1413,7 +1413,7 @@ orchard build-config
 Change build settings for a deployment
 
 ```bash
-orchard set <id>
+orchard deploy build-config set <id>
 ```
 
 | Flag | Type | Default | Description |
@@ -1433,7 +1433,7 @@ orchard set <id>
 Manage the build context of a GitHub deployment
 
 ```bash
-orchard build-root
+orchard deploy build-root
 ```
 
 ### `orchard deploy build-root set`
@@ -1441,7 +1441,7 @@ orchard build-root
 Build from the repo root (on) or the Dockerfile directory (off)
 
 ```bash
-orchard set <id> <on|off>
+orchard deploy build-root set <id> <on|off>
 ```
 
 | Flag | Type | Default | Description |
@@ -1454,7 +1454,7 @@ orchard set <id> <on|off>
 Cancel an in-progress build
 
 ```bash
-orchard cancel <id>
+orchard deploy cancel <id>
 ```
 
 ### `orchard deploy create`
@@ -1462,7 +1462,7 @@ orchard cancel <id>
 Create a deployment from a Docker image or a GitHub repo
 
 ```bash
-orchard create
+orchard deploy create
 ```
 
 | Flag | Type | Default | Description |
@@ -1497,7 +1497,7 @@ orchard create
 Delete a deployment and its Kubernetes resources
 
 ```bash
-orchard delete <id>
+orchard deploy delete <id>
 ```
 
 Aliases: `rm`
@@ -1507,7 +1507,7 @@ Aliases: `rm`
 Manage a deployment's environment variables
 
 ```bash
-orchard env
+orchard deploy env
 ```
 
 ### `orchard deploy env get`
@@ -1515,7 +1515,7 @@ orchard env
 Show environment variables
 
 ```bash
-orchard get <id>
+orchard deploy env get <id>
 ```
 
 ### `orchard deploy env set`
@@ -1523,7 +1523,7 @@ orchard get <id>
 Add or update environment variables (pods restart)
 
 ```bash
-orchard set <id> [KEY=VAL ...]
+orchard deploy env set <id> [KEY=VAL ...]
 ```
 
 | Flag | Type | Default | Description |
@@ -1536,7 +1536,7 @@ orchard set <id> [KEY=VAL ...]
 Remove environment variables (pods restart)
 
 ```bash
-orchard unset <id> KEY...
+orchard deploy env unset <id> KEY...
 ```
 
 ### `orchard deploy get`
@@ -1544,7 +1544,7 @@ orchard unset <id> KEY...
 Show a deployment
 
 ```bash
-orchard get <id>
+orchard deploy get <id>
 ```
 
 | Flag | Type | Default | Description |
@@ -1556,7 +1556,7 @@ orchard get <id>
 List GitHub deployment status entries for this deployment
 
 ```bash
-orchard github-deployments <id>
+orchard deploy github-deployments <id>
 ```
 
 ### `orchard deploy health-check`
@@ -1564,7 +1564,7 @@ orchard github-deployments <id>
 Manage liveness/readiness/startup probes
 
 ```bash
-orchard health-check
+orchard deploy health-check
 ```
 
 ### `orchard deploy health-check set`
@@ -1572,7 +1572,7 @@ orchard health-check
 Update health check configuration (unset flags keep current values)
 
 ```bash
-orchard set <id>
+orchard deploy health-check set <id>
 ```
 
 | Flag | Type | Default | Description |
@@ -1595,7 +1595,7 @@ orchard set <id>
 Show a deployment's image history
 
 ```bash
-orchard history <id>
+orchard deploy history <id>
 ```
 
 | Flag | Type | Default | Description |
@@ -1607,7 +1607,7 @@ orchard history <id>
 Manage the Docker image of an image-source deployment
 
 ```bash
-orchard image
+orchard deploy image
 ```
 
 ### `orchard deploy image set`
@@ -1615,7 +1615,7 @@ orchard image
 Change the image (GitHub-built deployments must use `deploy rebuild`)
 
 ```bash
-orchard set <id> <image>
+orchard deploy image set <id> <image>
 ```
 
 | Flag | Type | Default | Description |
@@ -1628,7 +1628,7 @@ orchard set <id> <image>
 Inspect logs captured from killed containers
 
 ```bash
-orchard killed
+orchard deploy killed
 ```
 
 ### `orchard deploy killed list`
@@ -1636,7 +1636,7 @@ orchard killed
 List killed-container log captures
 
 ```bash
-orchard list <id>
+orchard deploy killed list <id>
 ```
 
 Aliases: `ls`
@@ -1646,7 +1646,7 @@ Aliases: `ls`
 Print the captured logs of a killed container
 
 ```bash
-orchard logs <id> <entryId>
+orchard deploy killed logs <id> <entryId>
 ```
 
 ### `orchard deploy list`
@@ -1654,7 +1654,7 @@ orchard logs <id> <entryId>
 List deployments (scoped to the current project when one is set)
 
 ```bash
-orchard list
+orchard deploy list
 ```
 
 Aliases: `ls`
@@ -1664,7 +1664,7 @@ Aliases: `ls`
 Fetch runtime pod logs (or build logs with --build)
 
 ```bash
-orchard logs <id>
+orchard deploy logs <id>
 ```
 
 | Flag | Type | Default | Description |
@@ -1678,7 +1678,7 @@ orchard logs <id>
 Show CPU/memory/network metrics for the last hour
 
 ```bash
-orchard metrics <id>
+orchard deploy metrics <id>
 ```
 
 ### `orchard deploy pods`
@@ -1686,7 +1686,7 @@ orchard metrics <id>
 List a deployment's pods
 
 ```bash
-orchard pods <id>
+orchard deploy pods <id>
 ```
 
 | Flag | Type | Default | Description |
@@ -1698,7 +1698,7 @@ orchard pods <id>
 Manage whether the image is re-pulled on every pod start
 
 ```bash
-orchard pull-policy
+orchard deploy pull-policy
 ```
 
 ### `orchard deploy pull-policy set`
@@ -1706,7 +1706,7 @@ orchard pull-policy
 Override the image pull policy
 
 ```bash
-orchard set <id>
+orchard deploy pull-policy set <id>
 ```
 
 | Flag | Type | Default | Description |
@@ -1718,7 +1718,7 @@ orchard set <id>
 Rebuild a deployment from source
 
 ```bash
-orchard rebuild <id>
+orchard deploy rebuild <id>
 ```
 
 | Flag | Type | Default | Description |
@@ -1731,7 +1731,7 @@ orchard rebuild <id>
 List releases, newest first
 
 ```bash
-orchard releases <id>
+orchard deploy releases <id>
 ```
 
 | Flag | Type | Default | Description |
@@ -1743,7 +1743,7 @@ orchard releases <id>
 Manage a deployment's CPU/memory requests
 
 ```bash
-orchard resources
+orchard deploy resources
 ```
 
 ### `orchard deploy resources get`
@@ -1751,7 +1751,7 @@ orchard resources
 Show CPU/memory requests
 
 ```bash
-orchard get <id>
+orchard deploy resources get <id>
 ```
 
 ### `orchard deploy resources set`
@@ -1759,7 +1759,7 @@ orchard get <id>
 Update CPU/memory requests (0 clears to the org default; pods roll)
 
 ```bash
-orchard set <id>
+orchard deploy resources set <id>
 ```
 
 | Flag | Type | Default | Description |
@@ -1772,7 +1772,7 @@ orchard set <id>
 Restart a deployment's pods
 
 ```bash
-orchard restart <id>
+orchard deploy restart <id>
 ```
 
 | Flag | Type | Default | Description |
@@ -1785,7 +1785,7 @@ orchard restart <id>
 Roll a deployment back to a previous image (default: the previous release)
 
 ```bash
-orchard rollback <id> [historyId]
+orchard deploy rollback <id> [historyId]
 ```
 
 | Flag | Type | Default | Description |
@@ -1799,7 +1799,7 @@ orchard rollback <id> [historyId]
 Scale a deployment to N replicas
 
 ```bash
-orchard scale <id> <replicas>
+orchard deploy scale <id> <replicas>
 ```
 
 | Flag | Type | Default | Description |
@@ -1812,7 +1812,7 @@ orchard scale <id> <replicas>
 Start a stopped deployment; builds the latest held push first when there is one
 
 ```bash
-orchard start <id>
+orchard deploy start <id>
 ```
 
 | Flag | Type | Default | Description |
@@ -1826,7 +1826,7 @@ orchard start <id>
 Show whether a deployment is live, and if not, why
 
 ```bash
-orchard status <id>
+orchard deploy status <id>
 ```
 
 | Flag | Type | Default | Description |
@@ -1841,7 +1841,7 @@ orchard status <id>
 Stop a deployment: scale it to zero and hold pushes until it is started
 
 ```bash
-orchard stop <id>
+orchard deploy stop <id>
 ```
 
 ### `orchard deploy strategy`
@@ -1849,7 +1849,7 @@ orchard stop <id>
 Manage the Kubernetes update strategy
 
 ```bash
-orchard strategy
+orchard deploy strategy
 ```
 
 ### `orchard deploy strategy set`
@@ -1857,7 +1857,7 @@ orchard strategy
 Set the update strategy (PVC-backed deployments require recreate)
 
 ```bash
-orchard set <id>
+orchard deploy strategy set <id>
 ```
 
 | Flag | Type | Default | Description |
@@ -1869,7 +1869,7 @@ orchard set <id>
 Manage a deployment's volumes
 
 ```bash
-orchard volumes
+orchard deploy volumes
 ```
 
 ### `orchard deploy volumes get`
@@ -1877,7 +1877,7 @@ orchard volumes
 Show attached volumes
 
 ```bash
-orchard get <id>
+orchard deploy volumes get <id>
 ```
 
 ### `orchard deploy volumes set`
@@ -1885,7 +1885,7 @@ orchard get <id>
 Replace all volumes with the given PVC volumes
 
 ```bash
-orchard set <id>
+orchard deploy volumes set <id>
 ```
 
 | Flag | Type | Default | Description |
@@ -1897,7 +1897,7 @@ orchard set <id>
 Manage deploy webhook trigger tokens
 
 ```bash
-orchard webhook-token
+orchard deploy webhook-token
 ```
 
 Aliases: `webhook-tokens`
@@ -1907,7 +1907,7 @@ Aliases: `webhook-tokens`
 Mint a webhook token that triggers a rebuild via POST
 
 ```bash
-orchard create <id>
+orchard deploy webhook-token create <id>
 ```
 
 | Flag | Type | Default | Description |
@@ -1919,7 +1919,7 @@ orchard create <id>
 Delete a webhook token
 
 ```bash
-orchard delete <id> <tokenId>
+orchard deploy webhook-token delete <id> <tokenId>
 ```
 
 Aliases: `rm`
@@ -1929,7 +1929,7 @@ Aliases: `rm`
 List webhook tokens (secrets are never shown again)
 
 ```bash
-orchard list <id>
+orchard deploy webhook-token list <id>
 ```
 
 Aliases: `ls`
@@ -1951,7 +1951,7 @@ Aliases: `ingress`, `domains`
 Add a domain to a deployment
 
 ```bash
-orchard create
+orchard domain create
 ```
 
 | Flag | Type | Default | Description |
@@ -1967,7 +1967,7 @@ orchard create
 Delete a domain
 
 ```bash
-orchard delete <ingress-id>
+orchard domain delete <ingress-id>
 ```
 
 Aliases: `rm`
@@ -1977,7 +1977,7 @@ Aliases: `rm`
 Show a domain
 
 ```bash
-orchard get <ingress-id>
+orchard domain get <ingress-id>
 ```
 
 ### `orchard domain list`
@@ -1985,7 +1985,7 @@ orchard get <ingress-id>
 List domains
 
 ```bash
-orchard list
+orchard domain list
 ```
 
 Aliases: `ls`
@@ -1999,7 +1999,7 @@ Aliases: `ls`
 Control access protection on a domain
 
 ```bash
-orchard protection
+orchard domain protection
 ```
 
 ### `orchard domain protection get`
@@ -2007,7 +2007,7 @@ orchard protection
 Show a domain's protection mode and bypass secret
 
 ```bash
-orchard get <ingress-id>
+orchard domain protection get <ingress-id>
 ```
 
 ### `orchard domain protection set`
@@ -2015,7 +2015,7 @@ orchard get <ingress-id>
 Set a domain's protection mode
 
 ```bash
-orchard set <ingress-id>
+orchard domain protection set <ingress-id>
 ```
 
 | Flag | Type | Default | Description |
@@ -2028,7 +2028,7 @@ orchard set <ingress-id>
 Update a domain's host, path, port, or TLS
 
 ```bash
-orchard update <ingress-id>
+orchard domain update <ingress-id>
 ```
 
 | Flag | Type | Default | Description |
@@ -2045,7 +2045,7 @@ orchard update <ingress-id>
 Check that a domain's DNS points at the cluster
 
 ```bash
-orchard validate-dns <host>
+orchard domain validate-dns <host>
 ```
 
 ## env
@@ -2065,7 +2065,7 @@ Aliases: `environment`, `envs`
 Create an environment in the project
 
 ```bash
-orchard create
+orchard env create
 ```
 
 | Flag | Type | Default | Description |
@@ -2078,7 +2078,7 @@ orchard create
 Delete an environment and its namespace
 
 ```bash
-orchard delete <name-or-id>
+orchard env delete <name-or-id>
 ```
 
 Aliases: `rm`
@@ -2088,7 +2088,7 @@ Aliases: `rm`
 Show an environment
 
 ```bash
-orchard get [name-or-id]
+orchard env get [name-or-id]
 ```
 
 ### `orchard env list`
@@ -2096,7 +2096,7 @@ orchard get [name-or-id]
 List environments in the project
 
 ```bash
-orchard list
+orchard env list
 ```
 
 Aliases: `ls`
@@ -2106,7 +2106,7 @@ Aliases: `ls`
 Write environment variables to a local dotenv file
 
 ```bash
-orchard pull [env]
+orchard env pull [env]
 ```
 
 | Flag | Type | Default | Description |
@@ -2120,7 +2120,7 @@ orchard pull [env]
 Make an environment the project default
 
 ```bash
-orchard set-default <name-or-id>
+orchard env set-default <name-or-id>
 ```
 
 ### `orchard env vars`
@@ -2128,7 +2128,7 @@ orchard set-default <name-or-id>
 Manage shared environment variables
 
 ```bash
-orchard vars
+orchard env vars
 ```
 
 Aliases: `var`
@@ -2138,7 +2138,7 @@ Aliases: `var`
 List shared variables (secret values are write-only, never returned)
 
 ```bash
-orchard get [env]
+orchard env vars get [env]
 ```
 
 Aliases: `list`, `ls`
@@ -2148,7 +2148,7 @@ Aliases: `list`, `ls`
 Set shared variables (merged into the existing set)
 
 ```bash
-orchard set [KEY=VAL ...]
+orchard env vars set [KEY=VAL ...]
 ```
 
 | Flag | Type | Default | Description |
@@ -2161,7 +2161,7 @@ orchard set [KEY=VAL ...]
 Remove shared variables
 
 ```bash
-orchard unset KEY [KEY ...]
+orchard env vars unset KEY [KEY ...]
 ```
 
 Aliases: `rm`, `remove`
@@ -2181,7 +2181,7 @@ orchard events
 Tail org events until interrupted (NDJSON when piped)
 
 ```bash
-orchard tail
+orchard events tail
 ```
 
 | Flag | Type | Default | Description |
@@ -2206,7 +2206,7 @@ Aliases: `git-providers`, `providers`
 Connect a git provider
 
 ```bash
-orchard add --provider <kind> --name <name> --token <token>
+orchard git add --provider <kind> --name <name> --token <token>
 ```
 
 | Flag | Type | Default | Description |
@@ -2222,7 +2222,7 @@ orchard add --provider <kind> --name <name> --token <token>
 List branches of a repository
 
 ```bash
-orchard branches <name> <owner/repo>
+orchard git branches <name> <owner/repo>
 ```
 
 ### `orchard git detect`
@@ -2230,7 +2230,7 @@ orchard branches <name> <owner/repo>
 Inspect a repository the way the new app form does
 
 ```bash
-orchard detect <name> <owner/repo>
+orchard git detect <name> <owner/repo>
 ```
 
 | Flag | Type | Default | Description |
@@ -2242,7 +2242,7 @@ orchard detect <name> <owner/repo>
 List git providers
 
 ```bash
-orchard list
+orchard git list
 ```
 
 ### `orchard git remove`
@@ -2250,7 +2250,7 @@ orchard list
 Disconnect a git provider
 
 ```bash
-orchard remove <name>
+orchard git remove <name>
 ```
 
 ### `orchard git repos`
@@ -2258,7 +2258,7 @@ orchard remove <name>
 List repositories the token can see
 
 ```bash
-orchard repos <name>
+orchard git repos <name>
 ```
 
 ### `orchard git webhook`
@@ -2266,7 +2266,7 @@ orchard repos <name>
 Show the webhook URL and secret to paste into the forge
 
 ```bash
-orchard webhook <name>
+orchard git webhook <name>
 ```
 
 ## github
@@ -2286,7 +2286,7 @@ Aliases: `gh`
 List a repository's branches
 
 ```bash
-orchard branches <owner/repo>
+orchard github branches <owner/repo>
 ```
 
 ### `orchard github contents`
@@ -2294,7 +2294,7 @@ orchard branches <owner/repo>
 List files and directories in a repository
 
 ```bash
-orchard contents <owner/repo> [path]
+orchard github contents <owner/repo> [path]
 ```
 
 Aliases: `ls`
@@ -2308,7 +2308,7 @@ Aliases: `ls`
 Show exposed ports, env vars, and build stages of a Dockerfile
 
 ```bash
-orchard dockerfile-info <owner/repo> <dockerfile-path>
+orchard github dockerfile-info <owner/repo> <dockerfile-path>
 ```
 
 | Flag | Type | Default | Description |
@@ -2320,7 +2320,7 @@ orchard dockerfile-info <owner/repo> <dockerfile-path>
 Find Dockerfiles in a repository
 
 ```bash
-orchard dockerfiles <owner/repo>
+orchard github dockerfiles <owner/repo>
 ```
 
 | Flag | Type | Default | Description |
@@ -2332,7 +2332,7 @@ orchard dockerfiles <owner/repo>
 Get the GitHub App installation URL
 
 ```bash
-orchard install
+orchard github install
 ```
 
 | Flag | Type | Default | Description |
@@ -2344,7 +2344,7 @@ orchard install
 List GitHub App installations available to your account
 
 ```bash
-orchard installations
+orchard github installations
 ```
 
 ### `orchard github link`
@@ -2352,7 +2352,7 @@ orchard installations
 Link your GitHub account (opens the OAuth flow in a browser)
 
 ```bash
-orchard link
+orchard github link
 ```
 
 | Flag | Type | Default | Description |
@@ -2364,7 +2364,7 @@ orchard link
 List repositories you can deploy from
 
 ```bash
-orchard repos
+orchard github repos
 ```
 
 Aliases: `repositories`
@@ -2378,7 +2378,7 @@ Aliases: `repositories`
 Show the linked GitHub account and app installations
 
 ```bash
-orchard status
+orchard github status
 ```
 
 ### `orchard github unlink`
@@ -2386,7 +2386,7 @@ orchard status
 Unlink your GitHub account
 
 ```bash
-orchard unlink
+orchard github unlink
 ```
 
 ## help
@@ -2433,7 +2433,7 @@ Aliases: `invitations`
 Accept a pending invitation
 
 ```bash
-orchard accept <id>
+orchard invitation accept <id>
 ```
 
 ### `orchard invitation accept-all`
@@ -2441,7 +2441,7 @@ orchard accept <id>
 Accept every pending invitation
 
 ```bash
-orchard accept-all
+orchard invitation accept-all
 ```
 
 ### `orchard invitation decline`
@@ -2449,7 +2449,7 @@ orchard accept-all
 Decline a pending invitation
 
 ```bash
-orchard decline <id>
+orchard invitation decline <id>
 ```
 
 ### `orchard invitation list`
@@ -2457,7 +2457,7 @@ orchard decline <id>
 List your pending invitations
 
 ```bash
-orchard list
+orchard invitation list
 ```
 
 Aliases: `ls`
@@ -2479,7 +2479,7 @@ Aliases: `jobs`
 Create a job in the project from a steps file
 
 ```bash
-orchard create
+orchard job create
 ```
 
 | Flag | Type | Default | Description |
@@ -2497,7 +2497,7 @@ orchard create
 Delete a job, its schedule, and its run history
 
 ```bash
-orchard delete <id>
+orchard job delete <id>
 ```
 
 Aliases: `rm`
@@ -2507,7 +2507,7 @@ Aliases: `rm`
 Show a job and its steps
 
 ```bash
-orchard get <id>
+orchard job get <id>
 ```
 
 ### `orchard job list`
@@ -2515,7 +2515,7 @@ orchard get <id>
 List jobs in the org (or the current project when one is set)
 
 ```bash
-orchard list
+orchard job list
 ```
 
 Aliases: `ls`
@@ -2525,7 +2525,7 @@ Aliases: `ls`
 Pause a job's schedule (manual runs still work)
 
 ```bash
-orchard pause <id>
+orchard job pause <id>
 ```
 
 ### `orchard job resume`
@@ -2533,7 +2533,7 @@ orchard pause <id>
 Resume a paused job's schedule
 
 ```bash
-orchard resume <id>
+orchard job resume <id>
 ```
 
 ### `orchard job run`
@@ -2541,7 +2541,7 @@ orchard resume <id>
 Trigger a job run now
 
 ```bash
-orchard run <id>
+orchard job run <id>
 ```
 
 | Flag | Type | Default | Description |
@@ -2555,7 +2555,7 @@ orchard run <id>
 List a job's run history, newest first
 
 ```bash
-orchard runs <id>
+orchard job runs <id>
 ```
 
 | Flag | Type | Default | Description |
@@ -2569,7 +2569,7 @@ orchard runs <id>
 Manage a job's step pipeline
 
 ```bash
-orchard steps
+orchard job steps
 ```
 
 ### `orchard job steps set`
@@ -2577,7 +2577,7 @@ orchard steps
 Replace a job's entire ordered step list
 
 ```bash
-orchard set <id>
+orchard job steps set <id>
 ```
 
 | Flag | Type | Default | Description |
@@ -2589,7 +2589,7 @@ orchard set <id>
 Update a job's name, schedule, or paused state
 
 ```bash
-orchard update <id>
+orchard job update <id>
 ```
 
 | Flag | Type | Default | Description |
@@ -2617,7 +2617,7 @@ Aliases: `job-runs`
 Cancel an in-progress run (remaining steps are skipped)
 
 ```bash
-orchard cancel <runId>
+orchard job-run cancel <runId>
 ```
 
 ### `orchard job-run get`
@@ -2625,7 +2625,7 @@ orchard cancel <runId>
 Show a run: status, timing, and per-step results
 
 ```bash
-orchard get <runId>
+orchard job-run get <runId>
 ```
 
 | Flag | Type | Default | Description |
@@ -2637,7 +2637,7 @@ orchard get <runId>
 Print step logs (all steps in order, or one with --step)
 
 ```bash
-orchard logs <runId>
+orchard job-run logs <runId>
 ```
 
 | Flag | Type | Default | Description |
@@ -2703,7 +2703,7 @@ Aliases: `members`
 Invite someone to the organization by email
 
 ```bash
-orchard invite <email>
+orchard member invite <email>
 ```
 
 | Flag | Type | Default | Description |
@@ -2715,7 +2715,7 @@ orchard invite <email>
 Manage the organization's pending invitations
 
 ```bash
-orchard invites
+orchard member invites
 ```
 
 Aliases: `invitations`
@@ -2725,7 +2725,7 @@ Aliases: `invitations`
 Cancel a pending invitation
 
 ```bash
-orchard cancel <invitationId>
+orchard member invites cancel <invitationId>
 ```
 
 Aliases: `revoke`, `rm`
@@ -2735,7 +2735,7 @@ Aliases: `revoke`, `rm`
 List pending invitations for the organization
 
 ```bash
-orchard list
+orchard member invites list
 ```
 
 Aliases: `ls`
@@ -2745,7 +2745,7 @@ Aliases: `ls`
 Resend a pending invitation's email
 
 ```bash
-orchard resend <invitationId>
+orchard member invites resend <invitationId>
 ```
 
 ### `orchard member list`
@@ -2753,7 +2753,7 @@ orchard resend <invitationId>
 List members of the organization
 
 ```bash
-orchard list
+orchard member list
 ```
 
 Aliases: `ls`
@@ -2763,7 +2763,7 @@ Aliases: `ls`
 Remove a member from the organization
 
 ```bash
-orchard remove <memberId>
+orchard member remove <memberId>
 ```
 
 Aliases: `rm`
@@ -2773,7 +2773,7 @@ Aliases: `rm`
 Change a member's organization role (owner\|admin\|member\|guest)
 
 ```bash
-orchard set-role <memberId> <role>
+orchard member set-role <memberId> <role>
 ```
 
 ## notify
@@ -2793,7 +2793,7 @@ Aliases: `notification`, `notifications`
 Manage notification channels
 
 ```bash
-orchard channel
+orchard notify channel
 ```
 
 Aliases: `channels`
@@ -2803,7 +2803,7 @@ Aliases: `channels`
 Create a notification channel in the org
 
 ```bash
-orchard create
+orchard notify channel create
 ```
 
 | Flag | Type | Default | Description |
@@ -2820,7 +2820,7 @@ orchard create
 Delete a notification channel and its delivery history
 
 ```bash
-orchard delete <channelId>
+orchard notify channel delete <channelId>
 ```
 
 Aliases: `rm`
@@ -2830,7 +2830,7 @@ Aliases: `rm`
 List the org's notification channels
 
 ```bash
-orchard list
+orchard notify channel list
 ```
 
 Aliases: `ls`
@@ -2840,7 +2840,7 @@ Aliases: `ls`
 Send a test notification through a channel
 
 ```bash
-orchard test <channelId>
+orchard notify channel test <channelId>
 ```
 
 ### `orchard notify channel update`
@@ -2848,7 +2848,7 @@ orchard test <channelId>
 Update a notification channel
 
 ```bash
-orchard update <channelId>
+orchard notify channel update <channelId>
 ```
 
 | Flag | Type | Default | Description |
@@ -2867,7 +2867,7 @@ orchard update <channelId>
 List a channel's recent delivery attempts, newest first
 
 ```bash
-orchard deliveries <channelId>
+orchard notify deliveries <channelId>
 ```
 
 | Flag | Type | Default | Description |
@@ -2891,7 +2891,7 @@ Aliases: `obs`
 Activity feed for a deployment
 
 ```bash
-orchard activity <deploymentId>
+orchard observe activity <deploymentId>
 ```
 
 Aliases: `timeline`
@@ -2908,7 +2908,7 @@ Aliases: `timeline`
 Which observability signals are available for this deployment
 
 ```bash
-orchard capabilities <deploymentId>
+orchard observe capabilities <deploymentId>
 ```
 
 ### `orchard observe errors`
@@ -2916,7 +2916,7 @@ orchard capabilities <deploymentId>
 Grouped error log entries with counts and trends
 
 ```bash
-orchard errors <deploymentId>
+orchard observe errors <deploymentId>
 ```
 
 | Flag | Type | Default | Description |
@@ -2928,7 +2928,7 @@ orchard errors <deploymentId>
 HTTP request rate, error rate and latency for the last hour
 
 ```bash
-orchard http <deploymentId>
+orchard observe http <deploymentId>
 ```
 
 ### `orchard observe logs`
@@ -2936,7 +2936,7 @@ orchard http <deploymentId>
 Structured logs (level detection, multi-line grouping) with filter and follow
 
 ```bash
-orchard logs <deploymentId>
+orchard observe logs <deploymentId>
 ```
 
 | Flag | Type | Default | Description |
@@ -2951,7 +2951,7 @@ orchard logs <deploymentId>
 Stat strip: uptime, pods, restarts, cpu/mem, request rate, errors, latency
 
 ```bash
-orchard overview <deploymentId>
+orchard observe overview <deploymentId>
 ```
 
 ### `orchard observe runtime`
@@ -2959,7 +2959,7 @@ orchard overview <deploymentId>
 Detected language/framework (from build logs, image, env vars or dockerfile)
 
 ```bash
-orchard runtime <deploymentId>
+orchard observe runtime <deploymentId>
 ```
 
 ## open
@@ -2993,7 +2993,7 @@ Aliases: `orgs`, `organization`, `organizations`
 Manage the organization avatar
 
 ```bash
-orchard avatar
+orchard org avatar
 ```
 
 ### `orchard org avatar delete`
@@ -3001,7 +3001,7 @@ orchard avatar
 Remove the organization avatar
 
 ```bash
-orchard delete <slug-or-id>
+orchard org avatar delete <slug-or-id>
 ```
 
 Aliases: `rm`
@@ -3011,7 +3011,7 @@ Aliases: `rm`
 Upload an organization avatar image
 
 ```bash
-orchard set <slug-or-id> <file>
+orchard org avatar set <slug-or-id> <file>
 ```
 
 ### `orchard org backup-settings`
@@ -3019,7 +3019,7 @@ orchard set <slug-or-id> <file>
 Org-wide R2 settings for database backups
 
 ```bash
-orchard backup-settings
+orchard org backup-settings
 ```
 
 Aliases: `backups`
@@ -3029,7 +3029,7 @@ Aliases: `backups`
 Show the scoped organization's backup settings
 
 ```bash
-orchard get
+orchard org backup-settings get
 ```
 
 ### `orchard org backup-settings set`
@@ -3037,7 +3037,7 @@ orchard get
 Update the scoped organization's backup settings
 
 ```bash
-orchard set
+orchard org backup-settings set
 ```
 
 | Flag | Type | Default | Description |
@@ -3053,7 +3053,7 @@ orchard set
 Show an organization (defaults to the current scope)
 
 ```bash
-orchard get [slug-or-id]
+orchard org get [slug-or-id]
 ```
 
 ### `orchard org list`
@@ -3061,7 +3061,7 @@ orchard get [slug-or-id]
 List organizations you belong to
 
 ```bash
-orchard list
+orchard org list
 ```
 
 Aliases: `ls`
@@ -3071,7 +3071,7 @@ Aliases: `ls`
 Manage default registry credentials for the scoped organization
 
 ```bash
-orchard registry
+orchard org registry
 ```
 
 Aliases: `registries`, `pull-secret`
@@ -3081,7 +3081,7 @@ Aliases: `registries`, `pull-secret`
 List organization registry defaults
 
 ```bash
-orchard list
+orchard org registry list
 ```
 
 Aliases: `ls`
@@ -3091,7 +3091,7 @@ Aliases: `ls`
 Remove a registry credential
 
 ```bash
-orchard remove <id>
+orchard org registry remove <id>
 ```
 
 Aliases: `rm`, `delete`
@@ -3101,7 +3101,7 @@ Aliases: `rm`, `delete`
 Add or replace the credential for a registry (ghcr.io, docker.io, registry.gitlab.com, ...)
 
 ```bash
-orchard set <registry>
+orchard org registry set <registry>
 ```
 
 | Flag | Type | Default | Description |
@@ -3115,7 +3115,7 @@ orchard set <registry>
 Update an organization
 
 ```bash
-orchard update <slug-or-id>
+orchard org update <slug-or-id>
 ```
 
 | Flag | Type | Default | Description |
@@ -3156,7 +3156,7 @@ Aliases: `pods`
 Delete a pod (its controller will replace it)
 
 ```bash
-orchard delete <name>
+orchard pod delete <name>
 ```
 
 Aliases: `rm`
@@ -3170,7 +3170,7 @@ Aliases: `rm`
 Run a one-shot command in a pod (like kubectl exec)
 
 ```bash
-orchard exec <name> -- <cmd...>
+orchard pod exec <name> -- <cmd...>
 ```
 
 | Flag | Type | Default | Description |
@@ -3183,7 +3183,7 @@ orchard exec <name> -- <cmd...>
 Show a pod's status, containers, and node
 
 ```bash
-orchard get <name>
+orchard pod get <name>
 ```
 
 | Flag | Type | Default | Description |
@@ -3195,7 +3195,7 @@ orchard get <name>
 List pods in a namespace
 
 ```bash
-orchard list
+orchard pod list
 ```
 
 Aliases: `ls`
@@ -3209,7 +3209,7 @@ Aliases: `ls`
 Fetch runtime logs from a pod
 
 ```bash
-orchard logs <name>
+orchard pod logs <name>
 ```
 
 | Flag | Type | Default | Description |
@@ -3225,7 +3225,7 @@ orchard logs <name>
 Open an interactive shell in a pod
 
 ```bash
-orchard shell <name>
+orchard pod shell <name>
 ```
 
 | Flag | Type | Default | Description |
@@ -3250,7 +3250,7 @@ Aliases: `projects`, `proj`
 Manage the project background image
 
 ```bash
-orchard background
+orchard project background
 ```
 
 ### `orchard project background set`
@@ -3258,7 +3258,7 @@ orchard background
 Upload a background image for the scoped project (jpeg/png/webp, max 8MB)
 
 ```bash
-orchard set <file>
+orchard project background set <file>
 ```
 
 ### `orchard project create`
@@ -3266,7 +3266,7 @@ orchard set <file>
 Create a project in the scoped organization
 
 ```bash
-orchard create
+orchard project create
 ```
 
 | Flag | Type | Default | Description |
@@ -3280,7 +3280,7 @@ orchard create
 Delete a project and everything in it
 
 ```bash
-orchard delete <project>
+orchard project delete <project>
 ```
 
 Aliases: `rm`
@@ -3290,7 +3290,7 @@ Aliases: `rm`
 Show a project
 
 ```bash
-orchard get <project>
+orchard project get <project>
 ```
 
 ### `orchard project icon`
@@ -3298,7 +3298,7 @@ orchard get <project>
 Manage the project icon
 
 ```bash
-orchard icon
+orchard project icon
 ```
 
 ### `orchard project icon set`
@@ -3306,7 +3306,7 @@ orchard icon
 Upload a project icon (jpeg/png/gif/webp, max 2MB)
 
 ```bash
-orchard set <project> <file>
+orchard project icon set <project> <file>
 ```
 
 ### `orchard project invitation`
@@ -3314,7 +3314,7 @@ orchard set <project> <file>
 Manage pending invitations for the scoped project
 
 ```bash
-orchard invitation
+orchard project invitation
 ```
 
 Aliases: `invitations`, `invite`
@@ -3324,7 +3324,7 @@ Aliases: `invitations`, `invite`
 Revoke a pending project invitation
 
 ```bash
-orchard revoke <invitationId>
+orchard project invitation revoke <invitationId>
 ```
 
 ### `orchard project list`
@@ -3332,7 +3332,7 @@ orchard revoke <invitationId>
 List projects (all orgs, or the scoped one)
 
 ```bash
-orchard list
+orchard project list
 ```
 
 Aliases: `ls`
@@ -3342,7 +3342,7 @@ Aliases: `ls`
 Manage members of the scoped project
 
 ```bash
-orchard member
+orchard project member
 ```
 
 Aliases: `members`
@@ -3352,7 +3352,7 @@ Aliases: `members`
 Add an org member to the project (emails without an account get an invitation)
 
 ```bash
-orchard add <email>
+orchard project member add <email>
 ```
 
 | Flag | Type | Default | Description |
@@ -3364,7 +3364,7 @@ orchard add <email>
 List project members
 
 ```bash
-orchard list
+orchard project member list
 ```
 
 Aliases: `ls`
@@ -3374,7 +3374,7 @@ Aliases: `ls`
 Remove a member from the project
 
 ```bash
-orchard remove <memberId>
+orchard project member remove <memberId>
 ```
 
 Aliases: `rm`
@@ -3384,7 +3384,7 @@ Aliases: `rm`
 Change a member's project role (admin\|member\|viewer)
 
 ```bash
-orchard set-role <memberId> <role>
+orchard project member set-role <memberId> <role>
 ```
 
 ### `orchard project registry`
@@ -3392,7 +3392,7 @@ orchard set-role <memberId> <role>
 Manage credentials for pulling private images into the scoped project
 
 ```bash
-orchard registry
+orchard project registry
 ```
 
 Aliases: `registries`, `pull-secret`
@@ -3402,7 +3402,7 @@ Aliases: `registries`, `pull-secret`
 List the registries this project can pull private images from
 
 ```bash
-orchard list
+orchard project registry list
 ```
 
 Aliases: `ls`
@@ -3412,7 +3412,7 @@ Aliases: `ls`
 Remove a registry credential
 
 ```bash
-orchard remove <id>
+orchard project registry remove <id>
 ```
 
 Aliases: `rm`, `delete`
@@ -3422,7 +3422,7 @@ Aliases: `rm`, `delete`
 Add or replace the credential for a registry (ghcr.io, docker.io, registry.gitlab.com, ...)
 
 ```bash
-orchard set <registry>
+orchard project registry set <registry>
 ```
 
 | Flag | Type | Default | Description |
@@ -3436,7 +3436,7 @@ orchard set <registry>
 Pull live cluster state for the project's namespace into Orchard
 
 ```bash
-orchard sync <project>
+orchard project sync <project>
 ```
 
 ### `orchard project transfer`
@@ -3444,7 +3444,7 @@ orchard sync <project>
 Transfer ownership of a project to another member
 
 ```bash
-orchard transfer
+orchard project transfer
 ```
 
 ### `orchard project transfer accept`
@@ -3452,7 +3452,7 @@ orchard transfer
 Accept ownership of a project offered to you
 
 ```bash
-orchard accept <requestId>
+orchard project transfer accept <requestId>
 ```
 
 ### `orchard project transfer cancel`
@@ -3460,7 +3460,7 @@ orchard accept <requestId>
 Withdraw the scoped project's pending ownership transfer
 
 ```bash
-orchard cancel
+orchard project transfer cancel
 ```
 
 ### `orchard project transfer decline`
@@ -3468,7 +3468,7 @@ orchard cancel
 Decline ownership of a project offered to you
 
 ```bash
-orchard decline <requestId>
+orchard project transfer decline <requestId>
 ```
 
 ### `orchard project transfer list`
@@ -3476,7 +3476,7 @@ orchard decline <requestId>
 List ownership transfers waiting on you
 
 ```bash
-orchard list
+orchard project transfer list
 ```
 
 Aliases: `ls`
@@ -3486,7 +3486,7 @@ Aliases: `ls`
 Ask another project member to take ownership of the scoped project
 
 ```bash
-orchard request <email|userId>
+orchard project transfer request <email|userId>
 ```
 
 ### `orchard project update`
@@ -3494,7 +3494,7 @@ orchard request <email|userId>
 Update project fields
 
 ```bash
-orchard update <project>
+orchard project update <project>
 ```
 
 | Flag | Type | Default | Description |
@@ -3522,7 +3522,7 @@ Aliases: `quotas`
 Show your own allowance, usage, and headroom in the org
 
 ```bash
-orchard me
+orchard quota me
 ```
 
 ### `orchard quota members`
@@ -3530,7 +3530,7 @@ orchard me
 Show per-member allowances and usage (org admins)
 
 ```bash
-orchard members
+orchard quota members
 ```
 
 ### `orchard quota projects`
@@ -3538,7 +3538,7 @@ orchard members
 Show per-project caps and usage (org admins)
 
 ```bash
-orchard projects
+orchard quota projects
 ```
 
 ### `orchard quota show`
@@ -3546,7 +3546,7 @@ orchard projects
 Show org-wide usage against its caps
 
 ```bash
-orchard show
+orchard quota show
 ```
 
 ## sandbox
@@ -3566,7 +3566,7 @@ Aliases: `sb`
 Send a message to the claude agent in a sandbox
 
 ```bash
-orchard chat <name> [message...]
+orchard sandbox chat <name> [message...]
 ```
 
 | Flag | Type | Default | Description |
@@ -3578,7 +3578,7 @@ orchard chat <name> [message...]
 List and manage Cloud Code conversations in a sandbox
 
 ```bash
-orchard conversations <sandbox>
+orchard sandbox conversations <sandbox>
 ```
 
 Aliases: `convos`
@@ -3595,7 +3595,7 @@ Aliases: `convos`
 Create a cloud dev sandbox
 
 ```bash
-orchard create [name]
+orchard sandbox create [name]
 ```
 
 | Flag | Type | Default | Description |
@@ -3612,7 +3612,7 @@ orchard create [name]
 Manage agent tokens injected into your sandboxes
 
 ```bash
-orchard credentials
+orchard sandbox credentials
 ```
 
 ### `orchard sandbox credentials clear`
@@ -3620,7 +3620,7 @@ orchard credentials
 Remove stored sandbox agent tokens
 
 ```bash
-orchard clear
+orchard sandbox credentials clear
 ```
 
 | Flag | Type | Default | Description |
@@ -3633,7 +3633,7 @@ orchard clear
 Store agent tokens (claude code / openai) for your sandboxes
 
 ```bash
-orchard set
+orchard sandbox credentials set
 ```
 
 | Flag | Type | Default | Description |
@@ -3646,7 +3646,7 @@ orchard set
 Show which sandbox agent tokens are configured (never the values)
 
 ```bash
-orchard status
+orchard sandbox credentials status
 ```
 
 ### `orchard sandbox delete`
@@ -3654,7 +3654,7 @@ orchard status
 Delete a sandbox and its home volume
 
 ```bash
-orchard delete <name>
+orchard sandbox delete <name>
 ```
 
 Aliases: `rm`
@@ -3664,7 +3664,7 @@ Aliases: `rm`
 Show git changes inside the sandbox workspace
 
 ```bash
-orchard diff <name>
+orchard sandbox diff <name>
 ```
 
 | Flag | Type | Default | Description |
@@ -3677,7 +3677,7 @@ orchard diff <name>
 Fork a machine you own into a new one with the same disk and sessions
 
 ```bash
-orchard fork <sandbox>
+orchard sandbox fork <sandbox>
 ```
 
 | Flag | Type | Default | Description |
@@ -3691,7 +3691,7 @@ orchard fork <sandbox>
 Show a sandbox
 
 ```bash
-orchard get <name>
+orchard sandbox get <name>
 ```
 
 ### `orchard sandbox link`
@@ -3699,7 +3699,7 @@ orchard get <name>
 Attach Orchard projects so their env vars land in the sandbox
 
 ```bash
-orchard link
+orchard sandbox link
 ```
 
 Aliases: `links`
@@ -3709,7 +3709,7 @@ Aliases: `links`
 Attach a project environment to a sandbox (host only); --env picks the environment
 
 ```bash
-orchard add <sandbox> <project>
+orchard sandbox link add <sandbox> <project>
 ```
 
 ### `orchard sandbox link list`
@@ -3717,7 +3717,7 @@ orchard add <sandbox> <project>
 List projects attached to a sandbox
 
 ```bash
-orchard list <sandbox>
+orchard sandbox link list <sandbox>
 ```
 
 Aliases: `ls`
@@ -3727,7 +3727,7 @@ Aliases: `ls`
 Detach a project from a sandbox (host only)
 
 ```bash
-orchard remove <sandbox> <project>
+orchard sandbox link remove <sandbox> <project>
 ```
 
 Aliases: `rm`
@@ -3737,7 +3737,7 @@ Aliases: `rm`
 List your sandboxes
 
 ```bash
-orchard list
+orchard sandbox list
 ```
 
 Aliases: `ls`
@@ -3747,7 +3747,7 @@ Aliases: `ls`
 Manage git repositories inside a sandbox
 
 ```bash
-orchard repo
+orchard sandbox repo
 ```
 
 ### `orchard sandbox repo add`
@@ -3755,7 +3755,7 @@ orchard repo
 Clone another repository into a sandbox
 
 ```bash
-orchard add <sandbox> <repo-url>
+orchard sandbox repo add <sandbox> <repo-url>
 ```
 
 ### `orchard sandbox repo icon`
@@ -3763,7 +3763,7 @@ orchard add <sandbox> <repo-url>
 Set the icon a repository shows in Greenhouse
 
 ```bash
-orchard icon <sandbox> <repo> [icon]
+orchard sandbox repo icon <sandbox> <repo> [icon]
 ```
 
 | Flag | Type | Default | Description |
@@ -3775,7 +3775,7 @@ orchard icon <sandbox> <repo> [icon]
 List repositories cloned into a sandbox
 
 ```bash
-orchard list <sandbox>
+orchard sandbox repo list <sandbox>
 ```
 
 Aliases: `ls`
@@ -3785,7 +3785,7 @@ Aliases: `ls`
 Retry a sandbox's failed cluster or Vercel changes
 
 ```bash
-orchard retry <name>
+orchard sandbox retry <name>
 ```
 
 ### `orchard sandbox session`
@@ -3793,7 +3793,7 @@ orchard retry <name>
 Manage worktree agent sessions inside a sandbox
 
 ```bash
-orchard session
+orchard sandbox session
 ```
 
 Aliases: `sessions`
@@ -3803,7 +3803,7 @@ Aliases: `sessions`
 Archive a session (removes the worktree, keeps the branch)
 
 ```bash
-orchard archive <sandbox> <session>
+orchard sandbox session archive <sandbox> <session>
 ```
 
 | Flag | Type | Default | Description |
@@ -3815,7 +3815,7 @@ orchard archive <sandbox> <session>
 Start a session on a fresh git worktree (branch orchard/&lt;slug&gt;)
 
 ```bash
-orchard create <sandbox> <repo>
+orchard sandbox session create <sandbox> <repo>
 ```
 
 | Flag | Type | Default | Description |
@@ -3830,7 +3830,7 @@ orchard create <sandbox> <repo>
 List sessions with their branch, diffstat and PR
 
 ```bash
-orchard list <sandbox>
+orchard sandbox session list <sandbox>
 ```
 
 Aliases: `ls`
@@ -3844,7 +3844,7 @@ Aliases: `ls`
 Deploy a session branch as a gh-&lt;slug&gt; preview environment (host only)
 
 ```bash
-orchard preview <sandbox> <session>
+orchard sandbox session preview <sandbox> <session>
 ```
 
 | Flag | Type | Default | Description |
@@ -3857,7 +3857,7 @@ orchard preview <sandbox> <session>
 Send a prompt to a session's agent as yourself (reads stdin with - or no text)
 
 ```bash
-orchard prompt <sandbox> <session> [text|-]
+orchard sandbox session prompt <sandbox> <session> [text|-]
 ```
 
 ### `orchard sandbox session transcript`
@@ -3865,7 +3865,7 @@ orchard prompt <sandbox> <session> [text|-]
 Print the latest messages of a session's agent chat
 
 ```bash
-orchard transcript <sandbox> <session>
+orchard sandbox session transcript <sandbox> <session>
 ```
 
 | Flag | Type | Default | Description |
@@ -3877,7 +3877,7 @@ orchard transcript <sandbox> <session>
 Read-only share links for org teammates (transcript and diff only)
 
 ```bash
-orchard share
+orchard sandbox share
 ```
 
 ### `orchard sandbox share create`
@@ -3885,7 +3885,7 @@ orchard share
 Create a share link (the token is shown once)
 
 ```bash
-orchard create <sandbox>
+orchard sandbox share create <sandbox>
 ```
 
 | Flag | Type | Default | Description |
@@ -3898,7 +3898,7 @@ orchard create <sandbox>
 List share links and whether they are active, expired or revoked
 
 ```bash
-orchard list <sandbox>
+orchard sandbox share list <sandbox>
 ```
 
 Aliases: `ls`
@@ -3908,7 +3908,7 @@ Aliases: `ls`
 Revoke a share link; viewers lose access on their next request
 
 ```bash
-orchard revoke <sandbox> <link-id>
+orchard sandbox share revoke <sandbox> <link-id>
 ```
 
 ### `orchard sandbox ssh`
@@ -3916,7 +3916,7 @@ orchard revoke <sandbox> <link-id>
 SSH into a sandbox through the orchard tunnel
 
 ```bash
-orchard ssh <name> [-- ssh-args...]
+orchard sandbox ssh <name> [-- ssh-args...]
 ```
 
 | Flag | Type | Default | Description |
@@ -3929,7 +3929,7 @@ orchard ssh <name> [-- ssh-args...]
 Print ssh config Host blocks, or --install a wildcard orchard-* entry into ~/.ssh/config
 
 ```bash
-orchard ssh-config [name]
+orchard sandbox ssh-config [name]
 ```
 
 | Flag | Type | Default | Description |
@@ -3941,7 +3941,7 @@ orchard ssh-config [name]
 Start a stopped sandbox
 
 ```bash
-orchard start <name>
+orchard sandbox start <name>
 ```
 
 | Flag | Type | Default | Description |
@@ -3954,7 +3954,7 @@ orchard start <name>
 Stop a sandbox (its home volume is kept)
 
 ```bash
-orchard stop <name>
+orchard sandbox stop <name>
 ```
 
 | Flag | Type | Default | Description |
@@ -3967,7 +3967,7 @@ orchard stop <name>
 Rename a sandbox or switch its ssh identity
 
 ```bash
-orchard update <name>
+orchard sandbox update <name>
 ```
 
 | Flag | Type | Default | Description |
@@ -3982,7 +3982,7 @@ orchard update <name>
 Show a machine's CPU, memory, disk and time limits
 
 ```bash
-orchard usage <sandbox>
+orchard sandbox usage <sandbox>
 ```
 
 ## service
@@ -4002,7 +4002,7 @@ Aliases: `services`, `svc`
 Create a service exposing a port on a deployment
 
 ```bash
-orchard create
+orchard service create
 ```
 
 | Flag | Type | Default | Description |
@@ -4021,7 +4021,7 @@ orchard create
 Delete a service from a deployment
 
 ```bash
-orchard delete <service-id>
+orchard service delete <service-id>
 ```
 
 Aliases: `rm`
@@ -4035,7 +4035,7 @@ Aliases: `rm`
 Manage service exposure
 
 ```bash
-orchard exposure
+orchard service exposure
 ```
 
 ### `orchard service exposure set`
@@ -4043,7 +4043,7 @@ orchard exposure
 Switch a service between public (NodePort/LoadBalancer) and internal (ClusterIP)
 
 ```bash
-orchard set <service-id> <public|internal>
+orchard service exposure set <service-id> <public|internal>
 ```
 
 | Flag | Type | Default | Description |
@@ -4055,7 +4055,7 @@ orchard set <service-id> <public|internal>
 List services for a deployment
 
 ```bash
-orchard list
+orchard service list
 ```
 
 Aliases: `ls`
@@ -4069,7 +4069,7 @@ Aliases: `ls`
 Manage individual service ports
 
 ```bash
-orchard port
+orchard service port
 ```
 
 ### `orchard service port public`
@@ -4077,7 +4077,7 @@ orchard port
 Toggle public exposure of a single service port
 
 ```bash
-orchard public
+orchard service port public
 ```
 
 ### `orchard service port public disable`
@@ -4085,7 +4085,7 @@ orchard public
 Stop exposing a single service port publicly
 
 ```bash
-orchard disable <service-id> <port-id>
+orchard service port public disable <service-id> <port-id>
 ```
 
 | Flag | Type | Default | Description |
@@ -4097,7 +4097,7 @@ orchard disable <service-id> <port-id>
 Expose a single service port publicly
 
 ```bash
-orchard enable <service-id> <port-id>
+orchard service port public enable <service-id> <port-id>
 ```
 
 | Flag | Type | Default | Description |
@@ -4109,7 +4109,7 @@ orchard enable <service-id> <port-id>
 Update a service's ports or domain
 
 ```bash
-orchard update <service-id>
+orchard service update <service-id>
 ```
 
 | Flag | Type | Default | Description |
@@ -4138,7 +4138,7 @@ Aliases: `ssh-key`, `identity`
 Register an ssh public key as a named identity
 
 ```bash
-orchard add <name>
+orchard ssh-identity add <name>
 ```
 
 | Flag | Type | Default | Description |
@@ -4150,7 +4150,7 @@ orchard add <name>
 Import your public ssh keys from GitHub as identities
 
 ```bash
-orchard import-github
+orchard ssh-identity import-github
 ```
 
 ### `orchard ssh-identity list`
@@ -4158,7 +4158,7 @@ orchard import-github
 List your ssh identities
 
 ```bash
-orchard list
+orchard ssh-identity list
 ```
 
 Aliases: `ls`
@@ -4168,7 +4168,7 @@ Aliases: `ls`
 Delete an ssh identity
 
 ```bash
-orchard remove <name>
+orchard ssh-identity remove <name>
 ```
 
 Aliases: `rm`
@@ -4190,7 +4190,7 @@ Aliases: `status-pages`, `statuspage`
 Create a page: --title 'Acme status' --slug acme --component deployment:&lt;id&gt;
 
 ```bash
-orchard create
+orchard status-page create
 ```
 
 | Flag | Type | Default | Description |
@@ -4207,7 +4207,7 @@ orchard create
 Delete a page and its host
 
 ```bash
-orchard delete <pageId>
+orchard status-page delete <pageId>
 ```
 
 Aliases: `rm`
@@ -4217,7 +4217,7 @@ Aliases: `rm`
 List the org's status pages
 
 ```bash
-orchard list
+orchard status-page list
 ```
 
 Aliases: `ls`
@@ -4227,7 +4227,7 @@ Aliases: `ls`
 Apps and databases a page can list
 
 ```bash
-orchard options
+orchard status-page options
 ```
 
 ### `orchard status-page show`
@@ -4235,7 +4235,7 @@ orchard options
 Read a public status page the way a visitor does
 
 ```bash
-orchard show [slug]
+orchard status-page show [slug]
 ```
 
 | Flag | Type | Default | Description |
@@ -4247,7 +4247,7 @@ orchard show [slug]
 Change a page's title, slug, host, visibility or components
 
 ```bash
-orchard update <pageId>
+orchard status-page update <pageId>
 ```
 
 | Flag | Type | Default | Description |
@@ -4278,7 +4278,7 @@ Aliases: `ts`
 Expose a deployment on your tailnet via a sidecar
 
 ```bash
-orchard expose <deploymentId>
+orchard tailscale expose <deploymentId>
 ```
 
 ### `orchard tailscale get`
@@ -4286,7 +4286,7 @@ orchard expose <deploymentId>
 Show a deployment's Tailscale exposure
 
 ```bash
-orchard get <deploymentId>
+orchard tailscale get <deploymentId>
 ```
 
 ### `orchard tailscale link`
@@ -4294,7 +4294,7 @@ orchard get <deploymentId>
 Link your Tailscale account with an auth key
 
 ```bash
-orchard link
+orchard tailscale link
 ```
 
 | Flag | Type | Default | Description |
@@ -4306,7 +4306,7 @@ orchard link
 Show whether a Tailscale account is linked
 
 ```bash
-orchard status
+orchard tailscale status
 ```
 
 ### `orchard tailscale unexpose`
@@ -4314,7 +4314,7 @@ orchard status
 Remove a deployment's Tailscale exposure
 
 ```bash
-orchard unexpose <deploymentId>
+orchard tailscale unexpose <deploymentId>
 ```
 
 ### `orchard tailscale unlink`
@@ -4322,7 +4322,7 @@ orchard unexpose <deploymentId>
 Unlink your Tailscale account
 
 ```bash
-orchard unlink
+orchard tailscale unlink
 ```
 
 ## template
@@ -4342,7 +4342,7 @@ Aliases: `templates`, `tpl`
 Create a template from a YAML definition file
 
 ```bash
-orchard create
+orchard template admin create
 ```
 
 | Flag | Type | Default | Description |
@@ -4354,7 +4354,7 @@ orchard create
 Delete a template (fails while instances of it exist)
 
 ```bash
-orchard delete <id>
+orchard template admin delete <id>
 ```
 
 Aliases: `rm`
@@ -4364,7 +4364,7 @@ Aliases: `rm`
 Replace a template's YAML definition (built-ins cannot be updated)
 
 ```bash
-orchard update <id>
+orchard template admin update <id>
 ```
 
 | Flag | Type | Default | Description |
@@ -4376,7 +4376,7 @@ orchard update <id>
 Deploy a template into the current project
 
 ```bash
-orchard deploy <templateId>
+orchard template deploy <templateId>
 ```
 
 | Flag | Type | Default | Description |
@@ -4390,7 +4390,7 @@ orchard deploy <templateId>
 Show a template with its parameters and resources
 
 ```bash
-orchard get <id>
+orchard template get <id>
 ```
 
 ### `orchard template instance`
@@ -4398,7 +4398,7 @@ orchard get <id>
 Manage deployed template instances
 
 ```bash
-orchard instance
+orchard template instance
 ```
 
 Aliases: `instances`
@@ -4408,7 +4408,7 @@ Aliases: `instances`
 Delete a template instance and every resource it created
 
 ```bash
-orchard delete <id>
+orchard template instance delete <id>
 ```
 
 Aliases: `rm`
@@ -4418,7 +4418,7 @@ Aliases: `rm`
 Show a template instance and the resources it created
 
 ```bash
-orchard get <id>
+orchard template instance get <id>
 ```
 
 ### `orchard template instance list`
@@ -4426,7 +4426,7 @@ orchard get <id>
 List template instances in the current project
 
 ```bash
-orchard list
+orchard template instance list
 ```
 
 Aliases: `ls`
@@ -4436,7 +4436,7 @@ Aliases: `ls`
 List available templates
 
 ```bash
-orchard list
+orchard template list
 ```
 
 Aliases: `ls`
@@ -4528,7 +4528,7 @@ orchard user
 Manage your avatar image
 
 ```bash
-orchard avatar
+orchard user avatar
 ```
 
 ### `orchard user avatar delete`
@@ -4536,7 +4536,7 @@ orchard avatar
 Remove your avatar
 
 ```bash
-orchard delete
+orchard user avatar delete
 ```
 
 Aliases: `rm`
@@ -4546,7 +4546,7 @@ Aliases: `rm`
 Upload an avatar image (jpeg/png/gif/webp, max 5MB)
 
 ```bash
-orchard set <file>
+orchard user avatar set <file>
 ```
 
 ### `orchard user profile`
@@ -4554,7 +4554,7 @@ orchard set <file>
 Show your profile
 
 ```bash
-orchard profile
+orchard user profile
 ```
 
 ### `orchard user profile update`
@@ -4562,7 +4562,7 @@ orchard profile
 Update your profile (only flagged fields change)
 
 ```bash
-orchard update
+orchard user profile update
 ```
 
 | Flag | Type | Default | Description |
@@ -4598,7 +4598,7 @@ Aliases: `webhooks`
 Trigger a deployment via a webhook token (no login required)
 
 ```bash
-orchard deploy <token>
+orchard webhook deploy <token>
 ```
 
 | Flag | Type | Default | Description |

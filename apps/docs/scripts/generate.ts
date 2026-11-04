@@ -270,7 +270,7 @@ override the saved context. **${visible.length} commands** are available.
     for (const c of cmds) {
       body += `### \`orchard ${c.name}\`\n\n`;
       if (c.short) body += `${esc(c.short)}\n\n`;
-      body += `${fence('bash', 'orchard ' + c.use)}\n\n`;
+      body += `${fence('bash', ['orchard', c.name, ...c.use.split(' ').slice(1)].join(' '))}\n\n`;
       if (c.aliases?.length) body += `Aliases: ${c.aliases.map((a) => `\`${a}\``).join(', ')}\n\n`;
 
       const own = c.flags?.filter((f) => !f.persistent) ?? [];
