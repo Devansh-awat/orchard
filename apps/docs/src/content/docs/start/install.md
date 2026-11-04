@@ -22,6 +22,7 @@ The installer creates a single-node k3s cluster. It then installs Traefik, Cloud
 ### Prerequisites
 
 - A physical machine or a virtual machine (VM) with an amd64 or arm64 CPU. The installer refuses other architectures.
+- An IPv4 address. IPv6-only servers are not supported yet. For more information, refer to [The installer stops on an IPv6-only server](/operate/troubleshooting/#the-installer-stops-on-an-ipv6-only-server).
 - Root access.
 - At least 4 GiB of RAM and 20 GB of free disk. Orchard recommends 8 GiB of RAM and 60 GB of disk.
 - For `public` mode, ports 80 and 443 free and reachable from the internet. A domain is optional. To try Orchard without one, refer to [Try Orchard without a domain](#try-orchard-without-a-domain).
@@ -144,7 +145,7 @@ These cases need more than a new record:
 | Split-horizon DNS, or an entry in `/etc/hosts` | Both the answer on this machine and the public answer | Create the public record. Let's Encrypt only uses public DNS. |
 | A private address in public DNS | `wrong value`, and the address | Point the record at the public address, or use `lan` mode. |
 | Ports 80 or 443 blocked by a provider firewall | A warning that names the firewall to open | Allow both ports. A test from the machine can only find this behind 1:1 NAT. On a machine that has the public address itself, the summary reports it when Let's Encrypt fails. |
-| Machine with an IPv6 address only | `AAAA` records instead of `A` records | GitHub and its container registry have no IPv6, and this installer sets up k3s with IPv4 inside the cluster. You need NAT64, and Orchard has not tested this setup. |
+| Machine with both IPv4 and IPv6 addresses | A note not to add `AAAA` records | Create `A` records only. Orchard listens on IPv4 only. |
 | CAA records that exclude Let's Encrypt | A warning with the record to add | Add `0 issue "letsencrypt.org"` to the zone. |
 
 For `tunnel` mode, the installer prints the hostnames to add to your tunnel:

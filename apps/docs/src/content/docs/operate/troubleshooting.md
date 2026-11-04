@@ -174,6 +174,18 @@ kubectl get challenges -A
 
 ## Control plane
 
+### The installer stops on an IPv6-only server
+
+```txt
+IPv6-only servers are not supported yet. This server has no IPv4 address.
+```
+
+**Cause:** The server has no IPv4 address. GitHub and `ghcr.io` have no IPv6 addresses, so the server cannot download k3s or the Orchard images, and Orchard cannot clone or build from GitHub. k3s runs with IPv4 inside the cluster, and Orchard listens on IPv4 only, so traffic to the IPv6 address does not reach it.
+
+**Fix:** Use a server with an IPv4 address. A server with both IPv4 and IPv6 addresses works.
+
+To try anyway, add `--allow-ipv6-only` when you run the installer. `--yes` does not imply this flag. NAT64 in front of an IPv4 server is unsupported, and Orchard has not tested it.
+
 ### The dashboard returns a 404 at a name that resolves to the host
 
 **Cause:** Traefik routes by `Host` header and does not know the name.
