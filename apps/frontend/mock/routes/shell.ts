@@ -277,7 +277,7 @@ export function shellRoutes(r: Router, { store, hub, log }: MockContext) {
 					title: 'Storage',
 					value: 'On this server',
 					state: skippedOr('storage'),
-					detail: 'If the server is lost, the backups are lost.',
+					detail: 'If you lose the server, you lose the backups.',
 					href: '/admin/instance'
 				},
 				{

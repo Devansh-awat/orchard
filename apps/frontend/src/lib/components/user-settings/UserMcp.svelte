@@ -167,7 +167,7 @@
 				This instance has no MCP endpoint yet. An instance admin turns it on with
 				<code>mcp.ingress.host</code> in the chart values, or on the server:
 			</p>
-			<CommandSnippet command="sudo orchardctl mcp enable" />
+			<CommandSnippet command="sudo orchardctl mcp enable" wrap />
 		</div>
 	{/if}
 </SectionCard>
@@ -195,11 +195,11 @@
 						Run this, then <code>/mcp</code> inside Claude Code to sign in. Or add
 						<code>.mcp.json</code> to your project.
 					</p>
-					<CommandSnippet command={`claude mcp add --transport http orchard '${serverUrl}'`} />
+					<CommandSnippet command={`claude mcp add --transport http orchard '${serverUrl}'`} wrap />
 					<CodeBlock code={claudeCodeConfig} title=".mcp.json" />
 				{:else if client === 'amp'}
 					<p class="step">Run this, then sign in when Amp asks.</p>
-					<CommandSnippet command={`amp mcp add orchard '${serverUrl}'`} />
+					<CommandSnippet command={`amp mcp add orchard '${serverUrl}'`} wrap />
 				{:else if client === 'vscode'}
 					<p class="step">
 						Run MCP: Add Server from the Command Palette <Kbd keys={['⇧', '⌘', 'P']} />, or add
