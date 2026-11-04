@@ -1,0 +1,106 @@
+---
+title: Deploy from GitLab, Gitea and others
+description: Link GitLab, Gitea, Forgejo, Codeberg, Bitbucket Cloud, or another Git host to your Orchard account, then deploy an app from it with auto-deploy on push.
+sidebar:
+  order: 2
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+To deploy from a Git host other than the [GitHub App](/deploy/github/), link a Git provider to your account. Orchard supports GitLab, Gitea, Forgejo, Codeberg, Bitbucket Cloud, GitHub with a token, and any Git host that serves HTTPS.
+
+A provider belongs to you. Orchard lists only the repositories your token can see.
+
+## Link a provider
+
+To link a provider, sign in with OAuth or add a token. OAuth is available for GitLab and Bitbucket when an instance admin registers an OAuth app under **Instance admin** > **Configuration**. Orchard refreshes OAuth tokens for you.
+
+<Tabs syncKey="dashPlusCli">
+<TabItem label="Dashboard">
+
+1. Open your account menu and select **Account settings**.
+2. Go to **GitHub and Tailscale**.
+3. In **Git providers**, take one of these steps:
+   - If your instance has OAuth configured, select **Add provider**, then **Sign in with GitLab** or **Sign in with Bitbucket**.
+   - Otherwise, select **Add with a token**.
+4. If you add a token, enter the **Provider**, **Name**, **Host**, and **Token**.
+5. Select **Connect**.
+
+</TabItem>
+<TabItem label="CLI">
+
+```sh
+orchard git add --provider gitlab --name work --token glpat-...
+```
+
+The `--provider` flag accepts `github`, `gitlab`, `gitea`, `bitbucket`, or `generic`. For a self-hosted instance, add `--url`.
+
+</TabItem>
+</Tabs>
+
+Orchard stores the token encrypted and checks it once before it saves.
+
+| Provider | Token | Scopes |
+| --- | --- | --- |
+| GitLab | Personal or project access token | `read_api`, `read_repository` |
+| Gitea, Forgejo, Codeberg | Access token | Repository read |
+| Bitbucket Cloud | App password, with your username | Repository read |
+| GitHub with a token | Fine-grained token | Contents read |
+| Any Git host | The password used to clone over HTTPS | None |
+
+## Create an app
+
+<Tabs syncKey="dashPlusCli">
+<TabItem label="Dashboard">
+
+1. Open a project and select **New app**.
+2. In **Start from scratch**, select **GitHub repo**.
+3. In **Source**, select **Git**.
+4. In **Repository**, select the provider, then select a repository or enter its URL.
+5. In **Branch**, select a branch.
+6. Complete the rest of the form and select **Deploy**.
+
+Orchard detects Dockerfiles, frameworks, ports, and a [`score.yaml`](/deploy/score/) file the same way it does for GitHub.
+
+</TabItem>
+<TabItem label="CLI">
+
+```sh
+orchard deploy create --git work --repo https://gitlab.com/group/app#main --name web
+```
+
+</TabItem>
+</Tabs>
+
+## Turn on auto-deploy
+
+When you turn on auto-deploy, Orchard registers a push webhook on the repository through the provider's API. Orchard signs the webhook with a secret that belongs to that provider. A push then builds the app and applies its [watch paths](/deploy/github/#limit-builds-to-certain-paths).
+
+1. Open the app and go to **Settings** > **Deploy behavior**.
+2. In **Auto-deploy**, enter the branch and turn on **Deploy on push**.
+
+**Webhook** shows **Registered** when the webhook is in place.
+
+A plain Git host has no API for Orchard to call. For those hosts, the page shows the webhook URL and secret. Paste them into the webhook settings of the repository. To print the same values from the CLI, run `orchard git webhook <name>`.
+
+## Permissions
+
+Only the person who linked a provider can:
+
+- List its repositories and branches.
+- Run detection on it.
+- Create an app from it.
+- Change which repository an app builds from. The new repository must be on the same host.
+
+After an app exists, project membership controls access. Project members can rebuild the app, read its logs, and turn auto-deploy on or off. Builds clone with the token of the person who linked the provider.
+
+## Replace a provider when someone leaves
+
+An app keeps the provider it was created from. If the person who linked the provider leaves or removes it, builds from that provider fail with an error. Orchard does not let you remove a provider that still has apps.
+
+To restore builds, another member creates the app again from their own provider.
+
+## Related resources
+
+- [Deploy from GitHub](/deploy/github/)
+- [Builds](/deploy/builds/)

@@ -1,0 +1,103 @@
+---
+title: Domains and HTTPS
+description: Use the generated HTTPS URL for an Orchard app, add a custom domain, configure DNS, and redirect a domain.
+sidebar:
+  order: 4
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+Each app can have a generated URL on the instance's app domain, one or more custom domains, and redirects. You manage all of them on the app's **Network** tab.
+
+## Generated URLs
+
+When you create an app and set a port's reach to **Private link** or **Public link**, Orchard generates a URL on the app domain. **Private link** requires people to sign in. **Public link** is open to anyone. Reach options **Public port** and **Internal** do not generate a URL. For more information, refer to [Reach](/deploy/networking/#reach).
+
+## Add a custom domain
+
+### Prerequisites
+
+- An app with a TCP port.
+- Access to the DNS settings of the domain.
+- On a self-hosted instance, a CNAME target. An instance admin sets it under **Instance admin** > **Configuration** > **Custom domains**.
+
+### Steps
+
+<Tabs syncKey="dashPlusCli">
+<TabItem label="Dashboard">
+
+1. Open the app and go to **Network**.
+2. In **Domains**, select **Add domain**.
+3. Enter the domain, such as `app.example.com`.
+4. Keep **Point to this app** selected.
+5. If the app has more than one port, select the **Port**.
+6. Select **Add domain**.
+7. In the **Set up DNS** dialog, add the record it shows at your DNS provider.
+8. Wait for the status to change from **Waiting for DNS** to **Connected**, then select **Done**.
+
+To open this dialog later, open the domain's menu and select **DNS setup…**.
+
+</TabItem>
+<TabItem label="CLI">
+
+1. Add the domain:
+
+   ```sh
+   orchard domain create --deployment <id> --host app.example.com --service-port 3000
+   ```
+
+2. Add the DNS record at your DNS provider.
+
+3. Check the record:
+
+   ```sh
+   orchard domain validate-dns app.example.com
+   ```
+
+</TabItem>
+</Tabs>
+
+After the record resolves, cert-manager issues a certificate and renews it. The domain's status shows **Securing** while the certificate is in progress.
+
+## Redirect a domain
+
+A redirect sends visitors from a domain to another address. It keeps the path and query string.
+
+<Tabs syncKey="dashPlusCli">
+<TabItem label="Dashboard">
+
+1. Go to **Network** > **Domains** and select **Add domain**.
+2. Enter the domain.
+3. Select **Redirect**.
+4. In **Redirect to**, enter the destination.
+5. In **Status**, select **307 Temporary**, **302 Found**, **308 Permanent**, or **301 Moved Permanently**.
+6. Select **Add domain**.
+
+To change a redirect, open its menu and select **Edit redirect…**. If you change the domain, Orchard provisions the new domain before it removes the old one.
+
+</TabItem>
+<TabItem label="CLI">
+
+You can edit an existing redirect from the CLI:
+
+```sh
+orchard domain update <ingress-id> --redirect-to www.example.com --redirect-status 308
+orchard domain update <ingress-id> --host new.example.com
+```
+
+</TabItem>
+</Tabs>
+
+## Certificates
+
+| Setup | Certificates |
+| --- | --- |
+| Installer, `public` mode | One certificate for each hostname, over HTTP-01 |
+| Installer, `lan` mode | Self-signed certificates |
+| Installer, `tunnel` mode | Cloudflare terminates TLS. Orchard does not use cert-manager. |
+| Helm chart with a DNS-01 issuer | A wildcard certificate. For more information, refer to [Wildcard certificates](/operate/wildcard-certificates/). |
+
+## Related resources
+
+- [Deployment protection](/deploy/protection/)
+- [Networking](/deploy/networking/)

@@ -1,0 +1,73 @@
+---
+title: Deployment protection
+description: Require a sign-in, a password, or a username and password before visitors can reach an Orchard app, and exclude paths such as webhook receivers.
+sidebar:
+  order: 8
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+To restrict who can open an app, add protection to its domain. Requests to a protected domain go through Orchard's proxy first. Your app needs no changes.
+
+## Protection types
+
+| Type | Who can reach the app |
+| --- | --- |
+| **None** | Anyone. |
+| **Password** | Visitors who enter the shared password. |
+| **Username and password** | Clients that send the correct HTTP basic authentication credentials. |
+| **Project members** | People who sign in to Orchard and have access to the project. |
+
+A generated URL with the reach **Private link** starts with **Project members**. A generated URL with the reach **Public link**, and a custom domain, start with **None**.
+
+## Set protection
+
+<Tabs syncKey="dashPlusCli">
+<TabItem label="Dashboard">
+
+1. Open the app and go to **Network**.
+2. In **Domains**, select **Add protection** on the domain. If the domain already has protection, select its badge.
+3. In **Protection type**, select a type.
+4. Enter the password, or the username and password, if the type needs them.
+5. Select **Save**.
+
+</TabItem>
+<TabItem label="CLI">
+
+```sh
+orchard domain protection set <ingress-id> --mode orchard
+```
+
+The `--mode` flag accepts `none`, `password`, or `orchard`. For `password`, add `--password`. To set **Username and password**, use the dashboard.
+
+</TabItem>
+</Tabs>
+
+To make a protected URL public, select **None** and save.
+
+## Exclude public paths
+
+Webhook receivers, health endpoints, and OAuth callbacks must stay reachable. If they sit behind protection, the sender receives a sign-in page and the delivery fails. Add these routes as public paths before you point a provider at the app.
+
+1. In the **Protection** dialog, find **Public paths**.
+2. Enter one path per line. `/api` also opens `/api/v1`. It does not open `/apikeys`.
+3. Select **Save**.
+
+## Skip protection from scripts
+
+Scripts and CI can skip sign-in with a bypass header. After you save protection, reopen the **Protection** dialog to copy the header from **Bypass header**.
+
+```text
+x-orchard-protection-bypass: <secret>
+```
+
+Orchard removes this header before the request reaches your app.
+
+## Limitations
+
+Protection covers HTTP. Raw TCP and UDP ports do not pass through the proxy, so protection does not apply to them.
+
+## Related resources
+
+- [Domains and HTTPS](/deploy/domains/)
+- [Networking](/deploy/networking/#reach)

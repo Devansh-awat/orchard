@@ -1,0 +1,123 @@
+---
+title: Scaling and resources
+description: Change the replica count of an Orchard app, stop and start it, set its CPU and memory, and configure health checks.
+sidebar:
+  order: 5
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+To change how much of an app runs, set its replica count, its CPU and memory, or stop it.
+
+## Change replicas
+
+<Tabs syncKey="dashPlusCli">
+<TabItem label="Dashboard">
+
+1. Open the app and go to **Overview**.
+2. In **Pods**, use the **Replicas** control to set the count.
+
+</TabItem>
+<TabItem label="CLI">
+
+```sh
+orchard deploy scale <id> 3
+```
+
+</TabItem>
+</Tabs>
+
+A deploy does not drop traffic if more than one replica is up and health checks pass.
+
+## Stop and start an app
+
+Stopping an app scales it to zero and keeps its replica count for later. While the app is stopped, Orchard holds pushes to its repository and does not build them. The header shows how many pushes it holds, such as **3 pushes since**.
+
+<Tabs syncKey="dashPlusCli">
+<TabItem label="Dashboard">
+
+To stop the app, open **More actions** in the header and select **Stop**.
+
+To start it again, take one of these steps in the header:
+
+- Select **Start**.
+- If pushes are held, select **Build and start**. Orchard builds the newest held commit.
+- To build from the current branch head, open **More actions** and select **Deploy and start**.
+
+**Restart** stays off until the app runs.
+
+</TabItem>
+<TabItem label="CLI">
+
+```sh
+orchard deploy stop <id>
+orchard deploy start <id>
+orchard deploy start <id> --build
+```
+
+`start` builds the newest held push if one exists. `--build` rebuilds from source before starting.
+
+</TabItem>
+</Tabs>
+
+## Set CPU and memory
+
+<Tabs syncKey="dashPlusCli">
+<TabItem label="Dashboard">
+
+1. Open the app and go to **Settings** > **Resources**.
+2. In **CPU and memory**, select the sizes.
+3. Select **Save**. Saving restarts the app.
+
+</TabItem>
+<TabItem label="CLI">
+
+```sh
+orchard deploy resources set <id> --cpu 500 --memory 512Mi
+```
+
+`--cpu` is in millicores. A value of `0` clears the setting to the organization default.
+
+</TabItem>
+</Tabs>
+
+The value you select is the container's limit.
+
+- Memory: the request equals the limit. The app gets that amount, and Kubernetes kills it if it uses more.
+- CPU: the request is 10% of the limit, with a minimum of 50 millicores. The app can use CPU up to the limit when the node has capacity. To change this, set `CPU_REQUEST_RATIO` and `CPU_REQUEST_MIN_MILLI` on the server.
+
+:::caution
+When you change resources through the API, send every field you want to keep. An omitted value falls back to the organization default, which may be smaller than the current size.
+:::
+
+## Set health checks
+
+Health checks decide whether a pod counts as ready. An app that runs but fails its check shows as failing. Orchard applies the checks again on each rebuild.
+
+<Tabs syncKey="dashPlusCli">
+<TabItem label="Dashboard">
+
+1. Open the app and go to **Settings** > **Health checks**.
+2. Turn on **Check this app**.
+3. In **Check with**, select the method, then enter the path or command and the port.
+4. Select what the check controls: **Restart the container when it fails**, **Stop sending traffic until it passes**, or **Allow extra time on startup**.
+5. Select **Save**. Saving restarts the app.
+
+</TabItem>
+<TabItem label="CLI">
+
+```sh
+orchard deploy health-check set <id> --path /healthz --port 3000
+```
+
+</TabItem>
+</Tabs>
+
+## Quotas
+
+An organization can set resource caps, and each member can have an allowance inside those caps. The limit for a new app is the smaller of the amount left in your allowance and the amount left in the organization's cap. For more information, refer to [Quotas and usage](/teams/quotas/).
+
+## Related resources
+
+- [Metrics and anomalies](/run/observability/)
+- [Storage](/deploy/storage/)

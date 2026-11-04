@@ -1,0 +1,76 @@
+---
+title: Rollbacks
+description: Roll an Orchard app back to an earlier image, optionally restore its bound databases, and restart an app on the same image.
+sidebar:
+  order: 7
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+To return an app to an earlier version, roll back to a previous image. A rollback is a deploy of the older image, so it uses the same rolling update and health checks as any other deploy.
+
+A rollback does not revert your repository. It also leaves the database schema as it is, unless you restore bound databases.
+
+## Roll back an app
+
+<Tabs syncKey="dashPlusCli">
+<TabItem label="Dashboard">
+
+1. Open the app and go to **Activity**.
+2. In **History**, find the release you want, and select **Roll back**. To return to the previous release, select **Roll back** on the release marked **Live**.
+3. (Optional) Select **Also restore bound databases to before this deploy**. Each database returns to its checkpoint from before the deploy.
+4. Select **Promote**.
+
+</TabItem>
+<TabItem label="CLI">
+
+To roll back to the previous release:
+
+```sh
+orchard deploy rollback <id> --wait
+```
+
+To roll back to a specific release, get its ID from `orchard deploy releases <id>`, then run:
+
+```sh
+orchard deploy rollback <id> <history-id> --wait
+```
+
+To restore bound databases too, add `--restore-databases`.
+
+</TabItem>
+</Tabs>
+
+:::caution
+Restoring a database discards writes made after the checkpoint. If you do not restore, a destructive migration stays in place and the older image runs against the new schema.
+:::
+
+## Recover from a bad deploy
+
+1. Roll back to the last working image.
+2. Fix the problem in the repository.
+3. Push the fix. If auto-deploy is on, Orchard builds and deploys it.
+
+## Restart an app
+
+A restart creates new pods on the same image. Use it for a stuck process, such as a blocked connection pool. If the image has the problem, use a rollback instead.
+
+<Tabs syncKey="dashPlusCli">
+<TabItem label="Dashboard">
+
+Open the app and select **Restart** in the header.
+
+</TabItem>
+<TabItem label="CLI">
+
+```sh
+orchard deploy restart <id>
+```
+
+</TabItem>
+</Tabs>
+
+## Related resources
+
+- [Builds](/deploy/builds/)
+- [Backups and restore](/data/backups/)

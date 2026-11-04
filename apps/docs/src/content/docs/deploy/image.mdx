@@ -1,0 +1,126 @@
+---
+title: Deploy from an image
+description: Run a container image in Orchard with no build step, add private registry credentials, and update the image on an existing app.
+sidebar:
+  order: 2
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+To run an image that already exists, create an app with an image source. Orchard skips the build and pulls the image directly.
+
+## Create the app
+
+<Tabs syncKey="dashPlusCli">
+<TabItem label="Dashboard">
+
+1. Open a project and select **New app**.
+2. In **Start from scratch**, select **Docker image**.
+3. In **Image**, enter the image reference, such as `ghcr.io/org/app:latest`.
+4. In **Name**, enter a name for the app.
+5. Under **Networking**, confirm the port and select a reach. For the options, refer to [Networking](/deploy/networking/#reach).
+6. Select **Deploy**.
+
+When the image exposes a port, Orchard sets the first port for you and shows the value below **Image**. If the image exposes no port, the form uses port 80. Set the port your process listens on.
+
+</TabItem>
+<TabItem label="CLI">
+
+```sh
+orchard deploy create --image nginx:alpine --name web --port 80 --wait
+```
+
+Without `--port`, Orchard uses the port the image exposes, or port 80.
+
+</TabItem>
+</Tabs>
+
+An app with no port does not get a URL. To run a worker or a queue consumer with no URL, set the reach to **Internal**.
+
+## Add private registry credentials
+
+To pull a private image, add a credential for its registry. Orchard stores one credential per registry for each project. It checks the credential against the registry when you save it.
+
+<Tabs syncKey="dashPlusCli">
+<TabItem label="Dashboard">
+
+1. Open the project and go to **Settings**.
+2. In **Registry credentials**, select **Add**.
+3. Select the **Registry**, then enter the **Username** and the token.
+4. Save the credential.
+
+</TabItem>
+<TabItem label="CLI">
+
+```sh
+orchard project registry set ghcr.io --username octocat --password-stdin < token.txt
+orchard project registry list
+```
+
+</TabItem>
+</Tabs>
+
+Orchard attaches the credential to every app and job in the project whose image is on that registry. Those pods restart to pick it up. `ghcr.io/org/app` uses the `ghcr.io` credential. `user/app` and `docker.io/user/app` use the Docker Hub credential.
+
+You can also add credentials for a whole organization under **Organization settings** > **Registry credentials**. Every project uses them unless it sets its own.
+
+| Registry | Username | Token |
+| --- | --- | --- |
+| `ghcr.io` | Your GitHub username | A classic personal access token with `read:packages` |
+| `docker.io` | Your Docker Hub username | A Docker Hub access token |
+| `registry.gitlab.com` | A deploy token user (`gitlab+deploy-token-…`) or your username | The deploy token, or a personal access token with `read_registry` |
+| `quay.io` | A robot account name | The robot account token |
+| Other registries | The username its basic or bearer authentication expects | The matching password or token |
+
+For `ghcr.io`, use a classic token. GitHub fine-grained tokens cannot read packages. If an organization owns the package, also authorize the token for SSO in that organization.
+
+:::caution
+Removing a credential restarts the apps that used it. If their images are private, the new pods do not start.
+:::
+
+## Update the image
+
+<Tabs syncKey="dashPlusCli">
+<TabItem label="Dashboard">
+
+1. Open the app and go to **Settings** > **Source & build**.
+2. In **Image**, enter the new reference.
+3. Select **Save**.
+
+</TabItem>
+<TabItem label="CLI">
+
+```sh
+orchard deploy image set <id> ghcr.io/org/app:v2 --wait
+```
+
+To update the image from CI, you can also use a [webhook token](/run/webhooks/).
+
+</TabItem>
+</Tabs>
+
+Orchard rolls the app onto the new image. Health checks and rollback history apply as they do for any deploy.
+
+## Set the pull policy
+
+Orchard does not watch your registry. If you push a new image to the same tag, nothing changes until the app restarts. The pull policy decides whether the restart fetches the new image.
+
+| Pull policy | Behavior |
+| --- | --- |
+| **Automatic** | The default. A tag that can move, such as `latest`, `main`, or a major version like `17`, uses `Always`. A pinned tag or a digest uses `IfNotPresent`. |
+| **Use cached** | Starts reuse the copy already on the node. |
+| **Always re-pull** | Every start fetches the image again. |
+
+To change the policy on an existing app, go to **Settings** > **Source & build** > **Pulling**, or run `orchard deploy pull-policy set <id> --policy always`. The flag accepts `auto`, `always`, or `ifnotpresent`.
+
+:::caution
+If you select **Use cached** on a tag that can move, a restart does not pick up a new push.
+:::
+
+Where you control the build, tag images by commit or version. Rollbacks then point at a fixed image. Apps built from a repository get a unique tag for every build.
+
+## Related resources
+
+- [Networking](/deploy/networking/)
+- [Webhooks](/run/webhooks/)
+- [Rollbacks](/deploy/rollbacks/)

@@ -1,49 +1,37 @@
 ---
 title: Builds
-description: How images get built, cached, and what to do when a build fails.
+description: Orchard builds images in Kubernetes jobs on your cluster with BuildKit. Learn how build steps, caching, and the queue work, and fix common build failures.
 sidebar:
   order: 3
 ---
 
-Builds run as jobs on your cluster, not on a build service somewhere else. Each
-one clones the repo, builds the image with BuildKit, and pushes to the registry
-the instance is configured with.
+Orchard runs each build as a Kubernetes job on your cluster. The job clones the repository, builds the image with BuildKit, and pushes it to the registry configured on the instance.
 
-## The five steps
+Orchard reads build status from the job. If a builder dies, the build shows as failed.
 
-The progress page tracks the build as five steps, each with its own timing:
+## Build steps
 
-1. **Scheduling builder**: waiting for a node with capacity
-2. **Building image**: BuildKit doing the work, with streaming logs
-3. **Pushing image**: to the configured registry
-4. **Creating app**: the Kubernetes objects
-5. **Done**
+The build progress page shows these steps, with the logs for each one.
 
-Build status is tracked from the cluster's own job state rather than inferred
-from a request, so a builder that dies is reported as failed instead of hanging
-in "building" forever.
+| Step | What happens |
+| --- | --- |
+| **Starting the builder** | The build waits for a slot and a node, and the builder pod starts. |
+| **Cloning the repo** | The builder clones the repository. |
+| **Building the image** | BuildKit builds the image. |
+| **Pushing the image** | The builder pushes the image to the registry. |
+| **Rolling out** | Kubernetes starts the new pods. |
 
-## Where the time went
-
-Under the steps, a finished build shows a bar split into queue, builder,
-start, clone, build, push and rollout, each with its seconds. Builder is the
-wait between the job being submitted and its pod running, which is where disk
-attach and image pulls hide; start is the pod coming up before the clone begins.
+To cancel a running build, select **Cancel deployment** on the progress page.
 
 ## Caching
 
-Builders share a BuildKit cache so a second build of the same repo reuses layers.
-Cache size is sized to the machine on installer-based setups; on the chart it is
-a values setting. Tenants get eviction rather than an unbounded cache.
+Builders share a BuildKit cache, so a later build of the same repository reuses layers. The installer sizes the cache from free disk. On a Helm install, set the size with `builders.localCache.size`.
 
-## Concurrency
+## Concurrency and the queue
 
-How many builds run at once depends on available memory. On the one-command
-installer it is derived from the box: under 8Gi RAM allows one, 8 to 16Gi allows
-two, above that three. Extra builds queue.
+`MAX_CONCURRENT_BUILDS` limits how many builds run at once. The installer sets it from the machine's memory. For the values, refer to [Sizing](/start/install/#sizing).
 
-A queued build is **accepted, not ignored**. It starts on its own when a slot
-frees up, and the API says so: a rebuild that cannot start yet returns
+When all slots are busy, Orchard queues the build and starts it when a slot opens. The API reports this in the rebuild response:
 
 ```json
 {
@@ -59,42 +47,64 @@ frees up, and the API says so: a rebuild that cannot start yet returns
 }
 ```
 
-Everything else on that response still describes the **previous** build, because
-the new one has not produced anything yet. That is expected. Do not retry: a
-second request supersedes the first rather than moving it up the queue, so a
-retry loop can keep a deployment permanently at the back.
+The rest of that response still describes the previous build.
 
-A deployment already building queues the same way, and says that instead.
+:::caution
+Do not retry a queued build. A new request replaces the queued one and moves it to the back of the queue. A retry loop can keep an app waiting indefinitely.
+:::
 
-## When a build fails
+## Troubleshoot a failed build
 
-The logs are the answer, and they are kept. Common cases:
+A failed build leaves the previous version running. To read the logs, open the app and select **Build logs** in **Activity**, or run `orchard logs <id> --build`.
 
-**Wrong build stage.** A multi-stage Dockerfile built at `base` produces an image
-with no application. Check the build stage dropdown.
+### The image has no application in it
 
-**Missing build-time secrets.** A stage that needs an API key to run a codegen
-step will fail without it. Pass it as a build argument.
+**Cause:** The build used a stage that does not contain the application.
 
-**`401 Unauthorized` pulling a base image.** Registries such as `dhi.io` reject
-anonymous pulls. Put the credentials on the app as secrets, not on the Orchard
-instance:
+**Fix:** Go to **Settings** > **Source & build**. In **Build stage**, select the stage that contains your app.
 
-- `DHI_USERNAME` + `DHI_TOKEN` for Docker Hardened Images (`dhi.io`)
-- or `DOCKER_AUTH_CONFIG`, a Docker config JSON whose `auths` map lists each
-  registry
+### A build step fails because a key is missing
 
-Those keys are used only for `FROM` / `COPY --from` pulls. They are not passed
-as Dockerfile build args and are not injected into the running container.
+**Cause:** A stage needs a value at build time, such as an API key for a code generation step.
 
-**The toolchain does not agree with itself.** Version skew inside the repo's own
-Dockerfile, for example a bundler that cannot load a framework's compiled output.
-Orchard reports it, but the fix is in the repo.
+**Fix:** Add the value as a variable on the app. Orchard passes app variables to the build as [build arguments](/deploy/github/#build-arguments).
 
-**Out of disk or cache pressure.** Shows up as I/O errors deep in a layer. If a
-build dies quickly with a push error, read the BuildKit container's logs rather
-than the pusher's; a fast failure there is usually the daemon dying, not a rate
-limit.
+### Error: 401 Unauthorized when pulling a base image
 
-A failed build leaves the previous version running. Nothing is torn down until a
-new image is ready.
+**Cause:** The registry rejects anonymous pulls. `dhi.io` is one example.
+
+**Fix:** Add these keys to the app as secret variables:
+
+- `DHI_USERNAME` and `DHI_TOKEN` for Docker Hardened Images (`dhi.io`).
+- `DOCKER_AUTH_CONFIG` for other registries. The value is a Docker config JSON whose `auths` map lists each registry.
+
+Orchard uses these keys only for `FROM` and `COPY --from` pulls. It does not pass them as build arguments, and it does not add them to the running container.
+
+### The build fails with I/O errors in a layer
+
+**Cause:** The builder ran out of disk or the cache is full.
+
+**Fix:** Increase the cache size. On an installer host, run `sudo orchardctl config set builders.localCache.size <size>G --apply`.
+
+### The build fails quickly with a push error
+
+**Cause:** The BuildKit daemon stopped. A fast failure here is usually not a registry rate limit.
+
+**Fix:** Read the logs of the BuildKit container, not the pusher container.
+
+### Could not schedule build pod: Insufficient memory
+
+**Cause:** Memory requests on the node leave no room for the builder pod. Kubernetes counts requests, not real use.
+
+**Fix:** Remove or shrink other workloads, or add a node.
+
+### The build also fails on your machine
+
+**Cause:** The Dockerfile has a problem of its own. Orchard runs your Dockerfile as written. It does not change your base image or your build steps.
+
+**Fix:** Reproduce the build with `docker build` and fix it in the repository.
+
+## Related resources
+
+- [Rollbacks](/deploy/rollbacks/)
+- [Deploy from GitHub](/deploy/github/)

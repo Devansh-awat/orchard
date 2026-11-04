@@ -1,0 +1,128 @@
+---
+title: Networking
+description: Set how an Orchard app is reached, connect apps with internal addresses, publish raw TCP or UDP ports, and read client details from request headers.
+sidebar:
+  order: 4
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+Each app port has a Kubernetes Service in front of its pods. The Service balances traffic across replicas. You manage ports on the app's **Network** tab.
+
+## Reach
+
+Reach sets who can connect to a port. You choose it when you create an app.
+
+| Reach | Result |
+| --- | --- |
+| **Private link** | An HTTPS URL behind Orchard sign-in. Only people with access to the project can open it. |
+| **Public link** | An HTTPS URL open to anyone. |
+| **Public port** | Raw TCP or UDP on an external address. |
+| **Internal** | A cluster-internal address with no URL. |
+
+UDP ports support only **Public port** and **Internal**.
+
+## Connect apps inside the cluster
+
+To call another app in the same environment, use its internal address. **Network** > **Ports** shows the address below each port, in this form:
+
+```text
+<service>.<namespace>.svc.cluster.local:<port>
+```
+
+Inside the same namespace, the short form `<service>:<port>` also resolves.
+
+Use the internal address for traffic between apps. A request to a public URL leaves the cluster, depends on public DNS, and passes through the ingress.
+
+Tenant namespaces deny incoming traffic by default. Apps in the same namespace can reach each other. Each [environment](/start/concepts/#environment) has its own namespace, so apps in different environments cannot use internal addresses to reach each other.
+
+## Add a port
+
+<Tabs syncKey="dashPlusCli">
+<TabItem label="Dashboard">
+
+1. Open the app and go to **Network**.
+2. In **Ports**, select **Add port**.
+3. In **Port**, enter the port your process listens on inside the container.
+4. Select **TCP** or **UDP**.
+5. Select **Add port**.
+
+</TabItem>
+<TabItem label="CLI">
+
+```sh
+orchard service create --deployment <id> --port 8080
+```
+
+To use UDP, add `--protocol UDP`.
+
+</TabItem>
+</Tabs>
+
+## Publish a TCP or UDP port
+
+Publish a raw port to reach a game server or another non-HTTP service from outside the cluster.
+
+### Prerequisites
+
+- A layer 4 (L4) load balancer in the cluster.
+- A public IP address. To set one for your organization, go to **Organization settings** > **Database defaults** > **Public database IP**. Otherwise, the organization inherits the instance default. If neither exists, publishing fails with an error. For the instance default, refer to [Set a default public IP](/operate/finishing-setup/#set-a-default-public-ip).
+
+This feature is not available in Cloudflare Tunnel mode, because tunnels carry HTTP only.
+
+### Steps
+
+<Tabs syncKey="dashPlusCli">
+<TabItem label="Dashboard">
+
+1. Open the app and go to **Network**.
+2. In **Ports**, turn on **Public** for the port.
+3. Select **Make public**.
+
+The public address replaces the internal address on the row.
+
+</TabItem>
+<TabItem label="CLI">
+
+```sh
+orchard service port public enable <service-id> <port-id> --deployment <id>
+```
+
+</TabItem>
+</Tabs>
+
+:::caution
+Public TCP and UDP traffic skips the HTTP layer, so [Deployment protection](/deploy/protection/) does not apply. The service must handle its own authentication.
+:::
+
+## Outbound traffic
+
+Apps can reach the public internet. The tenant network policy blocks traffic to private address ranges and to the link-local range that holds cloud metadata services. It also blocks the Kubernetes API, the platform database, and unpublished services in other namespaces.
+
+## Request headers
+
+Traffic reaches your app through at least one proxy, so the socket peer is the proxy. Client details arrive in headers.
+
+| Header | Set by | Contains |
+| --- | --- | --- |
+| `X-Real-IP` | The ingress | The peer of the inbound TCP connection |
+| `X-Forwarded-For` | The ingress, appended for each hop | The client chain, left to right |
+| `X-Forwarded-Proto` | The ingress | `https` or `http`, as the client saw it |
+| `X-Forwarded-Host` | The proxy | The hostname the client requested |
+
+To get the client address, use `X-Real-IP`. The ingress sets it to the actual peer and overwrites any value from the client.
+
+Clients can add entries to `X-Forwarded-For`. Trust only the entries your own proxies added. If your framework derives the client IP from this header, configure the number of proxy hops to trust.
+
+A domain with [protection](/deploy/protection/) adds a hop. The protection proxy forwards these headers and appends the peer it saw. It removes `x-orchard-protection-bypass` before the request reaches your app.
+
+To build absolute URLs, use `X-Forwarded-Proto` and `X-Forwarded-Host`. Otherwise, a framework can generate links that point at a pod IP address.
+
+## Databases
+
+Managed databases are reachable inside the cluster by default. To publish one, refer to [Public access](/data/databases/#public-access).
+
+## Related resources
+
+- [Domains and HTTPS](/deploy/domains/)
+- [Deployment protection](/deploy/protection/)

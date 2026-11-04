@@ -1,0 +1,164 @@
+---
+title: Deploy from GitHub
+description: Deploy an app from a GitHub repository in Orchard and turn on auto-deploy so that each push builds and rolls out a new version.
+sidebar:
+  order: 1
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+To build and run an app from a GitHub repository, create an app with a GitHub source. To deploy each push, turn on auto-deploy.
+
+## Prerequisites
+
+- A GitHub App on the instance. An instance admin creates it during setup, or by following [Connect a GitHub App](/operate/finishing-setup/#connect-a-github-app).
+- A GitHub account linked to Orchard. Go to **Account settings** > **GitHub and Tailscale**, and in **GitHub**, select **Connect**.
+- The GitHub App installed on the account that owns the repository. Go to **Account settings** > **GitHub and Tailscale**, and in **Repository access**, select **Add account**.
+
+You can deploy a public repository without these items. In the repository search field, paste `owner/repo`. Auto-deploy still needs the GitHub App.
+
+Orchard lists only the repositories your own GitHub account granted to the App. Two people in the same project can see different lists.
+
+## Create the app
+
+<Tabs syncKey="dashPlusCli">
+<TabItem label="Dashboard">
+
+1. Open a project and select **New app**.
+2. In **Start from scratch**, select **GitHub repo**.
+3. In **Repository**, select the repository.
+4. In **Branch**, select the branch.
+5. In **Name**, enter a name for the app.
+6. In **Build with**, confirm the build method. Orchard selects **Dockerfile** if the repository has one. Otherwise, it selects the framework it detects.
+7. (Optional) Expand **Build and output settings** to change the Dockerfile path or build stage.
+8. Under **Environment variables**, review the variables that Orchard detected.
+9. Under **Networking**, confirm the port and select a reach. For the options, refer to [Networking](/deploy/networking/#reach).
+10. Select **Deploy**.
+
+Orchard opens the build progress page.
+
+</TabItem>
+<TabItem label="CLI">
+
+```sh
+orchard deploy create --github owner/repo#main --name web --port 3000 --wait
+```
+
+For the build flags, refer to the [CLI reference](/reference/cli/).
+
+</TabItem>
+</Tabs>
+
+## Detected settings
+
+Orchard reads the repository and fills in the form.
+
+| Field | Detected from |
+| --- | --- |
+| **Build with** | A `Dockerfile`, or framework detection when no Dockerfile exists |
+| **Dockerfile** | The file Orchard found |
+| **Stage** | The stages in the Dockerfile. The default is **Final stage**. |
+| **Port** | `EXPOSE`, or the default port of the framework |
+| **Environment variables** | `ENV` lines in the image |
+
+In a monorepo, turn on **Build from the repository root** if the Dockerfile copies files from outside its own directory.
+
+If the repository contains a [`score.yaml`](/deploy/score/) file, the form shows a summary of what the file provisions.
+
+## Auto-deploy
+
+Auto-deploy builds and rolls out the app when you push to the selected branch.
+
+### Turn on auto-deploy
+
+<Tabs syncKey="dashPlusCli">
+<TabItem label="Dashboard">
+
+1. Open the app and go to **Settings** > **Deploy behavior**.
+2. In **Auto-deploy**, enter the branch in **Branch**.
+3. Turn on **Deploy on push**.
+
+If the App is not installed on the repository, the page shows **Install GitHub App** instead of the switch. Select it and add the repository.
+
+</TabItem>
+<TabItem label="CLI">
+
+```sh
+orchard deploy auto-deploy enable <id> --branch main
+```
+
+</TabItem>
+</Tabs>
+
+### Limit builds to certain paths
+
+Watch paths limit which pushes start a build. With an empty list, every push builds.
+
+```text
+apps/api/**
+packages/shared/**
+package.json
+!**/*.md
+```
+
+- Enter one glob per line. Orchard matches each glob against every file the push changed.
+- `**` crosses directories. `*` stays inside one segment. `{a,b}` matches either value.
+- A bare directory, such as `apps/api`, covers everything under it.
+- A line that starts with `!` excludes matches. An exclude takes priority over an include.
+- A list of only excludes watches everything else.
+
+If Orchard cannot tell what a push changed, it builds.
+
+<Tabs syncKey="dashPlusCli">
+<TabItem label="Dashboard">
+
+1. Go to **Settings** > **Deploy behavior**.
+2. In **Watch paths**, enter the globs.
+3. Select **Save**.
+
+</TabItem>
+<TabItem label="CLI">
+
+```sh
+orchard deploy auto-deploy enable <id> --branch main --path 'apps/api/**' --path '!**/*.md'
+```
+
+To clear the list, pass `--path ""`.
+
+</TabItem>
+</Tabs>
+
+### Troubleshoot auto-deploy
+
+**Symptom:** Auto-deploy is on, but pushes do not build.
+
+**Cause:** The GitHub App cannot see the repository, or the app is not bound to the App installation. An App installed with **Only select repositories** does not include repositories created after the install.
+
+**Fix:** Add the repository in the App settings on GitHub. Then open **Settings** > **Deploy behavior**. If the page shows **Auto-deploy is on but not connected**, select **Reconnect**.
+
+**Verify:**
+
+```sh
+orchard deploy auto-deploy status <id>
+```
+
+`enabled` is the setting you chose. `deliverable` shows whether a push can reach the app. When `deliverable` is false, the output gives the reason.
+
+## Build arguments
+
+Orchard passes the app's variables to the build as Dockerfile build arguments.
+
+- Orchard adds the `ARG` declarations above your own `ENV` lines. An `ENV` line in the repository takes priority over a build argument of the same name.
+- The arguments also reach stages that build `FROM` the stage where they are declared.
+
+`DHI_USERNAME`, `DHI_TOKEN`, and `DOCKER_AUTH_CONFIG` are different. They authenticate base image pulls. For more information, refer to [Builds](/deploy/builds/#error-401-unauthorized-when-pulling-a-base-image).
+
+## Trigger a deploy from outside GitHub
+
+To start a deploy from a CI pipeline or another system, use a [webhook token](/run/webhooks/).
+
+## Related resources
+
+- [Builds](/deploy/builds/)
+- [Deploy from GitLab, Gitea and others](/deploy/git-providers/)
+- [Rollbacks](/deploy/rollbacks/)

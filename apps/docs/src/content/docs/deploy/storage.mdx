@@ -1,0 +1,57 @@
+---
+title: Storage
+description: Attach a persistent volume to an Orchard app so that its files survive restarts and redeploys.
+sidebar:
+  order: 6
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+A container's filesystem is deleted when the pod restarts. To keep files, attach a volume. Orchard creates a PersistentVolumeClaim from the cluster's storage class.
+
+## Attach a volume
+
+<Tabs syncKey="dashPlusCli">
+<TabItem label="Dashboard">
+
+1. Open the app and go to **Settings** > **Storage**.
+2. In **Volumes**, select **Add volume**.
+3. In **Name**, enter a name for the volume.
+4. In **Mount path**, enter the path inside the container, such as `/data`.
+5. In **Size**, enter the size, such as `1Gi`.
+6. (Optional) Turn on **Read-only**.
+7. Select **Save**. Saving restarts the app.
+
+You can also add a volume when you create an app, under **Advanced** > **Storage**.
+
+</TabItem>
+<TabItem label="CLI">
+
+```sh
+orchard deploy volumes set <id> --volume /data=1Gi
+```
+
+This command replaces all the app's volumes with the ones you pass. To remove every volume, omit `--volume`.
+
+</TabItem>
+</Tabs>
+
+## Verify the mount
+
+From a [shell](/run/logs/#shell) in the container, list the mount path. An empty ext4 volume contains a `lost+found` directory. If the path is not mounted, its contents are ordinary container storage and are deleted with the pod.
+
+## Limitations
+
+- Most storage classes allow one writer at a time. If you scale past one replica on one of these classes, the extra pods do not start.
+- With a volume, updates stop the app first.
+- Volumes can grow, but they cannot shrink. Growth needs a storage class that allows expansion.
+- Orchard does not back up app volumes. To keep data safe, write it to object storage or a [managed database](/data/databases/). Managed databases have their own storage and do not need a volume.
+
+## How volumes interact with builds
+
+Orchard records a volume as soon as you add it. A volume you add during a build reaches the pod that build creates. Each rebuild also compares the running pod with the configured volumes and repairs any difference.
+
+## Related resources
+
+- [Scaling and resources](/deploy/scaling/)
+- [Databases](/data/databases/)
