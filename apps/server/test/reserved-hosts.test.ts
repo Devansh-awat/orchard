@@ -10,9 +10,21 @@ function service() {
 }
 
 const saved = process.env.MCP_BASE_URL;
+const savedFrontend = process.env.FRONTEND_URL;
 afterEach(() => {
   if (saved === undefined) delete process.env.MCP_BASE_URL;
   else process.env.MCP_BASE_URL = saved;
+  if (savedFrontend === undefined) delete process.env.FRONTEND_URL;
+  else process.env.FRONTEND_URL = savedFrontend;
+});
+
+test('no app can take the dashboard hostname, even under the apps wildcard', async () => {
+  process.env.FRONTEND_URL = 'https://orchard.apps.example.com';
+  await assert.rejects(
+    service().assertHostnameAvailable('orchard.apps.example.com', 'p1'),
+    ConflictException
+  );
+  await service().assertHostnameAvailable('shop.apps.example.com', 'p1');
 });
 
 test('no app can take the MCP hostname', async () => {

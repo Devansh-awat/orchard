@@ -67,6 +67,8 @@ export class ProjectAccessService {
     );
     const mcpHost = hostOf(process.env.MCP_BASE_URL);
     if (mcpHost) reservedExact.add(mcpHost);
+    const dashboardHost = hostOf(process.env.FRONTEND_URL);
+    if (dashboardHost) reservedExact.add(dashboardHost);
     const reservedSuffixes = (process.env.RESERVED_HOST_SUFFIXES || '')
       .split(',')
       .map((s) => s.trim().toLowerCase().replace(/^\./, ''))
