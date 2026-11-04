@@ -100,10 +100,10 @@ export class K8sNetworkService implements OnModuleInit {
   ) {}
 
   onModuleInit() {
-    setTimeout(() => {
+    this.leaderElection.onAcquired(() => {
       void this.reconcileProtectionProxies();
       void this.reconcileWildcardSecrets();
-    }, 10_000);
+    });
     setInterval(
       () => {
         void this.reconcileProtectionProxies();
