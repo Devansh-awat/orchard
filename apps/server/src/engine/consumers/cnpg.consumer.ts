@@ -137,7 +137,7 @@ export class CnpgConsumer implements OnModuleDestroy {
     const ns = cluster.metadata?.namespace;
     const name = cluster.metadata?.name;
     if (!ns || !name) return {};
-    const ctx = await this.resolveCtx(ns, name);
+    const ctx = await this.resolveCtx(ns, name, { fresh: true });
     return ctx ? { databaseId: ctx.databaseId, projectId: ctx.projectId } : {};
   }
 
@@ -642,7 +642,7 @@ export class CnpgConsumer implements OnModuleDestroy {
     const ns = cluster.metadata?.namespace;
     const name = cluster.metadata?.name;
     if (!ns || !name) return;
-    const ctx = await this.resolveCtx(ns, name);
+    const ctx = await this.resolveCtx(ns, name, { fresh: true });
     if (!ctx) return;
 
     if (type === 'delete') {
@@ -962,10 +962,14 @@ export class CnpgConsumer implements OnModuleDestroy {
     };
   }
 
-  private async resolveCtx(ns: string, clusterName: string): Promise<Ctx | null> {
+  private async resolveCtx(
+    ns: string,
+    clusterName: string,
+    opts: { fresh?: boolean } = {}
+  ): Promise<Ctx | null> {
     const key = `${ns}/${clusterName}`;
     const cached = this.ctxCache.get(key);
-    if (cached && cached.exp > Date.now()) return cached.ctx;
+    if (cached && cached.exp > Date.now() && (cached.ctx || !opts.fresh)) return cached.ctx;
 
     // A lookup that throws is left to propagate: `null` means "no such
     // database", which callers store as an answer, and a database blip must not

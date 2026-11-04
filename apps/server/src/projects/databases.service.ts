@@ -1415,6 +1415,12 @@ export class DatabasesService {
               podsByDb.get(d.id) ?? [],
               clusterMirror(d)
             );
+            if (ls.ready && d.status !== 'ready' && d.status !== 'restoring') {
+              await this.prisma.database
+                .update({ where: { id: d.id }, data: { status: 'ready' } })
+                .catch(() => undefined);
+              return { ...d, status: 'ready', liveStatus: ls };
+            }
             return { ...d, liveStatus: ls };
           } catch {
             return d;
