@@ -31,6 +31,7 @@
 	let steps = $state<ServerStep[]>([]);
 	let phase = $state<Phase>('passkey');
 	let askTelemetry = $state(false);
+	let certificateFailed = $state(false);
 	let ready = $state(false);
 	let finishing = $state(false);
 	let stage = $state<HTMLElement | null>(null);
@@ -42,7 +43,7 @@
 		'passkey',
 		'organization',
 		'github',
-		'certificate',
+		...(certificateFailed ? (['certificate'] as const) : []),
 		...(askTelemetry ? (['telemetry'] as const) : []),
 		'done'
 	]);
@@ -56,6 +57,12 @@
 
 	async function load() {
 		void telemetry.reload().then((state) => (askTelemetry = !!state?.needsAnswer));
+		void apiFetch('/apiv1/setup/certificate')
+			.then((response) => (response.ok ? response.json() : null))
+			.then(
+				(cert) => (certificateFailed = cert?.state === 'failed' || cert?.state === 'rateLimited')
+			)
+			.catch(() => (certificateFailed = false));
 		try {
 			const response = await apiFetch('/apiv1/setup/state');
 			if (!response.ok) throw new Error('unavailable');
@@ -116,6 +123,10 @@
 		await move(firstUnsettled(steps) ?? 'github');
 	}
 
+	function afterGithub() {
+		return move(certificateFailed ? 'certificate' : askTelemetry ? 'telemetry' : 'done');
+	}
+
 	async function finish() {
 		if (finishing) return;
 		finishing = true;
@@ -149,7 +160,7 @@
 			{:else if phase === 'organization'}
 				<SetupOrgStep onDone={advance} onSkip={() => skip('organization')} />
 			{:else if phase === 'github'}
-				<SetupGithubStep onDone={() => move('certificate')} onSkip={() => move('certificate')} />
+				<SetupGithubStep onDone={afterGithub} onSkip={afterGithub} />
 			{:else if phase === 'certificate'}
 				<SetupCertificateStep onDone={() => move(askTelemetry ? 'telemetry' : 'done')} />
 			{:else if phase === 'telemetry'}
