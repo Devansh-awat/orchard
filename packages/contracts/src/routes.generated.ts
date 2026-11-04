@@ -434,6 +434,7 @@ export const routes: GeneratedRoute[] = [
   { method: 'GET', path: '/invitations/:token', auth: 'public' },
   { method: 'POST', path: '/invitations/:token/accept', auth: 'authenticated' },
   { method: 'POST', path: '/invitations/:token/decline', auth: 'authenticated' },
+  { method: 'POST', path: '/invitations/:token/sign-up', auth: 'public' },
   { method: 'POST', path: '/invitations/accept-pending', auth: 'authenticated' },
   { method: 'POST', path: '/invitations/by-id/:id/accept', auth: 'authenticated' },
   { method: 'POST', path: '/invitations/by-id/:id/decline', auth: 'authenticated' },

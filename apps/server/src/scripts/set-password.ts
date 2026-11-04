@@ -2,6 +2,7 @@ import { PrismaClient } from '@prisma/client';
 import {
   PasswordRefused,
   clearSuperadminPassword,
+  setAccountPassword,
   setSuperadminPassword
 } from '../auth/superadmin-password';
 
@@ -39,6 +40,19 @@ async function main() {
     if (!password) {
       console.error('no password on stdin');
       process.exitCode = 1;
+      return;
+    }
+
+    const account = email
+      ? await prisma.user.findUnique({
+          where: { email: email.toLowerCase().trim() },
+          select: { id: true, email: true, isSuperAdmin: true }
+        })
+      : null;
+    if (account && !account.isSuperAdmin) {
+      await setAccountPassword(prisma, account.id, password);
+      console.log(`password set for ${account.email}`);
+      console.log('It works while this instance has no email. With email, they use a code.');
       return;
     }
 

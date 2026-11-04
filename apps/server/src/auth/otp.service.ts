@@ -17,6 +17,10 @@ export class OtpService {
     private readonly rateLimitService: RateLimitService
   ) {}
 
+  sendsEmail(): boolean {
+    return this.emailService.isConfigured();
+  }
+
   canDeliverCodes(): boolean {
     return this.emailService.isConfigured() || process.env.NODE_ENV !== 'production';
   }

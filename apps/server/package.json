@@ -56,6 +56,7 @@
     "test:internal-urls": "tsx --test test/internal-urls.test.ts",
     "test:domains": "tsx --test test/domain-derivation.test.ts",
     "test:scim": "tsx --test test/scim.test.ts",
+    "test:invite-link": "tsx --test test/invite-link.test.ts",
     "test:notifications": "tsx --test test/notification-routing.test.ts test/notification-url-guard.test.ts",
     "mcp": "tsx src/mcp/index.ts",
     "mcp:remote": "ts-node --swc src/mcp/main.ts",

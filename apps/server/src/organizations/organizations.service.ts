@@ -3,13 +3,14 @@ import {
   NotFoundException,
   BadRequestException,
   ForbiddenException,
+  ConflictException,
   Logger
 } from '@nestjs/common';
 import { OrganizationRole } from '@prisma/client';
 import { S3Client, ListObjectsV2Command } from '@aws-sdk/client-s3';
 import { randomBytes, createHash } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
-import { UsersService } from '../users/users.service';
+import { UsersService, sanitizeUsername } from '../users/users.service';
 import { StorageService } from './storage.service';
 import { EmailService } from '../email/email.service';
 import { AuditService } from '../audit/audit.service';
@@ -20,6 +21,8 @@ import { requestAuthStorage } from '../auth/request-context';
 import { TailscaleService } from '../tailscale/tailscale.service';
 import { InstanceConfigService } from '../instance-config/instance-config.service';
 import { RateLimitService } from '../auth/rate-limit.service';
+import { signupMode, signupDeniedError } from '../auth/signup-mode';
+import { PasswordRefused, hashAccountPassword } from '../auth/superadmin-password';
 import { SecretCryptoService } from '../crypto/secret-crypto.service';
 
 export function normalizeBackupEndpoint(input: string | null): string | null {
@@ -66,6 +69,15 @@ export class OrganizationsService {
   // this hash so a DB read cannot yield working invite links.
   private hashToken(token: string): string {
     return createHash('sha256').update(token).digest('hex');
+  }
+
+  private inviteLink(token: string): string {
+    const base = (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/+$/, '');
+    return `${base}/invite/${token}`;
+  }
+
+  private inviteDelivery(): 'email' | 'link' {
+    return this.emailService.isConfigured() ? 'email' : 'link';
   }
 
   async checkPermission(organizationId: string, userId: string, requiredRole: 'owner' | 'admin') {
@@ -930,7 +942,13 @@ export class OrganizationsService {
       metadata: { email: normalizedEmail, role }
     });
 
-    return invitation;
+    const { tokenHash: _hash, ...visible } = invitation;
+    const delivery = this.inviteDelivery();
+    return {
+      ...visible,
+      delivery,
+      ...(delivery === 'link' ? { inviteLink: this.inviteLink(token) } : {})
+    };
   }
 
   /**
@@ -1040,11 +1058,15 @@ export class OrganizationsService {
       metadata: { email: normalizedEmail, role: projectRoleName }
     });
 
+    const delivery = this.inviteDelivery();
+    const orgAccess = await this.authz.getOrgAccess(organizationId, inviter.id);
     return {
       id: invitation.id,
       email: invitation.email,
       expiresAt: invitation.expiresAt,
-      createdAt: invitation.createdAt
+      createdAt: invitation.createdAt,
+      delivery,
+      ...(delivery === 'link' && orgAccess?.isAdmin ? { inviteLink: this.inviteLink(token) } : {})
     };
   }
 
@@ -1116,7 +1138,8 @@ export class OrganizationsService {
     // L-1: collapse to the same 404 shape: distinguishing "wrong user"
     // from "not verified" lets a freshly-registered unverified account
     // under the victim's email probe whether an invitation exists.
-    if (!user.emailVerified) {
+    const linkIsProof = via === 'invitation' && this.inviteDelivery() === 'link';
+    if (!user.emailVerified && !linkIsProof) {
       throw notFound();
     }
 
@@ -1310,13 +1333,128 @@ export class OrganizationsService {
 
     // Minimal payload for the unauthenticated landing page. Inviter identity
     // and invited email are revealed only on the authenticated accept path,
-    // where an email-match check already runs. Anyone who happens to share a
-    // link could otherwise dox both the inviter and the invited user.
-    return {
+    // so that a leaked link could not dox both the inviter and the invited
+    // user.
+    const base = {
       role: invitation.role,
       expiresAt: invitation.expiresAt,
       organization: invitation.organization
     };
+    if (this.inviteDelivery() === 'email') return base;
+    return {
+      ...base,
+      email: invitation.email,
+      next: await this.nextStepForLink(invitation.email)
+    };
+  }
+
+  private async nextStepForLink(email: string): Promise<'sign_up' | 'sign_in' | 'sso' | 'closed'> {
+    try {
+      await this.authz.assertSsoNotEnforcedForEmail(email, 'password');
+    } catch (err) {
+      if (err instanceof ForbiddenException) return 'sso';
+      throw err;
+    }
+    const account = await this.prisma.user.findUnique({
+      where: { email: email.toLowerCase() },
+      select: { id: true }
+    });
+    if (account) return 'sign_in';
+    return signupMode() === 'closed' ? 'closed' : 'sign_up';
+  }
+
+  async signUpWithInvitation(token: string, password: string | null) {
+    const notFound = () => new NotFoundException('Invitation not found or expired.');
+    if (this.inviteDelivery() === 'email') throw notFound();
+
+    const tokenHash = this.hashToken(token);
+    const invitation = await this.prisma.organizationInvitation.findUnique({
+      where: { tokenHash },
+      include: { organization: { select: { id: true, name: true, slug: true } } }
+    });
+    if (!invitation || invitation.expiresAt < new Date()) throw notFound();
+
+    const email = invitation.email.toLowerCase();
+    const next = await this.nextStepForLink(email);
+    if (next === 'sso') await this.authz.assertSsoNotEnforcedForEmail(email, 'password');
+    if (next === 'closed') throw new ForbiddenException(signupDeniedError());
+    if (next === 'sign_in') {
+      throw new ConflictException('This email already has an account. Sign in to accept.');
+    }
+
+    let passwordHash: string | null = null;
+    if (password !== null) {
+      try {
+        passwordHash = await hashAccountPassword(password);
+      } catch (err) {
+        if (err instanceof PasswordRefused) throw new BadRequestException(err.message);
+        throw err;
+      }
+    }
+
+    const base = sanitizeUsername(email.split('@')[0]);
+    let username = base;
+    let counter = 1;
+    while (await this.prisma.user.findUnique({ where: { username } })) {
+      username = `${base}${counter}`;
+      counter += 1;
+    }
+
+    const user = await this.prisma
+      .$transaction(async (tx) => {
+        const spent = await tx.organizationInvitation.deleteMany({
+          where: { id: invitation.id, tokenHash }
+        });
+        if (spent.count !== 1) throw notFound();
+        const created = await tx.user.create({ data: { email, username, passwordHash } });
+        await tx.organizationMember.create({
+          data: {
+            organizationId: invitation.organizationId,
+            userId: created.id,
+            role: invitation.role,
+            addedBy: invitation.invitedBy
+          }
+        });
+        if (invitation.projectId && invitation.projectRoleId) {
+          await tx.projectMember.create({
+            data: {
+              projectId: invitation.projectId,
+              userId: created.id,
+              roleId: invitation.projectRoleId,
+              addedBy: invitation.invitedBy
+            }
+          });
+        }
+        return created;
+      })
+      .catch((err) => {
+        if (err?.code === 'P2002') {
+          throw new ConflictException('This email already has an account. Sign in to accept.');
+        }
+        throw err;
+      });
+
+    void this.audit.log({
+      action: 'user.signed_up',
+      actorUserId: user.id,
+      actorEmail: user.email,
+      organizationId: invitation.organizationId,
+      targetType: 'user',
+      targetId: user.id,
+      metadata: { signup_method: 'invitation_link' }
+    });
+    void this.audit.log({
+      action: 'org.member.joined',
+      actorUserId: user.id,
+      actorEmail: user.email,
+      organizationId: invitation.organizationId,
+      targetType: 'user',
+      targetId: user.id,
+      targetLabel: user.email,
+      metadata: { role: invitation.role, via: 'invitation_link' }
+    });
+
+    return { user, organization: invitation.organization };
   }
 
   async getPendingInvitationsForUser(clerkId: string, userData?: any) {
@@ -1396,7 +1534,7 @@ export class OrganizationsService {
     if (user.email.toLowerCase() !== invitation.email.toLowerCase()) {
       throw notFound();
     }
-    if (!user.emailVerified) {
+    if (!user.emailVerified && this.inviteDelivery() === 'email') {
       throw notFound();
     }
     if (invitation.expiresAt < new Date()) {
@@ -1451,7 +1589,7 @@ export class OrganizationsService {
 
     await this.checkPermission(organizationId, user.id, 'admin');
 
-    return this.prisma.organizationInvitation.findMany({
+    const rows = await this.prisma.organizationInvitation.findMany({
       where: {
         organizationId,
         expiresAt: { gt: new Date() }
@@ -1468,6 +1606,8 @@ export class OrganizationsService {
       },
       orderBy: { createdAt: 'desc' }
     });
+    const delivery = this.inviteDelivery();
+    return rows.map(({ tokenHash: _hash, ...row }) => ({ ...row, delivery }));
   }
 
   async cancelInvitation(invitationId: string, clerkId: string, userData?: any) {
@@ -1547,6 +1687,10 @@ export class OrganizationsService {
       throw new NotFoundException('Invitation not found');
     }
 
+    if (this.inviteDelivery() === 'link') {
+      return this.reissueInvitationLink(invitation, user);
+    }
+
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
     const inviterName =
       invitation.inviter.firstName && invitation.inviter.lastName
@@ -1566,7 +1710,43 @@ export class OrganizationsService {
         console.error('Failed to resend organization invite email:', err);
       });
 
-    return { success: true, message: 'Invitation resent' };
+    return { success: true, message: 'Invitation resent', delivery: 'email' as const };
+  }
+
+  private async reissueInvitationLink(
+    invitation: { id: string; organizationId: string; email: string; role: OrganizationRole },
+    actor: { id: string; email: string }
+  ) {
+    if (invitation.role === 'owner') {
+      await this.checkPermission(invitation.organizationId, actor.id, 'owner');
+    }
+    await this.rateLimit.checkRateLimit(invitation.organizationId, 'org', 'invite');
+
+    const token = randomBytes(32).toString('hex');
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 7);
+    await this.prisma.organizationInvitation.update({
+      where: { id: invitation.id },
+      data: { tokenHash: this.hashToken(token), expiresAt }
+    });
+
+    void this.audit.log({
+      action: 'org.invitation.link_issued',
+      actorUserId: actor.id,
+      actorEmail: actor.email,
+      organizationId: invitation.organizationId,
+      targetType: 'invitation',
+      targetId: invitation.id,
+      targetLabel: invitation.email
+    });
+
+    return {
+      success: true,
+      message: 'New invitation link created',
+      delivery: 'link' as const,
+      inviteLink: this.inviteLink(token),
+      expiresAt
+    };
   }
 
   async removeMemberFromOrganization(

@@ -585,6 +585,7 @@
   "POST /internal/image-scans/:id/result": "public",
   "POST /invitations/:token/accept": "authenticated",
   "POST /invitations/:token/decline": "authenticated",
+  "POST /invitations/:token/sign-up": "public",
   "POST /invitations/accept-pending": "authenticated",
   "POST /invitations/by-id/:id/accept": "authenticated",
   "POST /invitations/by-id/:id/decline": "authenticated",

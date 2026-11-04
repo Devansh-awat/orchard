@@ -1,11 +1,23 @@
-import { Controller, Get, Post, Param, Request } from '@nestjs/common';
+import { Body, Controller, Get, Post, Param, Request, Response } from '@nestjs/common';
+import { Response as ExpressResponse } from 'express';
 import { OrganizationsService } from './organizations.service';
 import { Public, Auth } from '../auth/decorators';
+import { OAuthService } from '../auth/oauth.service';
+import { RateLimitService } from '../auth/rate-limit.service';
+import { SessionsService } from '../auth/sessions.service';
+import { signedInUser } from '../auth/signed-in-user';
+import { setSessionCookie } from '../auth/cookies';
+import { getClientIp } from '../auth/client-ip';
 
 @Auth()
 @Controller('invitations')
 export class InvitationsController {
-  constructor(private readonly organizationsService: OrganizationsService) {}
+  constructor(
+    private readonly organizationsService: OrganizationsService,
+    private readonly rateLimit: RateLimitService,
+    private readonly sessions: SessionsService,
+    private readonly oauth: OAuthService
+  ) {}
 
   @Get('pending')
   async getPendingInvitations(@Request() req) {
@@ -59,6 +71,39 @@ export class InvitationsController {
   @Get(':token')
   async getInvitationByToken(@Param('token') token: string) {
     return this.organizationsService.getInvitationByToken(token);
+  }
+
+  @Public()
+  @Post(':token/sign-up')
+  async signUp(
+    @Param('token') token: string,
+    @Body() body: { password?: string; passkey?: boolean },
+    @Request() req,
+    @Response({ passthrough: true }) res: ExpressResponse
+  ) {
+    const ipAddress = getClientIp(req);
+    await this.rateLimit.checkRateLimit(ipAddress, 'ip', 'password_signin');
+    const password = body?.passkey === true ? null : String(body?.password ?? '');
+    const { user, organization } = await this.organizationsService.signUpWithInvitation(
+      token,
+      password
+    );
+    const authMethod = password === null ? 'passkey' : 'password';
+    const sessionId = await this.sessions.createSession({
+      userId: user.id,
+      ipAddress,
+      userAgent: req.headers['user-agent'],
+      authMethod
+    });
+    const session = await this.oauth.generateSessionTokenForUser(
+      user.id,
+      user.email,
+      user.username,
+      authMethod,
+      sessionId
+    );
+    setSessionCookie(res, session);
+    return { success: true, user: signedInUser(user), organization };
   }
 
   @Post(':token/accept')

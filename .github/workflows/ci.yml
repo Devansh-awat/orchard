@@ -244,6 +244,8 @@ jobs:
         run: pnpm --filter server test:exec
       - name: SCIM protocol test
         run: pnpm --filter server test:scim
+      - name: Invitation link tests
+        run: pnpm --filter server test:invite-link
       - name: Ingress URL test
         run: pnpm --filter server test:ingress-url
       - name: Template parameter normalization test

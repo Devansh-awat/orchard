@@ -46603,6 +46603,49 @@
         ]
       }
     },
+    "/invitations/{token}/sign-up": {
+      "post": {
+        "description": "Auth: public",
+        "operationId": "invitations_sign_up",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "POST /invitations/:token/sign-up",
+        "tags": [
+          "invitations"
+        ]
+      }
+    },
     "/invitations/accept-pending": {
       "post": {
         "description": "Auth: authenticated",

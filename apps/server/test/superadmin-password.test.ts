@@ -163,6 +163,31 @@ test('email case and whitespace do not matter', async () => {
   );
 });
 
+test('a member password only counts when the instance has no email', async () => {
+  const passwordHash = await bcrypt.hash('correct horse battery', 4);
+  const prisma = prismaWith([
+    {
+      id: 'm1',
+      email: 'member@example.com',
+      isSuperAdmin: false,
+      passwordHash,
+      createdAt: new Date()
+    }
+  ]) as any;
+
+  assert.equal(await superadminHasPassword(prisma, 'member@example.com'), false);
+  assert.equal(await superadminHasPassword(prisma, 'member@example.com', true), true);
+  assert.equal(
+    await verifySuperadminPassword(prisma, 'member@example.com', 'correct horse battery'),
+    null
+  );
+  assert.deepEqual(
+    await verifySuperadminPassword(prisma, 'member@example.com', 'correct horse battery', true),
+    { id: 'm1', email: 'member@example.com' }
+  );
+  assert.equal(await verifySuperadminPassword(prisma, 'member@example.com', 'wrong', true), null);
+});
+
 test('a sign-in response says superadmin only when it is true', () => {
   const base = {
     id: 'u1',

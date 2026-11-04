@@ -49,6 +49,24 @@ export async function setSuperadminPassword(
   return user.email;
 }
 
+export async function hashAccountPassword(password: string): Promise<string> {
+  if (password.length < MIN_LENGTH) {
+    throw new PasswordRefused(`A password needs at least ${MIN_LENGTH} characters.`);
+  }
+  return bcrypt.hash(password, BCRYPT_ROUNDS);
+}
+
+export async function setAccountPassword(
+  prisma: PasswordPrisma,
+  userId: string,
+  password: string
+): Promise<void> {
+  await prisma.user.update({
+    where: { id: userId },
+    data: { passwordHash: await hashAccountPassword(password) }
+  });
+}
+
 export async function clearSuperadminPassword(
   prisma: PasswordPrisma,
   email: string
@@ -60,26 +78,28 @@ export async function clearSuperadminPassword(
 
 export async function superadminHasPassword(
   prisma: PasswordPrisma,
-  email: string
+  email: string,
+  anyAccount = false
 ): Promise<boolean> {
   const user = await prisma.user.findUnique({
     where: { email: email.toLowerCase().trim() },
     select: { id: true, email: true, isSuperAdmin: true, passwordHash: true }
   });
-  return Boolean(user?.isSuperAdmin && user.passwordHash);
+  return Boolean((user?.isSuperAdmin || anyAccount) && user?.passwordHash);
 }
 
 export async function verifySuperadminPassword(
   prisma: PasswordPrisma,
   email: string,
-  password: string
+  password: string,
+  anyAccount = false
 ): Promise<{ id: string; email: string } | null> {
   const user = await prisma.user.findUnique({
     where: { email: email.toLowerCase().trim() },
     select: { id: true, email: true, isSuperAdmin: true, passwordHash: true }
   });
 
-  const hash = user?.isSuperAdmin ? user.passwordHash : null;
+  const hash = user?.isSuperAdmin || anyAccount ? (user?.passwordHash ?? null) : null;
   const ok = await bcrypt.compare(password, hash ?? ABSENT);
   if (!hash || !ok || !user) return null;
   return { id: user.id, email: user.email };

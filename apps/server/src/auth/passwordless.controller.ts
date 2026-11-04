@@ -17,6 +17,7 @@ import { RateLimitService } from './rate-limit.service';
 import { TurnstileService } from './turnstile.service';
 import {
   PasswordRefused,
+  setAccountPassword,
   setSuperadminPassword,
   superadminHasPassword,
   verifySuperadminPassword
@@ -270,7 +271,7 @@ export class PasswordlessController {
 
     const [passkey, password, user] = await Promise.all([
       this.passkeyService.userHasPasskeys(email),
-      superadminHasPassword(this.prisma, email),
+      superadminHasPassword(this.prisma, email, !this.otpService.sendsEmail()),
       this.prisma.user.findUnique({ where: { email }, select: { isSuperAdmin: true } })
     ]);
     return { passkey, password, superadmin: Boolean(user?.isSuperAdmin) };
@@ -303,13 +304,22 @@ export class PasswordlessController {
     await this.rateLimit.checkRateLimit(ipAddress, 'ip', 'password_signin');
     await this.turnstile.verifyRequest(req, 'signin', ipAddress);
 
-    const match = await verifySuperadminPassword(this.prisma, normalizedEmail, password);
+    const match = await verifySuperadminPassword(
+      this.prisma,
+      normalizedEmail,
+      password,
+      !this.otpService.sendsEmail()
+    );
     if (!match) {
       throw new HttpException('Invalid email or password', HttpStatus.UNAUTHORIZED);
     }
 
     const user = await this.prisma.user.findUnique({ where: { id: match.id } });
     if (!user) throw new HttpException('Invalid email or password', HttpStatus.UNAUTHORIZED);
+
+    if (!(await this.hasPrivateBetaAccess(user.email, user))) {
+      throw new HttpException(signupDeniedError(), HttpStatus.FORBIDDEN);
+    }
 
     await this.authz.assertSsoNotEnforced(user, 'password');
 
@@ -356,7 +366,7 @@ export class PasswordlessController {
     @Req() req: any
   ): Promise<{ success: true }> {
     const user = await this.resolveInternalUser(req.user.sub);
-    if (!user.isSuperAdmin) {
+    if (!user.isSuperAdmin && this.otpService.sendsEmail()) {
       throw new HttpException(
         'Only the superadmin has a password on this instance',
         HttpStatus.FORBIDDEN
@@ -364,7 +374,11 @@ export class PasswordlessController {
     }
 
     try {
-      await setSuperadminPassword(this.prisma, user.email, body?.password ?? '');
+      if (user.isSuperAdmin) {
+        await setSuperadminPassword(this.prisma, user.email, body?.password ?? '');
+      } else {
+        await setAccountPassword(this.prisma, user.id, body?.password ?? '');
+      }
     } catch (err) {
       if (err instanceof PasswordRefused) {
         throw new HttpException(err.message, HttpStatus.BAD_REQUEST);
