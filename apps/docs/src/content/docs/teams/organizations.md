@@ -38,9 +38,21 @@ Owners and admins can invite members.
 4. Select **Member**, **Admin**, or **Owner**.
 5. Select **Send invite**.
 
-The invitation appears under **Pending invitations**. If the instance has no email configured, the invitation is a link that you send yourself.
+The invitation appears under **Pending invitations**. The person joins the organization when they accept it. To resend or cancel an invitation, use the controls on its row.
 
-To resend or cancel an invitation, use the controls on its row. The person joins the organization when they accept the invitation.
+### Invite someone when the instance has no email
+
+If the instance has no email configured, Orchard shows a link instead of sending a message. Copy it and send it to the person yourself. `orchard member invite` prints the same link.
+
+- Only organization owners and admins see the link, and only once. Orchard stores a hash of it.
+- The link works once and expires after 7 days.
+- To get a new link, select the link control on the invitation's row, or run `orchard member invites resend <id>`. The old link stops working.
+
+The link opens a page where the person sets a password or creates a passkey and joins the organization. Their account uses the invited email address. Nothing checks that they own that address, so send the link only to the person you mean to invite. If the address already has an account, they sign in and accept. If single sign-on is enforced, they sign in with that instead.
+
+If they forget the password, someone with root on the server can set a new one with `orchardctl password set --email <address>`. After you add email to the instance, passwords stop working for everyone except the superadmin, and people sign in with an email code. If the address isn't a real mailbox, add a passkey first.
+
+With email configured, Orchard never shows a link. The person signs in with a code sent to the invited address and accepts the invitation there.
 
 ## Change a member's role
 
