@@ -332,7 +332,7 @@
 				<dl class="kv">
 					<div>
 						<dt>Uptime</dt>
-						<dd>{uptime(r.pod.startTime) ?? '—'}</dd>
+						<dd>{uptime(r.pod.startTime) ?? '-'}</dd>
 					</div>
 					<div>
 						<dt>Restarts</dt>
@@ -340,11 +340,11 @@
 					</div>
 					<div>
 						<dt>CPU</dt>
-						<dd>{r.pod.cpuUsage ? formatCpu(r.pod.cpuUsage) : '—'}</dd>
+						<dd>{r.pod.cpuUsage ? formatCpu(r.pod.cpuUsage) : '-'}</dd>
 					</div>
 					<div>
 						<dt>Memory</dt>
-						<dd>{r.pod.cpuUsage ? formatMemory(r.pod.memoryUsage) : '—'}</dd>
+						<dd>{r.pod.cpuUsage ? formatMemory(r.pod.memoryUsage) : '-'}</dd>
 					</div>
 					{#if r.exit}
 						<div class="kv-wide">

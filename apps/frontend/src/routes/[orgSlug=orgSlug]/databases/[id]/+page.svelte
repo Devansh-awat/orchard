@@ -1409,7 +1409,7 @@
 	}
 
 	function formatBytes(bytes: number | null): string {
-		if (!bytes) return '—';
+		if (!bytes) return '-';
 		const units = ['B', 'KB', 'MB', 'GB', 'TB'];
 		let n = bytes;
 		let i = 0;
