@@ -32,7 +32,7 @@
 		{ kind: 'cmd', text: installScript },
 		{ kind: 'out', text: ' ' },
 		{ kind: 'out', text: 'ORCHARD   self-hosted app platform' },
-		{ kind: 'dim', text: 'One box, one command. About 10 minutes on a clean machine.' },
+		{ kind: 'dim', text: 'One box, one command. A few minutes on a clean machine.' },
 		{ kind: 'out', text: ' ' },
 		{ kind: 'out', text: 'What happens next' },
 		{ kind: 'dim', text: ' 1  Check this machine' },
