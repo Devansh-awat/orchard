@@ -62,7 +62,7 @@ Everything else:
 ## Generated files
 
 Update these in the same change. CI catches stale routes, docs and doors, but nothing catches stale
-credits.
+credits or a missing changelog entry.
 
 | When you change                                   | Run                                                                                                                           |
 | ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
@@ -70,6 +70,7 @@ credits.
 | Routes, CLI commands, MCP tools or `.env.example` | `pnpm --filter docs generate`                                                                                                 |
 | The graft door surface                            | `UPDATE_SNAPSHOT=1 pnpm --filter server test:grafts`                                                                          |
 | A dependency                                      | `pnpm credits`, and fix anything it reports                                                                                   |
+| A feature or fix people will notice               | Add an entry to `apps/docs/src/lib/changelog-entries.ts`                                                                      |
 
 ## Conventions
 

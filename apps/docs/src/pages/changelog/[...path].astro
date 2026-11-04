@@ -108,9 +108,7 @@ const isFirst = page === 1 && !component;
                       <span class="kind">{change.type}</span>
                       {change.version && <span class="kind">{change.version}</span>}
                       {change.url && (
-                        <a href={change.url} rel="noopener">
-                          View source
-                        </a>
+                        <a href={change.url}>Learn more</a>
                       )}
                     </div>
                   </li>
