@@ -61,10 +61,17 @@ The domain status changes from **Pending** to **Verified**.
 
 ## Require single sign-on
 
-Requiring single sign-on blocks email codes, passkeys, and instance providers for members of the organization. Orchard also signs out members who signed in another way.
+Requiring single sign-on applies at two levels, depending on who owns the member's email domain.
+
+| Member                                                           | Effect                                                                                                                                      |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| Email on one of your [verified domains](#verify-an-email-domain) | Orchard blocks email codes, passkeys, passwords, and instance providers for the whole account, and signs out sessions that used them.       |
+| Any other email                                                  | The person keeps their Orchard account and their other organizations. They need your provider to open this organization. Owners are exempt. |
+
+Your provider can only sign in as an existing account if its email is on a verified domain, or the person started the sign-in from their own Orchard session. Otherwise Orchard asks them to sign in to Orchard first.
 
 :::caution
-Test a connection before you turn this on. A provider that fails blocks every member except superadmins.
+Test a connection before you turn this on. A provider that fails blocks members on your verified domains from Orchard, and every other member except owners from this organization. Superadmins are never blocked.
 :::
 
 1. In **Single sign-on**, turn on **Require single sign-on**.
