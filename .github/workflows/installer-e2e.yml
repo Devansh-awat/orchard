@@ -10,6 +10,7 @@ on:
       - apps/frontend/Dockerfile
       - apps/server/src/docker/**
       - apps/server/src/kubernetes/k8s-workload.service.ts
+      - apps/server/src/scripts/install-settings.ts
       - .github/workflows/installer-e2e.yml
 
 concurrency:

@@ -672,7 +672,7 @@ preflight() {
   [ "$HTTPS_PORT" = 443 ] || HTTPS_SUFFIX=":$HTTPS_PORT"
 
   # Not fatal here: tunnel mode never binds either port, and the mode is not
-  # chosen until the next step. choose_ingress_mode stops the run if the mode
+  # chosen until the next step. check_mode_constraints stops the run if the mode
   # that gets picked does need them.
   if command -v ss >/dev/null 2>&1; then
     local holder
