@@ -60,9 +60,32 @@ PROMPT_HINT_SHOWN=false
 PREVIOUS_INSTALL=false
 PREVIOUS_EXTRA_HOSTS=''
 PUBLIC_IP=''
+PUBLIC_IP6=''
 PRIMARY_IP=''
 LOCAL_IPS=''
+LOCAL_IPS6=''
 BEHIND_NAT=true
+CLOUD=''
+DMI_DIR=${ORCHARD_DMI_DIR:-/sys/class/dmi/id}
+ORCHARD_PUBLIC_IP=${ORCHARD_PUBLIC_IP:-}
+ORCHARD_INGRESS_CNAME=${ORCHARD_INGRESS_CNAME:-}
+INGRESS_MODE=''
+DOMAIN_SET=false
+APP_DOMAIN_SET=false
+MCP_DOMAIN_SET=false
+CNAME_SET=false
+PUBLIC_IP_SET=false
+MOVING_OFF_SSLIP=false
+PREV_MODE=''
+PREV_DOMAIN=''
+PREV_APP_DOMAIN=''
+PREV_MCP=''
+PREV_MCP_DOMAIN=''
+PREV_CNAME=''
+PREV_PUBLIC_IP=''
+PREV_EMAIL=''
+PREV_UPDATES=''
+PREV_LIMITS=''
 
 HOST_DEFAULTS_VERSION=2
 
@@ -104,8 +127,9 @@ fi
 
 PLAN_TITLES=(
   "Check this machine"
-  "Find how traffic gets in"
-  "Choose domains"
+  "Check the network"
+  "Your answers"
+  "DNS records"
   "Install k3s"
   "Install Helm"
   "Install platform operators"
@@ -116,7 +140,7 @@ PLAN_TITLES=(
   "Install the updater"
   "Finish"
 )
-PLAN_COSTS=(6 6 6 120 20 240 105 45 4 300 4 0)
+PLAN_COSTS=(6 6 0 0 120 20 240 105 45 4 300 4 0)
 
 STEP_N=0
 STEP_TOTAL=${#PLAN_TITLES[@]}
@@ -263,13 +287,17 @@ usage() {
 
   How traffic gets in
     --mode <public|tunnel|lan>   ORCHARD_INGRESS_MODE   how the internet reaches this box
-    --domain <host>              ORCHARD_DOMAIN         where the Orchard UI lives (public mode
-                                                        default: an sslip.io name for this IP)
-    --app-domain <host>          ORCHARD_APP_DOMAIN     wildcard parent for deployed apps
+    --public-ip <ip|none>        ORCHARD_PUBLIC_IP      address for raw ports and public databases
+                                                        (default: detected. In tunnel mode: none)
+    --domain <host>              ORCHARD_DOMAIN         the dashboard (public mode default: an
+                                                        sslip.io name. lan default: this address)
+    --app-domain <host>          ORCHARD_APP_DOMAIN     parent of app URLs, needs a wildcard record
                                                         (default: apps.<parent of your domain>)
+    --ingress-cname <host|none>  ORCHARD_INGRESS_CNAME  what custom domains CNAME to (default: the
+                                                        dashboard. In tunnel mode: the tunnel)
     --mcp-domain <host>          ORCHARD_MCP_DOMAIN     where agents connect over MCP
-                                                        (default: mcp.<app domain>)
-    --email <address>            ORCHARD_ACME_EMAIL     Let's Encrypt contact, optional
+                                                        (default: mcp.<parent of your domain>)
+    --email <address|none>       ORCHARD_ACME_EMAIL     Let's Encrypt contact, optional
     --tunnel-token <token>       ORCHARD_TUNNEL_TOKEN   Cloudflare Tunnel token, tunnel mode
     --http-port <port>           ORCHARD_HTTP_PORT      where Traefik listens, lan mode only
                                                         (default: 80)
@@ -305,8 +333,10 @@ usage() {
     --limits <on|off>            ORCHARD_LIMITS         resource limits on apps and databases,
                                                         locked to this value. Unset, the setup
                                                         page asks and you can change it later
-    --yes, -y                    ORCHARD_ASSUME_YES     never prompt: use defaults, leave optional
-                                                        steps off if they are not ready
+    --yes, -y                    ORCHARD_ASSUME_YES     never prompt and never wait for DNS: use
+                                                        flags, then current values, then defaults.
+                                                        A required answer with no default stops
+                                                        the run and names its flag
                                  ORCHARD_PROMPT_TIMEOUT seconds to wait on a question before
                                                         giving up (default: 900, 0 waits forever)
     --help, -h                                         show this and exit
@@ -349,8 +379,10 @@ parse_args() {
     FLAGS_GIVEN="$FLAGS_GIVEN$1 "
     case "$1" in
       --mode) need_value "$1" "${2:-}"; ORCHARD_INGRESS_MODE=$2; shift 2 ;;
+      --public-ip) need_value "$1" "${2:-}"; ORCHARD_PUBLIC_IP=$2; shift 2 ;;
       --domain) need_value "$1" "${2:-}"; ORCHARD_DOMAIN=$2; shift 2 ;;
       --app-domain) need_value "$1" "${2:-}"; ORCHARD_APP_DOMAIN=$2; shift 2 ;;
+      --ingress-cname) need_value "$1" "${2:-}"; ORCHARD_INGRESS_CNAME=$2; shift 2 ;;
       --mcp-domain) need_value "$1" "${2:-}"; ORCHARD_MCP_DOMAIN=$2; shift 2 ;;
       --mcp) need_value "$1" "${2:-}"; ORCHARD_MCP=$2; shift 2 ;;
       --limits) need_value "$1" "${2:-}"; ORCHARD_LIMITS=$2; shift 2 ;;
@@ -459,7 +491,7 @@ ask() {
   if [ "$ASSUME_YES" = true ]; then printf '%s' "$default"; return; fi
 
   if [ "$PROMPT_FD_OPEN" != true ]; then
-    warn "cannot ask '$prompt': ${PROMPT_BLOCKED:-no terminal to read an answer from}"
+    warn "cannot ask '${prompt#"${prompt%%[![:space:]]*}"}': ${PROMPT_BLOCKED:-no terminal to read an answer from}"
     if [ "$PROMPT_HINT_SHOWN" != true ]; then prompt_hint; fi
     die "nothing has been installed yet; nothing to undo"
   fi
@@ -480,6 +512,12 @@ ask() {
     IFS= read -r answer <&3 2>/dev/null || rc=$?
   fi
   trap - TTIN TTOU
+
+  if [ "$rc" -ne 0 ] && [ "${ASK_SOFT:-false}" = true ]; then
+    printf '\n' >&2
+    printf '__eof__'
+    return 0
+  fi
 
   if [ "$rc" -ne 0 ]; then
     printf '\n' >&2
@@ -534,6 +572,24 @@ is_sslip() {
   case "$1" in *.sslip.io) return 0 ;; *) return 1 ;; esac
 }
 
+read_live_settings() {
+  local live line
+  PREV_PUBLIC_IP=$(reuse_value '.tenant.publicIp')
+  PREV_CNAME=$(reuse_secret INGRESS_CNAME)
+  PREV_EMAIL=$(KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl get clusterissuer letsencrypt \
+    -o jsonpath='{.spec.acme.email}' 2>/dev/null || true)
+  live=$(KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl -n orchard exec deploy/server --request-timeout=20s -- \
+    node dist/scripts/install-settings.js show 2>/dev/null || true)
+  while IFS= read -r line; do
+    case "$line" in
+      publicIp=?*) if [ -z "$PREV_PUBLIC_IP" ]; then PREV_PUBLIC_IP=${line#publicIp=}; fi ;;
+      cname=?*) if [ -z "$PREV_CNAME" ]; then PREV_CNAME=${line#cname=}; fi ;;
+    esac
+  done <<EOF
+$live
+EOF
+}
+
 load_previous_answers() {
   [ -f "$VALUES_FILE" ] || return 0
   PREVIOUS_INSTALL=true
@@ -543,18 +599,30 @@ load_previous_answers() {
     ensure_yq
   fi
 
+  PREV_MODE=$(previous_ingress_mode)
   if ! answer_given --mode ORCHARD_INGRESS_MODE; then
-    ORCHARD_INGRESS_MODE=$(previous_ingress_mode)
+    ORCHARD_INGRESS_MODE=$PREV_MODE
   fi
 
-  local previous_domain moving_off_sslip=false
-  previous_domain=$(reuse_value '.ingress.host')
-  if answer_given --domain ORCHARD_DOMAIN && is_sslip "$previous_domain" && ! is_sslip "$ORCHARD_DOMAIN"; then
-    moving_off_sslip=true
+  PREV_DOMAIN=$(reuse_value '.ingress.host')
+  PREV_APP_DOMAIN=$(reuse_secret APP_DOMAIN)
+  PREV_MCP=$(reuse_value '.mcp.enabled')
+  PREV_MCP_DOMAIN=$(reuse_value '.mcp.ingress.host')
+  PREV_LIMITS=$(reuse_secret INSTANCE_RESOURCE_LIMITS)
+  if answer_given --domain ORCHARD_DOMAIN && is_sslip "$PREV_DOMAIN" && ! is_sslip "$ORCHARD_DOMAIN"; then
+    MOVING_OFF_SSLIP=true
   fi
+  if ! answer_given --limits ORCHARD_LIMITS; then ORCHARD_LIMITS=$PREV_LIMITS; fi
+  PREV_UPDATES=manual
+  if systemctl is-enabled --quiet orchard-update.timer 2>/dev/null; then PREV_UPDATES=automatic; fi
+
+  read_live_settings
+  if ! answer_given --public-ip ORCHARD_PUBLIC_IP; then ORCHARD_PUBLIC_IP=$PREV_PUBLIC_IP; fi
+  if ! answer_given --ingress-cname ORCHARD_INGRESS_CNAME; then ORCHARD_INGRESS_CNAME=$PREV_CNAME; fi
+  if ! answer_given --email ORCHARD_ACME_EMAIL; then ORCHARD_ACME_EMAIL=$PREV_EMAIL; fi
 
   keep_answer --domain ORCHARD_DOMAIN ORCHARD_DOMAIN '.ingress.host'
-  if [ "$moving_off_sslip" = false ]; then
+  if [ "$MOVING_OFF_SSLIP" = false ]; then
     keep_answer --app-domain ORCHARD_APP_DOMAIN ORCHARD_APP_DOMAIN '.server.env[]? | select(.name == "APP_DOMAIN") | .value'
     keep_answer --mcp-domain ORCHARD_MCP_DOMAIN ORCHARD_MCP_DOMAIN '.mcp.ingress.host'
   fi
@@ -656,66 +724,228 @@ preflight() {
   info "node ports: $NODE_PORT_RANGE, registry on 127.0.0.1:$REGISTRY_PORT"
 }
 
+is_ipv4() {
+  local a b c d
+  [[ "$1" =~ ^([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})$ ]] || return 1
+  a=${BASH_REMATCH[1]} b=${BASH_REMATCH[2]} c=${BASH_REMATCH[3]} d=${BASH_REMATCH[4]}
+  [ "$a" -le 255 ] && [ "$b" -le 255 ] && [ "$c" -le 255 ] && [ "$d" -le 255 ]
+}
+
+is_ipv6() {
+  case "$1" in *:*) ;; *) return 1 ;; esac
+  [[ "$1" =~ ^[0-9a-fA-F:.]+$ ]]
+}
+
+is_ip() {
+  is_ipv4 "$1" || is_ipv6 "$1"
+}
+
+ipv4_to_int() {
+  local IFS=.
+  # shellcheck disable=SC2086  # splitting on dots is the point
+  set -- $1
+  printf '%d' $((($1 << 24) + ($2 << 16) + ($3 << 8) + $4))
+}
+
+ipv4_in_cidr() {
+  local ip=$1 net=${2%/*} bits=${2#*/} mask
+  mask=$(((0xFFFFFFFF << (32 - bits)) & 0xFFFFFFFF))
+  [ $(($(ipv4_to_int "$ip") & mask)) -eq $(($(ipv4_to_int "$net") & mask)) ]
+}
+
+is_private_ip() {
+  local cidr
+  if is_ipv4 "$1"; then
+    for cidr in 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 100.64.0.0/10 127.0.0.0/8 169.254.0.0/16; do
+      if ipv4_in_cidr "$1" "$cidr"; then return 0; fi
+    done
+    return 1
+  fi
+  case "$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')" in
+    fc*|fd*|fe8*|fe9*|fea*|feb*|::1) return 0 ;;
+  esac
+  return 1
+}
+
+is_cloudflare_ip() {
+  local cidr
+  if is_ipv4 "$1"; then
+    for cidr in 173.245.48.0/20 103.21.244.0/22 103.22.200.0/22 103.31.4.0/22 141.101.64.0/18 \
+      108.162.192.0/18 190.93.240.0/20 188.114.96.0/20 197.234.240.0/22 198.41.128.0/17 \
+      162.158.0.0/15 104.16.0.0/13 104.24.0.0/14 172.64.0.0/13 131.0.72.0/22; do
+      if ipv4_in_cidr "$1" "$cidr"; then return 0; fi
+    done
+    return 1
+  fi
+  case "$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')" in
+    2400:cb00:*|2606:4700:*|2803:f800:*|2405:b500:*|2405:8100:*|2a06:98c?:*|2c0f:f248:*) return 0 ;;
+  esac
+  return 1
+}
+
+clean_host() {
+  local host
+  host=$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')
+  host=${host#http://}
+  host=${host#https://}
+  host=${host%%/*}
+  host=${host#\*.}
+  host=${host%.}
+  printf '%s' "$host"
+}
+
+valid_host() {
+  [ "${#1}" -le 253 ] || return 1
+  [[ "$1" =~ ^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$ ]] || return 1
+  if is_ipv4 "$1"; then return 1; fi
+  return 0
+}
+
+valid_lan_host() {
+  if is_ip "$1"; then return 0; fi
+  if [[ "$1" =~ ^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$ ]]; then return 0; fi
+  valid_host "$1"
+}
+
+email_problem() {
+  case "$1" in
+    *[[:space:]]*|*\"*|*\'*|*:*) printf 'that is not an email address'; return ;;
+    *@*.*) ;;
+    *) printf 'that is not an email address'; return ;;
+  esac
+  case "${1##*@}" in
+    example.com|example.org|example.net|*.example.com|*.example.org|*.example.net|*.local|*.test|*.invalid|*.localhost)
+      printf "Let's Encrypt refuses addresses at %s, and no certificate would issue" "${1##*@}"
+      ;;
+  esac
+}
+
+sslip_name() {
+  local label=$1 ip=$2 dashed
+  if is_ipv6 "$ip"; then
+    dashed=${ip//:/-}
+    case "$dashed" in *-) dashed="${dashed}0" ;; esac
+    case "$dashed" in -*) dashed="0$dashed" ;; esac
+  else
+    dashed=${ip//./-}
+  fi
+  printf '%s.%s.sslip.io' "$label" "$dashed"
+}
+
+cloud_provider() {
+  local dir=$DMI_DIR vendor asset
+  vendor=$(cat "$dir/sys_vendor" 2>/dev/null || true)
+  asset=$(cat "$dir/chassis_asset_tag" 2>/dev/null || true)
+  case "$asset" in OracleCloud*) printf oracle; return ;; esac
+  case "$vendor" in
+    Amazon*) printf aws ;;
+    Google*) printf gcp ;;
+    Microsoft*) printf azure ;;
+    Hetzner*) printf hetzner ;;
+    DigitalOcean*) printf digitalocean ;;
+    Linode*|Akamai*) printf linode ;;
+    Vultr*) printf vultr ;;
+    OVH*) printf ovh ;;
+  esac
+}
+
+firewall_hint() {
+  case "$CLOUD" in
+    aws) printf 'On AWS, allow 80 and 443 in the security group: EC2 > Security Groups > Inbound rules.' ;;
+    gcp) printf 'On Google Cloud, allow 80 and 443 in VPC network > Firewall.' ;;
+    azure) printf "On Azure, allow 80 and 443 in the VM's network security group." ;;
+    hetzner) printf 'On Hetzner, allow 80 and 443 in Cloud Console > Firewalls, if one is attached.' ;;
+    digitalocean) printf 'On DigitalOcean, allow 80 and 443 in Networking > Firewalls, if one is attached.' ;;
+    oracle) printf 'On Oracle Cloud, allow 80 and 443 in the VCN security list, and in the iptables rules on the machine.' ;;
+    linode) printf 'On Linode, allow 80 and 443 in the Cloud Firewall, if one is attached.' ;;
+    vultr) printf 'On Vultr, allow 80 and 443 in the firewall group, if one is attached.' ;;
+    ovh) printf 'On OVH, allow 80 and 443 in the Edge Network Firewall, if it is on.' ;;
+    *) printf "Allow 80 and 443 in your provider's firewall, or forward them on your router." ;;
+  esac
+}
+
+detect_public_ipv4() {
+  local url ip
+  for url in https://api.ipify.org https://ipv4.icanhazip.com; do
+    ip=$(curl -4 -fsS --max-time 6 "$url" 2>/dev/null | tr -d '[:space:]' || true)
+    if is_ipv4 "$ip"; then printf '%s' "$ip"; return 0; fi
+  done
+  return 0
+}
+
+detect_public_ipv6() {
+  local ip
+  ip=$(curl -6 -fsS --max-time 4 https://api6.ipify.org 2>/dev/null | tr -d '[:space:]' || true)
+  if is_ipv6 "$ip"; then printf '%s' "$ip"; fi
+  return 0
+}
+
+host_addresses() {
+  ip "-$1" -o addr show scope global 2>/dev/null \
+    | awk '$2 !~ /^(docker|br-|cni|flannel|veth|virbr|lo)/ {print $4}' | cut -d/ -f1 || true
+}
+
+ip_is_local() {
+  local candidate
+  for candidate in $LOCAL_IPS $LOCAL_IPS6; do
+    if [ "$candidate" = "$1" ]; then return 0; fi
+  done
+  return 1
+}
+
 detect_network() {
   step
 
-  PUBLIC_IP=$(curl -fsS --max-time 8 https://api.ipify.org 2>/dev/null || true)
-  LOCAL_IPS=$(ip -4 -o addr show scope global 2>/dev/null | awk '{print $4}' | cut -d/ -f1 || true)
-  PRIMARY_IP=$(printf '%s\n' "$LOCAL_IPS" | head -1)
+  PUBLIC_IP=$(detect_public_ipv4)
+  PUBLIC_IP6=$(detect_public_ipv6)
+  LOCAL_IPS=$(host_addresses 4)
+  LOCAL_IPS6=$(host_addresses 6)
+  PRIMARY_IP=$(ip -4 route get 1.1.1.1 2>/dev/null | sed -n 's/.* src \([0-9.]*\).*/\1/p' || true)
+  if [ -z "$PRIMARY_IP" ]; then PRIMARY_IP=$(printf '%s\n' "$LOCAL_IPS" | head -1); fi
+  CLOUD=$(cloud_provider)
+
+  if [ -z "$PUBLIC_IP" ]; then
+    local candidate
+    for candidate in $LOCAL_IPS; do
+      if ! is_private_ip "$candidate"; then PUBLIC_IP=$candidate; break; fi
+    done
+  fi
 
   BEHIND_NAT=true
-  if [ -n "$PUBLIC_IP" ] && printf '%s\n' "$LOCAL_IPS" | grep -qx "$PUBLIC_IP"; then
-    BEHIND_NAT=false
-  fi
+  if [ -n "$PUBLIC_IP" ] && ip_is_local "$PUBLIC_IP"; then BEHIND_NAT=false; fi
+  if [ -z "$PUBLIC_IP" ] && [ -n "$PUBLIC_IP6" ] && ip_is_local "$PUBLIC_IP6"; then BEHIND_NAT=false; fi
 
-  info "public IP: ${PUBLIC_IP:-unknown}"
-  info "local IP:  ${PRIMARY_IP:-unknown}"
-  if [ "$BEHIND_NAT" = true ]; then
-    info "this box is behind NAT"
-  else
-    info "this box has a routable address"
-  fi
+  info "public IP: ${PUBLIC_IP:-${PUBLIC_IP6:-not found}}"
+  info "local IP:  ${PRIMARY_IP:-${LOCAL_IPS6:-not found}}"
+  if [ -n "$CLOUD" ]; then info "provider:  $CLOUD"; fi
 }
 
-choose_ingress_mode() {
-  if [ -n "$ORCHARD_INGRESS_MODE" ]; then
-    INGRESS_MODE=$ORCHARD_INGRESS_MODE
-  elif [ "$ASSUME_YES" = true ]; then
-    INGRESS_MODE=$([ "$BEHIND_NAT" = true ] && echo tunnel || echo public)
-  else
-    echo
-    bold "How should the internet reach this instance?"
-    echo "  1) public    - this box has a routable IP; a domain is optional"
-    echo "  2) tunnel    - Cloudflare Tunnel (works behind NAT/CGNAT)"
-    echo "  3) lan       - LAN only, dashboard over plain HTTP"
-    if [ -n "$PORTS_BUSY" ]; then
-      echo
-      note "port $PORTS_BUSY is taken on this box, and public and lan both need it."
-      note "public sends the Let's Encrypt HTTP-01 challenge to 80, for every"
-      note "hostname and every renewal, and the ACME spec fixes that port. lan"
-      note "serves the dashboard there in plain HTTP. Tunnel mode needs neither"
-      note "80 nor 443, because cloudflared dials out from inside the cluster."
-      echo
-    fi
-    local default attempt=0
-    default=$([ "$BEHIND_NAT" = true ] && echo 2 || echo 1)
-    INGRESS_MODE=''
-    while [ -z "$INGRESS_MODE" ] && [ "$attempt" -lt 5 ]; do
-      attempt=$((attempt + 1))
-      case "$(ask 'Choose' "$default")" in
-        1|public) INGRESS_MODE=public ;;
-        2|tunnel) INGRESS_MODE=tunnel ;;
-        3|lan) INGRESS_MODE=lan ;;
-        *) warn "pick 1, 2 or 3" ;;
-      esac
-    done
-    [ -n "$INGRESS_MODE" ] || die "invalid choice"
-  fi
-  info "ingress mode: $INGRESS_MODE"
+recommended_mode() {
+  if [ -z "$PUBLIC_IP$PUBLIC_IP6" ]; then printf lan; return; fi
+  if [ "$BEHIND_NAT" = false ] || [ -n "$CLOUD" ]; then printf public; return; fi
+  printf tunnel
+}
 
+recommended_reason() {
+  if [ -z "$PUBLIC_IP$PUBLIC_IP6" ]; then
+    printf 'No public address was found, so this machine looks private.'
+    return
+  fi
+  if [ "$BEHIND_NAT" = false ]; then
+    printf '%s is on this machine.' "${PUBLIC_IP:-$PUBLIC_IP6}"
+    return
+  fi
+  if [ -n "$CLOUD" ]; then
+    printf 'This looks like a cloud server: %s maps to %s on this machine.' "${PUBLIC_IP:-$PUBLIC_IP6}" "${PRIMARY_IP:-a private address}"
+    return
+  fi
+  printf 'This machine is behind NAT: it is %s, and the internet sees %s.' "${PRIMARY_IP:-a private address}" "${PUBLIC_IP:-$PUBLIC_IP6}"
+}
+
+check_mode_constraints() {
   case "$INGRESS_MODE" in
     public|tunnel|lan) ;;
-    *) die "unknown ingress mode: $INGRESS_MODE" ;;
+    *) die "--mode takes public, tunnel or lan, not: $INGRESS_MODE" ;;
   esac
 
   if [ "$INGRESS_MODE" != lan ] && { [ "$HTTP_PORT" != 80 ] || [ "$HTTPS_PORT" != 443 ]; }; then
@@ -745,11 +975,11 @@ choose_ingress_mode() {
 # Tailscale one), its hostname, its mDNS name, and the sslip.io name earlier
 # versions used.
 lan_alt_hosts() {
-  local short
+  local short sslip=''
   short=$(hostname 2>/dev/null | cut -d. -f1 || true)
+  if [ -n "$PRIMARY_IP" ]; then sslip=$(sslip_name orchard "$PRIMARY_IP"); fi
   # shellcheck disable=SC2086  # each of these is a list of names
-  extra_hosts_list $PREVIOUS_EXTRA_HOSTS $LOCAL_IPS $short ${short:+$short.local} \
-    "orchard.${PRIMARY_IP//./-}.sslip.io"
+  extra_hosts_list $PREVIOUS_EXTRA_HOSTS $LOCAL_IPS $short ${short:+$short.local} $sslip
 }
 
 extra_hosts_list() {
@@ -762,108 +992,6 @@ extra_hosts_list() {
     out="${out:+$out, }\"$candidate\""
   done
   printf '[%s]' "$out"
-}
-
-collect_domains() {
-  step
-
-  case "$ORCHARD_LIMITS" in
-    ''|on|off) ;;
-    *) die "--limits takes on or off, not: $ORCHARD_LIMITS" ;;
-  esac
-  case "$ORCHARD_MCP" in
-    true|false) ;;
-    *) die "--mcp takes true or false, not: $ORCHARD_MCP" ;;
-  esac
-
-  # shellcheck disable=SC2086  # a list of names
-  INGRESS_EXTRA_HOSTS=$(extra_hosts_list $PREVIOUS_EXTRA_HOSTS)
-
-  if [ "$INGRESS_MODE" = lan ]; then
-    # The dashboard answers on this box's own address, so nothing has to resolve
-    # for it: sslip.io is public DNS, and a resolver that will not answer for a
-    # private address (Tailscale's, most often) leaves an install nobody can
-    # reach. Apps still need a wildcard, which an IP cannot have, so their
-    # generated hostnames stay on sslip.io.
-    ORCHARD_DOMAIN=${ORCHARD_DOMAIN:-${PRIMARY_IP:-localhost}}
-    ORCHARD_APP_DOMAIN=${ORCHARD_APP_DOMAIN:-apps.${PRIMARY_IP//./-}.sslip.io}
-    ORCHARD_MCP_DOMAIN=${ORCHARD_MCP_DOMAIN:-mcp.$ORCHARD_APP_DOMAIN}
-    USE_TLS=false
-    CERT_ISSUER=selfsigned
-    INGRESS_EXTRA_HOSTS=$(lan_alt_hosts)
-    info "platform: http://$ORCHARD_DOMAIN$HTTP_SUFFIX"
-    local alts
-    alts=$(printf '%s' "$INGRESS_EXTRA_HOSTS" | tr -d '[]"')
-    [ -z "$alts" ] || info "also at:  $alts"
-    info "apps:     *.$ORCHARD_APP_DOMAIN$HTTPS_SUFFIX"
-    if [ "$ORCHARD_MCP" = true ]; then info "agents:   http://$ORCHARD_MCP_DOMAIN$HTTP_SUFFIX"; fi
-    return
-  fi
-
-  if [ -z "$ORCHARD_DOMAIN" ]; then
-    if [ "$INGRESS_MODE" = public ] && [ -n "$PUBLIC_IP" ]; then
-      echo
-      note "Have a domain? Enter it, such as orchard.example.com."
-      note "No domain yet? Press Enter to try Orchard on a free sslip.io name."
-      ORCHARD_DOMAIN=$(ask "Domain for the Orchard UI" "orchard.${PUBLIC_IP//./-}.sslip.io")
-    else
-      ORCHARD_DOMAIN=$(ask "Domain for the Orchard UI (e.g. orchard.example.com)")
-    fi
-  fi
-  [ -n "$ORCHARD_DOMAIN" ] || die "a domain is required for $INGRESS_MODE mode"
-
-  [ -n "$ORCHARD_APP_DOMAIN" ] || ORCHARD_APP_DOMAIN="apps.$(parent_domain "$ORCHARD_DOMAIN")"
-  [ -n "$ORCHARD_MCP_DOMAIN" ] || ORCHARD_MCP_DOMAIN="mcp.$ORCHARD_APP_DOMAIN"
-  info "apps:   *.$ORCHARD_APP_DOMAIN"
-  if [ "$ORCHARD_MCP" = true ]; then info "agents: $ORCHARD_MCP_DOMAIN"; fi
-
-  USE_TLS=true
-  CERT_ISSUER=letsencrypt
-
-  local names=("$ORCHARD_DOMAIN" "*.$ORCHARD_APP_DOMAIN")
-  if [ "$ORCHARD_MCP" = true ] && ! covered_by_app_wildcard "$ORCHARD_MCP_DOMAIN"; then
-    names+=("$ORCHARD_MCP_DOMAIN")
-  fi
-  local width=0 name
-  for name in "${names[@]}"; do
-    if [ ${#name} -gt "$width" ]; then width=${#name}; fi
-  done
-
-  if [ "$INGRESS_MODE" = public ]; then
-    if [ "$(reuse_value '.ingress.host')" = "$ORCHARD_DOMAIN" ]; then return 0; fi
-    local records=()
-    for name in "${names[@]}"; do
-      if ! is_sslip "$name"; then records+=("$name"); fi
-    done
-    if [ "${#records[@]}" -gt 0 ]; then
-      echo
-      bold "Point these records at ${PUBLIC_IP:-this box} before continuing:"
-      for name in "${records[@]}"; do
-        printf '  A  %-*s -> %s\n' "$width" "$name" "${PUBLIC_IP:-<this box>}"
-      done
-    fi
-    if is_sslip "$ORCHARD_DOMAIN"; then
-      echo
-      note "sslip.io answers for these names, so there are no DNS records to add."
-      note "All sslip.io users share one Let's Encrypt limit, so a certificate can"
-      note "be delayed. Use your own domain for anything you keep."
-      if [ "$BEHIND_NAT" = true ]; then
-        warn "This box looks like it is behind NAT. Ports 80 and 443 on $PUBLIC_IP must reach it."
-      fi
-    else
-      wait_for_dns "$ORCHARD_DOMAIN"
-    fi
-  else
-    USE_TLS=false
-    CERT_ISSUER=""
-    [ -n "$ORCHARD_TUNNEL_TOKEN" ] || ORCHARD_TUNNEL_TOKEN=$(ask "Cloudflare Tunnel token")
-    [ -n "$ORCHARD_TUNNEL_TOKEN" ] || die "a tunnel token is required for tunnel mode"
-    echo
-    bold "In the Cloudflare dashboard, route these hostnames to this tunnel:"
-    for name in "${names[@]}"; do
-      printf '  %-*s -> http://traefik.traefik.svc.cluster.local:80\n' "$width" "$name"
-    done
-  fi
 }
 
 parent_domain() {
@@ -883,26 +1011,1390 @@ covered_by_app_wildcard() {
   return 0
 }
 
-wait_for_dns() {
-  local host=$1 tries=0 resolved
-  if [ "$ASSUME_YES" = true ]; then return 0; fi
-  printf '    waiting for %s to resolve' "$host"
-  while [ $tries -lt 60 ]; do
-    resolved=$(getent ahostsv4 "$host" 2>/dev/null | awk 'NR==1{print $1}' || true)
-    if [ -n "$resolved" ]; then
-      printf '\n'
-      info "$host -> $resolved"
-      if [ -n "$PUBLIC_IP" ] && [ "$resolved" != "$PUBLIC_IP" ]; then
-        warn "that does not match this box's public IP ($PUBLIC_IP)"
+tunnel_id() {
+  printf '%s' "$ORCHARD_TUNNEL_TOKEN" | base64 -d 2>/dev/null \
+    | sed -n 's/.*"t":"\([0-9a-fA-F-]*\)".*/\1/p' || true
+}
+
+ingress_cname() {
+  local id
+  case "$INGRESS_MODE" in
+    public) printf '%s' "$ORCHARD_DOMAIN" ;;
+    tunnel)
+      id=$(tunnel_id)
+      if [ -n "$id" ]; then printf '%s.cfargotunnel.com' "$id"; fi
+      ;;
+    lan)
+      if [ -n "$PRIMARY_IP" ]; then sslip_name orchard "$PRIMARY_IP"; fi
+      ;;
+  esac
+}
+
+lan_name_base() {
+  if [ -n "$PRIMARY_IP" ]; then
+    sslip_name x "$PRIMARY_IP" | cut -d. -f2-
+  else
+    parent_domain "$ORCHARD_DOMAIN"
+  fi
+}
+
+default_domain() {
+  case "$INGRESS_MODE" in
+    lan) printf '%s' "${PRIMARY_IP:-localhost}" ;;
+    public)
+      if [ -n "$ORCHARD_PUBLIC_IP" ] && ! is_private_ip "$ORCHARD_PUBLIC_IP"; then
+        sslip_name orchard "$ORCHARD_PUBLIC_IP"
       fi
-      return 0
+      ;;
+  esac
+}
+
+default_app_domain() {
+  [ -n "$ORCHARD_DOMAIN" ] || return 0
+  if [ "$INGRESS_MODE" = lan ]; then
+    printf 'apps.%s' "$(lan_name_base)"
+  else
+    printf 'apps.%s' "$(parent_domain "$ORCHARD_DOMAIN")"
+  fi
+}
+
+default_mcp_domain() {
+  [ -n "$ORCHARD_DOMAIN" ] || return 0
+  local base
+  if [ "$INGRESS_MODE" = lan ]; then
+    base=$(lan_name_base)
+  else
+    base=$(parent_domain "$ORCHARD_DOMAIN")
+  fi
+  if [ "mcp.$base" = "$ORCHARD_DOMAIN" ]; then
+    printf 'agents.%s' "$base"
+  else
+    printf 'mcp.%s' "$base"
+  fi
+}
+
+default_public_ip() {
+  case "$INGRESS_MODE" in
+    public) printf '%s' "${PUBLIC_IP:-$PUBLIC_IP6}" ;;
+    lan) printf '%s' "$PRIMARY_IP" ;;
+  esac
+}
+
+mark_given_answers() {
+  if [ "$ORCHARD_PUBLIC_IP" = none ]; then ORCHARD_PUBLIC_IP=''; PUBLIC_IP_SET=true; fi
+  if [ "$ORCHARD_INGRESS_CNAME" = none ]; then ORCHARD_INGRESS_CNAME=''; CNAME_SET=true; fi
+  if [ "$ORCHARD_ACME_EMAIL" = none ]; then ORCHARD_ACME_EMAIL=''; fi
+  if [ -n "$ORCHARD_PUBLIC_IP" ]; then PUBLIC_IP_SET=true; fi
+  if [ -n "$ORCHARD_DOMAIN" ]; then
+    DOMAIN_SET=true
+    ORCHARD_DOMAIN=$(clean_host "$ORCHARD_DOMAIN")
+  fi
+  if [ -n "$ORCHARD_APP_DOMAIN" ]; then
+    APP_DOMAIN_SET=true
+    ORCHARD_APP_DOMAIN=$(clean_host "$ORCHARD_APP_DOMAIN")
+  fi
+  if [ -n "$ORCHARD_MCP_DOMAIN" ]; then
+    MCP_DOMAIN_SET=true
+    ORCHARD_MCP_DOMAIN=$(clean_host "$ORCHARD_MCP_DOMAIN")
+  fi
+  if [ -n "$ORCHARD_INGRESS_CNAME" ]; then
+    CNAME_SET=true
+    ORCHARD_INGRESS_CNAME=$(clean_host "$ORCHARD_INGRESS_CNAME")
+  fi
+}
+
+derive_answers() {
+  if [ "$PUBLIC_IP_SET" != true ]; then ORCHARD_PUBLIC_IP=$(default_public_ip); fi
+  if [ "$DOMAIN_SET" != true ]; then ORCHARD_DOMAIN=$(default_domain); fi
+  if [ "$APP_DOMAIN_SET" != true ]; then ORCHARD_APP_DOMAIN=$(default_app_domain); fi
+  if [ "$MCP_DOMAIN_SET" != true ]; then ORCHARD_MCP_DOMAIN=$(default_mcp_domain); fi
+  if [ "$CNAME_SET" != true ]; then ORCHARD_INGRESS_CNAME=$(ingress_cname); fi
+}
+
+apply_mode_settings() {
+  # shellcheck disable=SC2086  # a list of names
+  INGRESS_EXTRA_HOSTS=$(extra_hosts_list $PREVIOUS_EXTRA_HOSTS)
+  case "$INGRESS_MODE" in
+    public) USE_TLS=true; CERT_ISSUER=letsencrypt ;;
+    tunnel) USE_TLS=false; CERT_ISSUER='' ;;
+    lan)
+      USE_TLS=false
+      CERT_ISSUER=selfsigned
+      INGRESS_EXTRA_HOSTS=$(lan_alt_hosts)
+      ;;
+  esac
+}
+
+host_problem() {
+  local value=$1 flag=$2
+  if ! valid_host "$value"; then printf '%s is not a hostname. %s takes a name such as orchard.example.com' "$value" "$flag"; fi
+}
+
+validate_answers() {
+  case "$ORCHARD_LIMITS" in
+    ''|on|off) ;;
+    *) die "--limits takes on or off, not: $ORCHARD_LIMITS" ;;
+  esac
+  case "$ORCHARD_MCP" in
+    true|false) ;;
+    *) die "--mcp takes true or false, not: $ORCHARD_MCP" ;;
+  esac
+  case "$ORCHARD_UPDATE_POLICY" in
+    manual|automatic|'') ;;
+    *) die "--updates takes manual or automatic, not: $ORCHARD_UPDATE_POLICY" ;;
+  esac
+  if [ -n "$ORCHARD_PUBLIC_IP" ] && ! is_ip "$ORCHARD_PUBLIC_IP"; then
+    die "--public-ip takes an IP address or none, not: $ORCHARD_PUBLIC_IP"
+  fi
+
+  if [ "$INGRESS_MODE" = tunnel ] && [ -z "$ORCHARD_TUNNEL_TOKEN" ]; then
+    die "tunnel mode needs a token: pass --tunnel-token or set ORCHARD_TUNNEL_TOKEN"
+  fi
+  if [ -z "$ORCHARD_DOMAIN" ]; then
+    case "$INGRESS_MODE" in
+      tunnel) die "tunnel mode needs a domain: pass --domain or set ORCHARD_DOMAIN" ;;
+      public) die "public mode needs a domain, or an address to name one after: pass --domain or --public-ip" ;;
+    esac
+  fi
+
+  local problem
+  if [ "$INGRESS_MODE" = lan ]; then
+    if ! valid_lan_host "$ORCHARD_DOMAIN"; then die "$ORCHARD_DOMAIN is not an address or a hostname: check --domain"; fi
+  else
+    problem=$(host_problem "$ORCHARD_DOMAIN" --domain)
+    if [ -n "$problem" ]; then die "$problem"; fi
+  fi
+  problem=$(host_problem "$ORCHARD_APP_DOMAIN" --app-domain)
+  if [ -n "$problem" ]; then die "$problem"; fi
+  if [ "$ORCHARD_MCP" = true ]; then
+    problem=$(host_problem "$ORCHARD_MCP_DOMAIN" --mcp-domain)
+    if [ -n "$problem" ]; then die "$problem"; fi
+    if [ "$ORCHARD_MCP_DOMAIN" = "$ORCHARD_DOMAIN" ]; then
+      die "the MCP endpoint and the dashboard cannot share $ORCHARD_DOMAIN: change --mcp-domain"
     fi
-    printf '.'
-    sleep 5
-    tries=$((tries + 1))
+  fi
+  if [ -n "$ORCHARD_INGRESS_CNAME" ]; then
+    problem=$(host_problem "$ORCHARD_INGRESS_CNAME" --ingress-cname)
+    if [ -n "$problem" ]; then die "$problem"; fi
+  fi
+  if [ -n "$ORCHARD_ACME_EMAIL" ]; then
+    problem=$(email_problem "$ORCHARD_ACME_EMAIL")
+    if [ -n "$problem" ]; then die "--email: $problem"; fi
+  fi
+}
+
+Q_N=0
+Q_TOTAL=0
+FIRST_PASS=false
+
+q_head() {
+  Q_N=$((Q_N + 1))
+  printf '\n'
+  if [ "$Q_TOTAL" -gt 0 ]; then
+    printf '  %s%s%d of %d%s  %s%s%s\n' "$C_BRAND" "$C_BOLD" "$Q_N" "$Q_TOTAL" "$C_RESET" "$C_BOLD" "$1" "$C_RESET"
+  else
+    printf '  %s%s%s\n' "$C_BOLD" "$1" "$C_RESET"
+  fi
+}
+
+ask_yes_no() {
+  local prompt=$1 default=$2 hint='y/N' attempt=0 answer
+  if [ "$default" = yes ]; then hint='Y/n'; fi
+  while [ "$attempt" -lt 5 ]; do
+    attempt=$((attempt + 1))
+    answer=$(ask "$prompt ($hint)")
+    case "$answer" in
+      '') printf '%s' "$default"; return ;;
+      y|Y|yes|YES|Yes) printf yes; return ;;
+      n|N|no|NO|No) printf no; return ;;
+    esac
+    warn "answer y or n"
+  done
+  printf '%s' "$default"
+}
+
+on_mode_changed() {
+  if [ "$PUBLIC_IP_SET" != true ]; then ORCHARD_PUBLIC_IP=$(default_public_ip); fi
+  if [ "$DOMAIN_SET" = true ] && [ "$INGRESS_MODE" != lan ] && is_ip "$ORCHARD_DOMAIN"; then
+    DOMAIN_SET=false
+    ORCHARD_DOMAIN=''
+  fi
+  CNAME_SET=false
+  derive_answers
+  [ "$FIRST_PASS" != true ] || return 0
+  if [ "$INGRESS_MODE" = tunnel ] && [ -z "$ORCHARD_TUNNEL_TOKEN" ]; then q_tunnel_token; fi
+  if [ -z "$ORCHARD_DOMAIN" ]; then q_domain; fi
+}
+
+q_mode() {
+  local recommended default attempt=0 choice previous=${INGRESS_MODE:-}
+  recommended=$(recommended_mode)
+  default=${previous:-$recommended}
+  q_head "How should traffic reach this machine?"
+  note "1) public   This machine has a public address. Let's Encrypt issues certificates."
+  note "2) tunnel   Cloudflare Tunnel. Works behind NAT, opens no ports, needs a Cloudflare domain."
+  note "3) lan      A private network or Tailscale. No public DNS, and the dashboard uses plain HTTP."
+  note "Recommended: $recommended. $(recommended_reason)"
+  if [ -n "$PORTS_BUSY" ]; then
+    note "Port $PORTS_BUSY is taken on this machine. public and lan need 80 and 443. tunnel needs neither."
+  fi
+  INGRESS_MODE=''
+  while [ -z "$INGRESS_MODE" ] && [ "$attempt" -lt 5 ]; do
+    attempt=$((attempt + 1))
+    choice=$(ask "      Mode" "$default")
+    case "$choice" in
+      1|public) INGRESS_MODE=public ;;
+      2|tunnel) INGRESS_MODE=tunnel ;;
+      3|lan) INGRESS_MODE=lan ;;
+      *) warn "pick 1, 2 or 3" ;;
+    esac
+  done
+  [ -n "$INGRESS_MODE" ] || die "no mode chosen; nothing has been installed"
+  check_mode_constraints
+  ORCHARD_INGRESS_MODE=$INGRESS_MODE
+  if [ "$INGRESS_MODE" != "$previous" ]; then on_mode_changed; fi
+}
+
+q_tunnel_token() {
+  local attempt=0
+  q_head "Cloudflare Tunnel token"
+  note "In Cloudflare, go to Zero Trust > Networks > Tunnels, create a tunnel, and copy its token."
+  while [ "$attempt" -lt 5 ]; do
+    attempt=$((attempt + 1))
+    ORCHARD_TUNNEL_TOKEN=$(ask "      Token" "$ORCHARD_TUNNEL_TOKEN")
+    if [ -n "$ORCHARD_TUNNEL_TOKEN" ]; then break; fi
+    warn "tunnel mode cannot run without a token"
+  done
+  [ -n "$ORCHARD_TUNNEL_TOKEN" ] || die "--tunnel-token is required for tunnel mode"
+  if [ -z "$(tunnel_id)" ]; then
+    warn "That does not look like a tunnel token, so the tunnel ID is unknown."
+  fi
+  if [ "$CNAME_SET" != true ]; then ORCHARD_INGRESS_CNAME=$(ingress_cname); fi
+}
+
+q_public_ip() {
+  local default attempt=0 answer
+  q_head "Public IP"
+  case "$INGRESS_MODE" in
+    public)
+      note "Raw TCP and UDP ports and public databases are published on this address."
+      ;;
+    lan)
+      note "The address on your network for raw TCP and UDP ports and databases."
+      ;;
+    tunnel)
+      note "Tunnel mode carries web traffic only, so most tunnel installs leave this blank."
+      note "Set it only if this machine also has a routable address for raw ports."
+      ;;
+  esac
+  if [ "$INGRESS_MODE" != tunnel ] && [ "$BEHIND_NAT" = true ] && [ -n "$PUBLIC_IP$PUBLIC_IP6" ] && [ -n "$PRIMARY_IP" ]; then
+    note "This machine is $PRIMARY_IP and the internet sees ${PUBLIC_IP:-$PUBLIC_IP6}. That is normal"
+    note "with 1:1 NAT on a cloud server, or behind a router. Traffic must still reach this machine."
+  fi
+  local addresses
+  addresses=$(printf '%s ' $LOCAL_IPS $LOCAL_IPS6)
+  case "${addresses% }" in
+    *' '*) note "Addresses on this machine: ${addresses% }" ;;
+  esac
+  if [ -z "$PUBLIC_IP" ] && [ -n "$PUBLIC_IP6" ]; then
+    warn "No IPv4 address was found. DNS uses AAAA records for ${PUBLIC_IP6}."
+    note "GitHub and its container registry have no IPv6, and this installer sets up k3s"
+    note "with IPv4 inside the cluster. An IPv6-only machine needs NAT64, and it is untested."
+  fi
+  if [ -z "$PUBLIC_IP$PUBLIC_IP6" ] && [ "$INGRESS_MODE" = public ]; then
+    note "No public address was found. Type it if you know it."
+  fi
+  note "Press Enter to accept. Type none to leave it blank: public ports and databases"
+  note "stay unavailable until you set it under Instance admin."
+  default=$ORCHARD_PUBLIC_IP
+  while [ "$attempt" -lt 5 ]; do
+    attempt=$((attempt + 1))
+    answer=$(ask "      Public IP" "$default")
+    case "$answer" in
+      none|'')
+        ORCHARD_PUBLIC_IP=''
+        PUBLIC_IP_SET=true
+        derive_answers
+        return
+        ;;
+    esac
+    if is_ip "$answer"; then
+      if [ "$answer" != "$default" ]; then PUBLIC_IP_SET=true; fi
+      ORCHARD_PUBLIC_IP=$answer
+      if [ "$INGRESS_MODE" = public ] && is_private_ip "$answer"; then
+        warn "$answer is a private address. Let's Encrypt cannot reach it, so certificates will not issue."
+      fi
+      derive_answers
+      return
+    fi
+    warn "that is not an IP address"
+  done
+  die "no valid public IP; nothing has been installed"
+}
+
+ask_host() {
+  local prompt=$1 default=$2 attempt=0 answer cleaned
+  while [ "$attempt" -lt 5 ]; do
+    attempt=$((attempt + 1))
+    answer=$(ask "$prompt" "$default")
+    cleaned=$(clean_host "$answer")
+    if [ -n "$cleaned" ] && valid_host "$cleaned"; then
+      printf '%s' "$cleaned"
+      return
+    fi
+    warn "enter a full name, such as orchard.example.com"
+  done
+  die "no valid hostname; nothing has been installed"
+}
+
+on_domain_changed() {
+  local old=$1 base=''
+  if [ -n "$old" ] && ! is_ip "$old"; then base=$(parent_domain "$old"); fi
+  if [ -n "$base" ]; then
+    if [ "$ORCHARD_APP_DOMAIN" = "apps.$base" ]; then APP_DOMAIN_SET=false; fi
+    if [ "$ORCHARD_MCP_DOMAIN" = "mcp.$base" ] || [ "$ORCHARD_MCP_DOMAIN" = "mcp.apps.$base" ]; then MCP_DOMAIN_SET=false; fi
+  fi
+  if [ -n "$old" ] && [ "$ORCHARD_INGRESS_CNAME" = "$old" ]; then CNAME_SET=false; fi
+  derive_answers
+}
+
+q_domain() {
+  local old=$ORCHARD_DOMAIN default answer attempt=0
+  q_head "Dashboard domain"
+  case "$INGRESS_MODE" in
+    public)
+      note "Where people open Orchard, such as orchard.example.com."
+      default=${ORCHARD_DOMAIN:-$(default_domain)}
+      if is_sslip "$default"; then
+        note "Press Enter to use $default: sslip.io answers for the IP in the name,"
+        note "so you add no DNS records. All sslip.io users share one Let's Encrypt limit, so"
+        note "a certificate can be delayed. Use your own domain for anything you keep."
+      fi
+      ;;
+    tunnel)
+      note "Where people open Orchard. It must be in a zone on your Cloudflare account."
+      default=$ORCHARD_DOMAIN
+      ;;
+    lan)
+      note "How people on your network reach this machine: an address, a machine name, or a"
+      note "Tailscale name. Its other addresses and names work as well."
+      default=${ORCHARD_DOMAIN:-$(default_domain)}
+      while [ "$attempt" -lt 5 ]; do
+        attempt=$((attempt + 1))
+        answer=$(clean_host "$(ask "      Dashboard" "$default")")
+        if [ -n "$answer" ] && valid_lan_host "$answer"; then
+          if [ "$answer" != "$default" ]; then DOMAIN_SET=true; fi
+          ORCHARD_DOMAIN=$answer
+          on_domain_changed "$old"
+          return
+        fi
+        warn "enter an address or a hostname"
+      done
+      die "no valid hostname; nothing has been installed"
+      ;;
+  esac
+  answer=$(ask_host "      Dashboard" "$default")
+  if [ "$answer" != "$(default_domain)" ]; then DOMAIN_SET=true; fi
+  ORCHARD_DOMAIN=$answer
+  if [ "$answer" != "$old" ]; then on_domain_changed "$old"; fi
+}
+
+q_app_domain() {
+  local answer
+  q_head "Apps domain"
+  note "Each app gets a URL under this domain, such as myapp.$ORCHARD_APP_DOMAIN."
+  if is_sslip "$ORCHARD_APP_DOMAIN"; then
+    note "sslip.io answers for every name under it, so it needs no DNS record."
+  elif [ "$INGRESS_MODE" = lan ]; then
+    note "It needs a wildcard record your clients can resolve: *.$ORCHARD_APP_DOMAIN."
+  else
+    note "It needs a wildcard DNS record: *.$ORCHARD_APP_DOMAIN."
+  fi
+  if [ "$INGRESS_MODE" = tunnel ]; then
+    note "Cloudflare's free certificate covers one level only. *.$(parent_domain "$ORCHARD_DOMAIN") is covered."
+    note "A deeper name such as *.apps.$(parent_domain "$ORCHARD_DOMAIN") needs Advanced Certificate Manager."
+  fi
+  answer=$(ask_host "      Apps domain" "$ORCHARD_APP_DOMAIN")
+  if [ "$answer" != "$ORCHARD_APP_DOMAIN" ]; then APP_DOMAIN_SET=true; fi
+  ORCHARD_APP_DOMAIN=$answer
+  if [ "$MCP_DOMAIN_SET" != true ]; then ORCHARD_MCP_DOMAIN=$(default_mcp_domain); fi
+}
+
+q_cname() {
+  local answer default attempt=0 cleaned
+  q_head "Custom domains target"
+  note "People who bring their own domain point a CNAME at this name. It must reach this machine."
+  case "$INGRESS_MODE" in
+    tunnel)
+      note "In tunnel mode that is your tunnel's address. Each custom domain also needs a route in the tunnel."
+      ;;
+    lan)
+      note "On a private network this only helps clients that can resolve the name."
+      ;;
+  esac
+  note "Type none to skip: Orchard then cannot check custom domains before it requests a certificate."
+  default=$ORCHARD_INGRESS_CNAME
+  while [ "$attempt" -lt 5 ]; do
+    attempt=$((attempt + 1))
+    answer=$(ask "      CNAME target" "$default")
+    case "$answer" in
+      none|'')
+        ORCHARD_INGRESS_CNAME=''
+        CNAME_SET=true
+        return
+        ;;
+    esac
+    cleaned=$(clean_host "$answer")
+    if valid_host "$cleaned"; then
+      if [ "$cleaned" != "$default" ]; then CNAME_SET=true; fi
+      ORCHARD_INGRESS_CNAME=$cleaned
+      return
+    fi
+    warn "enter a full name, such as edge.example.com, or none"
+  done
+  die "no valid hostname; nothing has been installed"
+}
+
+q_mcp() {
+  local default=yes
+  if [ "$ORCHARD_MCP" = false ]; then default=no; fi
+  q_head "MCP endpoint"
+  note "Lets AI agents such as Claude manage this instance through the same API as the dashboard."
+  if [ "$(ask_yes_no "      Serve an MCP endpoint so AI agents can connect?" "$default")" = no ]; then
+    ORCHARD_MCP=false
+    return
+  fi
+  ORCHARD_MCP=true
+  q_mcp_host
+}
+
+q_mcp_host() {
+  local answer attempt=0
+  note "Any name works. Press Enter to use the name shown, or type your own."
+  if ! is_sslip "$ORCHARD_APP_DOMAIN"; then
+    note "A name directly under *.$ORCHARD_APP_DOMAIN needs no extra DNS record."
+  fi
+  while [ "$attempt" -lt 5 ]; do
+    attempt=$((attempt + 1))
+    answer=$(ask_host "      MCP hostname" "$ORCHARD_MCP_DOMAIN")
+    if [ "$answer" != "$ORCHARD_DOMAIN" ]; then break; fi
+    warn "the dashboard already uses $answer"
+    answer=''
+  done
+  [ -n "$answer" ] || die "no valid hostname; nothing has been installed"
+  if [ "$answer" != "$ORCHARD_MCP_DOMAIN" ]; then MCP_DOMAIN_SET=true; fi
+  ORCHARD_MCP_DOMAIN=$answer
+  if covered_by_app_wildcard "$ORCHARD_MCP_DOMAIN"; then
+    info "No extra DNS record. Orchard reserves this name, so no app can take it."
+  elif is_sslip "$ORCHARD_MCP_DOMAIN"; then
+    info "No DNS record: sslip.io answers for this name."
+  else
+    info "This name needs its own DNS record. The DNS step lists it."
+  fi
+}
+
+q_email() {
+  local answer attempt=0 problem
+  q_head "Let's Encrypt email"
+  note "Optional. Let's Encrypt uses it for notices about your account. Press Enter to skip."
+  while [ "$attempt" -lt 5 ]; do
+    attempt=$((attempt + 1))
+    answer=$(ask "      Email" "$ORCHARD_ACME_EMAIL")
+    if [ "$answer" = none ] || [ -z "$answer" ]; then
+      ORCHARD_ACME_EMAIL=''
+      return
+    fi
+    problem=$(email_problem "$answer")
+    if [ -z "$problem" ]; then
+      ORCHARD_ACME_EMAIL=$answer
+      return
+    fi
+    warn "$problem"
+  done
+  die "no valid email; nothing has been installed"
+}
+
+q_updates() {
+  local answer attempt=0
+  q_head "Updates"
+  note "manual     Run sudo orchardctl update when you choose."
+  note "automatic  Install new versions every night. Apps stay up, the dashboard restarts."
+  while [ "$attempt" -lt 5 ]; do
+    attempt=$((attempt + 1))
+    answer=$(ask "      Updates" "$ORCHARD_UPDATE_POLICY")
+    case "$answer" in
+      1|m|manual) ORCHARD_UPDATE_POLICY=manual; return ;;
+      2|a|auto|automatic) ORCHARD_UPDATE_POLICY=automatic; return ;;
+    esac
+    warn "answer manual or automatic"
+  done
+  die "no update policy chosen; nothing has been installed"
+}
+
+q_s3() {
+  q_head "Off-server storage"
+  note "Backups stay on this machine unless you add S3-compatible storage."
+  choose_s3_storage
+}
+
+q_limits() {
+  local answer attempt=0
+  q_head "Resource limits"
+  note "on    Apps and databases get default CPU and memory caps, so one cannot starve the rest."
+  note "off   No caps. This fits one person running their own apps."
+  note "ask   Choose in the dashboard setup. Setting it here locks it to this value."
+  while [ "$attempt" -lt 5 ]; do
+    attempt=$((attempt + 1))
+    answer=$(ask "      Limits" "${ORCHARD_LIMITS:-ask}")
+    case "$answer" in
+      on|off) ORCHARD_LIMITS=$answer; return ;;
+      ask) ORCHARD_LIMITS=''; return ;;
+    esac
+    warn "answer on, off or ask"
+  done
+  die "no limits choice made; nothing has been installed"
+}
+
+first_pass_questions() {
+  local ids='' given_mcp=false
+  if [ -z "$INGRESS_MODE" ]; then ids="$ids mode"; fi
+  if [ "$INGRESS_MODE" = tunnel ] && [ -z "$ORCHARD_TUNNEL_TOKEN" ]; then ids="$ids tunnel_token"; fi
+  if [ "$PUBLIC_IP_SET" != true ]; then ids="$ids public_ip"; fi
+  if [ "$DOMAIN_SET" != true ]; then ids="$ids domain"; fi
+  if [ "$APP_DOMAIN_SET" != true ]; then ids="$ids app_domain"; fi
+  if [ "$CNAME_SET" != true ]; then ids="$ids cname"; fi
+  if answer_given --mcp ORCHARD_MCP || [ "$MCP_DOMAIN_SET" = true ]; then given_mcp=true; fi
+  if [ "$given_mcp" = false ]; then
+    ids="$ids mcp"
+  elif [ "$ORCHARD_MCP" = true ] && [ "$MCP_DOMAIN_SET" != true ]; then
+    ids="$ids mcp_host"
+  fi
+  if [ "$INGRESS_MODE" != lan ] && [ "$INGRESS_MODE" != tunnel ] && ! answer_given --email ORCHARD_ACME_EMAIL; then
+    ids="$ids email"
+  fi
+  if ! answer_given --updates ORCHARD_UPDATE_POLICY; then ids="$ids updates"; fi
+  if [ "$ORCHARD_S3" != false ] && [ -z "$ORCHARD_S3_ENDPOINT$ORCHARD_S3_BUCKET$ORCHARD_S3_ACCESS_KEY" ]; then
+    ids="$ids s3"
+  fi
+  printf '%s' "$ids"
+}
+
+review_ids() {
+  printf 'mode'
+  if [ "$INGRESS_MODE" = tunnel ]; then printf ' tunnel_token'; fi
+  printf ' public_ip domain app_domain cname mcp'
+  if [ "$INGRESS_MODE" = public ]; then printf ' email'; fi
+  printf ' updates s3 limits'
+}
+
+review_label() {
+  case "$1" in
+    mode) printf 'Traffic' ;;
+    tunnel_token) printf 'Tunnel token' ;;
+    public_ip) printf 'Public IP' ;;
+    domain) printf 'Dashboard' ;;
+    app_domain) printf 'Apps' ;;
+    cname) printf 'Custom domains' ;;
+    mcp) printf 'MCP endpoint' ;;
+    email) printf "Let's Encrypt email" ;;
+    updates) printf 'Updates' ;;
+    s3) printf 'S3 storage' ;;
+    limits) printf 'Resource limits' ;;
+  esac
+}
+
+public_scheme() {
+  if [ "$INGRESS_MODE" = lan ]; then printf 'http://%s' "$1$HTTP_SUFFIX"; else printf 'https://%s' "$1"; fi
+}
+
+review_value() {
+  case "$1" in
+    mode) printf '%s' "$INGRESS_MODE" ;;
+    tunnel_token)
+      if [ -n "$(tunnel_id)" ]; then printf 'set, tunnel %s' "$(tunnel_id)"; else printf 'set'; fi
+      ;;
+    public_ip)
+      if [ -n "$ORCHARD_PUBLIC_IP" ]; then
+        printf '%s' "$ORCHARD_PUBLIC_IP"
+      else
+        printf 'not set, public ports and databases are unavailable'
+      fi
+      ;;
+    domain) public_scheme "$ORCHARD_DOMAIN" ;;
+    app_domain) printf '*.%s' "$ORCHARD_APP_DOMAIN" ;;
+    cname)
+      if [ -n "$ORCHARD_INGRESS_CNAME" ]; then
+        printf 'CNAME to %s' "$ORCHARD_INGRESS_CNAME"
+      else
+        printf 'not set, custom domains are not checked'
+      fi
+      ;;
+    mcp)
+      if [ "$ORCHARD_MCP" = true ]; then
+        public_scheme "$ORCHARD_MCP_DOMAIN"
+      else
+        printf 'off'
+      fi
+      ;;
+    email)
+      if [ -n "$ORCHARD_ACME_EMAIL" ]; then printf '%s' "$ORCHARD_ACME_EMAIL"; else printf 'none'; fi
+      ;;
+    updates) printf '%s' "$ORCHARD_UPDATE_POLICY" ;;
+    s3)
+      if [ "$S3_READY" = true ]; then
+        printf '%s at %s' "$ORCHARD_S3_BUCKET" "$ORCHARD_S3_ENDPOINT"
+      elif [ "$PREVIOUS_INSTALL" = true ]; then
+        printf 'no change'
+      else
+        printf 'none, backups stay on this machine'
+      fi
+      ;;
+    limits)
+      if [ -n "$ORCHARD_LIMITS" ]; then printf '%s, locked' "$ORCHARD_LIMITS"; else printf 'choose in the dashboard setup'; fi
+      ;;
+  esac
+}
+
+show_review() {
+  local n=0 id
+  printf '\n  %sReview%s\n\n' "$C_BOLD" "$C_RESET"
+  for id in $(review_ids); do
+    n=$((n + 1))
+    printf '  %s%3d%s  %-20s %s\n' "$C_GREY" "$n" "$C_RESET" "$(review_label "$id")" "$(review_value "$id")"
   done
   printf '\n'
-  warn "$host still does not resolve; certificates will fail until it does"
+}
+
+describe_changes() {
+  [ "$PREVIOUS_INSTALL" = true ] || return 0
+  local any=false
+  change_line() {
+    if [ "$any" = false ]; then
+      printf '  %sWhat changes on this machine%s\n' "$C_BOLD" "$C_RESET"
+      any=true
+    fi
+    note "$@"
+  }
+  if [ "$INGRESS_MODE" != "$PREV_MODE" ] && [ -n "$PREV_MODE" ]; then
+    change_line "Traffic moves from $PREV_MODE to $INGRESS_MODE. Your DNS records have to change with it."
+  fi
+  if [ "$ORCHARD_DOMAIN" != "$PREV_DOMAIN" ] && [ -n "$PREV_DOMAIN" ]; then
+    change_line "Dashboard moves from $PREV_DOMAIN to $ORCHARD_DOMAIN. Everyone signs in again."
+    change_line "  Passkeys belong to the old name and stop working. Use a password or 'sudo orchardctl login'."
+    change_line "  The GitHub App and any SSO provider keep the old URL until you update them."
+  fi
+  if [ "$ORCHARD_APP_DOMAIN" != "$PREV_APP_DOMAIN" ] && [ -n "$PREV_APP_DOMAIN" ]; then
+    change_line "Apps domain moves from $PREV_APP_DOMAIN to $ORCHARD_APP_DOMAIN. Only new apps use it."
+    change_line "  Deployed apps keep their URLs, also after a redeploy, while DNS for the old name points here."
+    change_line "  To move an app, add a domain to it."
+  fi
+  if [ "$ORCHARD_MCP" != "$PREV_MCP" ] && [ -n "$PREV_MCP" ]; then
+    if [ "$ORCHARD_MCP" = true ]; then
+      change_line "The MCP endpoint turns on."
+    else
+      change_line "The MCP endpoint turns off. Connected agents stop working."
+    fi
+  fi
+  if [ "$ORCHARD_MCP" = true ] && [ "$PREV_MCP" = true ] && [ "$ORCHARD_MCP_DOMAIN" != "$PREV_MCP_DOMAIN" ] && [ -n "$PREV_MCP_DOMAIN" ]; then
+    change_line "MCP moves from $PREV_MCP_DOMAIN to $ORCHARD_MCP_DOMAIN. Reconnect every agent at the new URL."
+  fi
+  if [ "$ORCHARD_INGRESS_CNAME" != "$PREV_CNAME" ]; then
+    change_line "Custom domains target is now ${ORCHARD_INGRESS_CNAME:-not set}. Domains already added keep working"
+    change_line "  while their CNAME still reaches this machine. New ones are checked against the new target."
+  fi
+  if [ "$ORCHARD_PUBLIC_IP" != "$PREV_PUBLIC_IP" ]; then
+    change_line "Public IP is now ${ORCHARD_PUBLIC_IP:-not set}. Ports and databases already published stay on the"
+    change_line "  old address until you turn public access off and on again."
+  fi
+  if [ "$ORCHARD_UPDATE_POLICY" != "$PREV_UPDATES" ] && [ -n "$PREV_UPDATES" ]; then
+    change_line "Updates change to $ORCHARD_UPDATE_POLICY."
+  fi
+  if [ "$any" = true ]; then printf '\n'; fi
+  unset -f change_line
+}
+
+edit_answer() {
+  Q_TOTAL=0
+  Q_N=0
+  case "$1" in
+    mode) q_mode ;;
+    tunnel_token) q_tunnel_token ;;
+    public_ip) q_public_ip ;;
+    domain) q_domain ;;
+    app_domain) q_app_domain ;;
+    cname) q_cname ;;
+    mcp) q_mcp ;;
+    email) q_email ;;
+    updates) q_updates ;;
+    s3)
+      ORCHARD_S3=''
+      S3_READY=false
+      ORCHARD_S3_ENDPOINT='' ORCHARD_S3_BUCKET='' ORCHARD_S3_ACCESS_KEY='' ORCHARD_S3_SECRET_KEY='' ORCHARD_S3_SECRET_KEY_FILE=''
+      q_s3
+      ;;
+    limits) q_limits ;;
+  esac
+}
+
+review_answers() {
+  local choice id n ids ASK_SOFT=false
+  while true; do
+    show_review
+    describe_changes
+    if [ "$PREVIOUS_INSTALL" = true ]; then
+      note "Enter applies these. A number changes that answer. c cancels and changes nothing."
+    else
+      note "Enter installs. A number changes that answer. c cancels: nothing has been installed."
+    fi
+    choice=$(ask "      Choice")
+    case "$choice" in
+      '') return 0 ;;
+      c|C|cancel)
+        printf '\n'
+        if [ "$PREVIOUS_INSTALL" = true ]; then
+          note "Cancelled. Nothing was changed."
+        else
+          note "Cancelled. Nothing was installed."
+        fi
+        exit 0
+        ;;
+      *[!0-9]*)
+        warn "press Enter, type a number, or type c"
+        continue
+        ;;
+    esac
+    ids=$(review_ids)
+    n=0
+    id=''
+    local candidate
+    for candidate in $ids; do
+      n=$((n + 1))
+      if [ "$n" = "$choice" ]; then id=$candidate; fi
+    done
+    if [ -z "$id" ]; then
+      warn "no answer has that number"
+      continue
+    fi
+    edit_answer "$id"
+    validate_answers
+    apply_mode_settings
+  done
+}
+
+probe_given_s3() {
+  if [ "$ORCHARD_S3" != false ] && [ -n "$ORCHARD_S3_ENDPOINT$ORCHARD_S3_BUCKET$ORCHARD_S3_ACCESS_KEY" ]; then
+    choose_s3_storage
+  fi
+}
+
+collect_answers() {
+  step
+
+  if [ -n "$ORCHARD_INGRESS_MODE" ]; then
+    INGRESS_MODE=$ORCHARD_INGRESS_MODE
+  elif [ "$ASSUME_YES" = true ] || [ "$PREVIOUS_INSTALL" = true ]; then
+    INGRESS_MODE=$(recommended_mode)
+    info "ingress mode: $INGRESS_MODE. $(recommended_reason)"
+  else
+    INGRESS_MODE=''
+  fi
+  if [ -n "$INGRESS_MODE" ]; then check_mode_constraints; fi
+
+  mark_given_answers
+  if [ "$PREVIOUS_INSTALL" = true ]; then
+    PUBLIC_IP_SET=true
+    CNAME_SET=true
+    if [ "$MOVING_OFF_SSLIP" = true ]; then
+      CNAME_SET=false
+      if answer_given --ingress-cname ORCHARD_INGRESS_CNAME; then CNAME_SET=true; fi
+    fi
+  fi
+  if [ -z "$ORCHARD_UPDATE_POLICY" ]; then choose_update_policy; fi
+
+  if [ "$ASSUME_YES" = true ]; then
+    derive_answers
+    validate_answers
+    apply_mode_settings
+    if [ "$PREVIOUS_INSTALL" = true ]; then describe_changes; fi
+    choose_s3_storage
+    local id
+    for id in $(review_ids); do
+      info "$(review_label "$id"): $(review_value "$id")"
+    done
+    return 0
+  fi
+
+  if [ -n "$INGRESS_MODE" ]; then derive_answers; fi
+
+  if [ "$PREVIOUS_INSTALL" = true ]; then
+    printf '\n'
+    note "Orchard is already installed here. These are its current settings."
+    note "Change what you need. Anything you leave alone stays as it is."
+    probe_given_s3
+    validate_answers
+    apply_mode_settings
+    review_answers
+    return 0
+  fi
+
+  local questions question extra
+  FIRST_PASS=true
+  questions=$(first_pass_questions)
+  Q_N=0
+  Q_TOTAL=0
+  for question in $questions; do Q_TOTAL=$((Q_TOTAL + 1)); done
+  if [ "$Q_TOTAL" -gt 0 ]; then
+    printf '\n'
+    note "A few questions. Press Enter to accept the value in brackets."
+    note "Nothing is installed until you confirm your answers on the review screen."
+  fi
+  for question in $questions; do
+    if [ "$question" != mode ] && [ -z "$INGRESS_MODE" ]; then die "no mode chosen; nothing has been installed"; fi
+    case "$question" in
+      tunnel_token) if [ "$INGRESS_MODE" = tunnel ] && [ -z "$ORCHARD_TUNNEL_TOKEN" ]; then q_tunnel_token; fi ;;
+      email) if [ "$INGRESS_MODE" = public ]; then q_email; fi ;;
+      domain) if [ "$DOMAIN_SET" != true ]; then q_domain; fi ;;
+      mcp_host) q_mcp_host ;;
+      mode)
+        q_mode
+        Q_TOTAL=1
+        for extra in $(first_pass_questions); do Q_TOTAL=$((Q_TOTAL + 1)); done
+        if [ "$INGRESS_MODE" = tunnel ] && [ -z "$ORCHARD_TUNNEL_TOKEN" ]; then q_tunnel_token; fi
+        ;;
+      *) "q_$question" ;;
+    esac
+  done
+  FIRST_PASS=false
+  probe_given_s3
+  validate_answers
+  apply_mode_settings
+  review_answers
+}
+
+DNS_PROBE_LABEL=orchard-dns-probe
+PUBLIC_RESOLVERS=${ORCHARD_DNS_RESOLVERS:-1.1.1.1 8.8.8.8 2606:4700:4700::1111}
+RECORD_TYPES=()
+RECORD_NAMES=()
+RECORD_VALUES=()
+RECORD_PROBES=()
+DNS_PENDING=''
+DNS_SKIPPED=false
+CHECK_STATUS=''
+CHECK_NOTE=''
+PROXY_NOTE_SHOWN=false
+
+dns_type_number() {
+  case "$1" in
+    A) printf 1 ;;
+    NS) printf 2 ;;
+    CNAME) printf 5 ;;
+    AAAA) printf 28 ;;
+    CAA) printf 257 ;;
+  esac
+}
+
+dns_ask_public() {
+  local type=$1 name=$2 resolver out rc url
+  if command -v dig >/dev/null 2>&1; then
+    for resolver in $PUBLIC_RESOLVERS; do
+      rc=0
+      out=$(dig "@$resolver" +time=2 +tries=1 +noall +answer "$type" "$name" 2>/dev/null) || rc=$?
+      if [ "$rc" -eq 0 ]; then
+        printf '%s\n' "$out" | awk -v t="$type" '$4 == t { $1=$2=$3=$4=""; sub(/^ +/, ""); print }' | sed 's/\.$//' || true
+        return 0
+      fi
+    done
+  fi
+  for url in https://cloudflare-dns.com/dns-query https://dns.google/resolve; do
+    out=$(curl -fsS --max-time 4 -H 'accept: application/dns-json' "$url?name=$name&type=$type" 2>/dev/null) || continue
+    case "$out" in *'"Status"'*) ;; *) continue ;; esac
+    printf '%s' "$out" | tr '{' '\n' | grep "\"type\":$(dns_type_number "$type")[,}]" \
+      | sed -n 's/.*"data":"\([^"]*\)".*/\1/p' | sed 's/\.$//' || true
+    return 0
+  done
+  return 1
+}
+
+dns_ask_local() {
+  local name=$1 line
+  if command -v getent >/dev/null 2>&1; then
+    if command -v timeout >/dev/null 2>&1; then
+      timeout 5 getent ahosts "$name" 2>/dev/null | awk '{print $1}' | sort -u || true
+    else
+      getent ahosts "$name" 2>/dev/null | awk '{print $1}' | sort -u || true
+    fi
+    return 0
+  fi
+  if command -v dig >/dev/null 2>&1; then
+    { dig +short +time=2 +tries=1 A "$name" 2>/dev/null; dig +short +time=2 +tries=1 AAAA "$name" 2>/dev/null; } | while IFS= read -r line; do
+      if is_ip "$line"; then printf '%s\n' "$line"; fi
+    done || true
+  fi
+  return 0
+}
+
+dns_zone_of() {
+  local name=$1 out
+  while true; do
+    case "$name" in *.*) ;; *) return 1 ;; esac
+    out=$(dns_ask_public NS "$name") || return 2
+    if [ -n "$out" ]; then
+      printf '%s\n%s\n' "$name" "$out"
+      return 0
+    fi
+    name=${name#*.}
+  done
+}
+
+is_public_suffix_like() {
+  case "$1" in
+    co.??|com.??|org.??|net.??|ac.??|gov.??|edu.??) return 0 ;;
+    *.*) return 1 ;;
+    *) return 0 ;;
+  esac
+}
+
+dns_delegated_from() {
+  local parent=${1#*.} out
+  if is_public_suffix_like "$parent"; then return 0; fi
+  while true; do
+    out=$(dns_ask_public NS "$parent") || return 0
+    if [ -n "$out" ]; then
+      printf '%s' "$parent"
+      return 0
+    fi
+    parent=${parent#*.}
+    if is_public_suffix_like "$parent"; then return 0; fi
+  done
+}
+
+dns_zone_report() {
+  local i=0 name seen=' ' rc output zone servers parent caa
+  while [ "$i" -lt "${#RECORD_NAMES[@]}" ]; do
+    name=${RECORD_NAMES[$i]#\*.}
+    i=$((i + 1))
+    rc=0
+    output=$(dns_zone_of "$name") || rc=$?
+    case "$rc" in
+      1)
+        note "No nameservers answer for $name. Check that the domain is registered and its"
+        note "nameservers are set at your registrar."
+        continue
+        ;;
+      2) continue ;;
+    esac
+    zone=$(printf '%s\n' "$output" | head -1)
+    case "$seen" in *" $zone "*) continue ;; esac
+    seen="$seen$zone "
+    servers=$(printf '%s\n' "$output" | tail -n +2 | tr '\n' ' ')
+    note "Create these in the DNS panel for $zone. Its nameservers: ${servers% }"
+    parent=$(dns_delegated_from "$zone")
+    if [ -n "$parent" ]; then
+      note "$zone is delegated away from $parent, so records added at $parent's provider do nothing."
+    fi
+    caa=$(dns_ask_public CAA "$zone" || true)
+    case "$caa" in
+      *issue*letsencrypt*|'') ;;
+      *issue*)
+        if [ "$INGRESS_MODE" = public ]; then
+          warn "$zone has CAA records that do not allow Let's Encrypt. Add: 0 issue \"letsencrypt.org\""
+        fi
+        ;;
+    esac
+  done
+}
+
+add_record() {
+  local n=${#RECORD_TYPES[@]}
+  RECORD_TYPES[$n]=$1
+  RECORD_NAMES[$n]=$2
+  RECORD_VALUES[$n]=$3
+  RECORD_PROBES[$n]=$4
+}
+
+build_dns_records() {
+  RECORD_TYPES=()
+  RECORD_NAMES=()
+  RECORD_VALUES=()
+  RECORD_PROBES=()
+  [ "$INGRESS_MODE" != lan ] || return 0
+
+  local type=A value=$ORCHARD_PUBLIC_IP
+  if [ "$INGRESS_MODE" = tunnel ]; then
+    type=CNAME
+    value="$(tunnel_id)"
+    if [ -n "$value" ]; then value="$value.cfargotunnel.com"; else value='<tunnel-id>.cfargotunnel.com'; fi
+  elif is_ipv6 "$value"; then
+    type=AAAA
+  fi
+
+  if ! is_sslip "$ORCHARD_DOMAIN"; then
+    add_record "$type" "$ORCHARD_DOMAIN" "$value" "$ORCHARD_DOMAIN"
+  fi
+  if ! is_sslip "$ORCHARD_APP_DOMAIN"; then
+    add_record "$type" "*.$ORCHARD_APP_DOMAIN" "$value" "$DNS_PROBE_LABEL.$ORCHARD_APP_DOMAIN"
+  fi
+  if [ "$ORCHARD_MCP" = true ] && ! is_sslip "$ORCHARD_MCP_DOMAIN" && ! covered_by_app_wildcard "$ORCHARD_MCP_DOMAIN"; then
+    add_record "$type" "$ORCHARD_MCP_DOMAIN" "$value" "$ORCHARD_MCP_DOMAIN"
+  fi
+  if [ -n "$ORCHARD_INGRESS_CNAME" ] && [ "$ORCHARD_INGRESS_CNAME" != "$ORCHARD_DOMAIN" ] \
+    && [ "$ORCHARD_INGRESS_CNAME" != "$ORCHARD_MCP_DOMAIN" ] \
+    && ! is_sslip "$ORCHARD_INGRESS_CNAME" && ! covered_by_app_wildcard "$ORCHARD_INGRESS_CNAME"; then
+    case "$ORCHARD_INGRESS_CNAME" in
+      *.cfargotunnel.com) ;;
+      *) add_record "$type" "$ORCHARD_INGRESS_CNAME" "$value" "$ORCHARD_INGRESS_CNAME" ;;
+    esac
+  fi
+}
+
+print_dns_records() {
+  local i=0 width=4 display
+  while [ "$i" -lt "${#RECORD_NAMES[@]}" ]; do
+    if [ "${#RECORD_NAMES[$i]}" -gt "$width" ]; then width=${#RECORD_NAMES[$i]}; fi
+    i=$((i + 1))
+  done
+  printf '\n      %-6s %-*s  %s\n' Type "$width" Name Value
+  i=0
+  while [ "$i" -lt "${#RECORD_NAMES[@]}" ]; do
+    display=${RECORD_VALUES[$i]:-<your public IP>}
+    printf '      %-6s %-*s  %s\n' "${RECORD_TYPES[$i]}" "$width" "${RECORD_NAMES[$i]}" "$display"
+    i=$((i + 1))
+  done
+  printf '\n'
+}
+
+note_lines() {
+  local line
+  [ -n "$1" ] || return 0
+  while IFS= read -r line; do
+    [ -z "$line" ] || note "       $line"
+  done <<EOF
+$(printf '%s\n' "$1" | fold -s -w 76)
+EOF
+}
+
+all_cloudflare() {
+  local answer
+  [ -n "$1" ] || return 1
+  for answer in $1; do
+    if ! is_cloudflare_ip "$answer"; then return 1; fi
+  done
+  return 0
+}
+
+all_private() {
+  local answer
+  [ -n "$1" ] || return 1
+  for answer in $1; do
+    if ! is_private_ip "$answer"; then return 1; fi
+  done
+  return 0
+}
+
+one_line() {
+  printf '%s' "$1" | tr '\n' ' ' | sed 's/ *$//'
+}
+
+check_tunnel_record() {
+  local probe=$1 value=$2 answers cnames rc=0
+  answers=$(dns_ask_public A "$probe") || rc=$?
+  if [ "$rc" -ne 0 ]; then CHECK_STATUS='not checked'; return 0; fi
+  cnames=$(dns_ask_public CNAME "$probe" || true)
+  case "$cnames" in
+    *"$value"*) CHECK_STATUS=resolves; return 0 ;;
+  esac
+  if [ -z "$answers$cnames" ]; then
+    CHECK_STATUS=waiting
+    return 0
+  fi
+  if all_cloudflare "$answers"; then
+    CHECK_STATUS=resolves
+    CHECK_NOTE="Cloudflare hides the target of a proxied record, so check the route in the tunnel."
+    return 0
+  fi
+  CHECK_STATUS='wrong value'
+  CHECK_NOTE="It answers $(one_line "${answers:-$cnames}"), not Cloudflare. Tunnel traffic only arrives through a proxied CNAME to $value."
+}
+
+check_address_record() {
+  local type=$1 name=$2 value=$3 probe=$4 answers local_answers rc=0 other_type=AAAA other zone
+  answers=$(dns_ask_public "$type" "$probe") || rc=$?
+  if [ "$rc" -ne 0 ]; then
+    CHECK_STATUS='not checked'
+    CHECK_NOTE="No public resolver could be reached from this machine, so this was not checked."
+    return 0
+  fi
+  local_answers=$(dns_ask_local "$probe")
+
+  if [ -z "$answers" ]; then
+    if [ "$type" = AAAA ]; then other_type=A; fi
+    other=$(dns_ask_public "$other_type" "$probe" || true)
+    if [ -n "$other" ]; then
+      CHECK_STATUS='wrong value'
+      CHECK_NOTE="It has a $other_type record ($(one_line "$other")), and this machine needs a $type record."
+      return 0
+    fi
+    CHECK_STATUS=waiting
+    if [ -n "$local_answers" ]; then
+      CHECK_NOTE="This machine resolves it to $(one_line "$local_answers"), but public DNS has no answer.
+That is split-horizon DNS, or an entry in /etc/hosts. Let's Encrypt only sees public DNS."
+    fi
+    return 0
+  fi
+
+  if [ -z "$value" ]; then
+    CHECK_STATUS=resolves
+    return 0
+  fi
+
+  case " $(one_line "$answers") " in
+    *" $value "*)
+      CHECK_STATUS=resolves
+      if [ "$(one_line "$answers")" != "$value" ]; then
+        CHECK_NOTE="It also answers with other addresses: $(one_line "$answers"). Some visitors and Let's Encrypt may land on those, so remove them."
+      fi
+      if [ -n "$local_answers" ]; then
+        case " $(one_line "$local_answers") " in
+          *" $value "*) ;;
+          *)
+            CHECK_NOTE="${CHECK_NOTE:+$CHECK_NOTE
+}This machine still resolves it to $(one_line "$local_answers"). That is a cached answer or split-horizon DNS. Let's Encrypt uses public DNS, which is right."
+            ;;
+        esac
+      fi
+      return 0
+      ;;
+  esac
+
+  if all_cloudflare "$answers"; then
+    CHECK_STATUS=proxied
+    if [ "$PROXY_NOTE_SHOWN" = false ]; then
+      PROXY_NOTE_SHOWN=true
+      CHECK_NOTE="It answers a Cloudflare address ($(one_line "$answers")), not $value. That is the proxy, the orange cloud.
+Let's Encrypt HTTP-01 can still pass through the proxy if Always Use HTTPS is off, and SSL mode must be Full (strict).
+Raw ports and databases do not pass through it, and Cloudflare's free certificate does not cover *.apps names.
+The simplest fix is DNS only, the grey cloud."
+    fi
+    return 0
+  fi
+
+  CHECK_STATUS='wrong value'
+  if all_private "$answers"; then
+    CHECK_NOTE="It answers $(one_line "$answers"), a private address nothing on the internet can reach.
+Point it at $value. If this machine is only for a private network, choose lan mode."
+    return 0
+  fi
+
+  CHECK_NOTE="It points at $(one_line "$answers"), not $value. Change the record. A changed record can take as long as its old TTL."
+  zone=$(dns_zone_of "${name#\*.}" 2>/dev/null | head -1 || true)
+  if [ "$zone" = "$name" ]; then
+    CHECK_NOTE="$CHECK_NOTE
+$name is the top of its zone, and that address is probably a website. Pointing it here moves that site. To keep the site, change the dashboard to a subdomain such as orchard.$name."
+  fi
+}
+
+check_record() {
+  local i=$1
+  CHECK_STATUS=waiting
+  CHECK_NOTE=''
+  if [ "${RECORD_TYPES[$i]}" = CNAME ]; then
+    check_tunnel_record "${RECORD_PROBES[$i]}" "${RECORD_VALUES[$i]}"
+  else
+    check_address_record "${RECORD_TYPES[$i]}" "${RECORD_NAMES[$i]}" "${RECORD_VALUES[$i]}" "${RECORD_PROBES[$i]}"
+  fi
+}
+
+status_colour() {
+  case "$1" in
+    resolves) printf '%s' "$C_OK" ;;
+    'wrong value') printf '%s' "$C_FAIL" ;;
+    *) printf '%s' "$C_AMBER" ;;
+  esac
+}
+
+dns_check_all() {
+  local i=0 quiet=${1:-false} wildcard_waiting=false
+  DNS_PENDING=''
+  PROXY_NOTE_SHOWN=false
+  while [ "$i" -lt "${#RECORD_NAMES[@]}" ]; do
+    check_record "$i"
+    if [ "$quiet" != true ]; then
+      printf '      %s%-12s%s %s\n' "$(status_colour "$CHECK_STATUS")" "$CHECK_STATUS" "$C_RESET" "${RECORD_NAMES[$i]}"
+      note_lines "$CHECK_NOTE"
+    fi
+    if [ "$CHECK_STATUS" != resolves ]; then
+      DNS_PENDING="$DNS_PENDING${RECORD_NAMES[$i]} ($CHECK_STATUS)
+"
+      case "${RECORD_NAMES[$i]}" in
+        \**) if [ "$CHECK_STATUS" = waiting ]; then wildcard_waiting=true; fi ;;
+      esac
+    fi
+    i=$((i + 1))
+  done
+  if [ "$quiet" != true ] && [ "$wildcard_waiting" = true ]; then
+    printf '\n'
+    note "If your DNS provider does not allow wildcard records, add one record for each app as you"
+    note "deploy it, or move this domain to a provider that does. The dashboard works either way."
+  fi
+}
+
+port_state() {
+  local rc=0
+  command -v timeout >/dev/null 2>&1 || { printf unknown; return 0; }
+  timeout 4 bash -c 'exec 3<>"/dev/tcp/$0/$1"' "$1" "$2" 2>/dev/null || rc=$?
+  case "$rc" in
+    0) printf open ;;
+    124) printf blocked ;;
+    *) printf refused ;;
+  esac
+}
+
+check_reachability() {
+  [ "$INGRESS_MODE" = public ] || return 0
+  [ -n "$ORCHARD_PUBLIC_IP" ] || return 0
+  if is_private_ip "$ORCHARD_PUBLIC_IP"; then return 0; fi
+  if ip_is_local "$ORCHARD_PUBLIC_IP"; then
+    note "$ORCHARD_PUBLIC_IP is on this machine, so a test from here proves nothing. If 80 and 443"
+    note "are blocked upstream, the summary reports it when the certificate fails."
+    note "$(firewall_hint)"
+    return 0
+  fi
+  local port state blocked=''
+  for port in 80 443; do
+    state=$(port_state "$ORCHARD_PUBLIC_IP" "$port")
+    if [ "$state" = unknown ]; then return 0; fi
+    if [ "$state" = blocked ]; then blocked="${blocked:+$blocked and }$port"; fi
+  done
+  if [ -n "$blocked" ]; then
+    warn "Nothing answered on $ORCHARD_PUBLIC_IP port $blocked from this machine. A firewall may be in the way."
+    note "DNS can be right and Let's Encrypt still fail. $(firewall_hint)"
+    note "Some routers cannot loop back to their own address, so this can be a false alarm at home."
+  else
+    info "Connections to $ORCHARD_PUBLIC_IP on 80 and 443 get through from this machine."
+  fi
+}
+
+print_tunnel_instructions() {
+  bold "In Cloudflare, add these to your tunnel"
+  note "Go to Zero Trust > Networks > Tunnels > your tunnel > Public Hostname. For each name, set"
+  note "the service to http://traefik.traefik.svc.cluster.local:80."
+  print_dns_records
+  note "Cloudflare creates the CNAME for each hostname, except a wildcard. Add the wildcard by hand"
+  note "under DNS > Records, as a proxied CNAME to the value above."
+  if [ -z "$(tunnel_id)" ]; then
+    note "Your tunnel ID is on the tunnel's page in Zero Trust."
+  fi
+}
+
+print_lan_instructions() {
+  note "LAN mode needs no public DNS. People reach this machine at $(public_scheme "$ORCHARD_DOMAIN")."
+  note "Tailscale: MagicDNS gives the machine a name such as box.tailnet.ts.net. It has no wildcards,"
+  note "so generated app URLs stay on sslip.io, and sslip.io needs internet DNS on each client."
+  note ".local names come from mDNS. They cover this machine only, and no subdomains."
+  note "To teach Orchard another name later: sudo orchardctl hostname add <name> --apply"
+}
+
+dns_settings_unchanged() {
+  [ "$PREVIOUS_INSTALL" = true ] || return 1
+  [ "$ORCHARD_DOMAIN" = "$PREV_DOMAIN" ] || return 1
+  [ "$ORCHARD_APP_DOMAIN" = "$PREV_APP_DOMAIN" ] || return 1
+  [ "$INGRESS_MODE" = "$PREV_MODE" ] || return 1
+  [ "$ORCHARD_MCP" = "$PREV_MCP" ] || return 1
+  [ "$ORCHARD_MCP" = false ] || [ "$ORCHARD_MCP_DOMAIN" = "$PREV_MCP_DOMAIN" ] || return 1
+  [ "$ORCHARD_INGRESS_CNAME" = "$PREV_CNAME" ] || return 1
+}
+
+dns_step() {
+  step
+  build_dns_records
+
+  if [ "$INGRESS_MODE" = lan ]; then
+    print_lan_instructions
+    return 0
+  fi
+
+  if dns_settings_unchanged; then
+    info "DNS answers have not changed, so the records are not listed again."
+    dns_check_all true
+    if [ -n "$DNS_PENDING" ]; then
+      warn "These records still do not point here: $(one_line "$DNS_PENDING")"
+    fi
+    return 0
+  fi
+
+  if [ "${#RECORD_NAMES[@]}" -eq 0 ]; then
+    note "sslip.io answers for these names, so there are no DNS records to add."
+    note "All sslip.io users share one Let's Encrypt limit, so a certificate can be delayed."
+    note "Use your own domain for anything you keep."
+    check_reachability
+    return 0
+  fi
+
+  if [ "$INGRESS_MODE" = tunnel ]; then
+    print_tunnel_instructions
+  else
+    bold "Create these DNS records"
+    print_dns_records
+    if is_ipv6 "$ORCHARD_PUBLIC_IP"; then
+      note "These are AAAA records because $ORCHARD_PUBLIC_IP is an IPv6 address."
+    elif [ -n "$PUBLIC_IP6" ]; then
+      note "This machine also has $PUBLIC_IP6. Do not add AAAA records: this install listens on IPv4 only."
+    fi
+    if [ -z "$ORCHARD_PUBLIC_IP" ]; then
+      note "You left the public IP blank, so the check below only looks for an answer."
+    fi
+  fi
+  dns_zone_report
+
+  local PROMPT_TIMEOUT=0 ASK_SOFT=true choice
+  while true; do
+    printf '\n'
+    bold "Checking public DNS"
+    dns_check_all
+    if [ -z "$DNS_PENDING" ]; then
+      check_reachability
+      return 0
+    fi
+    if [ "$ASSUME_YES" = true ]; then
+      check_reachability
+      info "--yes does not wait for DNS. Certificates retry on their own."
+      return 0
+    fi
+    printf '\n'
+    note "1) Check again. New records usually appear in a few minutes."
+    note "2) Continue anyway. Orchard installs now, and the dashboard opens once DNS is right."
+    note "3) Skip DNS for now. Until these records exist, the dashboard, the first sign-in link"
+    note "   and certificates do not work. Certificates retry on their own once DNS is right."
+    note "4) Change an answer."
+    choice=$(ask "      Choice" 1)
+    case "$choice" in
+      1) ;;
+      2|__eof__)
+        check_reachability
+        return 0
+        ;;
+      3)
+        DNS_SKIPPED=true
+        return 0
+        ;;
+      4)
+        review_answers
+        build_dns_records
+        if [ "${#RECORD_NAMES[@]}" -eq 0 ]; then
+          DNS_PENDING=''
+          return 0
+        fi
+        printf '\n'
+        if [ "$INGRESS_MODE" = tunnel ]; then
+          print_tunnel_instructions
+        else
+          bold "Create these DNS records"
+          print_dns_records
+        fi
+        ;;
+      *) warn "pick 1, 2, 3 or 4" ;;
+    esac
+  done
 }
 
 choose_update_policy() {
@@ -916,7 +2408,6 @@ choose_update_policy() {
     manual|automatic) ;;
     *) die "--updates takes manual or automatic, not: $ORCHARD_UPDATE_POLICY" ;;
   esac
-  info "update policy: $ORCHARD_UPDATE_POLICY"
 }
 
 curl_can_sign() {
@@ -1069,12 +2560,9 @@ choose_s3_storage() {
 
   if [ "$given" = false ]; then
     [ "$interactive" = true ] || return 0
-    echo
-    bold "Storage"
-    case "$(ask 'Add S3-compatible storage for off-server backups and uploads? (optional, you can do it later)' no)" in
-      y|Y|yes|YES|Yes) ;;
-      *) return 0 ;;
-    esac
+    if [ "$(ask_yes_no '      Add S3-compatible storage for backups and uploads now?' no)" != yes ]; then
+      return 0
+    fi
     s3_ask_settings
   fi
 
@@ -1319,7 +2807,7 @@ EOF
   fi
 
   local email=$ORCHARD_ACME_EMAIL email_line=''
-  if [ -z "$email" ]; then
+  if [ -z "$email" ] && [ -z "$PREV_EMAIL" ] && [ "$PREVIOUS_INSTALL" != true ]; then
     email=$(kubectl get clusterissuer letsencrypt -o jsonpath='{.spec.acme.email}' 2>/dev/null || true)
   fi
   if [ -n "$email" ]; then
@@ -1752,18 +3240,18 @@ write_values() {
   [ -n "$SSO_KEY" ] || SSO_KEY=$(head -c 24 /dev/urandom | base64 | tr -d '\n=' | head -c 32)
   [ -n "$MCP_TOKEN" ] || MCP_TOKEN=$(head -c 32 /dev/urandom | base64 | tr -d '\n=' | head -c 43)
 
-  local cname_env='' cname previous_cname
-  previous_cname=$(reuse_secret INGRESS_CNAME)
-  if [ "$PREVIOUS_INSTALL" = false ] || { [ -n "$previous_cname" ] && [ "$previous_cname" = "$(reuse_value '.ingress.host')" ]; }; then
-    cname=$(ingress_cname)
-    if [ -n "$cname" ]; then
-      cname_env="
-    - { name: INGRESS_CNAME, value: $cname }"
-    fi
+  local cname_env='' pinned_cname
+  pinned_cname=$(reuse_secret INGRESS_CNAME)
+  if [ -n "$pinned_cname" ] && [ -n "$ORCHARD_INGRESS_CNAME" ] && [ "$ORCHARD_INGRESS_CNAME" != "$PREV_CNAME" ]; then
+    cname_env="
+    - { name: INGRESS_CNAME, value: $ORCHARD_INGRESS_CNAME }"
   fi
 
   local public_ip_pin=''
   public_ip_pin=$(reuse_value '.tenant.publicIp')
+  if [ -n "$public_ip_pin" ] && [ "$ORCHARD_PUBLIC_IP" != "$PREV_PUBLIC_IP" ]; then
+    public_ip_pin=$ORCHARD_PUBLIC_IP
+  fi
   if [ -n "$public_ip_pin" ]; then
     public_ip_pin="
   publicIp: \"$public_ip_pin\""
@@ -1948,22 +3436,13 @@ EOF
       die "could not carry settings over from $VALUES_FILE; it was left as it was"
     fi
     rm -f "$previous"
+    if [ -n "$pinned_cname" ] && [ -z "$ORCHARD_INGRESS_CNAME" ] && [ -n "$PREV_CNAME" ]; then
+      yq -i 'del(.server.env[] | select(.name == "INGRESS_CNAME"))' "$VALUES_FILE" || true
+    fi
+    if [ -z "$ORCHARD_LIMITS" ] && [ -n "$PREV_LIMITS" ]; then
+      yq -i 'del(.server.env[] | select(.name == "INSTANCE_RESOURCE_LIMITS"))' "$VALUES_FILE" || true
+    fi
   fi
-}
-
-ingress_cname() {
-  local tunnel_id
-  case "$INGRESS_MODE" in
-    public) printf '%s' "$ORCHARD_DOMAIN" ;;
-    tunnel)
-      tunnel_id=$(printf '%s' "$ORCHARD_TUNNEL_TOKEN" | base64 -d 2>/dev/null \
-        | sed -n 's/.*"t":"\([0-9a-fA-F-]*\)".*/\1/p' || true)
-      if [ -n "$tunnel_id" ]; then printf '%s.cfargotunnel.com' "$tunnel_id"; fi
-      ;;
-    lan)
-      if [ -n "$PRIMARY_IP" ]; then printf 'orchard.%s.sslip.io' "${PRIMARY_IP//./-}"; fi
-      ;;
-  esac
 }
 
 keep_custom_env() {
@@ -2042,24 +3521,58 @@ apply_chart() {
   done
 }
 
-seed_public_ip() {
-  local pending="$STATE_DIR/public-ip-pending"
-  [ -f "$pending" ] || return 0
-  if [ "$INGRESS_MODE" != public ] || [ "$BEHIND_NAT" = true ] || [ -z "$PUBLIC_IP" ]; then
-    rm -f "$pending"
-    return 0
-  fi
-  if kubectl -n orchard exec deploy/server -- node dist/scripts/seed-public-ip.js "$PUBLIC_IP" >/dev/null 2>&1; then
-    rm -f "$pending"
-    info "public ports and databases use $PUBLIC_IP; change it in the admin panel"
+save_install_settings() {
+  local pending="$STATE_DIR/settings-pending" args=(seed) force=false save_ip=false save_cname=false
+  if [ -f "$pending" ]; then
+    save_ip=true
+    save_cname=true
   else
-    warn "could not save the public IP. Set $PUBLIC_IP in the admin panel, under Configuration."
+    if [ "$ORCHARD_PUBLIC_IP" != "$PREV_PUBLIC_IP" ]; then save_ip=true; force=true; fi
+    if [ "$ORCHARD_INGRESS_CNAME" != "$PREV_CNAME" ]; then save_cname=true; force=true; fi
   fi
+  if [ -n "$(reuse_value '.tenant.publicIp')" ]; then save_ip=false; fi
+  if [ -n "$(reuse_secret INGRESS_CNAME)" ]; then save_cname=false; fi
+
+  if [ "$force" = true ]; then args+=(--force); fi
+  if [ "$save_ip" = true ] && { [ "$force" = true ] || [ -n "$ORCHARD_PUBLIC_IP" ]; }; then
+    args+=(--public-ip "$ORCHARD_PUBLIC_IP")
+  fi
+  if [ "$save_cname" = true ] && { [ "$force" = true ] || [ -n "$ORCHARD_INGRESS_CNAME" ]; }; then
+    args+=(--cname "$ORCHARD_INGRESS_CNAME")
+  fi
+
+  if [ "${#args[@]}" -gt 1 ] && [ "${args[*]}" != "seed --force" ]; then
+    if ! kubectl -n orchard exec deploy/server -- node dist/scripts/install-settings.js "${args[@]}" >/dev/null 2>&1; then
+      warn "could not save the public IP and custom domains target. Set them under Instance admin > Configuration."
+      return 0
+    fi
+    info "saved. Change the public IP and custom domains target under Instance admin > Configuration."
+  fi
+  rm -f "$pending"
 }
 
 dashboard_cert_ready() {
   [ "$(kubectl -n orchard get certificate orchard-tls \
     -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null)" = True ]
+}
+
+certificate_problem() {
+  local reasons
+  reasons=$(kubectl get challenges -A \
+    -o jsonpath='{range .items[*]}{.status.reason}{"\n"}{end}' 2>/dev/null || true)
+  reasons="$reasons $(kubectl get orders -A \
+    -o jsonpath='{range .items[*]}{.status.reason}{"\n"}{end}' 2>/dev/null || true)"
+  case "$reasons" in
+    *'Timeout during connect'*|*'Connection refused'*|*'connection refused'*|*'Connection reset'*|*firewall*)
+      printf firewall
+      ;;
+    *NXDOMAIN*|*'No valid IP addresses'*|*'no valid A records'*|*'DNS problem'*|*'SERVFAIL'*)
+      printf dns
+      ;;
+    *rateLimited*|*'too many certificates'*|*'rate limit'*)
+      printf ratelimit
+      ;;
+  esac
 }
 
 wait_for_dashboard_cert() {
@@ -2074,7 +3587,7 @@ wait_for_dashboard_cert() {
 install_orchard() {
   step
 
-  if [ "$PREVIOUS_INSTALL" = false ]; then : > "$STATE_DIR/public-ip-pending"; fi
+  if [ "$PREVIOUS_INSTALL" = false ]; then : > "$STATE_DIR/settings-pending"; fi
 
   kubectl create namespace network >/dev/null 2>&1 || true
 
@@ -2095,9 +3608,13 @@ install_orchard() {
   if [ "$ORCHARD_MCP" = true ]; then
     run_step "the agent endpoint" 1m kubectl -n orchard rollout status deploy/mcp --timeout=5m
   fi
-  seed_public_ip
+  save_install_settings
   if [ "$USE_TLS" = true ]; then
-    run_step "the dashboard certificate" 1m wait_for_dashboard_cert
+    if [ -n "$DNS_PENDING" ] || [ "$DNS_SKIPPED" = true ]; then
+      info "not waiting for the dashboard certificate, because DNS is not finished"
+    else
+      run_step "the dashboard certificate" 1m wait_for_dashboard_cert
+    fi
   fi
 }
 
@@ -2161,16 +3678,23 @@ EOF
 summary() {
   local scheme=https suffix=$HTTPS_SUFFIX
   if [ "$USE_TLS" = false ]; then
-    [ "$INGRESS_MODE" != tunnel ] && { scheme=http; suffix=$HTTP_SUFFIX; }
+    if [ "$INGRESS_MODE" != tunnel ]; then scheme=http; suffix=$HTTP_SUFFIX; fi
   fi
   if [ "$INGRESS_MODE" = tunnel ]; then suffix=''; fi
 
   step
 
+  build_dns_records
+  dns_check_all true
+
+  local cert_pending=false headline='Orchard is ready' line problem
+  if [ "$USE_TLS" = true ] && ! dashboard_cert_ready; then cert_pending=true; fi
+  if [ -n "$DNS_PENDING" ] || [ "$cert_pending" = true ]; then headline='Orchard is installed'; fi
+
   printf '\n'
   box_top
   pad_line ""
-  pad_line "$C_BRIGHT$C_BOLD  Orchard is ready$C_RESET$C_GREY   installed in $(elapsed)$C_RESET"
+  pad_line "$C_BRIGHT$C_BOLD  $headline$C_RESET$C_GREY   took $(elapsed)$C_RESET"
   pad_line ""
   pad_line "  ${C_GREY}Dashboard${C_RESET}  $scheme://$ORCHARD_DOMAIN$suffix"
   pad_line "  ${C_GREY}Your apps${C_RESET}  *.$ORCHARD_APP_DOMAIN$HTTPS_SUFFIX"
@@ -2180,9 +3704,56 @@ summary() {
   pad_line ""
   box_bottom
 
+  printf '\n  %sConfigured%s\n' "$C_BOLD" "$C_RESET"
+  note "Public IP: ${ORCHARD_PUBLIC_IP:-not set}"
+  note "Custom domains target: ${ORCHARD_INGRESS_CNAME:-not set}"
+  if [ "$ORCHARD_MCP" = false ]; then note "MCP endpoint: off"; fi
+  if [ "$INGRESS_MODE" = public ]; then note "Let's Encrypt email: ${ORCHARD_ACME_EMAIL:-none}"; fi
+  note "Updates: $ORCHARD_UPDATE_POLICY"
+  if [ "$S3_READY" = true ]; then
+    note "Storage: $ORCHARD_S3_BUCKET at $ORCHARD_S3_ENDPOINT"
+  elif [ "$ORCHARD_OBJECT_STORAGE" = true ]; then
+    note "Storage: on this server. If the server is lost, the backups are lost."
+  fi
+
+  if [ -n "$DNS_PENDING" ] || [ "$DNS_SKIPPED" = true ] || [ "$cert_pending" = true ]; then
+    printf '\n  %sStill pending%s\n' "$C_BOLD" "$C_RESET"
+    if [ -n "$DNS_PENDING" ]; then
+      while IFS= read -r line; do
+        if [ -n "$line" ]; then note "DNS: $line"; fi
+      done <<EOF
+$DNS_PENDING
+EOF
+      note "Nothing opens at these names until the records are right."
+    fi
+    if [ "$cert_pending" = true ]; then
+      note "Certificate: not issued yet, so browsers warn on the dashboard."
+      problem=$(certificate_problem)
+      case "$problem" in
+        firewall)
+          note "Let's Encrypt could not connect to this machine. $(firewall_hint)"
+          ;;
+        dns)
+          note "Let's Encrypt could not find the DNS records for it."
+          ;;
+        ratelimit)
+          note "Let's Encrypt is rate limiting this domain. That clears on its own."
+          ;;
+      esac
+      if is_sslip "$ORCHARD_DOMAIN"; then
+        note "All sslip.io users share one Let's Encrypt limit. Your own domain avoids it."
+      fi
+      note "cert-manager retries on its own, first after about an hour. To see why it has not"
+      note "issued yet: sudo kubectl -n orchard describe certificate orchard-tls"
+    fi
+  fi
+
   printf '\n  %sSign in%s\n' "$C_BOLD" "$C_RESET"
   note "Open this link to create the first account. The link is the credential,"
   note "so there is no email to wait for."
+  if [ -n "$DNS_PENDING" ]; then
+    note "It opens once the dashboard's DNS record is right."
+  fi
   printf '\n'
   if claim_link=$(orchard-claim 2>/dev/null | grep -E '^\s+http'); then
     printf '      %s%s%s\n' "$C_BRIGHT" "$(echo "$claim_link" | tr -d ' ')" "$C_RESET"
@@ -2192,35 +3763,27 @@ summary() {
   printf '\n'
   note "Setup then asks for a passkey or a password. With no email configured there"
   note "are no sign-in codes. If you get locked out, run: sudo orchardctl login"
-  printf '\n'
 
-  printf '  %sNext%s\n' "$C_BOLD" "$C_RESET"
-  note "Deploy an app: https://docs.orchard.my/start/first-deploy/"
+  printf '\n  %sNext, in the dashboard%s\n' "$C_BOLD" "$C_RESET"
+  note "Setup walks you through what is left: your organization, the GitHub App,"
+  note "storage, resource limits and email. Then deploy an app:"
+  note "https://docs.orchard.my/start/first-deploy/"
+
+  printf '\n  %sChange these later%s\n' "$C_BOLD" "$C_RESET"
+  note "Public IP, custom domains target, email, storage: Instance admin > Configuration"
+  note "MCP hostname: sudo orchardctl mcp enable <host> --apply"
+  if is_sslip "$ORCHARD_DOMAIN"; then
+    note "Your own domain: run the installer again with --domain <host>"
+  else
+    note "Dashboard or apps domain: run the installer again, or pass --domain and --app-domain"
+  fi
   if [ "$ORCHARD_UPDATE_POLICY" = automatic ]; then
     note "Updates run nightly. To update now: sudo orchardctl update"
   else
-    note "Update when you choose: sudo orchardctl update"
-    note "For nightly updates, run the installer again with --updates automatic."
-  fi
-  if is_sslip "$ORCHARD_DOMAIN"; then
-    note "To move to your own domain, run the installer again with --domain <host>."
+    note "Updates: sudo orchardctl update. For nightly updates, run the installer with --updates automatic"
   fi
   printf '\n'
 
-  if [ "$USE_TLS" = true ] && ! dashboard_cert_ready; then
-    warn "The dashboard certificate is not ready, so your browser warns until it is."
-    note "cert-manager keeps trying. To see why it has not issued yet:"
-    note "  sudo kubectl -n orchard describe certificate orchard-tls"
-    if is_sslip "$ORCHARD_DOMAIN"; then
-      note "All sslip.io users share one Let's Encrypt limit. Your own domain avoids it."
-    fi
-    printf '\n'
-  fi
-  if [ "$S3_READY" != true ] && [ "$ORCHARD_OBJECT_STORAGE" = true ]; then
-    note "Backups are on this server. If the server is lost, the backups are lost."
-    note "To add S3 storage, run 'sudo orchardctl backups s3 set' or use Instance admin."
-    printf '\n'
-  fi
   if [ "$INGRESS_MODE" = tunnel ]; then
     warn "Tunnel mode carries HTTP only, so public databases and raw TCP ports are off."
   fi
@@ -2254,10 +3817,9 @@ main() {
   show_plan
   preflight
   detect_network
-  choose_ingress_mode
-  collect_domains
-  choose_update_policy
-  choose_s3_storage
+  collect_answers
+  dns_step
+  START_TS=$(date +%s)
   size_workloads
   install_k3s
   ensure_helm

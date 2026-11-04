@@ -110,6 +110,15 @@ jobs:
           df -h /var/lib/rancher
           helm version --short | grep -q '^v4\.'
 
+      - name: The answers reached the admin page's settings
+        run: |
+          settings=$($KUBECTL -n orchard exec deploy/server -- node dist/scripts/install-settings.js show)
+          echo "$settings"
+          grep -q '^publicIp=.' <<<"$settings"
+          grep -q '^cname=.' <<<"$settings"
+          test -z "$(sudo yq -r '.server.env[] | select(.name == "INGRESS_CNAME") | .value' /etc/orchard/values.yaml)"
+          test "$(sudo yq -r '.tenant.publicIp // ""' /etc/orchard/values.yaml)" = ""
+
       - name: The install targets this machine's architecture
         run: |
           sudo grep -x "  platform: linux/${{ matrix.arch }}" /etc/orchard/values.yaml
@@ -218,6 +227,7 @@ jobs:
           test "$(sudo yq -r '[.server.env[] | select(.name == "SSO_ENCRYPTION_KEY")] | length' /etc/orchard/values.yaml)" = 1
           sudo orchardctl env set E2E_KEEP_ME kept
           started=$(k3s_started)
+          settings_before=$($KUBECTL -n orchard exec deploy/server -- node dist/scripts/install-settings.js show)
           sudo ORCHARD_ASSUME_YES=true ORCHARD_NO_PACING=1 NO_COLOR=1 bash install/install.sh \
             --chart ./infra/charts/orchard \
             --image-tag e2e \
@@ -226,6 +236,7 @@ jobs:
           test "$started" = "$(k3s_started)"
           test "$(sudo orchardctl env get E2E_KEEP_ME)" = kept
           test "$(sudo yq -r '.mcp.enabled' /etc/orchard/values.yaml)" = false
+          test "$($KUBECTL -n orchard exec deploy/server -- node dist/scripts/install-settings.js show)" = "$settings_before"
           test "$(sudo yq -r '.metrics.enabled' /etc/orchard/values.yaml)" = false
           $KUBECTL -n orchard rollout status deploy/server --timeout=5m
           $KUBECTL -n orchard get deploy server -o json \

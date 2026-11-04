@@ -9,6 +9,12 @@ export ORCHARD_LIB_ONLY
 source "$HERE/install.sh"
 
 dashboard_cert_ready() { return 0; }
+dns_ask_public() {
+  case "$1" in
+    A) printf '203.0.113.44\n' ;;
+  esac
+}
+dns_ask_local() { printf '203.0.113.44\n'; }
 
 SPEED=${DEMO_SPEED:-1}
 FAIL_AT=${DEMO_FAIL:-}
@@ -41,6 +47,14 @@ ORCHARD_DOMAIN=orchard.example.com
 # shellcheck disable=SC2034
 ORCHARD_APP_DOMAIN=apps.example.com
 # shellcheck disable=SC2034
+ORCHARD_MCP_DOMAIN=mcp.example.com
+# shellcheck disable=SC2034
+ORCHARD_PUBLIC_IP=203.0.113.44
+# shellcheck disable=SC2034
+ORCHARD_INGRESS_CNAME=orchard.example.com
+# shellcheck disable=SC2034
+ORCHARD_UPDATE_POLICY=manual
+# shellcheck disable=SC2034
 INGRESS_MODE=public
 # shellcheck disable=SC2034
 USE_TLS=true
@@ -68,13 +82,15 @@ demo() {
   step
   info "public IP: 203.0.113.44"
   info "local IP:  203.0.113.44"
-  info "this box has a routable address"
-  info "ingress mode: public"
 
   step
-  info "platform: https://orchard.example.com"
-  info "apps:     *.apps.example.com"
-  info "update policy: manual"
+  show_review
+
+  step
+  build_dns_records
+  bold "Create these DNS records"
+  print_dns_records
+  dns_check_all
   info "concurrent builds: 3, build cache: 43G, registry: 43G"
 
   step
