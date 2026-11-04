@@ -1,31 +1,33 @@
 ---
 title: Templates
-description: One-click stacks that create several resources together.
+description: Deploy an Orchard template that creates several resources together, write your own template in YAML, and publish it to the community registry.
 sidebar:
   order: 4
 ---
 
-A template describes a set of resources and the parameters that fill them in.
-Deploying one creates everything at once: an app, a database, an ingress, wired
-together.
+A template is a YAML file that describes a set of resources and the parameters that fill them in. Deploying a template creates the resources together, such as an app, a database, and a domain.
 
-## Using one
+## Deploy a template
 
-**New** shows the templates available on the instance. Pick one, fill in the
-parameters (a name, a domain, an image, resource sizes) and deploy. The result is
-a **template instance** that groups what it made, so you can see the pieces and
-delete them together.
+1. Open a project and select **New app**.
+2. Select a template, or search for one by name.
+3. Fill in the parameters.
+4. (Optional) Change the size of each service.
+5. Select the deploy button, which names the template, such as **Deploy Ghost Blog**.
 
-Each created resource is a normal app or database afterwards: scale it, change
-its variables, roll it back.
+From the CLI, run `orchard template list` to find the template ID, then:
 
-From the CLI: `orchard template list`, then `orchard template deploy <id>`.
+```sh
+orchard template deploy <template-id> --param appName=ghost --param domain=blog.example.com
+```
 
-## Writing one
+The result is a template instance, which groups the resources it created. Each resource is a normal app or database that you can scale, configure, and roll back.
 
-A template is one YAML file with three sections: `metadata` describes it,
-`parameters` are the questions Orchard asks before deploying, and `resources`
-are what gets created, in order.
+To find the instance, open the project and go to **Templates**. To remove the instance and its resources, open it and select **Delete everything**.
+
+## Write a template
+
+A template has three sections. `metadata` describes it. `parameters` lists the questions Orchard asks before it deploys. `resources` lists what it creates, in order.
 
 ```yaml
 apiVersion: leaf/v1
@@ -98,157 +100,139 @@ resources:
 
 ### Metadata
 
-| Field         | Required | Notes                                                                  |
-| ------------- | -------- | ---------------------------------------------------------------------- |
-| `name`        | yes      | Lowercase letters, digits and hyphens. Unique on the instance.         |
-| `displayName` | no       | Shown in the UI. Defaults to `name`.                                   |
-| `description` | no       | One or two sentences.                                                  |
-| `version`     | registry | A semantic version. Required to publish to the registry.               |
-| `category`    | no       | Groups templates in the gallery, for example `cms` or `database`.      |
-| `tags`        | no       | A list of strings, searchable.                                         |
-| `keywords`    | no       | Extra search terms: what someone types when they do not know the name. |
-| `icon`        | no       | An icon name for the UI.                                               |
-| `author`      | no       | Your GitHub login. The gallery credits you with it.                    |
-| `homepage`    | no       | An `https://` link to the software's site.                             |
-| `license`     | no       | SPDX id of the software the template deploys, shown on its page.       |
+| Field | Required | Notes |
+| --- | --- | --- |
+| `name` | Yes | Lowercase letters, digits, and hyphens. Must be unique on the instance. |
+| `displayName` | No | Shown in the UI. The default is `name`. |
+| `description` | No | One or two sentences. |
+| `version` | To publish | A semantic version. Required to publish to the registry. |
+| `category` | No | Groups templates in the gallery, such as `cms` or `database`. |
+| `tags` | No | A list of searchable strings. |
+| `keywords` | No | Extra search terms. |
+| `icon` | No | An icon name for the UI. |
+| `author` | No | Your GitHub login. The gallery credits you with it. |
+| `homepage` | No | An `https://` link to the software's site. |
+| `license` | No | The SPDX ID of the software the template deploys. |
 
 ### Parameters
 
-Every parameter needs a `name`. Everything else is optional.
+Each parameter needs a `name`. The other fields are optional.
 
-| Field         | Notes                                                                                                                                                                                    |
-| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `displayName` | The label in the form. Defaults to `name`.                                                                                                                                               |
-| `description` | Help text under the field.                                                                                                                                                               |
-| `type`        | `string` (default), `number`, `boolean`, `select` or `secret`.                                                                                                                           |
-| `default`     | Used when the field is left empty.                                                                                                                                                       |
-| `required`    | Rejects an empty value that has no default.                                                                                                                                              |
-| `placeholder` | Hint text in the empty field.                                                                                                                                                            |
-| `options`     | For `select`: a list of `{ label, value }`. The value must be one of them.                                                                                                               |
-| `validation`  | `pattern` and `message` for strings; `min` and `max` for numbers and secret lengths; `bytes` and `encoding` (`hex` or `base64`) for generated secrets that must decode to an exact size. |
+| Field | Notes |
+| --- | --- |
+| `displayName` | The label in the form. The default is `name`. |
+| `description` | Help text under the field. |
+| `type` | `string` (default), `number`, `boolean`, `select`, or `secret`. |
+| `default` | The value used when the field is empty. |
+| `required` | Rejects an empty value that has no default. |
+| `placeholder` | Hint text in the empty field. |
+| `options` | For `select`, a list of `{ label, value }`. |
+| `validation` | `pattern` and `message` for strings. `min` and `max` for numbers and secret lengths. `bytes` and `encoding` (`hex` or `base64`) for generated secrets that must decode to an exact size. |
 
-Types matter at deploy time:
+Orchard handles each type as follows when you deploy:
 
-- **string** values are checked against `validation.pattern` if there is one. A
-  parameter that names a resource (`name`, `appName`, anything ending in `Name`)
-  is slugified first, so "My Blog" becomes `my-blog` instead of failing.
-- **number** values are coerced and checked against `min` and `max`.
-- **boolean** accepts `true` or the string `"true"`.
-- **select** must match one of the option values.
-- **secret** is generated when left blank: a random hex string, 32 characters
-  long or `validation.min` if that is larger. Use it for admin passwords and
-  signing keys so the user does not have to invent one.
+| Type | Handling |
+| --- | --- |
+| `string` | Checked against `validation.pattern`. A parameter that names a resource (`name`, `appName`, or anything ending in `Name`) is converted to a slug first, so `My Blog` becomes `my-blog`. |
+| `number` | Converted to a number and checked against `min` and `max`. |
+| `boolean` | Accepts `true` or the string `"true"`. |
+| `select` | Must match one of the option values. |
+| `secret` | Generated when empty, as a random hex string. The length is 32 characters, or `validation.min` if that is larger. |
 
 ### Resources
 
-Resources are created top to bottom, and each one can reference the ones above
-it. The `name` is how later resources refer to it; the `type` decides which
-`config` keys apply.
+Orchard creates resources from top to bottom. Each resource can reference the ones above it. `name` is how later resources refer to it, and `type` decides which `config` keys apply.
 
-**database** creates a PostgreSQL database.
+#### `database`
 
-| Config     | Notes                            |
-| ---------- | -------------------------------- |
-| `name`     | Required.                        |
-| `replicas` | Read replicas. Defaults to none. |
+Creates a PostgreSQL database.
 
-It exposes `host`, `port`, `dbName`, `dbUser`, `dbPassword` and
-`connectionString` (a full `postgresql://` URL) to later resources.
+| Config | Notes |
+| --- | --- |
+| `name` | Required. |
+| `replicas` | The number of instances. The default is 1. |
+| `resources` | The recommended size, as `{ cpu, memory }`. |
 
-**deployment** creates an app, either from an image or by building a
-repository.
+A database exposes `host`, `port`, `dbName`, `dbUser`, `dbPassword`, and `connectionString` to later resources.
 
-| Config                                                                               | Notes                                                                                                                                                                                                                     |
-| ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `name`                                                                               | Required.                                                                                                                                                                                                                 |
-| `image`                                                                              | Deploy this image. Use this or `repo`.                                                                                                                                                                                    |
-| `repo`, `branch`                                                                     | Build from a Git repository instead.                                                                                                                                                                                      |
-| `buildType`                                                                          | `dockerfile` (default, with `dockerfilePath`) or `railpack`.                                                                                                                                                              |
-| `rootDirectory`, `installCommand`, `buildCommand`, `startCommand`, `outputDirectory` | Build settings for repository builds. `startCommand` also applies to images.                                                                                                                                              |
-| `replicas`                                                                           | Defaults to 1.                                                                                                                                                                                                            |
-| `ports`                                                                              | A list of `{ name, containerPort, servicePort, protocol, public }`. `public: true` publishes that port on the organization's external IP over raw TCP or UDP, which is how a game server or a database client reaches it. |
-| `env`                                                                                | A list of `{ key, value }`. Add `secret: true` to store the value as a secret.                                                                                                                                            |
-| `volumes`                                                                            | Persistent volumes, same shape as the API accepts. Each `pvc` volume gets its own randomly named disk, so two deployed templates never share one.                                                                         |
-| `resources`                                                                          | The recommended size, as `{ cpu, memory }` (`500m`, `1Gi`). The deploy form starts here and each service can be changed before deploying. Also applies to `database` resources.                                           |
-| `exposePublic`                                                                       | Create the Service as a NodePort instead of ClusterIP. Prefer `public: true` on a port.                                                                                                                                   |
-| `autoDeploy`, `autoDeployBranch`                                                     | Redeploy on push, for repository builds.                                                                                                                                                                                  |
+#### `deployment`
 
-It exposes `serviceName`, which is what an ingress route points at. A deployment
-with a published port also exposes `publicIp`, `publicPort` and `publicHost`;
-the public port number is assigned by the instance, not chosen by the template.
+Creates an app from an image or from a repository.
 
-**ingress** puts a domain in front of a deployment.
+| Config | Notes |
+| --- | --- |
+| `name` | Required. |
+| `image` | The image to deploy. Use this or `repo`. |
+| `repo`, `branch` | A Git repository to build. |
+| `buildType` | `dockerfile` (default, with `dockerfilePath`) or `railpack`. |
+| `rootDirectory`, `installCommand`, `buildCommand`, `startCommand`, `outputDirectory` | Build settings for a repository. `startCommand` also applies to images. |
+| `replicas` | The default is 1. |
+| `ports` | A list of `{ name, containerPort, servicePort, protocol, public }`. `public: true` publishes the port on the organization's external IP over raw TCP or UDP. |
+| `env` | A list of `{ key, value }`. Add `secret: true` to store the value as a secret. |
+| `volumes` | Persistent volumes, in the shape the API accepts. Each `pvc` volume gets its own randomly named disk, so two deployed templates do not share one. |
+| `resources` | The recommended size, as `{ cpu, memory }`, such as `500m` and `1Gi`. The deploy form starts here, and you can change it before you deploy. |
+| `exposePublic` | Creates the Service as a NodePort instead of ClusterIP. Use `public: true` on a port instead. |
+| `autoDeploy`, `autoDeployBranch` | Redeploys on push, for repository builds. |
 
-| Config                               | Notes                                                  |
-| ------------------------------------ | ------------------------------------------------------ |
-| `host`                               | Required. The domain.                                  |
-| `tlsEnabled`                         | Defaults to `true`.                                    |
-| `routes`                             | A list of `{ path, serviceName, servicePort }`.        |
-| `path`, `serviceName`, `servicePort` | Shorthand for a single route when `routes` is omitted. |
-| `basicAuth`                          | Protect the domain with a username and password.       |
+A deployment exposes `serviceName`, which an ingress route points at. A deployment with a published port also exposes `publicIp`, `publicPort`, and `publicHost`. The instance assigns the public port number.
 
-It exposes `host`.
+#### `ingress`
+
+Puts a domain in front of a deployment.
+
+| Config | Notes |
+| --- | --- |
+| `host` | Required. The domain. |
+| `tlsEnabled` | The default is `true`. |
+| `routes` | A list of `{ path, serviceName, servicePort }`. |
+| `path`, `serviceName`, `servicePort` | Shorthand for a single route when you omit `routes`. |
+| `basicAuth` | Protects the domain with a username and password. |
+
+An ingress exposes `host`.
 
 ### Expressions
 
-Two forms, and nothing else:
+Templates support two expression forms:
 
 - `{{ params.<name> }}` reads a parameter.
-- `{{ resources.<name>.<field> }}` reads a field exposed by an earlier resource.
+- `{{ resources.<name>.<field> }}` reads a field from an earlier resource.
 
-A value that is exactly one expression keeps its type, so
-`replicas: '{{ params.replicas }}'` stays a number and
-`tlsEnabled: '{{ params.enableTls }}'` stays a boolean. Anything longer is
-string interpolation: `'https://{{ params.domain }}'`. Referencing a resource
-that is defined further down fails at deploy time.
+A value that is exactly one expression keeps its type. For example, `replicas: '{{ params.replicas }}'` stays a number. A longer value is string interpolation, such as `'https://{{ params.domain }}'`. A reference to a resource defined further down fails when you deploy.
 
 :::caution
-Deploy a template end to end before publishing it. A template that references
-software with a database it cannot actually use will deploy cleanly and then
-crash-loop, which is a much worse experience than a template that does not exist.
+Deploy a template end to end before you publish it. A template can deploy without errors and then crash-loop, for example if the software cannot use the database it receives.
 :::
-
-## Instances
-
-A template instance keeps track of the resources it created and their status.
-Deleting the instance offers to delete everything it made.
 
 ## The community registry
 
-The templates that ship with Orchard, and the ones the community has
-contributed, are published to a public registry at
-`https://assets.orchard.my/registry` and shown in the gallery at
-[orchard.my/templates](https://orchard.my/templates).
+Orchard publishes its built-in templates and community templates to `https://assets.orchard.my/registry`. The gallery is at [orchard.my/templates](https://orchard.my/templates).
 
-Every instance pulls the catalogue on boot and every six hours, from that
-registry unless `TEMPLATE_REGISTRY_URL` points somewhere else. Imported templates
-are protected like built-in ones: they cannot be edited or deleted from the
-instance, and a custom template that already uses a name is never overwritten.
-Set the variable empty on an air-gapped instance; the built-in templates still
-seed from the server image.
+Each instance reads the catalogue when it starts and every six hours. To use another registry, set `TEMPLATE_REGISTRY_URL`. On an air-gapped instance, set the variable to an empty value. The built-in templates still load from the server image.
 
-### Publishing one
+Imported templates cannot be edited or deleted from the instance. An import does not overwrite a custom template with the same name.
 
-1. Add `registry/templates/<name>.yaml` to the
-   [Orchard repository](https://github.com/hackclub/orchard/tree/main/registry).
-   The file name must match `metadata.name`, and `metadata.version` is required.
-   A `<name>.md` next to it is rendered on the template's page and a 1200x675
-   `<name>.png` is its preview in the gallery.
-2. Check it locally:
+### Publish a template
+
+1. Add `registry/templates/<name>.yaml` to the [Orchard repository](https://github.com/hackclub/orchard/tree/main/registry). The file name must match `metadata.name`, and `metadata.version` is required.
+2. (Optional) Add `<name>.md`, which appears on the template's page, and a 1200x675 `<name>.png`, which is its preview in the gallery.
+3. Validate the template:
 
    ```sh
    go run ./apps/registry validate -templates registry/templates
    ```
 
-3. Commit as `feat(templates): add <name>` and open a pull request. CI runs the
-   same validator, and a merge publishes it within a minute.
+4. Commit with the message `feat(templates): add <name>` and open a pull request. CI runs the same validator. A merge publishes the template within a minute.
 
-Published versions are immutable, so bump `metadata.version` to ship a change.
-Every version stays fetchable:
+Published versions cannot change. To ship a change, increase `metadata.version`. Every version stays available:
 
-```
+```text
 https://assets.orchard.my/registry/templates/index.json
 https://assets.orchard.my/registry/templates/<name>/index.json
 https://assets.orchard.my/registry/templates/<name>/<version>/template.yaml
 https://assets.orchard.my/registry/templates/<name>/latest/template.yaml
 ```
+
+## Related resources
+
+- [Compose stacks](/run/compose/)
+- [Databases](/data/databases/)

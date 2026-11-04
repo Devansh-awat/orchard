@@ -1,0 +1,100 @@
+---
+title: Jobs and pipelines
+description: Create an Orchard job that runs one or more steps on a cron schedule or on demand, and read the logs of each run.
+sidebar:
+  order: 2
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+A job runs work that does not stay up as a server, such as a cleanup, an import, or a report. Jobs run on the cluster, in one or more ordered steps.
+
+## Step types
+
+| Step | Runs |
+| --- | --- |
+| **Script** | `bash`, `python`, or `node` source that you enter |
+| **App command** | A command inside the image of an existing app |
+| **Custom image** | Any container image, with an optional command |
+
+## Create a job
+
+<Tabs syncKey="dashPlusCli">
+<TabItem label="Dashboard">
+
+1. In the sidebar, go to **Jobs** and select **New job**.
+2. Select the project.
+3. In **Name**, enter a name, such as `nightly-cleanup`.
+4. In **Schedule**, select a preset, **Custom cron…**, or **Manual only**.
+5. In **If a run is still going**, select **Skip the new run** or **Run them in parallel**.
+6. Add one or more steps, and select the type of each one.
+7. (Optional) Set a timeout, retries, and CPU for each step.
+8. Select **Create job**.
+
+</TabItem>
+<TabItem label="CLI">
+
+1. Write the steps to a JSON file.
+
+2. Create the job:
+
+   ```sh
+   orchard job create --name nightly-cleanup --cron "0 2 * * *" --steps steps.json
+   ```
+
+The `--concurrency` flag accepts `forbid`, the default, or `allow`. The `--timezone` flag sets the IANA time zone for the schedule. The default is UTC.
+
+</TabItem>
+</Tabs>
+
+A job with a schedule runs as a Kubernetes CronJob. A job without one runs only when you start it.
+
+## Run a job
+
+<Tabs syncKey="dashPlusCli">
+<TabItem label="Dashboard">
+
+Open the job and select **Run now**.
+
+</TabItem>
+<TabItem label="CLI">
+
+```sh
+orchard job run <id>
+```
+
+</TabItem>
+</Tabs>
+
+To pause a schedule, select **Pause** on the job page, or run `orchard job pause <id>`.
+
+## Read a run
+
+Each run has a status, a duration, and output for each step. Steps run in order, and each one has its own logs and exit code. Orchard keeps past runs on the job page. To list them from the CLI, run `orchard job runs <id>`.
+
+:::caution
+A step that ends in `|| true` always reports success, even when the command fails. Use this pattern only if you check for the failure elsewhere.
+:::
+
+## Choose a script image
+
+Script steps run in a small image for the language you select.
+
+| Runtime | Default image |
+| --- | --- |
+| `bash` | `debian:12.15-slim` |
+| `python` | `python:3.12.15-slim` |
+| `node` | `node:22.23.4-slim` |
+
+These images leave out common tools. For example, `debian:12.15-slim` has no `curl` or `wget`. If a step needs a tool, use a **Custom image** step, or install the tool in the first line of the script.
+
+To change a default image for the whole instance, set `JOB_RUNTIME_IMAGE_BASH`, `JOB_RUNTIME_IMAGE_PYTHON`, or `JOB_RUNTIME_IMAGE_NODE` on the server.
+
+## Reach an app from a job
+
+A job in the same environment as an app can reach it by its internal address. For more information, refer to [Networking](/deploy/networking/#connect-apps-inside-the-cluster).
+
+## Related resources
+
+- [Notifications](/run/notifications/)
+- [CLI reference](/reference/cli/)

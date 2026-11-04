@@ -1,0 +1,119 @@
+---
+title: Logs and shell
+description: Stream live logs from an Orchard app, read the output of containers that crashed, open a shell in a running container, and diagnose a crash loop.
+sidebar:
+  order: 5
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+To read what an app is doing, use the console on its **Overview** tab. To search older logs, use **Observe** > **Logs**. For more on the **Observe** tab, refer to [Monitor an app](/run/monitor-an-app/).
+
+## Stream live logs
+
+<Tabs syncKey="dashPlusCli">
+<TabItem label="Dashboard">
+
+1. Open the app and go to **Overview**.
+2. In the console, select **Logs**.
+3. To follow one replica, open the source menu and select a pod and container.
+
+</TabItem>
+<TabItem label="CLI">
+
+```sh
+orchard logs <id> --follow
+```
+
+To read build logs, add `--build`.
+
+</TabItem>
+</Tabs>
+
+## Read past logs
+
+Past logs include replicas that have since been replaced. They come from the instance's log store. If the view is empty, refer to [Logs and request data](/operate/logs/).
+
+1. Open the app and go to **Observe** > **Logs**.
+2. Select a time range.
+
+## Read crash output
+
+Orchard captures the final output of a container that was killed, including out-of-memory (OOM) kills. It attaches the output to the app.
+
+<Tabs syncKey="dashPlusCli">
+<TabItem label="Dashboard">
+
+1. Open the app and go to **Overview**.
+2. In the console, open the source menu.
+3. Select the entry for the container labeled **Output from before the last crash**.
+
+</TabItem>
+<TabItem label="CLI">
+
+```sh
+orchard deploy killed list <id>
+orchard deploy killed logs <id> <entry-id>
+```
+
+</TabItem>
+</Tabs>
+
+## Diagnose a crash loop
+
+In a crash loop, a container starts and exits, and Kubernetes restarts it. Read the exit reason and the last logs.
+
+| Symptom | Likely cause | What to do |
+| --- | --- | --- |
+| Exits immediately with a module or import error | The image is missing a dependency, or the build used the wrong stage | Check the [build stage](/deploy/builds/#the-image-has-no-application-in-it) |
+| Exits after a few seconds with connection refused | The app cannot reach its database | Check the internal host and the credentials |
+| Killed with exit code 137 | The container ran out of memory | Raise the [memory limit](/deploy/scaling/#set-cpu-and-memory) or fix the leak |
+| Runs but never becomes ready | The health check path or port is wrong | Check [health checks](/deploy/scaling/#set-health-checks) |
+
+## Shell
+
+A shell opens a terminal inside a running container. It uses the same authentication as the dashboard.
+
+<Tabs syncKey="dashPlusCli">
+<TabItem label="Dashboard">
+
+1. Open the app and go to **Overview**.
+2. In the console, select **Shell**.
+3. If the app has more than one pod or container, select one.
+
+</TabItem>
+<TabItem label="CLI">
+
+The CLI runs one command at a time in a pod. It does not open an interactive shell.
+
+```sh
+orchard pod exec <pod> -- env
+```
+
+To open the app's language REPL in a pod, run `orchard console <id>`.
+
+</TabItem>
+</Tabs>
+
+Changes you make in a shell are lost on the next restart. A command that uses too much memory can get the container killed.
+
+## Database logs
+
+A database has the same console on its **Overview** tab.
+
+- **Logs** streams the logs of an instance.
+- **Killed** lists containers killed in the last 24 hours, with their final output.
+- **Shell** opens a terminal in an instance.
+
+To open `psql` from the CLI, run `orchard db psql <id>`.
+
+## Kubernetes events
+
+**Observe** > **Events** lists crashes and Kubernetes warnings for the app's pods, newest first. It includes failed scheduling, image pull problems, probe failures, and volume mounts. It also shows how many times each one repeated.
+
+The alert banner above an app's tabs shows only problems that exist now. Kubernetes keeps warning events for about an hour after a problem clears, so the history can show warnings the banner does not.
+
+## Related resources
+
+- [Monitor an app](/run/monitor-an-app/)
+- [Metrics and alerts](/run/observability/)

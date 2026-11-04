@@ -1,0 +1,91 @@
+---
+title: Notifications
+description: Send Orchard deploy, health, backup, and job events to Slack, Discord, email, or a signed webhook, using destinations and rules.
+sidebar:
+  order: 7
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+To receive events outside the dashboard, add a destination and a rule. A destination sets where a message goes. A rule sets which events reach that destination.
+
+## Prerequisites
+
+- You need the **Owner** or **Admin** role in the organization to manage organization destinations.
+- If your instance uses PostHog, the Notifications beta must be on for your account. Go to **Account settings** > **Early access**. An instance without PostHog does not need this step.
+
+## Add a destination
+
+<Tabs syncKey="dashPlusCli">
+<TabItem label="Dashboard">
+
+1. Go to **Organization settings** > **Notifications**.
+2. Select **Add destination**.
+3. In **Send to**, select **Discord**, **Slack**, **Webhook**, or **Email**.
+4. In **Name**, enter a name, such as `#deploys`.
+5. Enter the **Webhook URL**, or for email, the **Recipients**. Recipients must be members of the organization.
+6. Select **Add destination**.
+7. For a webhook, copy the signing secret. Orchard does not show it again.
+
+To check the destination, select **Send a test notification** on its row.
+
+</TabItem>
+<TabItem label="CLI">
+
+```sh
+orchard notify channel create --type slack --name deploys \
+  --url https://hooks.slack.com/services/... \
+  --events deploy.failed,pod.crashing
+```
+
+To send a test message, run `orchard notify channel test <id>`.
+
+</TabItem>
+</Tabs>
+
+Orchard validates webhook URLs before it saves them. It rejects internal addresses.
+
+## Add a rule
+
+1. Go to **Organization settings** > **Notifications**.
+2. In **Rules**, select **Add rule**.
+3. In **Channel**, select a destination.
+4. Select the events to send.
+5. Select **Add rule**.
+
+We recommend that you start with failure events.
+
+## Scope a rule to an app
+
+To route an app's events somewhere else, add a channel on the app. You can also mute an inherited organization rule for that app.
+
+1. Open the app and go to **Settings** > **Notifications**.
+2. In **Team channels**, select **Add channel**.
+3. Enter the channel details and select the events.
+
+To mute a rule, select **Mute here** on its row.
+
+## Events
+
+| Category | Events |
+| --- | --- |
+| Deploys | `deploy.succeeded`, `deploy.failed`, `deploy.regressed` |
+| App and database health | `pod.crashing`, `pod.recovered`, `alert.firing`, `alert.resolved`, `db.crashing`, `db.recovered`, `db.storage_pressure`, `db.storage_recovered`, `db.read_only`, `db.writes_resumed`, `db.memory_raised` |
+| Backups and archiving | `backup.completed`, `backup.failed`, `db.archiving_failing`, `db.archiving_recovered`, `db.restore_test_failed` |
+| Jobs | `job.succeeded`, `job.failed` |
+| Security | `security.signed_in`, `security.app_authorized` |
+
+## Personal notifications
+
+Your own notifications are separate from organization rules. To choose which categories reach you, go to **Account settings** > **Notifications**.
+
+## Review deliveries
+
+Orchard records each delivery attempt and its outcome. The status appears on the destination's row. To list deliveries from the CLI, run `orchard notify deliveries`.
+
+To resend events after you fix a destination, open the destination's menu and select **Replay the last 24 hours**.
+
+## Related resources
+
+- [Create alert rules](/run/alerts/)
+- [Metrics and alerts](/run/observability/)

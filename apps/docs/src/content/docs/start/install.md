@@ -268,7 +268,7 @@ Decide these items before you start:
 
 | Decision | Reason |
 | --- | --- |
-| The ingress mode | The agent can detect NAT. It cannot know whether you intend to expose the machine. |
+| The ingress mode | The agent can detect NAT. It cannot know if you intend to expose the machine. |
 | The domain | Nothing on the machine shows which domains you own. |
 | The DNS records | The records must exist before the run, and the agent may not have access to your DNS provider. |
 | Whether to proceed | The installer installs k3s system-wide. Outside `tunnel` mode, it also takes ports 80 and 443. |

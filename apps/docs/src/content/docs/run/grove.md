@@ -1,63 +1,51 @@
 ---
 title: The Grove
-description: The discussion space for your instance, shipped as the forum graft.
+description: Turn on the Grove, a discussion forum for the people on your Orchard instance, shipped as the forum graft.
 sidebar:
   order: 10
 ---
 
-The Grove is a forum inside Orchard, for the people using the instance. It exists
-so questions and answers live next to the platform they are about, rather than in
-a chat history nobody can search.
+The Grove is a forum for the people on an Orchard instance. It holds bug reports and feature requests, with votes, replies, and image attachments. It ships as the `forum` [graft](/grafts/overview/).
 
-## Turning it on
+## Turn on the Grove
 
-The Grove is the `forum` [graft](/grafts/overview/), published to the Extension
-Marketplace from the Orchard repository:
+Installing the graft turns on the Grove. On a host set up by the installer:
 
 ```sh
 sudo orchardctl graft add forum --apply
 ```
 
-or, for GitOps, in the Orchard chart values:
+On a GitOps setup, add the graft to the chart values:
 
 ```yaml
 grafts:
   - id: forum
-    version: 1.0.0
+    version: <version>
     digest: sha256:...
 ```
 
-Installed means on: `GROVE_ENABLED` and `PUBLIC_GROVE_ENABLED` no longer exist and
-are ignored if still set. Image attachments need object storage configured under
-**Instance admin**.
+`GROVE_ENABLED` and `PUBLIC_GROVE_ENABLED` no longer exist. Orchard ignores them if they are set.
 
-### Upgrading from an Orchard that had the Grove built in
+Image attachments need object storage. To set it up, go to **Instance admin** > **Configuration** > **Object storage**.
 
-When the graft first starts it moves the `forum_*` tables from the `public` schema
-into its own `ext_forum` schema in one transaction, without copying or deleting
-anything, and leaves views with the old names in `public` so pods still running the
-previous release keep working during the rollout. Thread links, numbers and
-uploaded images stay where they were. Install the graft in the same change that
-upgrades Orchard, or the Grove is unavailable until you do (nothing is lost in
-between).
+## Upgrade from a built-in Grove
 
-## Threads
+If an earlier Orchard release had the Grove built in, install the graft in the same change that upgrades Orchard. Until you install it, the Grove is unavailable. No data is lost in that period.
 
-Threads are grouped into **categories** and support replies, **votes**, and file
-uploads.
+When the graft first starts, it moves the `forum_*` tables from the `public` schema to the `ext_forum` schema in one transaction. It does not copy or delete anything. It leaves views with the old names in `public`, so pods on the previous release keep working during the rollout. Thread links, numbers, and uploaded images stay the same.
 
-Each thread carries a **status**, so a question can be marked resolved and a bug
-report can be tracked rather than scrolling away.
+## Moderate threads
 
-## Moderation
+Superadmins can manage threads with these actions:
 
-Admins can **pin** a thread to keep it at the top, **lock** it to stop further
-replies, and set **priority** to surface something important.
+| Action | Result |
+| --- | --- |
+| Set status | Tracks where a report or a request stands. |
+| Set priority | Marks how important a thread is. |
+| Pin | Keeps a thread at the top. |
+| Lock | Stops further replies. |
+| Delete | Removes a thread or a reply. |
 
-Threads and individual replies can be deleted.
+## Related resources
 
-## Why it is there
-
-A self-hosted platform tends to grow institutional knowledge: how this cluster is
-configured, which base image people use, why that node pool exists. The Grove is
-somewhere for that to accumulate where the next person will actually find it.
+- [Install grafts](/grafts/install/)

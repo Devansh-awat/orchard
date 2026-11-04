@@ -1,0 +1,122 @@
+---
+title: Environments and variables
+description: Set variables on an Orchard app, share values across an environment, store secrets, create environments, and pull variables to a local file.
+sidebar:
+  order: 1
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+To configure an app, set variables on it. To reuse a value across apps, store it as a shared variable and reference it. Each [environment](/start/concepts/#environment) has its own shared variables.
+
+## Set app variables
+
+Saving variables restarts the app, because a process reads its environment at startup.
+
+<Tabs syncKey="dashPlusCli">
+<TabItem label="Dashboard">
+
+1. Open the app and go to **Variables**.
+2. Add the variables in **Editor**. To paste `.env` text, select **Raw**.
+3. Select **Save**.
+
+</TabItem>
+<TabItem label="CLI">
+
+```sh
+orchard deploy env set <id> LOG_LEVEL=info
+```
+
+To store a value as a secret, add `--secret`. To read pairs from a file, use `--file`.
+
+</TabItem>
+</Tabs>
+
+An app can have up to 1,000 variables, and each value can be up to 64 KB. For files, use [storage](/deploy/storage/). For data, use a [database](/data/databases/).
+
+## Shared variables
+
+A shared variable belongs to an environment. An app receives a shared value only when one of its own variables references it.
+
+### Add a shared variable
+
+<Tabs syncKey="dashPlusCli">
+<TabItem label="Dashboard">
+
+1. Open the project and go to **Variables**.
+2. Select the environment.
+3. In **Shared variables**, select **Add variable**.
+4. Enter the key and the value.
+5. Select **Save**.
+
+</TabItem>
+<TabItem label="CLI">
+
+```sh
+orchard env vars set API_BASE_URL=https://api.example.com
+```
+
+</TabItem>
+</Tabs>
+
+### Reference a shared variable
+
+Set an app variable to a reference:
+
+```text
+API_BASE_URL=${{shared.API_BASE_URL}}
+```
+
+Orchard resolves references when it starts the pod and when it builds the image. If you change a shared value, Orchard updates and restarts only the apps whose values change.
+
+## Secrets
+
+Orchard encrypts secret values at rest. You can replace a secret value, but you cannot read it back from the dashboard, the CLI, the API, or MCP.
+
+Orchard passes a secret to the container through the app's Kubernetes Secret. The pod spec holds a reference and not the value.
+
+## Reference a database or another app
+
+To read a value from a resource, use a reference such as `${{resource.appdb.connection_string}}`. Select **Use a resource** in the value field to add one. For more information, refer to [Connect an app](/data/databases/#connect-an-app).
+
+## Create an environment
+
+Each project has a `Production` environment by default. Each new environment gets its own namespace.
+
+<Tabs syncKey="dashPlusCli">
+<TabItem label="Dashboard">
+
+1. Open the project.
+2. Open the environment menu and select **New environment**.
+3. Enter a name.
+
+</TabItem>
+<TabItem label="CLI">
+
+```sh
+orchard env create --name staging
+```
+
+</TabItem>
+</Tabs>
+
+:::caution
+Deleting an environment permanently deletes its namespace and everything in it. You cannot undo this action.
+:::
+
+## Pull variables to a local file
+
+To match a cluster environment during local development, pull its variables:
+
+```sh
+orchard env pull staging
+```
+
+The command writes the environment's shared variables to `.env.orchard`. To change the path, use `--out`. To merge one app's variables on top, use `--deployment <id>`.
+
+Secret values are write-only, so the file contains commented placeholders for them. Fill these in locally.
+
+## Related resources
+
+- [CLI reference](/reference/cli/)
+- [Connect an app to a database or app](/deploy/connect-resources/)

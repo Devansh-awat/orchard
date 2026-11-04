@@ -1,0 +1,129 @@
+---
+title: Compose stacks
+description: Deploy a docker-compose.yml file from a GitHub repository to Orchard. Each service becomes its own app in the project.
+sidebar:
+  order: 3
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+A compose stack deploys the services in a `docker-compose.yml` file as apps in a project. Each service becomes its own app, which you can scale, redeploy, and roll back on its own. Orchard reads the file from a GitHub repository.
+
+## Prerequisites
+
+- A GitHub account linked to Orchard. Go to **Account settings** > **GitHub and Tailscale**.
+- Access to the repository through your GitHub account or the GitHub App.
+
+## Deploy a stack
+
+<Tabs syncKey="dashPlusCli">
+<TabItem label="Dashboard">
+
+1. Open the project and go to **Compose**.
+2. Select **Deploy compose file**. If the project already has a stack, select **New stack**.
+3. Enter a name for the stack.
+4. In **Repository**, select the repository.
+5. In **Branch**, select the branch.
+6. In **Path to docker-compose.yml**, confirm the path.
+7. (Optional) Turn off **Auto-deploy on push**.
+8. Select **Deploy stack**.
+
+Orchard opens the stack page. Builds run in the background.
+
+</TabItem>
+<TabItem label="CLI">
+
+```sh
+orchard compose deploy --name shop --github owner/repo#main --path docker-compose.yml
+```
+
+To rebuild on each push, add `--auto-deploy`.
+
+</TabItem>
+</Tabs>
+
+Orchard names each app `<stack>-<service>`. Services use their Orchard internal addresses to reach each other, so check any hostnames in your configuration. To find an address, open the app and go to **Network** > **Ports**.
+
+## How Orchard reads the file
+
+| Compose key | Orchard result |
+| --- | --- |
+| `image` | An app that runs the image. |
+| `build` | An app that Orchard builds from the repository, with `context` and `dockerfile`. |
+| `ports` | The app's ports, over TCP. |
+| `environment` | The app's variables. |
+| `volumes` with a named volume | A persistent volume, 1 GiB unless `driver_opts.size` sets another size. Only the short string form is read. |
+| `deploy.replicas` | The replica count. |
+| `deploy.resources` | The CPU and memory sizes. |
+| `command` | The start command. |
+
+Each service must have `image` or `build`.
+
+Orchard does not apply these keys:
+
+- Bind mounts of host paths. For files that must persist, use a named volume or [storage](/deploy/storage/).
+- `network_mode` and other container networking settings.
+- `depends_on`. Services must tolerate a dependency that is unavailable when they start.
+- Build contexts that need files outside the repository.
+
+Check each service after you deploy the stack.
+
+## Redeploy a stack
+
+Redeploying reads the compose file from GitHub again. A service that still exists keeps its app, along with its domains, volumes, and variable edits. Orchard creates or deletes apps only for services you added to or removed from the file.
+
+<Tabs syncKey="dashPlusCli">
+<TabItem label="Dashboard">
+
+1. Open the stack from the project's **Compose** tab.
+2. Select **Redeploy**.
+
+To turn auto-deploy on or off, use **Deploy on push** on the stack page.
+
+</TabItem>
+<TabItem label="CLI">
+
+```sh
+orchard compose redeploy <id>
+```
+
+</TabItem>
+</Tabs>
+
+## Delete a stack
+
+Deleting a stack also deletes its services.
+
+<Tabs syncKey="dashPlusCli">
+<TabItem label="Dashboard">
+
+1. Open the stack.
+2. Select **More actions** > **Delete stack**.
+3. Confirm the deletion.
+
+</TabItem>
+<TabItem label="CLI">
+
+```sh
+orchard compose delete <id>
+```
+
+</TabItem>
+</Tabs>
+
+## Troubleshooting
+
+### No GitHub access for this repo
+
+```text
+No GitHub access for this repo. Connect your GitHub account or install the GitHub App.
+```
+
+**Cause:** Orchard has no token that can read the repository. A compose stack needs one, even for a public repository.
+
+**Fix:** Connect your GitHub account, and install the GitHub App on the repository's account.
+
+## Related resources
+
+- [Deploy from GitHub](/deploy/github/)
+- [Networking](/deploy/networking/)

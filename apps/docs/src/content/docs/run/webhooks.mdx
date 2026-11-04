@@ -1,0 +1,99 @@
+---
+title: Webhooks
+description: Create an Orchard webhook token, then send a POST request from CI to restart an app or roll it onto a new image.
+sidebar:
+  order: 8
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+To change an app from a CI pipeline or another external system, create a webhook token. A request with the token restarts the app, or rolls it onto a new image.
+
+Each token belongs to one app. GitHub webhooks for auto-deploy are separate. The [GitHub App](/deploy/github/#auto-deploy) handles them.
+
+## Create a token
+
+<Tabs syncKey="dashPlusCli">
+<TabItem label="Dashboard">
+
+1. Open the app and go to **Activity**.
+2. In **Webhooks**, enter a label, such as `github-actions`.
+3. Select **Create token**.
+4. Copy the webhook URL and the token. Orchard shows them only once.
+
+The dashboard shows **Webhooks** for apps that do not build from a GitHub repository. For a GitHub app, use the CLI.
+
+</TabItem>
+<TabItem label="CLI">
+
+```sh
+orchard deploy webhook-token create <id> --label github-actions
+```
+
+</TabItem>
+</Tabs>
+
+Store the token in your CI system's secret store. Anyone with the token can change the app.
+
+## Send a request
+
+Send the token in the `Authorization` header. The header form keeps the token out of proxy and access logs.
+
+To restart the app:
+
+```sh
+curl -X POST https://orchard.example.com/apiv1/webhooks/deploy \
+  -H "Authorization: Bearer $WEBHOOK_TOKEN"
+```
+
+To roll an image app onto a new tag:
+
+```sh
+curl -X POST https://orchard.example.com/apiv1/webhooks/deploy \
+  -H "Authorization: Bearer $WEBHOOK_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"tag": "v1.2.3"}'
+```
+
+To roll an image app onto a new image and tag, send `{"image": "ghcr.io/org/app", "tag": "sha-abc123"}`.
+
+The token also works in the URL, as `/apiv1/webhooks/deploy/<token>`. The URL that the dashboard shows uses this form.
+
+## Behavior
+
+| Request | App type | Result |
+| --- | --- | --- |
+| No `image` or `tag` | Any | Restarts the app on its current image. |
+| With `image` or `tag` | Image | Rolls the app onto the new image. The previous image stays available for rollback. |
+| With `image` or `tag` | GitHub | Returns a `400` error. To rebuild a GitHub app, push to the branch or run `orchard deploy rebuild <id>`. |
+
+A request returns a `409` error while the app is building. Each token allows 30 requests per minute.
+
+## Delete a token
+
+Anything still using a deleted token stops working immediately.
+
+<Tabs syncKey="dashPlusCli">
+<TabItem label="Dashboard">
+
+1. Open the app and go to **Activity** > **Webhooks**.
+2. Select the delete icon on the token, then select **Delete token**.
+
+</TabItem>
+<TabItem label="CLI">
+
+```sh
+orchard deploy webhook-token delete <id> <token-id>
+```
+
+</TabItem>
+</Tabs>
+
+To rotate a token, create a new one, update the caller, then delete the old one.
+
+Orchard also deletes a token if the person who created it loses edit access to the project, or if the API token that created it is revoked.
+
+## Related resources
+
+- [Deploy from an image](/deploy/image/)
+- [Rollbacks](/deploy/rollbacks/)
