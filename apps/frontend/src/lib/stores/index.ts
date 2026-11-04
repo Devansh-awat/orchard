@@ -9,11 +9,11 @@ export {
 } from './instance-checklist';
 export {
 	instanceFeatures,
-	earlyAccessFlag,
 	uploadsEnabled,
 	backupsOnThisServer,
 	type InstanceFeatures
 } from './instance-features';
+export { earlyAccessFlag } from './early-access';
 export { telemetry, type TelemetryState, type TelemetryPreview } from './telemetry';
 export { authConfig, type AuthConfig } from './auth-config';
 export {

@@ -1,6 +1,5 @@
 import { derived, writable, get, type Readable } from 'svelte/store';
 import { browser } from '$app/environment';
-import { featureFlag } from '$lib/posthog';
 import { apiFetch } from './api';
 
 export interface InstanceFeatures {
@@ -71,11 +70,3 @@ export const uploadsEnabled = loadedOnUse(
 export const backupsOnThisServer = loadedOnUse(
 	derived(features, ($features) => $features.storage.backups === 'local')
 );
-
-export function earlyAccessFlag(key: string): Readable<boolean> {
-	if (browser) instanceFeatures.load().catch(() => undefined);
-	return derived(
-		[features, featureFlag(key)],
-		([$features, $enabled]) => $features.earlyAccessOpen || $enabled
-	);
-}
