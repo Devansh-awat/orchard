@@ -117,6 +117,30 @@ export function ddlGuardRemoveSql(): string {
   ].join(' ');
 }
 
+export function ddlGuardPresentSql(): string {
+  return `SELECT (
+    to_regclass('${DDL_GUARD_SCHEMA}.checkpoints') IS NOT NULL
+    AND to_regprocedure('${DDL_GUARD_SCHEMA}.checkpoint_before_drop()') IS NOT NULL
+    AND EXISTS (
+      SELECT 1 FROM pg_event_trigger
+       WHERE evtname = 'orchard_checkpoint_before_drop' AND evtenabled <> 'D'
+    )
+  )::text;`;
+}
+
+export function parseDdlGuardPresent(stdout: string): boolean | null {
+  const answer = stdout.trim();
+  if (answer === 'true') return true;
+  if (answer === 'false') return false;
+  return null;
+}
+
+export function ddlGuardTableMissing(stderr: string): boolean {
+  return new RegExp(
+    `(relation "${DDL_GUARD_SCHEMA}\\.checkpoints"|schema "${DDL_GUARD_SCHEMA}") does not exist`
+  ).test(stderr);
+}
+
 export interface GuardCheckpointRow {
   seq: number;
   restorePointName: string;

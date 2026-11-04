@@ -11,9 +11,12 @@ import {
   createRestorePointSql,
   DDL_GUARD_VERSION,
   ddlGuardInstallSql,
+  ddlGuardPresentSql,
   ddlGuardRemoveSql,
+  ddlGuardTableMissing,
   guardCheckpointsSql,
   LAST_ARCHIVED_WAL_SQL,
+  parseDdlGuardPresent,
   parseGuardCheckpoints,
   parseRestorePoint,
   restorePointName,
@@ -59,6 +62,8 @@ export class DatabaseCheckpointsService {
   private ticking = false;
 
   private guardTick = 0;
+
+  private guardLost = false;
 
   private readonly guardSeq = new Map<string, number>();
 
@@ -242,7 +247,10 @@ export class DatabaseCheckpointsService {
       });
       this.guardTick += 1;
       if (this.guardTick % 4 === 1) await this.ingestGuardCheckpoints();
-      if (this.guardTick % 20 === 1) await this.reconcileGuards();
+      if (this.guardTick % 20 === 1 || this.guardLost) {
+        this.guardLost = false;
+        await this.reconcileGuards();
+      }
     } catch (e: any) {
       this.logger.warn(`checkpoint tick failed: ${e?.message ?? e}`);
     } finally {
@@ -322,7 +330,22 @@ export class DatabaseCheckpointsService {
     const work = dbs.filter((d) =>
       wanted(d) ? d.ddlGuardVersion !== DDL_GUARD_VERSION : d.ddlGuardVersion !== null
     );
-    await inBatches(work.slice(0, 40), 4, async (d) => {
+    const recorded = dbs.filter((d) => wanted(d) && d.ddlGuardVersion === DDL_GUARD_VERSION);
+    const probes = await inBatches(recorded, PARALLEL, async (d) => {
+      const out = await this.k8sCnpg.runPsqlInCnpg(
+        d.namespace!,
+        d.clusterName!,
+        d.dbName,
+        ddlGuardPresentSql(),
+        { tuplesOnly: true }
+      );
+      return out.success ? parseDdlGuardPresent(out.stdout) : null;
+    });
+    const lost = recorded.filter((_, i) => {
+      const probe = probes[i];
+      return probe.status === 'fulfilled' && probe.value === false;
+    });
+    await inBatches([...work, ...lost].slice(0, 40), 4, async (d) => {
       const install = wanted(d);
       const out = await this.k8sCnpg.runPsqlInCnpg(
         d.namespace!,
@@ -336,6 +359,7 @@ export class DatabaseCheckpointsService {
         );
         return;
       }
+      this.guardSeq.delete(guardSeqKey(d));
       await this.prisma.database.update({
         where: { id: d.id },
         data: { ddlGuardVersion: install ? DDL_GUARD_VERSION : null }
@@ -348,7 +372,7 @@ export class DatabaseCheckpointsService {
       (d) => d.ddlCheckpoints && hasBackupRoute(d.project?.organization)
     );
     await inBatches(dbs, PARALLEL, async (d) => {
-      const after = this.guardSeq.get(d.id) ?? 0;
+      const after = this.guardSeq.get(guardSeqKey(d)) ?? 0;
       const out = await this.k8sCnpg.runPsqlInCnpg(
         d.namespace!,
         d.clusterName!,
@@ -356,7 +380,17 @@ export class DatabaseCheckpointsService {
         guardCheckpointsSql(after),
         { tuplesOnly: true }
       );
-      if (!out.success) return;
+      if (!out.success) {
+        if (ddlGuardTableMissing(out.stderr)) {
+          this.logger.warn(`drop guard missing on ${d.name}, reinstalling`);
+          await this.prisma.database.update({
+            where: { id: d.id },
+            data: { ddlGuardVersion: null }
+          });
+          this.guardLost = true;
+        }
+        return;
+      }
       const rows = parseGuardCheckpoints(out.stdout);
       if (rows.length === 0) return;
       await this.prisma.databaseCheckpoint.createMany({
@@ -374,9 +408,13 @@ export class DatabaseCheckpointsService {
         })),
         skipDuplicates: true
       });
-      this.guardSeq.set(d.id, Math.max(...rows.map((r) => r.seq)));
+      this.guardSeq.set(guardSeqKey(d), Math.max(...rows.map((r) => r.seq)));
     }).catch((e) => this.logger.warn(`drop guard ingest failed: ${k8sErrorMessage(e)}`));
   }
+}
+
+function guardSeqKey(d: { id: string; clusterName: string | null }): string {
+  return `${d.id}/${d.clusterName}`;
 }
 
 function defaultLabel(kind: CheckpointKind): string {

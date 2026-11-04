@@ -23,14 +23,143 @@ import {
 import {
   createRestorePointSql,
   ddlGuardInstallSql,
+  ddlGuardTableMissing,
+  parseDdlGuardPresent,
   parseGuardCheckpoints,
   parseRestorePoint,
   restorePointName,
   walArchived
 } from '../src/kubernetes/cnpg-checkpoint';
+import { DatabaseCheckpointsService } from '../src/projects/database-checkpoints.service';
 import { migrationRegression } from '../src/projects/database-plugin-migration.service';
 import { drillDue } from '../src/projects/database-drills.service';
 import { forkDecision, targetFromRequest } from '../src/projects/database-recovery.service';
+
+type Psql = { stdout: string; stderr: string; success: boolean };
+
+function guardHarness(answers: { probe: () => Psql | Promise<Psql>; ingest?: () => Psql }) {
+  const row = {
+    id: 'db-1',
+    name: 'appdb',
+    namespace: 'ns',
+    clusterName: 'pg-appdb',
+    dbName: 'app',
+    ddlCheckpoints: true,
+    ddlGuardVersion: 1 as number | null,
+    backupServerName: null,
+    project: {
+      organization: {
+        backupR2Endpoint: 'e',
+        backupR2Bucket: 'b',
+        backupR2AccessKey: 'a',
+        backupR2SecretKey: 's'
+      }
+    }
+  };
+  const calls = { probe: 0, ingest: 0, install: 0 };
+  const ok = (stdout: string): Psql => ({ stdout, stderr: '', success: true });
+  const svc = new DatabaseCheckpointsService(
+    {
+      database: {
+        findMany: async ({ where }: any) =>
+          where.ddlGuardVersion && row.ddlGuardVersion === null ? [] : [row],
+        update: async ({ data }: any) => Object.assign(row, data)
+      },
+      databaseCheckpoint: {
+        findMany: async () => [],
+        updateMany: async () => ({ count: 0 }),
+        createMany: async () => ({ count: 0 })
+      }
+    } as any,
+    {
+      runPsqlInCnpg: async (_ns: string, _cluster: string, _db: string, sql: string) => {
+        if (sql.includes('to_regprocedure')) {
+          calls.probe += 1;
+          return answers.probe();
+        }
+        if (sql.includes('CREATE EVENT TRIGGER')) {
+          calls.install += 1;
+          return ok('');
+        }
+        calls.ingest += 1;
+        return answers.ingest ? answers.ingest() : ok('[]');
+      }
+    } as any,
+    { isLeader: () => true } as any,
+    { isDatabaseToggleOn: async () => true } as any
+  );
+  return { svc, row, calls };
+}
+
+test('a recorded drop guard that the database no longer has is reinstalled', async () => {
+  const h = guardHarness({ probe: () => ({ stdout: 'false\n', stderr: '', success: true }) });
+  await h.svc.tick();
+  assert.equal(h.calls.probe, 1);
+  assert.equal(h.calls.install, 1);
+  assert.equal(h.row.ddlGuardVersion, 1);
+});
+
+test('a present drop guard is left alone', async () => {
+  const h = guardHarness({ probe: () => ({ stdout: 'true\n', stderr: '', success: true }) });
+  await h.svc.tick();
+  assert.equal(h.calls.install, 0);
+});
+
+test('a failed or unreadable guard check never counts as the guard being gone', async () => {
+  const answers: Array<() => Psql | Promise<Psql>> = [
+    () => ({ stdout: '', stderr: 'connection refused', success: false }),
+    () => ({ stdout: 'psql: warning', stderr: '', success: true }),
+    () => Promise.reject(new Error('no primary pod'))
+  ];
+  for (const probe of answers) {
+    const h = guardHarness({ probe });
+    await h.svc.tick();
+    assert.equal(h.calls.install, 0);
+    assert.equal(h.row.ddlGuardVersion, 1);
+  }
+});
+
+test('ingest that finds no checkpoints table reinstalls once and stops erroring', async () => {
+  let tableThere = false;
+  const h = guardHarness({
+    probe: () => ({ stdout: 'true\n', stderr: '', success: true }),
+    ingest: () =>
+      tableThere
+        ? { stdout: '[]', stderr: '', success: true }
+        : {
+            stdout: '',
+            stderr: 'ERROR:  relation "_orchard.checkpoints" does not exist',
+            success: false
+          }
+  });
+  await h.svc.tick();
+  assert.equal(h.calls.ingest, 1);
+  assert.equal(h.calls.install, 1);
+  assert.equal(h.row.ddlGuardVersion, 1);
+  tableThere = true;
+  for (let i = 0; i < 4; i += 1) await h.svc.tick();
+  assert.equal(h.calls.install, 1);
+});
+
+test('an ingest failure for any other reason leaves the recorded guard alone', async () => {
+  const h = guardHarness({
+    probe: () => ({ stdout: 'true\n', stderr: '', success: true }),
+    ingest: () => ({ stdout: '', stderr: 'could not connect to server', success: false })
+  });
+  await h.svc.tick();
+  assert.equal(h.row.ddlGuardVersion, 1);
+  assert.equal(h.calls.install, 0);
+});
+
+test('guard answers parse strictly', () => {
+  assert.equal(parseDdlGuardPresent('true\n'), true);
+  assert.equal(parseDdlGuardPresent(' false '), false);
+  assert.equal(parseDdlGuardPresent(''), null);
+  assert.equal(parseDdlGuardPresent('ERROR: nope'), null);
+  assert.equal(ddlGuardTableMissing('ERROR:  schema "_orchard" does not exist'), true);
+  assert.equal(ddlGuardTableMissing('ERROR:  relation "public.users" does not exist'), false);
+  assert.equal(ddlGuardTableMissing('connection refused'), false);
+});
 
 test('recovery targets map onto the CNPG fields, and named points carry the backup they start from', () => {
   assert.equal(recoveryTargetSpec({ type: 'latest' }), undefined);
