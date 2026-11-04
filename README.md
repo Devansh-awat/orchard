@@ -1,54 +1,28 @@
-<div align="center">
-
 <img src=".github/assets/banner.png" alt="Orchard" width="100%">
 
-### Push a repo. Get a running app. On the cluster you already own.
+# Orchard
 
-[![Release](https://github.com/hackclub/orchard/actions/workflows/release.yml/badge.svg?branch=main)](https://github.com/hackclub/orchard/actions/workflows/release.yml)
-[![License](https://img.shields.io/badge/license-AGPL--3.0-c93a4f?labelColor=1a0f11)](LICENSE)
-[![Docs](https://img.shields.io/badge/docs-docs.orchard.my-c93a4f?labelColor=1a0f11)](https://docs.orchard.my)
-[![Helm chart](https://img.shields.io/badge/helm-ghcr.io%2Fhackclub%2Forchard-c93a4f?labelColor=1a0f11)](https://github.com/hackclub/orchard/pkgs/container/orchard%2Fcharts%2Forchard)
+### A project made by [Leafd](https://github.com/LeafdTK)
 
-[Website](https://orchard.my) ·
-[Docs](https://docs.orchard.my) ·
-[Install](https://docs.orchard.my/start/install/) ·
-[First deploy](https://docs.orchard.my/start/first-deploy/) ·
-[Templates](https://orchard.my/templates)
+[![Made by Leafd](https://img.shields.io/badge/made%20by-Leafd-c93a4f?style=for-the-badge&logo=github&logoColor=white&labelColor=1a0f11)](https://github.com/LeafdTK)
+[![Kubernetes](https://img.shields.io/badge/Kubernetes-c93a4f?style=for-the-badge&logo=kubernetes&logoColor=white)](https://docs.orchard.my/start/what-is-orchard/)
+[![Self-hosted](https://img.shields.io/badge/self--hosted-1a0f11?style=for-the-badge)](https://docs.orchard.my/start/install/)
+[![License](https://img.shields.io/badge/license-AGPL--3.0-c93a4f?style=for-the-badge&labelColor=1a0f11)](LICENSE)
+[![Docs](https://img.shields.io/badge/docs-docs.orchard.my-1a0f11?style=for-the-badge)](https://docs.orchard.my)
 
-<br>
+Turn any Linux box into a private hosting platform.
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/screenshots/project-dark.png">
-  <img src=".github/assets/screenshots/project-light.png" alt="An Orchard project with its apps, databases and recent builds" width="900">
-</picture>
+Install Orchard, connect a GitHub repo, and your app is live on your own server.
 
-</div>
-
-## What is this
-
-Orchard installs into a Kubernetes cluster you own and turns it into something that feels like a
-PaaS. Point it at a GitHub repo and it builds the image, runs it, routes traffic to it, hands it a
-Postgres database, and shows you the logs when it breaks.
-
-It's similar to Coolify or Dokploy, except it targets Kubernetes. Replicas, rolling updates, health
-checks, quotas and node scheduling come from the platform underneath, instead of being rebuilt on
-top of Docker. No YAML past the install, and everything it creates is a normal Kubernetes resource
-you can still `kubectl get`.
-
-Hack Club runs its own apps on it. Your apps, your data and your builds stay on your hardware, and
-usage reporting is off unless an admin opts in.
-
-## Install
-
-On a Linux box with nothing on it:
+## Installation
 
 ```bash
 sudo bash -c "$(curl -fsSL https://assets.orchard.my/install.sh)"
 ```
 
 It asks for a domain and an email, then brings its own k3s, Traefik, CloudNativePG, cert-manager,
-registry, metrics, log search and image scanner. You need amd64 or arm64, at least 4 GB of RAM (8 GB
-is comfortable) and 20 GB of free disk (60 GB once you're building things).
+registry, metrics, log search and image scanner. You need amd64 or arm64, at least 4 GB of RAM (8 GB is
+comfortable) and 20 GB of free disk (60 GB once you're building things).
 
 | Mode     | Use it when                                 | HTTPS                                 |
 | -------- | ------------------------------------------- | ------------------------------------- |
@@ -56,87 +30,91 @@ is comfortable) and 20 GB of free disk (60 GB once you're building things).
 | `tunnel` | It's behind NAT, or those ports are taken   | Cloudflare, through Cloudflare Tunnel |
 | `lan`    | It's only for your LAN or Tailscale         | Self-signed                           |
 
-Already running Kubernetes? Use the Helm chart instead, because the installer would put k3s
-underneath you:
+> [!IMPORTANT]
+> Deployments are network isolated from each other and from the platform by default, but they **share
+> the host kernel** unless you install gVisor or Kata and switch them on. Running untrusted code is not
+> safe out of the box. Read [Security and isolation](https://docs.orchard.my/operate/security/) before
+> letting strangers deploy things.
+
+> [!TIP]
+> A fresh install is not a production instance. Secrets, signup mode, TLS cookies, control-plane backups
+> and isolation all need a decision from you.
+> [Going to production](https://docs.orchard.my/operate/production/) walks through the list.
+
+### Already running Kubernetes?
+
+The installer would put k3s underneath you, so use the Helm chart instead:
 
 ```bash
 helm install orchard oci://ghcr.io/hackclub/orchard/charts/orchard \
   --namespace orchard --create-namespace -f my-values.yaml
 ```
 
-The [install guide](https://docs.orchard.my/start/install/) covers prerequisites, DNS and every flag.
+The [install guide](https://docs.orchard.my/start/install/) has a minimal values file, DNS and every
+flag.
 
-> [!IMPORTANT]
-> Deployments are network isolated from each other and from the platform by default, but they
-> **share the host kernel** unless you install gVisor or Kata and switch them on. Running untrusted
-> code is not safe out of the box. Read
-> [Security and isolation](https://docs.orchard.my/operate/security/) before letting strangers deploy
-> things.
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/screenshots/project-dark.png">
+  <img src=".github/assets/screenshots/project-light.png" alt="An Orchard project with its apps, databases and recent builds" width="100%">
+</picture>
 
-> [!TIP]
-> A fresh install is not a production instance. Secrets, signup mode, TLS cookies, control-plane
-> backups and isolation all need a decision from you.
-> [Going to production](https://docs.orchard.my/operate/production/) walks through the list.
+## Say what you want. Your agent does the rest.
 
-## What it does
+Orchard ships an [MCP server](https://docs.orchard.my/mcp/), so Claude, Cursor or any MCP client can run
+your whole platform. About 160 tools cover deploying apps, adding databases, reading logs, working out
+why a rollout failed and rolling it back. A compact mode reaches the full API of about 450 operations
+without filling the model's context.
 
-|                |                                                                                                                                                                                                              |
-| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Deploys**    | GitHub repos, container images and Compose stacks, built on your cluster, with logs as they happen, and rollback                                                                                             |
-| **Routing**    | An HTTPS URL per app, custom domains with certificates that renew themselves, and an auth wall if you want one                                                                                               |
-| **Data**       | Managed Postgres with backups, point-in-time restore, forks, extensions, read replicas and a query console                                                                                                   |
-| **Jobs**       | Cron schedules and multi-step pipelines, with per-step output and exit codes                                                                                                                                 |
-| **Observe**    | Log search, per-route request stats, CPU and memory over time, and the logs of containers that already died                                                                                                  |
-| **Security**   | Image vulnerability scanning and config checks per app                                                                                                                                                       |
-| **Teams**      | Organizations, projects, roles, SSO, SCIM provisioning, audit logs and quotas                                                                                                                                |
-| **Templates**  | 90+ apps you can deploy from the [template gallery](https://orchard.my/templates)                                                                                                                            |
-| **Extensions** | Add pages, API routes and MCP tools with [grafts](https://docs.orchard.my/grafts/install/)                                                                                                                   |
-| **Interfaces** | A web dashboard, a [CLI](https://docs.orchard.my/reference/cli/), an [API](https://docs.orchard.my/api/), an OpenTofu provider, and an [MCP server](https://docs.orchard.my/mcp/) so your agent can drive it |
+> Deploy this repo with a Postgres database, then tell me why the last build failed.
 
-<table>
-  <tr>
-    <td width="50%">
-      <picture>
-        <source media="(prefers-color-scheme: dark)" srcset=".github/assets/screenshots/deployment-dark.png">
-        <img src=".github/assets/screenshots/deployment-light.png" alt="An app with live logs, pods, usage and error rate">
-      </picture>
-    </td>
-    <td width="50%">
-      <picture>
-        <source media="(prefers-color-scheme: dark)" srcset=".github/assets/screenshots/observe-dark.png">
-        <img src=".github/assets/screenshots/observe-light.png" alt="Request, error rate and response time graphs for an app">
-      </picture>
-    </td>
-  </tr>
-  <tr>
-    <td width="50%">
-      <picture>
-        <source media="(prefers-color-scheme: dark)" srcset=".github/assets/screenshots/database-dark.png">
-        <img src=".github/assets/screenshots/database-light.png" alt="A Postgres database with logs, health and activity">
-      </picture>
-    </td>
-    <td width="50%" valign="top">
-      <br>
+Your agent acts as you, with your permissions and nothing more. Sign-in is OAuth with an explicit
+approval step, tokens are scoped to read, deploy or exec, and **Settings → MCP** gives you ready-made
+config for Claude, Claude Code, VS Code and Cursor.
 
-```console
-$ orchard up
-$ orchard logs <id> -f
-$ orchard deploy scale <id> 3
-$ orchard deploy rollback <id>
+It can even do the install. Paste this into an agent on your server:
+
+```
+Install Orchard on my server following https://docs.orchard.my/start/install.md. Ask me before anything that is not reversible.
 ```
 
-The dashboard, CLI and MCP server all speak the same API.
+## Features
 
-</td>
-  </tr>
-</table>
+- **Deploy from GitHub.** Push to your repo and it rebuilds on its own
+- **Roll back.** The last deploy was a mistake. Now it never happened
+- **Fork a database.** Try the scary migration on a real copy of your data first
+- **Find out why it broke.** Logs, metrics and request stats, even for containers that already died
+- **Open a shell.** For when you really do have to look inside
+
+And the rest:
+
+- HTTPS on every app, custom domains and an auth wall if you want one
+- Managed Postgres with backups, point-in-time restore, read replicas and a query console
+- Cron and multi-step jobs, Compose stacks, and 90+ [templates](https://orchard.my/templates)
+- Log search, per-route request stats, image scanning and alerts
+- Organizations, roles, SSO, SCIM, audit logs and quotas
+- A [CLI](https://docs.orchard.my/reference/cli/), an [API](https://docs.orchard.my/api/) and an OpenTofu provider
+
+Orchard runs on Kubernetes, so replicas, rolling updates, health checks, quotas and node scheduling come from the platform underneath. Everything it creates is a normal Kubernetes resource you can still `kubectl get`.
+
+---
+
+## Table of contents
+
+- [Installation](#installation)
+  - [Already running Kubernetes?](#already-running-kubernetes)
+- [Say what you want. Your agent does the rest.](#say-what-you-want-your-agent-does-the-rest)
+- [Features](#features)
+- [Contributing](#contributing)
+- [Help](#help)
+- [License](#license)
+
+---
 
 ## Contributing
 
-Issues and pull requests are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) covers running it locally
-and how commits drive releases, and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) explains how the
-pieces fit together. You don't need a cluster for UI or API work, and `pnpm dev:mock` runs the
-dashboard with no backend at all.
+Issues and pull requests are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) covers running it locally and
+how commits drive releases, and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) explains how the pieces fit
+together. Report security issues privately: see [SECURITY.md](SECURITY.md).
 
 ## Help
 
@@ -145,13 +123,8 @@ Open an [issue](https://github.com/hackclub/orchard/issues), or find **@lfd** on
 
 ## License
 
-[AGPL-3.0](LICENSE). The web app, the API, the gateway, the CLI, all of it. Not an open core with the
-good parts held back.
+[AGPL-3.0](LICENSE).
 
-<br>
+---
 
-<div align="center">
-
-A [Hack Club](https://hackclub.com) project, made with <3 by [Leafd](https://github.com/LeafdTK)
-
-</div>
+Made by [Leafd](https://github.com/LeafdTK).
