@@ -98,7 +98,10 @@
 		</div>
 	{:else}
 		<h2>Connect GitHub</h2>
-		<p>Deploying from a repository needs an App of its own. Creating one is a single click.</p>
+		<p>
+			Create a GitHub App in one click. Without it, private repositories and rebuilds on push do not
+			work. Public repositories still deploy.
+		</p>
 
 		<div class="setup-body">
 			<input

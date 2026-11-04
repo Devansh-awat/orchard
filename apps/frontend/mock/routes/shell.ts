@@ -14,6 +14,28 @@ const unauthorized = () => reply(401, { statusCode: 401, message: 'Unauthorized'
 
 const storageFeatures = { s3: false, backups: 'local', uploads: true, localDeploys: false };
 
+const mockSetup: {
+	installer: boolean;
+	publicIp: string | null;
+	cname: string | null;
+	appDomain: string | null;
+	email: boolean;
+	skipped: string[];
+} = {
+	installer: false,
+	publicIp: null,
+	cname: null,
+	appDomain: 'apps.example.com',
+	email: false,
+	skipped: []
+};
+
+const mockCertificate = {
+	state: 'failed',
+	host: 'orchard.example.com',
+	message: 'Timeout during connect (likely firewall problem)'
+};
+
 const storageSection: Record<string, any> = {
 	id: 'storage',
 	configured: false,
@@ -165,7 +187,133 @@ export function shellRoutes(r: Router, { store, hub, log }: MockContext) {
 	}));
 	r.get('/setup/state', () => ({ steps: [], complete: false }));
 	r.get('/setup/github-app/status', () => ({ configured: false, lockedFields: [] }));
-	r.get('/setup/certificate', () => ({ state: 'ready', host: null, message: null }));
+	r.get('/setup/certificate', () => mockCertificate);
+	r.get('/setup/overview', () => {
+		const skipped = mockSetup.skipped;
+		const skippedOr = (id: string) => (skipped.includes(id) ? 'skipped' : 'pending');
+		return {
+			installer: mockSetup.installer,
+			mode: mockSetup.installer ? 'public' : null,
+			dashboardUrl: 'https://orchard.example.com',
+			appDomain: mockSetup.appDomain,
+			publicIp: mockSetup.publicIp,
+			cname: mockSetup.cname,
+			locked: { publicIp: false, cname: false, appDomain: false, email: false },
+			mcp: { deployed: true, enabled: true, url: 'https://mcp.example.com', locked: false },
+			emailConfigured: mockSetup.email,
+			certificate: mockCertificate,
+			skipped,
+			items: [
+				{
+					id: 'github',
+					title: 'GitHub App',
+					value: 'Not connected',
+					state: skippedOr('github'),
+					detail:
+						'Private repositories and rebuilds on push need it. Public repositories still deploy.',
+					href: '/setup/github'
+				},
+				{
+					id: 'storage',
+					title: 'Storage',
+					value: 'On this server',
+					state: skippedOr('storage'),
+					detail: 'If the server is lost, the backups are lost.',
+					href: '/admin/instance'
+				},
+				{
+					id: 'limits',
+					title: 'Resource limits',
+					value: 'On',
+					state: 'configured',
+					detail: null,
+					href: '/admin/instance'
+				},
+				{
+					id: 'domains',
+					title: 'Domains',
+					value: 'orchard.example.com',
+					state: 'configured',
+					detail: mockSetup.appDomain ? `Apps at *.${mockSetup.appDomain}` : null,
+					href: '/admin/networking'
+				},
+				{
+					id: 'public-ip',
+					title: 'Public IP',
+					value: mockSetup.publicIp ?? 'Not set',
+					state: mockSetup.publicIp ? 'configured' : skippedOr('network'),
+					detail: mockSetup.publicIp
+						? null
+						: 'Public ports and databases are unavailable until this is set.',
+					href: '/admin/instance'
+				},
+				{
+					id: 'custom-domains',
+					title: 'Custom domains target',
+					value: mockSetup.cname ?? 'Not set',
+					state: mockSetup.cname ? 'configured' : skippedOr('network'),
+					detail: null,
+					href: '/admin/instance'
+				},
+				{
+					id: 'mcp',
+					title: 'MCP endpoint',
+					value: 'mcp.example.com',
+					state: 'configured',
+					detail: null,
+					href: '/admin/instance'
+				},
+				{
+					id: 'email',
+					title: 'Email',
+					value: mockSetup.email ? 'Configured' : 'Not set',
+					state: mockSetup.email ? 'configured' : skippedOr('email'),
+					detail: mockSetup.email
+						? null
+						: 'No sign-in codes by email. Invitations still work as links.',
+					href: '/admin/instance'
+				},
+				{
+					id: 'certificate',
+					title: 'Certificate',
+					value: 'Failed',
+					state: 'pending',
+					detail: mockCertificate.message,
+					href: '/admin/networking'
+				}
+			]
+		};
+	});
+	r.post('/setup/skip', ({ body }) => {
+		if (body?.step && !mockSetup.skipped.includes(body.step)) mockSetup.skipped.push(body.step);
+		return { steps: [], complete: true };
+	});
+	r.put('/admin/instance-config/network', ({ body }) => {
+		mockSetup.publicIp = body?.publicIp || null;
+		return { id: 'network', configured: !!body?.publicIp, values: body ?? {}, lockedFields: [] };
+	});
+	r.put('/admin/instance-config/ingress', ({ body }) => {
+		mockSetup.cname = body?.cname || null;
+		return { id: 'ingress', configured: !!body?.cname, values: body ?? {}, lockedFields: [] };
+	});
+	r.put('/admin/instance-config/wildcard', ({ body }) => {
+		mockSetup.appDomain = body?.appDomain || null;
+		return { id: 'wildcard', configured: false, values: body ?? {}, lockedFields: [] };
+	});
+	r.post('/admin/instance-config/email/test', ({ body }) =>
+		body?.host === 'bad.example.com'
+			? { ok: false, message: 'connect ECONNREFUSED bad.example.com:587' }
+			: { ok: true }
+	);
+	r.put('/admin/instance-config/email', ({ body }) => {
+		mockSetup.email = !!body?.host;
+		return { id: 'email', configured: !!body?.host, values: {}, lockedFields: [] };
+	});
+	r.patch('/admin/instance-settings/mcp', ({ body }) => ({
+		enabled: !!body?.enabled,
+		dbValue: !!body?.enabled,
+		envOverride: null
+	}));
 	r.get('/setup/checklist', () => [
 		{
 			id: 'mock',

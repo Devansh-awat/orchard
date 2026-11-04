@@ -14,29 +14,39 @@
 	import SetupStorageStep from './SetupStorageStep.svelte';
 	import SetupTelemetryStep from './SetupTelemetryStep.svelte';
 	import SetupLimitsStep from './SetupLimitsStep.svelte';
+	import SetupNetworkStep from './SetupNetworkStep.svelte';
+	import SetupMcpStep from './SetupMcpStep.svelte';
+	import SetupEmailStep from './SetupEmailStep.svelte';
 	import SetupDoneStep from './SetupDoneStep.svelte';
+	import type { SetupOverview } from './setup-overview';
 
 	type ServerStep = { id: string; done: boolean; skipped: boolean; required: boolean };
 	type Phase =
 		| 'passkey'
 		| 'organization'
 		| 'github'
-		| 'certificate'
-		| 'limits'
 		| 'storage'
+		| 'limits'
+		| 'network'
+		| 'mcp'
+		| 'email'
+		| 'certificate'
 		| 'telemetry'
 		| 'done';
 
-	// 'github' and 'certificate' are client-side phases, not server steps: the
-	// server only tracks what it can verify about the user (passkey, org).
+	// Only passkey and organization gate setup on the server. The rest are
+	// client-side phases that the overview decides to show or leave out.
 	const BAND: Record<Phase, number> = {
 		passkey: 0.2,
-		organization: 0.34,
-		github: 0.48,
-		certificate: 0.58,
-		limits: 0.66,
-		storage: 0.73,
-		telemetry: 0.8,
+		organization: 0.3,
+		github: 0.4,
+		storage: 0.48,
+		limits: 0.56,
+		network: 0.64,
+		mcp: 0.7,
+		email: 0.76,
+		certificate: 0.82,
+		telemetry: 0.9,
 		done: 1
 	};
 
@@ -44,22 +54,45 @@
 	let phase = $state<Phase>('passkey');
 	let askTelemetry = $state(false);
 	let askStorage = $state(false);
-	let certificateFailed = $state(false);
 	let askLimits = $state(false);
+	let overview = $state<SetupOverview | null>(null);
 	let ready = $state(false);
 	let finishing = $state(false);
 	let stage = $state<HTMLElement | null>(null);
 	let scene = $state<ReturnType<typeof SetupScene> | null>(null);
 	let card = $state<ReturnType<typeof SetupCard> | null>(null);
 
+	const RESUME_KEY = 'orchard:instance-setup';
 	const returning = $page.url.searchParams.has('created');
+	const skipped = $derived(new Set(overview?.skipped ?? []));
+	const askGithub = $derived(
+		returning ||
+			(overview?.items.find((item) => item.id === 'github')?.state !== 'configured' &&
+				!skipped.has('github'))
+	);
+	const askNetwork = $derived(
+		!!overview &&
+			!overview.installer &&
+			!skipped.has('network') &&
+			(!overview.publicIp || !overview.cname || !overview.appDomain)
+	);
+	const askMcp = $derived(!!overview && !overview.installer && !skipped.has('mcp'));
+	const askEmail = $derived(
+		!!overview && !overview.emailConfigured && !overview.locked.email && !skipped.has('email')
+	);
+	const askCertificate = $derived(
+		!!overview && !['perHost', 'external', 'unconfigured'].includes(overview.certificate.state)
+	);
 	const order = $derived<Phase[]>([
 		'passkey',
 		'organization',
-		'github',
-		...(certificateFailed ? (['certificate'] as const) : []),
+		...(askGithub ? (['github'] as const) : []),
+		...(askStorage && !skipped.has('storage') ? (['storage'] as const) : []),
 		...(askLimits ? (['limits'] as const) : []),
-		...(askStorage ? (['storage'] as const) : []),
+		...(askNetwork ? (['network'] as const) : []),
+		...(askMcp ? (['mcp'] as const) : []),
+		...(askEmail ? (['email'] as const) : []),
+		...(askCertificate ? (['certificate'] as const) : []),
 		...(askTelemetry ? (['telemetry'] as const) : []),
 		'done'
 	]);
@@ -71,34 +104,51 @@
 		return next === 'passkey' || next === 'organization' ? next : null;
 	}
 
+	async function loadOverview() {
+		try {
+			const response = await apiFetch('/apiv1/setup/overview');
+			if (response.ok) overview = await response.json();
+		} catch {
+			overview = null;
+		}
+	}
+
+	function firstAfterAccount(): Phase {
+		return order[order.indexOf('organization') + 1] ?? 'done';
+	}
+
+	function nextAfter(current: Phase): Phase {
+		return order[order.indexOf(current) + 1] ?? 'done';
+	}
+
 	async function load() {
-		void telemetry.reload().then((state) => (askTelemetry = !!state?.needsAnswer));
-		void apiFetch('/apiv1/admin/instance-config/storage')
-			.then((response) => (response.ok ? response.json() : null))
-			.then((section) => {
-				askStorage = !!section && !section.configured && section.lockedFields.length === 0;
-			})
-			.catch(() => (askStorage = false));
-		void apiFetch('/apiv1/setup/certificate')
-			.then((response) => (response.ok ? response.json() : null))
-			.then(
-				(cert) => (certificateFailed = cert?.state === 'failed' || cert?.state === 'rateLimited')
-			)
-			.catch(() => (certificateFailed = false));
-		void apiFetch('/apiv1/admin/instance-settings/resource-limits')
-			.then((response) => (response.ok ? response.json() : null))
-			.then(
-				(limits) =>
-					(askLimits =
-						!!limits?.newInstance && limits.dbValue === null && limits.envOverride === null)
-			)
-			.catch(() => (askLimits = false));
+		sessionStorage.setItem(RESUME_KEY, '1');
+		const answers = Promise.all([
+			telemetry.reload().then((state) => (askTelemetry = !!state?.needsAnswer)),
+			apiFetch('/apiv1/admin/instance-config/storage')
+				.then((response) => (response.ok ? response.json() : null))
+				.then((section) => {
+					askStorage = !!section && !section.configured && section.lockedFields.length === 0;
+				})
+				.catch(() => (askStorage = false)),
+			apiFetch('/apiv1/admin/instance-settings/resource-limits')
+				.then((response) => (response.ok ? response.json() : null))
+				.then(
+					(limits) =>
+						(askLimits =
+							!!limits?.newInstance && limits.dbValue === null && limits.envOverride === null)
+				)
+				.catch(() => (askLimits = false)),
+			loadOverview()
+		]);
 		try {
 			const response = await apiFetch('/apiv1/setup/state');
 			if (!response.ok) throw new Error('unavailable');
 			const data = await response.json();
 			steps = data.steps ?? [];
-			phase = firstUnsettled(steps) ?? 'github';
+			await answers;
+			await tick();
+			phase = firstUnsettled(steps) ?? firstAfterAccount();
 		} catch {
 			phase = 'passkey';
 		}
@@ -134,7 +184,7 @@
 			const data = await response.json();
 			steps = data.steps ?? steps;
 		}
-		await move(firstUnsettled(steps) ?? 'github');
+		await move(firstUnsettled(steps) ?? firstAfterAccount());
 	}
 
 	async function skip(step: string) {
@@ -150,28 +200,31 @@
 		}
 		const data = await response.json();
 		steps = data.steps ?? steps;
-		await move(firstUnsettled(steps) ?? 'github');
+		await move(firstUnsettled(steps) ?? firstAfterAccount());
 	}
 
-	function afterStorage() {
-		return move(askTelemetry ? 'telemetry' : 'done');
+	async function record(step: string) {
+		const response = await apiFetch('/apiv1/setup/skip', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ step })
+		}).catch(() => null);
+		if (!response?.ok) {
+			toasts.add({ title: 'Could not save that. It will be asked again.', color: 'error' });
+		}
 	}
 
-	function afterLimits() {
-		return askStorage ? move('storage') : afterStorage();
+	async function advanceFrom(current: Phase, skippedStep?: string) {
+		const next = nextAfter(current);
+		if (skippedStep) await record(skippedStep);
+		if (next === 'done') await loadOverview();
+		await move(next);
 	}
 
-	function afterCertificate() {
-		return askLimits ? move('limits') : afterLimits();
-	}
-
-	function afterGithub() {
-		return certificateFailed ? move('certificate') : afterCertificate();
-	}
-
-	async function finish() {
+	async function finish(href = '/') {
 		if (finishing) return;
 		finishing = true;
+		sessionStorage.removeItem(RESUME_KEY);
 		try {
 			const response = await apiFetch('/apiv1/auth/me', {
 				method: 'PATCH',
@@ -183,10 +236,10 @@
 				user.set({ ...($user as any), ...updated });
 			}
 		} catch {
-			await goto('/', { replaceState: true });
+			await goto(href, { replaceState: true });
 			return;
 		}
-		await goto('/', { replaceState: true });
+		await goto(href, { replaceState: true });
 	}
 
 	onMount(load);
@@ -202,17 +255,36 @@
 			{:else if phase === 'organization'}
 				<SetupOrgStep onDone={advance} onSkip={() => skip('organization')} />
 			{:else if phase === 'github'}
-				<SetupGithubStep onDone={afterGithub} onSkip={afterGithub} />
-			{:else if phase === 'certificate'}
-				<SetupCertificateStep onDone={afterCertificate} />
-			{:else if phase === 'limits'}
-				<SetupLimitsStep onDone={afterLimits} />
+				<SetupGithubStep
+					onDone={() => advanceFrom('github')}
+					onSkip={() => advanceFrom('github', 'github')}
+				/>
 			{:else if phase === 'storage'}
-				<SetupStorageStep onDone={afterStorage} />
+				<SetupStorageStep
+					onDone={() => advanceFrom('storage')}
+					onSkip={() => advanceFrom('storage', 'storage')}
+				/>
+			{:else if phase === 'limits'}
+				<SetupLimitsStep onDone={() => advanceFrom('limits')} />
+			{:else if phase === 'network' && overview}
+				<SetupNetworkStep
+					{overview}
+					onDone={() => advanceFrom('network')}
+					onSkip={() => advanceFrom('network', 'network')}
+				/>
+			{:else if phase === 'mcp' && overview}
+				<SetupMcpStep {overview} onDone={() => advanceFrom('mcp', 'mcp')} />
+			{:else if phase === 'email'}
+				<SetupEmailStep
+					onDone={() => advanceFrom('email')}
+					onSkip={() => advanceFrom('email', 'email')}
+				/>
+			{:else if phase === 'certificate'}
+				<SetupCertificateStep onDone={() => advanceFrom('certificate')} />
 			{:else if phase === 'telemetry'}
-				<SetupTelemetryStep onDone={() => move('done')} />
+				<SetupTelemetryStep onDone={() => advanceFrom('telemetry')} />
 			{:else}
-				<SetupDoneStep onDone={finish} />
+				<SetupDoneStep items={overview?.items ?? []} onDone={finish} />
 			{/if}
 		</SetupCard>
 	{/if}

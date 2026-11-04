@@ -1,60 +1,57 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
 	import { apiFetch } from '$lib/stores';
+	import type { SetupCertificate } from './setup-overview';
 
 	let { onDone }: { onDone: () => Promise<void> | void } = $props();
-
-	type CertState =
-		| 'ready'
-		| 'issuing'
-		| 'failed'
-		| 'rateLimited'
-		| 'unknown'
-		| 'unconfigured'
-		| 'perHost';
-	type Certificate = { state: CertState; host: string | null; message: string | null };
 
 	const POLL_MS = 3000;
 	const DEADLINE_MS = 90_000;
 
-	let cert = $state<Certificate>({ state: 'issuing', host: null, message: null });
+	let cert = $state<SetupCertificate>({ state: 'issuing', host: null, message: null });
 	let waiting = $state(true);
 	let timedOut = $state(false);
 	let stopped = false;
 	let started = 0;
 	let timer: ReturnType<typeof setTimeout> | undefined;
 
-	const COPY: Record<Exclude<CertState, 'ready'>, { title: string; note: string }> = {
+	const COPY: Record<SetupCertificate['state'], { title: string; note: string }> = {
+		ready: {
+			title: 'Certificate issued',
+			note: 'It renews on its own.'
+		},
 		issuing: {
 			title: 'Still issuing',
-			note: 'This keeps running in the background. It will show up in your checklist when it lands.'
+			note: 'cert-manager keeps trying in the background. If it fails, check that DNS points here and that ports 80 and 443 are open.'
 		},
 		failed: {
 			title: 'Certificate did not issue',
-			note: 'Point the domain at this cluster, then try again. Orchard works without it.'
+			note: "Check that DNS points here and that ports 80 and 443 are open, including in your cloud provider's firewall. It retries on its own, first after about an hour. DNS status is in Instance admin, under Networking."
 		},
 		rateLimited: {
 			title: "Let's Encrypt rate limit",
-			note: 'Nothing to fix. The limit rolls off and the certificate issues on its own.'
+			note: 'Nothing to fix. The limit rolls off and the certificate issues on its own. Your own domain avoids the limit shared on sslip.io.'
 		},
 		unknown: {
-			title: 'No certificate automation',
-			note: 'Orchard runs fine without it. Terminate TLS wherever you already do.'
+			title: 'Certificate status unknown',
+			note: 'Orchard cannot read cert-manager from here. If your browser warns about this page, the certificate has not issued.'
 		},
 		unconfigured: {
 			title: 'No app domain set',
-			note: 'Set APP_DOMAIN to hand out generated URLs. Orchard works without it.'
+			note: 'Apps get no generated URL until you set one in Instance admin.'
 		},
 		perHost: {
 			title: 'Certificates issue per app',
-			note: 'No wildcard is configured, so each generated URL gets its own certificate. That is the default and nothing here is waiting on you.'
+			note: 'Each generated URL gets its own certificate, and nothing here is waiting on you.'
+		},
+		external: {
+			title: 'No certificate to issue here',
+			note: 'TLS is handled outside this instance.'
 		}
 	};
 
-	const title = $derived(
-		waiting ? 'Issuing your certificate' : COPY[cert.state as Exclude<CertState, 'ready'>].title
-	);
-	const note = $derived(waiting ? null : COPY[cert.state as Exclude<CertState, 'ready'>].note);
+	const title = $derived(waiting ? 'Issuing your certificate' : COPY[cert.state].title);
+	const note = $derived(waiting ? null : COPY[cert.state].note);
 	const canRetry = $derived(!waiting && (cert.state === 'failed' || timedOut));
 
 	async function poll() {
@@ -67,10 +64,6 @@
 		}
 		if (stopped) return;
 
-		if (cert.state === 'ready') {
-			await onDone();
-			return;
-		}
 		if (cert.state !== 'issuing') {
 			waiting = false;
 			return;
@@ -99,10 +92,12 @@
 
 <section class="setup-step">
 	<h2>{title}</h2>
-	{#if cert.message}
+	{#if cert.message && cert.state !== 'ready'}
 		<p class="status">{cert.message}</p>
+	{:else if cert.host}
+		<p class="status">{cert.host}</p>
 	{:else if waiting}
-		<p class="status">Waiting on cert-manager{cert.host ? ` for ${cert.host}` : ''}</p>
+		<p class="status">Waiting on cert-manager</p>
 	{/if}
 	{#if note}
 		<p class="setup-note">{note}</p>
@@ -112,12 +107,16 @@
 		<div class="setup-body">
 			<div class="setup-pulse" data-motion="progress"><i></i><i></i><i></i></div>
 		</div>
-	{:else}
-		<div class="setup-acts">
+	{/if}
+
+	<div class="setup-acts">
+		{#if waiting}
+			<button class="setup-ghost" onclick={onDone}>Continue, it keeps trying</button>
+		{:else}
 			<button class="setup-pill" onclick={onDone}>Continue</button>
 			{#if canRetry}
-				<button class="setup-ghost" onclick={watch}>Try again</button>
+				<button class="setup-ghost" onclick={watch}>Check again</button>
 			{/if}
-		</div>
-	{/if}
+		{/if}
+	</div>
 </section>

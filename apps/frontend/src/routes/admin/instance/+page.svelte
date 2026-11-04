@@ -44,6 +44,14 @@
 		};
 	}
 
+	const LOCKED_HINTS: Record<string, string> = {
+		appDomain: 'Set by the installer. To change it, run the installer again with --app-domain.',
+		publicIp:
+			'Pinned by orchardctl public-ip. To edit it here, run: orchardctl public-ip unset --apply',
+		cname:
+			'Pinned in the values file. To edit it here, run: orchardctl env unset INGRESS_CNAME --apply'
+	};
+
 	function hintFor(section: Section, name: string) {
 		return section.graft ? section.graft.fields[name]?.help : HINTS[name];
 	}
@@ -313,7 +321,9 @@
 							<Field
 								{label}
 								for="{section.id}-{name}"
-								hint={locked ? 'Set by the environment' : hintFor(section, name)}
+								hint={locked
+									? (LOCKED_HINTS[name] ?? 'Set by the environment')
+									: hintFor(section, name)}
 							>
 								<Input
 									id="{section.id}-{name}"

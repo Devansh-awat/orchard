@@ -103,6 +103,58 @@
 	border-color: color-mix(in srgb, var(--setup-crimson) 55%, transparent);
 }
 
+.setup-fields {
+	display: grid;
+	gap: 0.85rem;
+	text-align: left;
+}
+
+.setup-field {
+	display: grid;
+	gap: 0.25rem;
+}
+
+.setup-field > span {
+	font-size: 0.78125rem;
+	font-weight: 600;
+	color: var(--setup-ink);
+}
+
+.setup-field > small {
+	font-size: 0.71875rem;
+	line-height: 1.4;
+	color: var(--setup-ink-faint);
+}
+
+.setup-step .setup-field input {
+	text-align: left;
+	font-size: 0.875rem;
+	padding: 0.6rem 0.75rem;
+}
+
+.setup-step .setup-field input:disabled {
+	opacity: 0.6;
+}
+
+.setup-commands {
+	display: grid;
+	gap: 0.5rem;
+	text-align: left;
+}
+
+.setup-commands code {
+	display: block;
+	overflow-wrap: anywhere;
+	font-family: var(--font-mono);
+	font-size: 0.71875rem;
+	line-height: 1.5;
+	color: var(--setup-ink);
+	padding: 0.6rem 0.75rem;
+	border-radius: 0.75rem;
+	border: 1px solid var(--setup-line);
+	background: rgba(255, 255, 255, 0.55);
+}
+
 .setup-note {
 	margin-top: 0.7rem;
 	font-size: 0.8125rem;

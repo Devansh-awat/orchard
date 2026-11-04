@@ -2,7 +2,10 @@
 	import { apiFetch, instanceFeatures, toasts } from '$lib/stores';
 	import { STORAGE_PROVIDERS, storageConnection, storageProvider } from '$lib/storage-providers';
 
-	let { onDone }: { onDone: () => Promise<void> | void } = $props();
+	let {
+		onDone,
+		onSkip
+	}: { onDone: () => Promise<void> | void; onSkip: () => Promise<void> | void } = $props();
 
 	let providerId = $state('aws');
 	let place = $state('');
@@ -82,7 +85,8 @@
 <section class="setup-step">
 	<h2>Add S3 storage</h2>
 	<p>
-		Optional. Keeps database backups off this server, and turns on deploys from a local directory.
+		Optional. Without it, backups stay on this server and are lost with it, and deploying from a
+		local directory is off.
 	</p>
 
 	<div class="setup-body fields">
@@ -154,7 +158,7 @@
 				{testing ? 'Testing' : 'Test connection'}
 			</button>
 		{/if}
-		<button class="setup-ghost" onclick={onDone}>Skip for now</button>
+		<button class="setup-ghost" onclick={onSkip}>Skip for now</button>
 	</div>
 </section>
 
