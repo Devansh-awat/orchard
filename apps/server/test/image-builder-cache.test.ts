@@ -389,7 +389,8 @@ for (const scenario of ['preinstalled', 'install', 'unavailable', 'pull-failure'
       join(bin, 'git'),
       `#!/usr/bin/env node
 const fs = require('node:fs');
-const args = process.argv.slice(2);
+const raw = process.argv.slice(2);
+const args = raw[0] === '-c' ? raw.slice(2) : raw;
 fs.appendFileSync(process.env.CALLS_FILE, JSON.stringify({ command: 'git', args, skipSmudge: process.env.GIT_LFS_SKIP_SMUDGE, prompt: process.env.GIT_TERMINAL_PROMPT }) + '\\n');
 if (args[0] === 'lfs' && args[1] === 'version') process.exit(process.env.PREINSTALLED === 'true' ? 0 : 1);
 if (args[0] === 'clone') fs.mkdirSync(args.at(-1));

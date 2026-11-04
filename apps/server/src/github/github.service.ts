@@ -42,6 +42,7 @@ import {
 /** What the create form and the CLI get back from a detection run. */
 import { SCORE_FILES, parseScore, summarize, type ScoreSummary } from '../score/score-parse';
 import { finalBaseImage, inspectImagePorts } from '../projects/image-ports';
+import { hasDotPathSegment } from '../docker/repo-url';
 
 export interface RepoConfigDetection {
   buildType: 'dockerfile' | 'railpack';
@@ -1255,6 +1256,7 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
     // https://github.com/owner/repo
     // https://github.com/owner/repo.git
     // git@github.com:owner/repo.git
+    if (hasDotPathSegment(repoUrl)) return null;
     const httpsMatch = repoUrl.match(/github\.com\/([^/\s]+)\/([^/\s]+?)(?:\.git)?(?:[/\s]|$)/);
     if (httpsMatch) {
       return { owner: httpsMatch[1], repo: httpsMatch[2] };

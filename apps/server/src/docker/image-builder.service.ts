@@ -1523,7 +1523,10 @@ fi
 # checkout outright with "smudge filter lfs failed". That turned enabling LFS
 # into a way to break builds that would otherwise have succeeded with pointer
 # files. Content is pulled after the clone instead, where failing is survivable.
-CLONE_OUTPUT=$(GIT_TERMINAL_PROMPT=0 GIT_LFS_SKIP_SMUDGE=1 git clone --depth 1 --recurse-submodules --shallow-submodules --branch "${branch}" "$CLONE_URL" /workspace 2>&1) || {
+PLAIN_URL="$(printf '%s' "$CLONE_URL" | sed -E 's#://[^@/]+@#://#')"
+AUTH_BASE="$(printf '%s' "$CLONE_URL" | sed -E 's#^([a-z]+://[^/]+/).*#\\1#')"
+PLAIN_BASE="$(printf '%s' "$PLAIN_URL" | sed -E 's#^([a-z]+://[^/]+/).*#\\1#')"
+CLONE_OUTPUT=$(GIT_TERMINAL_PROMPT=0 GIT_LFS_SKIP_SMUDGE=1 git -c "url.$AUTH_BASE.insteadOf=$PLAIN_BASE" clone --depth 1 --recurse-submodules --shallow-submodules --branch "${branch}" "$PLAIN_URL" /workspace 2>&1) || {
   SANITIZED_OUTPUT=$(echo "$CLONE_OUTPUT" | sed -E 's/(x-access-token:|ghs_|ghp_|github_pat_)[^ @]*/***REDACTED***/g')
   echo "$SANITIZED_OUTPUT"
   if echo "$CLONE_OUTPUT" | grep -q "terminal prompts disabled\\|could not read Username\\|Authentication failed\\|403"; then
@@ -1541,13 +1544,12 @@ echo "$CLONE_OUTPUT" | sed -E 's/(x-access-token:|ghs_|ghp_|github_pat_)[^ @]*/*
 echo "=== Repository cloned successfully ==="
 
 if [ "$LFS_READY" = "1" ] && [ -n "$(git -C /workspace lfs ls-files 2>/dev/null)" ]; then
-  if GIT_TERMINAL_PROMPT=0 git -C /workspace lfs pull >/dev/null 2>&1; then
+  if GIT_TERMINAL_PROMPT=0 git -c "url.$AUTH_BASE.insteadOf=$PLAIN_BASE" -C /workspace lfs pull >/dev/null 2>&1; then
     echo "git-lfs: LFS content fetched"
   else
     echo "git-lfs: could not fetch LFS content, those files stay as pointers"
   fi
 fi
-git -C /workspace remote set-url origin "$(printf '%s' "$CLONE_URL" | sed -E 's#://[^@/]+@#://#')"
 echo "Checked out commit: $(git -C /workspace rev-parse HEAD 2>/dev/null || echo unknown)"
 ls -la /workspace
 `

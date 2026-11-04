@@ -2,7 +2,12 @@ import { decodeCloneCredential } from '../git/clone-credential';
 
 const SHELL_SAFE_HTTPS_URL = /^https:\/\/[A-Za-z0-9._~:/@+%-]+$/;
 
+export function hasDotPathSegment(repoUrl: string): boolean {
+  return /(^|\/)(\.|%2e){1,2}(\/|$|\?|#)/i.test(repoUrl);
+}
+
 export function parseRepoUrl(repoUrl: string): URL | null {
+  if (hasDotPathSegment(repoUrl)) return null;
   let url: URL;
   try {
     url = new URL(repoUrl);
