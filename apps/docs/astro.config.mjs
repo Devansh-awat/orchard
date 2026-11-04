@@ -57,13 +57,18 @@ export default defineConfig({
             { label: 'From GitHub', slug: 'deploy/github' },
             { label: 'From GitLab, Gitea and others', slug: 'deploy/git-providers' },
             { label: 'From an image', slug: 'deploy/image' },
+            { label: 'From your terminal', slug: 'deploy/deploy-from-terminal' },
             { label: 'Builds', slug: 'deploy/builds' },
             { label: 'Domains and HTTPS', slug: 'deploy/domains' },
             { label: 'Networking', slug: 'deploy/networking' },
             { label: 'Scaling and resources', slug: 'deploy/scaling' },
+            { label: 'Resource suggestions', slug: 'deploy/resource-suggestions' },
             { label: 'Storage', slug: 'deploy/storage' },
+            { label: 'Update strategies', slug: 'deploy/update-strategies' },
             { label: 'Rollbacks', slug: 'deploy/rollbacks' },
             { label: 'Protection', slug: 'deploy/protection' },
+            { label: 'App security', slug: 'deploy/security-tab' },
+            { label: 'Connect resources', slug: 'deploy/connect-resources' },
             { label: 'score.yaml', slug: 'deploy/score' }
           ]
         },
@@ -73,6 +78,14 @@ export default defineConfig({
             { label: 'Databases', slug: 'data/databases' },
             { label: 'Backups and restore', slug: 'data/backups' },
             { label: 'Read replicas', slug: 'data/replicas' },
+            { label: 'High availability', slug: 'data/high-availability' },
+            { label: 'Connection pooler', slug: 'data/connection-pooler' },
+            { label: 'Database users', slug: 'data/users' },
+            { label: 'Upgrade PostgreSQL', slug: 'data/upgrades' },
+            { label: 'Protect a database', slug: 'data/protection' },
+            { label: 'PostgreSQL parameters', slug: 'data/parameters' },
+            { label: 'Grow storage', slug: 'data/storage' },
+            { label: 'Monitor a database', slug: 'data/monitoring' },
             { label: 'Extensions', slug: 'data/extensions' }
           ]
         },
@@ -84,10 +97,14 @@ export default defineConfig({
             { label: 'Compose stacks', slug: 'run/compose' },
             { label: 'Templates', slug: 'run/templates' },
             { label: 'Logs and shell', slug: 'run/logs' },
+            { label: 'Monitor an app', slug: 'run/monitor-an-app' },
             { label: 'Metrics and alerts', slug: 'run/observability' },
+            { label: 'Alert rules', slug: 'run/alerts' },
             { label: 'Notifications', slug: 'run/notifications' },
+            { label: 'Status pages', slug: 'run/status-pages' },
             { label: 'Webhooks', slug: 'run/webhooks' },
             { label: 'Terraform and OpenTofu', slug: 'run/terraform' },
+            { label: 'Terminal dashboard', slug: 'run/terminal-dashboard' },
             { label: 'The Grove', slug: 'run/grove' }
           ]
         },
@@ -115,6 +132,7 @@ export default defineConfig({
             { label: 'Overview', slug: 'grafts/overview' },
             { label: 'Install grafts', slug: 'grafts/install' },
             { label: 'Upgrades and rollback', slug: 'grafts/upgrades' },
+            { label: 'Announcements', slug: 'grafts/announcements' },
             { label: 'Troubleshooting', slug: 'grafts/troubleshooting' },
             { label: 'Build a graft', slug: 'grafts/build/quickstart' },
             { label: 'graft.json', slug: 'grafts/build/manifest' },
@@ -132,17 +150,21 @@ export default defineConfig({
             { label: 'Profile', slug: 'account/profile' },
             { label: 'Sign-in and sessions', slug: 'account/security' },
             { label: 'API tokens', slug: 'account/tokens' },
-            { label: 'SSH identities', slug: 'account/ssh-identities' }
+            { label: 'SSH identities', slug: 'account/ssh-identities' },
+            { label: 'Preferences', slug: 'account/preferences' },
+            { label: 'Shortcuts and search', slug: 'account/command-palette' }
           ]
         },
         {
           label: 'Teams',
           items: [
             { label: 'Organizations and roles', slug: 'teams/organizations' },
+            { label: 'Manage a project', slug: 'teams/projects' },
             { label: 'SSO', slug: 'teams/sso' },
             { label: 'SCIM provisioning', slug: 'teams/scim' },
             { label: 'Audit logs', slug: 'teams/audit-logs' },
-            { label: 'Quotas and usage', slug: 'teams/quotas' }
+            { label: 'Quotas and usage', slug: 'teams/quotas' },
+            { label: 'Review usage', slug: 'teams/usage' }
           ]
         },
         {
@@ -151,8 +173,16 @@ export default defineConfig({
             { label: 'Architecture', slug: 'operate/architecture' },
             { label: 'Configuration', slug: 'operate/configuration' },
             { label: 'Finishing setup', slug: 'operate/finishing-setup' },
+            { label: 'Instance admin', slug: 'operate/instance-admin' },
+            { label: 'Manage users', slug: 'operate/manage-users' },
+            { label: 'Manage organizations', slug: 'operate/manage-organizations' },
+            { label: 'Size older workloads', slug: 'operate/backfill' },
             { label: 'Host commands', slug: 'operate/host-commands' },
             { label: 'Nodes and pools', slug: 'operate/nodes' },
+            { label: 'Manage node pools', slug: 'operate/node-pools' },
+            { label: 'Bot protection', slug: 'operate/bot-protection' },
+            { label: 'Database dumps', slug: 'operate/database-dumps' },
+            { label: 'Usage reports', slug: 'operate/telemetry' },
             { label: 'Running Greenhouse', slug: 'operate/greenhouse' },
             { label: 'Upgrades', slug: 'operate/upgrades' },
             { label: 'Going to production', slug: 'operate/production' },
