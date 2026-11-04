@@ -99,6 +99,12 @@ export class UsersService {
           );
         }
         const previous = user;
+        if (!user.emailVerified) {
+          await this.prisma.session.updateMany({
+            where: { userId: user.id, authMethod: 'sso', revokedAt: null },
+            data: { revokedAt: new Date() }
+          });
+        }
         user = await this.prisma.user.update({
           where: { id: user.id },
           data: {

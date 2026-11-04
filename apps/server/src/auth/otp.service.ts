@@ -158,10 +158,16 @@ export class OtpService {
     // this address. updateMany is a no-op when the user has not yet been
     // created (first-time signups are created post-verify by the controller
     // with emailVerified=true), so this is safe for both flows.
-    await this.prisma.user.updateMany({
+    const verified = await this.prisma.user.updateMany({
       where: { email: normalizedEmail, emailVerified: false },
       data: { emailVerified: true, emailVerifiedAt: new Date() }
     });
+    if (verified.count > 0) {
+      await this.prisma.session.updateMany({
+        where: { authMethod: 'sso', revokedAt: null, user: { email: normalizedEmail } },
+        data: { revokedAt: new Date() }
+      });
+    }
 
     await this.rateLimitService.resetRateLimit(normalizedEmail, 'email', 'otp_verify');
     await this.rateLimitService.resetRateLimit(ipAddress, 'ip', 'otp_verify');

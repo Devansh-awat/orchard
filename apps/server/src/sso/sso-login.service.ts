@@ -23,6 +23,7 @@ import { SamlRequestStore } from './saml-request.store';
 import { SsoCryptoService } from './sso-crypto.service';
 import { SsoService } from './sso.service';
 import { OrgDomainsService } from './org-domains.service';
+import { SignJWT, jwtVerify } from 'jose';
 
 interface IdpProfile {
   email: string;
@@ -104,6 +105,34 @@ export class SsoLoginService {
     if (provider.protocol === SsoProtocol.saml) return this.startSaml(provider, returnTo);
     if (provider.protocol === SsoProtocol.oauth2) return this.startOAuth2(provider, returnTo);
     return this.startOidc(provider, returnTo);
+  }
+
+  async issueLinkToken(providerId: string, sessionToken?: string): Promise<string | null> {
+    if (!sessionToken) return null;
+    try {
+      const payload = await this.oauthService.verifySessionToken(sessionToken);
+      if (payload.orgScope || !payload.sessionId) return null;
+      if (!(await this.sessionsService.validateSession(payload.sessionId))) return null;
+      return await new SignJWT({ type: 'sso_link', providerId })
+        .setProtectedHeader({ alg: 'HS256' })
+        .setSubject(payload.sub)
+        .setIssuedAt()
+        .setExpirationTime('10m')
+        .sign(this.oauthService.getJwtSecret());
+    } catch {
+      return null;
+    }
+  }
+
+  async linkedUserId(providerId: string, linkToken?: string): Promise<string | undefined> {
+    if (!linkToken) return undefined;
+    try {
+      const { payload } = await jwtVerify(linkToken, this.oauthService.getJwtSecret());
+      if (payload.type !== 'sso_link' || payload.providerId !== providerId) return undefined;
+      return payload.sub;
+    } catch {
+      return undefined;
+    }
   }
 
   private newState() {
@@ -193,7 +222,8 @@ export class SsoLoginService {
   async handleOidcCallback(
     providerId: string,
     callbackUrl: URL,
-    state: string
+    state: string,
+    linkedUserId?: string
   ): Promise<SsoLoginResult> {
     const stateData = await this.stateStore.consume(state);
     if (!stateData) throw new BadRequestException('Invalid or expired SSO state');
@@ -223,14 +253,16 @@ export class SsoLoginService {
         emailVerified: claims.email_verified as boolean | undefined,
         subject: (claims.sub as string) ?? null
       },
-      stateData.returnTo
+      stateData.returnTo,
+      linkedUserId
     );
   }
 
   async handleOAuth2Callback(
     providerId: string,
     code: string,
-    state: string
+    state: string,
+    linkedUserId?: string
   ): Promise<SsoLoginResult> {
     const stateData = await this.stateStore.consume(state);
     if (!stateData) throw new BadRequestException('Invalid or expired SSO state');
@@ -258,13 +290,14 @@ export class SsoLoginService {
     if (!tokenBody.access_token) throw new UnauthorizedException('SSO token exchange failed');
 
     const profile = await this.fetchOAuth2Profile(provider, tokenBody.access_token);
-    return this.completeLogin(provider, profile, stateData.returnTo);
+    return this.completeLogin(provider, profile, stateData.returnTo, linkedUserId);
   }
 
   async handleSamlCallback(
     providerId: string,
     samlResponse: string,
-    relayState?: string
+    relayState?: string,
+    linkedUserId?: string
   ): Promise<SsoLoginResult> {
     const provider = await this.loadLoginProvider(providerId);
     const saml = this.buildSamlClient(provider);
@@ -290,7 +323,8 @@ export class SsoLoginService {
         emailVerified: true,
         subject: profile.nameID ?? null
       },
-      relayState || undefined
+      relayState || undefined,
+      linkedUserId
     );
   }
 
@@ -353,7 +387,8 @@ export class SsoLoginService {
   private async completeLogin(
     provider: IdentityProvider,
     profile: IdpProfile,
-    returnTo?: string
+    returnTo?: string,
+    linkedUserId?: string
   ): Promise<SsoLoginResult> {
     const email = profile.email.toLowerCase().trim();
 
@@ -378,7 +413,7 @@ export class SsoLoginService {
     }
 
     const user = provider.organizationId
-      ? await this.resolveOrgUser(provider, email, profile.name)
+      ? await this.resolveOrgUser(provider, email, profile.name, linkedUserId)
       : await this.resolveInstanceUser(provider, email, profile.name);
 
     if (!user.setupCompleted) {
@@ -476,7 +511,12 @@ export class SsoLoginService {
    * token, in their own session: the same rule the direct-add path already
    * refuses to bend.
    */
-  private async resolveOrgUser(provider: IdentityProvider, email: string, name: string) {
+  private async resolveOrgUser(
+    provider: IdentityProvider,
+    email: string,
+    name: string,
+    linkedUserId?: string
+  ) {
     const organizationId = provider.organizationId;
     let user = await this.prisma.user.findUnique({ where: { email } });
 
@@ -505,6 +545,24 @@ export class SsoLoginService {
           `Refused org SSO for owner ${user.id} via provider ${provider.id} (org ${organizationId}): provider wasn't configured by this owner`
         );
         throw new UnauthorizedException('SSO authentication failed');
+      }
+      // Membership doesn't let an org act as an account it doesn't own: that
+      // takes its verified domain, or the person starting this sign-in from
+      // their own session.
+      if (
+        membership.role !== OrganizationRole.owner &&
+        user.emailVerified &&
+        linkedUserId !== user.id &&
+        !(await this.domains.isVerifiedFor(organizationId, email.split('@')[1] || ''))
+      ) {
+        const organization = await this.prisma.organization.findUnique({
+          where: { id: organizationId },
+          select: { slug: true }
+        });
+        throw new UnauthorizedException({
+          message: 'sso_link_required',
+          orgSlug: organization?.slug
+        });
       }
       return user;
     }

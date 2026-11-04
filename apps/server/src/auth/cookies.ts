@@ -69,3 +69,30 @@ export function setGitOauthStateCookie(res: Response, state: string): void {
 export function clearGitOauthStateCookie(res: Response): void {
   res.clearCookie(GIT_OAUTH_STATE_COOKIE, { path: GIT_OAUTH_STATE_PATH });
 }
+
+const SSO_LINK_COOKIE = 'sso_link';
+
+export function setSsoLinkCookie(res: Response, token: string): void {
+  const secure = process.env.NODE_ENV === 'production';
+  res.cookie(SSO_LINK_COOKIE, token, {
+    httpOnly: true,
+    secure,
+    sameSite: secure ? 'none' : 'lax',
+    path: '/',
+    maxAge: 10 * 60 * 1000
+  });
+}
+
+export function clearSsoLinkCookie(res: Response): void {
+  const secure = process.env.NODE_ENV === 'production';
+  res.clearCookie(SSO_LINK_COOKIE, {
+    httpOnly: true,
+    secure,
+    sameSite: secure ? 'none' : 'lax',
+    path: '/'
+  });
+}
+
+export function ssoLinkCookie(req: { cookies?: Record<string, string> }): string | undefined {
+  return req.cookies?.[SSO_LINK_COOKIE];
+}

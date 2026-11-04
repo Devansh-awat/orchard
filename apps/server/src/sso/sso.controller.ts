@@ -17,7 +17,12 @@ import { SsoProtocol } from '@prisma/client';
 import { SsoService } from './sso.service';
 import { SsoLoginService, SsoLoginResult } from './sso-login.service';
 import { Public } from '../auth/decorators';
-import { setSessionCookie } from '../auth/cookies';
+import {
+  clearSsoLinkCookie,
+  setSessionCookie,
+  setSsoLinkCookie,
+  ssoLinkCookie
+} from '../auth/cookies';
 
 @Public()
 @Controller('sso')
@@ -73,10 +78,14 @@ export class SsoController {
   async start(
     @Param('providerId') providerId: string,
     @Query('returnTo') returnTo: string | undefined,
+    @Req() req: Request,
     @Res() res: Response
   ) {
     try {
       const url = await this.login.startLogin(providerId, returnTo);
+      const linkToken = await this.login.issueLinkToken(providerId, req.cookies?.session_token);
+      if (linkToken) setSsoLinkCookie(res, linkToken);
+      else clearSsoLinkCookie(res);
       return res.redirect(url);
     } catch (err) {
       this.logger.warn(`SSO start failed for ${providerId}: ${(err as Error).message}`);
@@ -97,8 +106,18 @@ export class SsoController {
 
       const result =
         provider.protocol === SsoProtocol.oauth2
-          ? await this.login.handleOAuth2Callback(providerId, req.query.code as string, state)
-          : await this.login.handleOidcCallback(providerId, this.requestUrl(req), state);
+          ? await this.login.handleOAuth2Callback(
+              providerId,
+              req.query.code as string,
+              state,
+              await this.login.linkedUserId(providerId, ssoLinkCookie(req))
+            )
+          : await this.login.handleOidcCallback(
+              providerId,
+              this.requestUrl(req),
+              state,
+              await this.login.linkedUserId(providerId, ssoLinkCookie(req))
+            );
 
       return this.finish(res, result);
     } catch (err) {
@@ -112,11 +131,17 @@ export class SsoController {
     @Param('providerId') providerId: string,
     @Body('SAMLResponse') samlResponse: string,
     @Body('RelayState') relayState: string,
+    @Req() req: Request,
     @Res() res: Response
   ) {
     try {
       if (!samlResponse) throw new HttpException('Missing SAML response', HttpStatus.BAD_REQUEST);
-      const result = await this.login.handleSamlCallback(providerId, samlResponse, relayState);
+      const result = await this.login.handleSamlCallback(
+        providerId,
+        samlResponse,
+        relayState,
+        await this.login.linkedUserId(providerId, ssoLinkCookie(req))
+      );
       return this.finish(res, result);
     } catch (err) {
       return this.fail(res, err);
@@ -155,7 +180,12 @@ export class SsoController {
       const state = req.query.state as string;
       if (!state) throw new HttpException('Missing state parameter', HttpStatus.BAD_REQUEST);
       const provider = await this.login.findLegacyProvider(orgId, SsoProtocol.oidc);
-      const result = await this.login.handleOidcCallback(provider.id, this.requestUrl(req), state);
+      const result = await this.login.handleOidcCallback(
+        provider.id,
+        this.requestUrl(req),
+        state,
+        await this.login.linkedUserId(provider.id, ssoLinkCookie(req))
+      );
       return this.finish(res, result);
     } catch (err) {
       return this.fail(res, err);
@@ -167,12 +197,18 @@ export class SsoController {
     @Param('orgId') orgId: string,
     @Body('SAMLResponse') samlResponse: string,
     @Body('RelayState') relayState: string,
+    @Req() req: Request,
     @Res() res: Response
   ) {
     try {
       if (!samlResponse) throw new HttpException('Missing SAML response', HttpStatus.BAD_REQUEST);
       const provider = await this.login.findLegacyProvider(orgId, SsoProtocol.saml);
-      const result = await this.login.handleSamlCallback(provider.id, samlResponse, relayState);
+      const result = await this.login.handleSamlCallback(
+        provider.id,
+        samlResponse,
+        relayState,
+        await this.login.linkedUserId(provider.id, ssoLinkCookie(req))
+      );
       return this.finish(res, result);
     } catch (err) {
       return this.fail(res, err);
@@ -184,6 +220,7 @@ export class SsoController {
   }
 
   private finish(res: Response, result: SsoLoginResult) {
+    clearSsoLinkCookie(res);
     setSessionCookie(res, result.token);
     return res.redirect(result.redirectTo);
   }
@@ -191,9 +228,15 @@ export class SsoController {
   private fail(res: Response, err: unknown) {
     this.logger.warn(`SSO callback failed: ${err instanceof Error ? err.message : String(err)}`);
     const reason =
-      err instanceof Error && /private_beta|signups_disabled/.test(err.message)
+      err instanceof Error && /private_beta|signups_disabled|sso_link_required/.test(err.message)
         ? err.message
         : 'sso_failed';
+    const orgSlug = err instanceof HttpException && (err.getResponse() as any)?.orgSlug;
+    if (orgSlug) {
+      return res.redirect(
+        `${this.frontendUrl}/${encodeURIComponent(orgSlug)}/login?error=${encodeURIComponent(reason)}`
+      );
+    }
     return res.redirect(`${this.frontendUrl}?error=${encodeURIComponent(reason)}`);
   }
 }
