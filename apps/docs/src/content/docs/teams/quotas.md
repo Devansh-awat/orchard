@@ -14,10 +14,14 @@ Quotas apply only when resource limits are on. If a superadmin turns limits off,
 Orchard checks three limits when you create, scale, or resize an app or database:
 
 1. The organization cap, set by a superadmin.
-2. The project cap, if the project has its own. A project cap replaces the organization cap for that project.
+2. The project cap, if the project has its own. It covers the whole project, including its environments.
 3. The member allowance of the project owner.
 
+Orchard refuses a request that does not fit, and the message names the limit. Apps that already run keep running, and you can still restart them.
+
 Quotas count the CPU and memory that you select for an app. The resource picker shows the remaining budget while you size an app.
+
+If an app cannot start because its project is out of room, the app page shows which limit is used up. For example, `This app can't start: its project's memory limit is used up.` To continue, raise the limit, or stop or shrink another app.
 
 A member with no allowance of their own uses the organization's default allowance. If the organization has no default, the member has no limit.
 

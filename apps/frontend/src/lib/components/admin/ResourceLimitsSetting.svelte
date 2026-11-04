@@ -273,7 +273,9 @@
 		<div class="on">
 			<Alert tone="warning" title="Apps may be killed for using too much memory">
 				Every app and database without its own limits gets the organization default at its next
-				restart. Apps using more than that may be killed for memory. Nothing restarts now.
+				restart. If its organization or project has a cap, a pod that the cluster replaces before
+				then gets the default at that point. Apps using more than that may be killed for memory.
+				Nothing restarts now.
 				{#if affectedText}
 					This affects {affectedText}.
 				{/if}

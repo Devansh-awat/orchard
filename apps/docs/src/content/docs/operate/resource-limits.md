@@ -31,6 +31,19 @@ A change does not restart anything. Each app and database keeps its current limi
 
 Other changes, such as editing variables or scaling, keep the current limits. A pod that crashes and comes back also keeps them.
 
+### When the cluster replaces a pod
+
+The cluster can replace a pod at any time, for example when it drains a node or evicts the pod. After you turn limits on, what the new pod gets depends on whether a cap applies:
+
+- If its organization or project has a CPU or memory cap, the new pod gets the default limit at that point. The pod starts and keeps that limit.
+- If there is no cap, the new pod has no limit until the next restart.
+
+A new pod gets more than the default if it already reserves more. A database gets at least 512 MB, and enough for its `shared_buffers` setting.
+
+While apps and databases run without limits, Orchard raises the quota in the cluster so that their new pods fit, even if they need more than the cap. New apps and databases still count against the cap.
+
+After you turn limits off, a pod that the cluster replaces keeps its limits until the next restart.
+
 ## Turn limits off
 
 1. Go to **Instance admin** > **Configuration** > **Resource limits**.
@@ -43,7 +56,7 @@ Your apps and databases then run without limits. Orchard keeps the sizes that yo
 ## Turn limits on
 
 :::caution
-Every app and database without its own limits gets the organization default at its next restart. An app that uses more memory than that may be killed.
+Every app and database without its own limits gets the organization default at its next restart. If its organization or project has a cap, a pod that the cluster replaces before then gets the default at that point. An app that uses more memory than that may be killed.
 :::
 
 1. Go to **Instance admin** > **Configuration** > **Resource limits**.
@@ -52,8 +65,6 @@ Every app and database without its own limits gets the organization default at i
 4. Enter **Default memory limit** and **Default CPU limit** for each organization. Leave a field blank to use the instance default.
 5. Select **Turn on limits**.
 6. To apply the change now, select **Restart** on each app and database.
-
-If an organization has caps, an app that the cluster moves to another node before its restart can get a default limit early.
 
 ## Find apps that have not restarted
 
