@@ -61,6 +61,24 @@ To open this dialog later, open the domain's menu and select **DNS setup…**.
 
 After the record resolves, cert-manager issues a certificate and renews it. The domain's status shows **Securing** while the certificate is in progress.
 
+## Prove you own a domain
+
+An instance can require proof of ownership before anyone adds a custom domain. This setting is off by default.
+
+When it is on, add one more record at your DNS provider. The DNS setup shows the exact name and value:
+
+| Type  | Name                                 | Value               |
+| ----- | ------------------------------------ | ------------------- |
+| `TXT` | `_orchard-challenge.app.example.com` | Shown in the dialog |
+
+The value is different for each project and domain. Until Orchard finds the record, adding the domain fails with the error `domain_proof_required`, and the message gives the record to add. You can remove the record after the domain is added.
+
+You don't need the record in these cases:
+
+- The domain is under a generated URL on this instance.
+- The project already uses the domain.
+- Your organization already [verified the domain](/teams/sso/#verify-an-email-domain), or a parent of it.
+
 ## Redirect a domain
 
 A redirect sends visitors from a domain to another address. It keeps the path and query string.
