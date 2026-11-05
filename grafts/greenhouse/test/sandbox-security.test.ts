@@ -606,6 +606,7 @@ test('anything that gets code or a login onto a machine needs an exec token', ()
     [SandboxesController, 'create'],
     [SandboxesController, 'update'],
     [SandboxesController, 'addRepo'],
+    [SandboxesController, 'setCredentials'],
     [SandboxForkController, 'fork'],
     [SandboxMembersController, 'add'],
     [SandboxMembersController, 'update'],

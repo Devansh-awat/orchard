@@ -105,6 +105,7 @@ export class SandboxesController {
   }
 
   @Put('credentials')
+  @RequireScope('exec')
   async setCredentials(
     @Req() req: any,
     @Body()
