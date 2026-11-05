@@ -148,15 +148,19 @@
 			case 'official':
 				return { tone: 'success', text: 'Official' };
 			case 'community':
-				return { tone: 'info', text: `Community · by ${sig?.publisher ?? 'unknown'}` };
+				return { tone: 'warning', text: `Community · by ${sig?.publisher ?? 'unknown'}` };
 			case 'tap':
 				return { tone: 'warning', text: `Tap: ${sig?.tap ?? 'unknown'}` };
 			case 'publisher':
-				return { tone: 'neutral', text: `Publisher key ${sig?.keyId ?? ''}`.trim() };
+				return { tone: 'warning', text: `Publisher key ${sig?.keyId ?? ''}`.trim() };
 			default:
 				return { tone: 'error', text: 'Unsigned' };
 		}
 	}
+
+	const thirdParty = $derived(
+		(overview?.grafts ?? []).filter((g) => tierOf(g.signature) !== 'official')
+	);
 
 	const tapUrl = (name: string | undefined) =>
 		overview?.taps?.find((t) => t.name === name)?.url ?? null;
@@ -284,6 +288,13 @@
 		A graft runs with the same access as Orchard, including your database and your users' data. The
 		details below show what each graft asks for, but they don't limit it.
 	</Alert>
+	{#if thirdParty.length > 0}
+		<Alert tone="error" title="Not made by Orchard: {thirdParty.map((g) => g.name).join(', ')}">
+			These run inside Orchard with no sandbox. They can read your secrets and database, sign in as
+			any user, and change the apps on this cluster. Orchard can't limit what they do, and nobody at
+			Orchard reviews their updates. Remove any you wouldn't give full control of this server.
+		</Alert>
+	{/if}
 
 	<Swap key={loadError ? 'error' : overview ? 'ready' : 'loading'}>
 		{#if loadError}
