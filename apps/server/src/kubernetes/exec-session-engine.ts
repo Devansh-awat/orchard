@@ -10,6 +10,7 @@ import { SessionsService } from '../auth/sessions.service';
 import { hashApiToken } from '../auth/api-tokens.service';
 import { assertBrowserSession } from '../auth/session-jwt';
 import { originAllowed, platformOrigins } from '../auth/upgrade-auth';
+import type { RequestAuthContext } from '../auth/request-context';
 import type { PtyHandle } from './pty';
 import {
   DETACH_GRACE_MS,
@@ -284,6 +285,15 @@ export async function authenticateUpgrade(
       isProxyHop: false
     };
   }
+}
+
+export function execRequestContext(
+  auth: Pick<EngineAuth, 'sessionOrgScope' | 'tokenAuthCtx'>
+): RequestAuthContext {
+  const scope = auth.sessionOrgScope ? { sessionOrgId: auth.sessionOrgScope } : {};
+  return auth.tokenAuthCtx
+    ? { ...auth.tokenAuthCtx, ...scope }
+    : { ...scope, browserSession: true };
 }
 
 export const PROXY_HOP_TYPE = 'exec-proxy';

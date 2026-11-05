@@ -13,7 +13,7 @@ import { resolveNamespaceScope } from '../projects/namespace-scope';
 import type { PtyHandle } from './pty';
 import { loadKubeConfigFromPathOrBase64 } from './kubeconfig';
 import { ResizableOutput, isPodTarget, type PodExecTarget } from './exec-sessions';
-import { execSessionEngine, type ExecRouteHooks } from './exec-session-engine';
+import { execRequestContext, execSessionEngine, type ExecRouteHooks } from './exec-session-engine';
 import { isValidPodName } from './pod-name';
 
 function describeExecFailure(message: string): string {
@@ -148,12 +148,9 @@ export function attachTerminalWebSocket(server: http.Server, app: INestApplicati
       const project = { id: scope.projectId, organizationId: scope.organizationId };
       const runWithAuthCtx = <T>(fn: () => Promise<T>): Promise<T> =>
         new Promise<T>((resolve, rejectPromise) => {
-          requestAuthStorage.run(
-            auth.tokenAuthCtx ?? { sessionOrgId: auth.sessionOrgScope, browserSession: true },
-            () => {
-              fn().then(resolve, rejectPromise);
-            }
-          );
+          requestAuthStorage.run(execRequestContext(auth), () => {
+            fn().then(resolve, rejectPromise);
+          });
         });
       try {
         await runWithAuthCtx(() =>
