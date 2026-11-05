@@ -43,6 +43,14 @@ import { RolloutPinInterceptor } from './rollout.controller';
 import { autoUrlChoice } from './auto-url';
 import { detectedBuildFor } from './detected-build';
 
+function withoutOwnerRefs<T extends object>(body: T): T {
+  const safe = { ...body } as T & Record<string, unknown>;
+  for (const key of ['composeStackId', 'composeServiceName', 'templateInstanceId']) {
+    delete safe[key];
+  }
+  return safe;
+}
+
 @Auth()
 @Controller('projects')
 export class ProjectsController {
@@ -578,7 +586,7 @@ export class ProjectsController {
     },
     @Request() req
   ) {
-    return this.databases.createDatabase(id, body, req.user.sub, {
+    return this.databases.createDatabase(id, withoutOwnerRefs(body), req.user.sub, {
       email: req.user.email,
       username: req.user.username,
       firstName: req.user.firstName,
@@ -619,7 +627,7 @@ export class ProjectsController {
     },
     @Request() req
   ) {
-    return this.ingress.createProjectIngress(id, body, req.user.sub, {
+    return this.ingress.createProjectIngress(id, withoutOwnerRefs(body), req.user.sub, {
       email: req.user.email,
       username: req.user.username,
       firstName: req.user.firstName,
@@ -944,7 +952,7 @@ export class ProjectsController {
       imageUrl: req.user.imageUrl
     };
     const clerkId = req.user.externalAuthId || req.user.sub;
-    const request = await this.withDetectedBuild(body, clerkId, userData);
+    const request = await this.withDetectedBuild(withoutOwnerRefs(body), clerkId, userData);
     const result = await this.deployments.createDeploymentFromGitHub(
       id,
       request,

@@ -3,6 +3,7 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  ForbiddenException,
   Inject,
   forwardRef,
   Logger
@@ -85,10 +86,10 @@ export class ProjectOrgTransferService {
       throw new BadRequestException('The project is already in this organization');
     }
 
-    // Source: you must be able to edit the project. Destination: you must be
-    // able to create projects there (member, not guest): the same gate as
-    // spawning a brand-new project in that org.
-    await this.authz.requireProjectDelete(projectId, user.id);
+    // Source: moving a project takes it away from the org, so it's the org's
+    // call. Destination: you must be able to create projects there (member, not
+    // guest): the same gate as spawning a brand-new project in that org.
+    await this.authz.requireOrgAdmin(project.organizationId, user.id);
     await this.authz.requireOrgCanCreateProjects(destinationOrgId, user.id);
 
     const destOrg = (await this.prisma.organization.findUnique({
@@ -250,6 +251,15 @@ export class ProjectOrgTransferService {
       );
     }
 
+    if (plan.quota?.willExceed) {
+      const destAccess = await this.authz.getOrgAccess(destOrg.id, user.id);
+      if (!destAccess?.isAdmin) {
+        throw new ForbiddenException(
+          "This project would push the destination organization past its limits. Ask one of that organization's admins to move it."
+        );
+      }
+    }
+
     const sourceOrgId = project.organizationId;
     const losingIds = plan.membersLosingAccess.map((m) => m.id);
     const reassignOwner = !plan.ownerInDest;
@@ -348,6 +358,25 @@ export class ProjectOrgTransferService {
       actorUserId: user.id,
       actorEmail: user.email,
       organizationId: destOrg.id,
+      projectId: project.id,
+      targetType: 'project',
+      targetId: project.id,
+      targetLabel: project.name,
+      metadata: {
+        fromOrganizationId: sourceOrgId,
+        toOrganizationId: destOrg.id,
+        slug: [project.slug, plan.desiredSlug],
+        membersEvicted: losingIds.length,
+        ownerReassigned: reassignOwner,
+        backupsRepointed: plan.backups.willContinue,
+        backupsPaused: plan.backups.willPause
+      }
+    });
+    void this.audit.log({
+      action: 'project.organization.transferred',
+      actorUserId: user.id,
+      actorEmail: user.email,
+      organizationId: sourceOrgId,
       projectId: project.id,
       targetType: 'project',
       targetId: project.id,

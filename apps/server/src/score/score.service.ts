@@ -202,10 +202,19 @@ export class ScoreService {
           where: { host: plan.domain },
           select: { id: true, deploymentId: true }
         });
-        if (!existing) {
+        const service = deployment.services[0];
+        const servicePort = service?.ports[0]?.port;
+        if (!existing && !servicePort) {
+          warnings.push(`Domain ${plan.domain}: this app has no port to route to yet`);
+        } else if (!existing) {
           await ingress.createProjectIngress(
             deployment.projectId,
-            { host: plan.domain, deploymentId, tlsEnabled: true },
+            {
+              host: plan.domain,
+              deploymentId,
+              tlsEnabled: true,
+              routes: [{ path: '/', serviceName: service.name, servicePort: servicePort! }]
+            },
             actor.clerkId,
             actor.userData
           );

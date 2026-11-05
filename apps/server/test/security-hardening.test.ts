@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ForbiddenException } from '@nestjs/common';
+import { ConflictException, ForbiddenException } from '@nestjs/common';
 import { IngressService } from '../src/projects/ingress.service';
 import { ProtectionService, pathIsAmbiguous } from '../src/auth/protection.service';
 import { parseRepoUrl } from '../src/docker/repo-url';
@@ -37,6 +37,8 @@ import {
   newImageTag
 } from '../src/projects/image-ownership';
 import { versionLabel } from '../src/observability/changes';
+import { ProjectAccessService } from '../src/projects/project-access.service';
+import { DatabaseTrashService } from '../src/projects/database-trash.service';
 import { buildSafeEnv, builderContainerEnv } from '../src/env/reserved-env';
 import { dockerfileDirGuard } from '../src/docker/image-builder.service';
 import { sanitizeBuildLogMessage } from '../src/docker/build-log-redaction';
@@ -256,6 +258,82 @@ test('credentials quoted from a JSON file are masked in build logs', () => {
   const out = sanitizeBuildLogMessage('{"auths":{"h":{"auth":"c2VjcmV0","password":"hunter2"}}}');
   assert.ok(!out.includes('c2VjcmV0'));
   assert.ok(!out.includes('hunter2'));
+});
+
+function hostAccess(found: { ingress?: boolean; org?: boolean; page?: boolean }) {
+  const calls: any[] = [];
+  const service = Object.create(ProjectAccessService.prototype) as any;
+  service.prisma = {
+    ingress: {
+      findFirst: async (args: any) => {
+        calls.push(args.where);
+        return found.ingress ? { id: 'i' } : null;
+      }
+    },
+    organization: { findUnique: async () => (found.org ? { id: 'o' } : null) },
+    statusPage: { findUnique: async () => (found.page ? { id: 's' } : null) }
+  };
+  return { service, calls };
+}
+
+test('hostnames other parts of the platform serve cannot be claimed', async () => {
+  process.env.BASE_DOMAIN = 'orchard.example';
+  try {
+    for (const taken of [{ org: true }, { page: true }, { ingress: true }]) {
+      await assert.rejects(
+        () => hostAccess(taken).service.assertHostnameAvailable('acme.orchard.example', 'p'),
+        ConflictException
+      );
+    }
+    await hostAccess({}).service.assertHostnameAvailable('acme.orchard.example', 'p');
+  } finally {
+    delete process.env.BASE_DOMAIN;
+  }
+});
+
+test('hostname checks ignore case', async () => {
+  const { service, calls } = hostAccess({});
+  await service.assertHostnameAvailable('Foo.Example.COM', 'p');
+  assert.deepEqual(calls[0].host, { equals: 'foo.example.com', mode: 'insensitive' });
+});
+
+function trashHarness(live: boolean) {
+  const updates: any[] = [];
+  const purged: any[] = [];
+  const service = Object.create(DatabaseTrashService.prototype) as any;
+  service.logger = { log() {}, warn() {} };
+  service.prisma = {
+    database: { findFirst: async () => (live ? { id: 'live' } : null) },
+    deletedDatabase: { update: async (args: any) => updates.push(args) },
+    storageAccessKey: { deleteMany: async () => ({}) }
+  };
+  const dbs = {
+    mintScopedR2: async () => null,
+    purgeBackupObjects: async (args: any) => purged.push(args)
+  };
+  const row = {
+    id: 't',
+    name: 'foo',
+    namespace: 'acme-a',
+    clusterName: 'pg-foo',
+    organizationId: 'o',
+    project: { organization: {} }
+  };
+  return { run: () => service.purgeRow(dbs, row), updates, purged };
+}
+
+test('purging a deleted database spares a live one using the same backup path', async () => {
+  const { run, updates, purged } = trashHarness(true);
+  await run();
+  assert.deepEqual(purged, []);
+  assert.equal(updates.length, 1);
+});
+
+test('a deleted database with no successor still gets its backups purged', async () => {
+  const { run, updates, purged } = trashHarness(false);
+  await run();
+  assert.equal(purged.length, 1);
+  assert.equal(updates.length, 1);
 });
 
 test('operation records never carry the stored database password', () => {

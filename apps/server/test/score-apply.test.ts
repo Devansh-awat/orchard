@@ -50,7 +50,9 @@ function harness(opts: { existingDb?: boolean; existingIngressOwner?: string | n
     environmentId: 'env-1',
     replicas: 1,
     project: { id: 'proj-1', organizationId: 'org-1' },
-    services: [{ id: 'svc-1', ports: [{ port: 80, targetPort: 80, protocol: 'TCP' }] }],
+    services: [
+      { id: 'svc-1', name: 'web', ports: [{ port: 80, targetPort: 80, protocol: 'TCP' }] }
+    ],
     resourceBindings: [],
     envVars: [
       { key: 'SECRET_TOKEN', secret: true },
@@ -133,7 +135,8 @@ test('a score file provisions the database, binds it, and writes live references
   assert.deepEqual(calls.ingress, {
     host: 'web.example.com',
     deploymentId: 'dep-1',
-    tlsEnabled: true
+    tlsEnabled: true,
+    routes: [{ path: '/', serviceName: 'web', servicePort: 80 }]
   });
   assert.equal(result.applied.length, 6);
 });

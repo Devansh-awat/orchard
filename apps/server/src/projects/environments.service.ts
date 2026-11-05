@@ -131,11 +131,15 @@ export class EnvironmentsService {
     let attempt = 0;
     let namespace = this.buildEnvNamespace(base);
     while (true) {
-      const [envUse, projUse] = await Promise.all([
+      const [envUse, projUse, trashUse] = await Promise.all([
         this.prisma.environment.findFirst({ where: { namespace }, select: { id: true } }),
-        this.prisma.project.findFirst({ where: { namespace }, select: { id: true } })
+        this.prisma.project.findFirst({ where: { namespace }, select: { id: true } }),
+        this.prisma.deletedDatabase.findFirst({
+          where: { namespace, purgedAt: null, restoredAs: null },
+          select: { id: true }
+        })
       ]);
-      if (!envUse && !projUse) return namespace;
+      if (!envUse && !projUse && !trashUse) return namespace;
       attempt += 1;
       namespace = this.buildEnvNamespace([...base.slice(0, -1), `${baseSlug}-${attempt}`]);
     }

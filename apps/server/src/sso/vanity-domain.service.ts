@@ -82,11 +82,22 @@ export class VanityDomainService {
       });
 
       if (normalized) {
-        const conflict = await tx.organization.findFirst({
-          where: { subdomain: normalized, NOT: { id: organizationId } },
-          select: { id: true }
-        });
-        if (conflict) throw new ConflictException('This subdomain is already taken');
+        const [conflict, page, ingress] = await Promise.all([
+          tx.organization.findFirst({
+            where: { subdomain: normalized, NOT: { id: organizationId } },
+            select: { id: true }
+          }),
+          tx.statusPage.findUnique({ where: { subdomain: normalized }, select: { id: true } }),
+          tx.ingress.findFirst({
+            where: {
+              host: { equals: `${normalized}.${this.baseDomain}`, mode: 'insensitive' }
+            },
+            select: { id: true }
+          })
+        ]);
+        if (conflict || page || ingress) {
+          throw new ConflictException('This subdomain is already taken');
+        }
       }
 
       const updated = await tx.organization.update({

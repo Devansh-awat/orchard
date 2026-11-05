@@ -247,6 +247,10 @@ export class ProjectsService {
           (await this.prisma.environment.findUnique({
             where: { namespace },
             select: { id: true }
+          })) ??
+          (await this.prisma.deletedDatabase.findFirst({
+            where: { namespace, purgedAt: null, restoredAs: null },
+            select: { id: true }
           })));
 
       if (!slugInUse && !namespaceInUse) {

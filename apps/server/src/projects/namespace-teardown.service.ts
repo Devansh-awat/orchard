@@ -199,6 +199,12 @@ export class NamespaceTeardownService {
       });
     }
 
+    if (!scope.environmentId && !scope.keepData) {
+      await trash
+        .purgeForProject(scope.projectId)
+        .catch((err) => fail('purge the backups of trashed databases', err));
+    }
+
     const jobs = await this.prisma.job.findMany({ where, select: { id: true, name: true } });
     for (const job of jobs) {
       summary.jobs += 1;

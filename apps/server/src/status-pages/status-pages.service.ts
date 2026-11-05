@@ -564,14 +564,18 @@ export class StatusPagesService {
     }
     if (RESERVED_SUBDOMAINS.has(normalized))
       throw new BadRequestException('This subdomain is reserved');
-    const [org, page] = await Promise.all([
+    const [org, page, ingress] = await Promise.all([
       this.prisma.organization.findUnique({
         where: { subdomain: normalized },
         select: { id: true }
       }),
-      this.prisma.statusPage.findUnique({ where: { subdomain: normalized }, select: { id: true } })
+      this.prisma.statusPage.findUnique({ where: { subdomain: normalized }, select: { id: true } }),
+      this.prisma.ingress.findFirst({
+        where: { host: { equals: `${normalized}.${this.baseDomain}`, mode: 'insensitive' } },
+        select: { id: true }
+      })
     ]);
-    if (org || (page && page.id !== exceptId)) {
+    if (org || ingress || (page && page.id !== exceptId)) {
       throw new ConflictException('That subdomain is already in use');
     }
     return normalized;

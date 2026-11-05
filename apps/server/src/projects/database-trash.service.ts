@@ -203,42 +203,78 @@ export class DatabaseTrashService {
           select: { id: true }
         });
         if (busy) continue;
-        try {
-          const scoped = await dbs.mintScopedR2(row.project.organization, {
-            organizationId: row.organizationId,
-            writePrefix: `${row.namespace}/${row.clusterName}/`,
-            readPrefixes: [],
-            purpose: 'database-purge',
-            ttlMs: 60 * 60 * 1000
-          });
-          await dbs.purgeBackupObjects({
-            namespace: row.namespace,
-            clusterName: row.clusterName,
-            r2ProxyAccessKey: scoped?.scopedKey ?? null,
-            r2ProxySecret: scoped?.scopedKey ? scoped.r2.secretKey : null,
-            project: { organization: row.project.organization }
-          });
-          if (scoped?.scopedKey) {
-            await this.prisma.storageAccessKey.deleteMany({
-              where: { accessKey: scoped.scopedKey }
-            });
-          }
-          await this.prisma.deletedDatabase.update({
-            where: { id: row.id },
-            data: { purgedAt: new Date() }
-          });
-          this.logger.log(
-            `purged the backups of deleted database ${row.name} (${row.namespace}/${row.clusterName})`
-          );
-        } catch (e: any) {
-          this.logger.warn(`purging deleted database ${row.name} failed: ${k8sErrorMessage(e)}`);
-        }
+        await this.purgeRow(dbs, row);
       }
       await this.prisma.storageAccessKey.deleteMany({ where: { expiresAt: { lt: new Date() } } });
     } catch (e: any) {
       this.logger.warn(`trash purge failed: ${e?.message ?? e}`);
     } finally {
       this.ticking = false;
+    }
+  }
+
+  async purgeForProject(projectId: string): Promise<void> {
+    const rows = await this.prisma.deletedDatabase.findMany({
+      where: { projectId, purgedAt: null, restoredAs: null },
+      include: {
+        project: {
+          include: {
+            organization: { omit: { backupR2AccessKey: false, backupR2SecretKey: false } }
+          }
+        }
+      }
+    });
+    const dbs = await this.databases();
+    for (const row of rows) await this.purgeRow(dbs, row);
+  }
+
+  private async purgeRow(
+    dbs: Awaited<ReturnType<DatabaseTrashService['databases']>>,
+    row: any
+  ): Promise<void> {
+    const live = await this.prisma.database.findFirst({
+      where: { namespace: row.namespace, clusterName: row.clusterName },
+      select: { id: true }
+    });
+    if (live) {
+      await this.prisma.deletedDatabase.update({
+        where: { id: row.id },
+        data: { purgedAt: new Date() }
+      });
+      this.logger.log(
+        `kept the backups at ${row.namespace}/${row.clusterName}: a live database uses that path`
+      );
+      return;
+    }
+    try {
+      const scoped = await dbs.mintScopedR2(row.project.organization, {
+        organizationId: row.organizationId,
+        writePrefix: `${row.namespace}/${row.clusterName}/`,
+        readPrefixes: [],
+        purpose: 'database-purge',
+        ttlMs: 60 * 60 * 1000
+      });
+      await dbs.purgeBackupObjects({
+        namespace: row.namespace,
+        clusterName: row.clusterName,
+        r2ProxyAccessKey: scoped?.scopedKey ?? null,
+        r2ProxySecret: scoped?.scopedKey ? scoped.r2.secretKey : null,
+        project: { organization: row.project.organization }
+      });
+      if (scoped?.scopedKey) {
+        await this.prisma.storageAccessKey.deleteMany({
+          where: { accessKey: scoped.scopedKey }
+        });
+      }
+      await this.prisma.deletedDatabase.update({
+        where: { id: row.id },
+        data: { purgedAt: new Date() }
+      });
+      this.logger.log(
+        `purged the backups of deleted database ${row.name} (${row.namespace}/${row.clusterName})`
+      );
+    } catch (e: any) {
+      this.logger.warn(`purging deleted database ${row.name} failed: ${k8sErrorMessage(e)}`);
     }
   }
 }

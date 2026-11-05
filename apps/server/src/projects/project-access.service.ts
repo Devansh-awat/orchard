@@ -10,6 +10,7 @@ import { AuthorizationService } from '../auth/authorization.service';
 import { MembershipCacheService } from '../auth/membership-cache.service';
 import { requestAuthStorage } from '../auth/request-context';
 import { hostOf } from '../instance-network/hostnames';
+import { optionalDomain } from '../env/platform-domains';
 
 /**
  * Centralized RBAC/access guards for projects, deployments, databases,
@@ -85,11 +86,24 @@ export class ProjectAccessService {
       }
     }
 
-    const conflict = await this.prisma.ingress.findFirst({
-      where: { host: rawHost, NOT: { projectId } },
-      select: { id: true }
-    });
-    if (conflict) {
+    const baseDomain = optionalDomain(process.env.BASE_DOMAIN);
+    const subdomain =
+      baseDomain && host.endsWith(`.${baseDomain}`)
+        ? host.slice(0, -(baseDomain.length + 1))
+        : null;
+    const [conflict, vanity, statusPage] = await Promise.all([
+      this.prisma.ingress.findFirst({
+        where: { host: { equals: host, mode: 'insensitive' }, NOT: { projectId } },
+        select: { id: true }
+      }),
+      subdomain
+        ? this.prisma.organization.findUnique({ where: { subdomain }, select: { id: true } })
+        : null,
+      subdomain
+        ? this.prisma.statusPage.findUnique({ where: { subdomain }, select: { id: true } })
+        : null
+    ]);
+    if (conflict || vanity || statusPage) {
       throw new ConflictException(`Hostname ${rawHost} is unavailable. Choose a different domain.`);
     }
   }
