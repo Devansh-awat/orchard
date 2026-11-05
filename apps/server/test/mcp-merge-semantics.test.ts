@@ -382,3 +382,18 @@ test('tool results are serialised compactly, and stay that way', async () => {
     );
   }
 });
+
+test('env values and compose files stay out of every reply shape', () => {
+  const res = json({
+    pod: { spec: { containers: [{ env: [{ name: 'API_KEY', value: 'hunter2' }] }] } },
+    release: { envSnapshot: [{ key: 'OLD', value: 'hunter2' }] },
+    app: { replicas: 1, envVars: [{ key: 'TOKEN', value: 'hunter2' }] },
+    stack: { composeYaml: 'password: hunter2' }
+  });
+  const body = res.content[0].text;
+  assert.ok(!body.includes('hunter2'));
+  const parsed = JSON.parse(body);
+  assert.deepEqual(parsed.pod.spec.containers[0].env.names, ['API_KEY']);
+  assert.deepEqual(parsed.release.envSnapshot.names, ['OLD']);
+  assert.deepEqual(parsed.app.envVars.names, ['TOKEN']);
+});

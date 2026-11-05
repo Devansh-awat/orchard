@@ -1,3 +1,4 @@
+import { omitSecretFields } from '../tools/reply';
 import type { AgentOperation } from '../../agent-spec/agent-search';
 import { OrchardApiError, query as toQuery, type McpScope, type QueryInput } from '../client';
 import { SENSITIVE_META_KEY, scopeAllows } from '../catalog';
@@ -154,7 +155,12 @@ export async function executeCall(
         ? JSON.stringify({ ok: true })
         : typeof projected === 'string'
           ? projected
-          : JSON.stringify(projected);
+          : JSON.stringify(
+              projected,
+              operation['x-orchard-sensitive'] || input.fields?.length
+                ? undefined
+                : omitSecretFields
+            );
     const result: ToolResult = { content: [{ type: 'text', text: capOutput(text) }] };
     if (operation['x-orchard-sensitive']) result._meta = { [SENSITIVE_META_KEY]: true };
     return result;

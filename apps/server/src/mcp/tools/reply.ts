@@ -10,19 +10,27 @@ const BUILD_LOGS_OMITTED = '<omitted, call get_build_logs>';
 
 const ENV_VALUES_OMITTED = '<omitted, call get_env_vars>';
 
+const COMPOSE_OMITTED = '<omitted, may contain secrets>';
+
+const ENV_KEYS = new Set(['env', 'envSnapshot']);
+
 function envNames(value: unknown) {
   const names = Array.isArray(value)
-    ? value.map((v: { key?: string }) => v.key)
+    ? value.map((v: { key?: string; name?: string }) => v.key ?? v.name)
     : Object.keys(value as object);
   return { names, values: ENV_VALUES_OMITTED };
 }
 
+export function omitSecretFields(this: object, key: string, value: unknown) {
+  if (key === 'composeYaml' && value) return COMPOSE_OMITTED;
+  const envHolder = ENV_KEYS.has(key) || (key === 'envVars' && 'replicas' in this);
+  if (envHolder && value && typeof value === 'object') return envNames(value);
+  return value;
+}
+
 function omitLargeFields(this: object, key: string, value: unknown) {
   if (key === 'buildLogs' && value) return BUILD_LOGS_OMITTED;
-  if ((key === 'envVars' || key === 'envSnapshot') && value && 'replicas' in this) {
-    return envNames(value);
-  }
-  return value;
+  return omitSecretFields.call(this, key, value);
 }
 
 export function json(value: unknown) {
