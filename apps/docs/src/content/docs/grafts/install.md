@@ -63,11 +63,12 @@ After you confirm, Orchard rehearses the migrations inside a transaction and rol
 
 `add` and `upgrade` accept these flags:
 
-| Flag        | Effect                                |
-| ----------- | ------------------------------------- |
-| `--yes`     | Skips the confirmation prompt.        |
-| `--dry-run` | Runs every check and changes nothing. |
-| `--apply`   | Rolls Orchard out afterward.          |
+| Flag                  | Effect                                                   |
+| --------------------- | -------------------------------------------------------- |
+| `--yes`               | Skips the confirmation prompt.                           |
+| `--dry-run`           | Runs every check and changes nothing.                    |
+| `--apply`             | Rolls Orchard out afterward.                             |
+| `--allow-third-party` | With `--yes`, accepts a graft that Orchard did not make. |
 
 If a graft includes a cluster chart for CRDs or RBAC, `add` installs it as the Helm release `orchard-graft-<id>`. `remove` leaves that release in place and prints the `helm uninstall` command.
 
@@ -101,7 +102,13 @@ An Orchard maintainer reviews a community graft when it is first listed. Each ne
 
 ## Trust
 
-`graftSettings.trust` controls which grafts can load:
+:::danger
+A graft that Orchard did not make runs inside Orchard with no sandbox. It can read your secrets and database, sign in as any user, and change the apps on your cluster. Orchard cannot limit what it does, and nobody at Orchard reviews its updates. Only install it if you would give its publisher full control of your server.
+
+Before it installs one, `orchardctl` asks you to type the graft's ID. With `--yes`, also pass `--allow-third-party`. Grafts listed in `grafts` in your Helm values skip this prompt.
+:::
+
+`graftSettings.trust` controls which grafts can load. To load only Orchard's own grafts, set it to `official`:
 
 | Policy             | Loads                                                                             |
 | ------------------ | --------------------------------------------------------------------------------- |
