@@ -54,6 +54,16 @@ Webhook receivers, health endpoints, and OAuth callbacks must stay reachable. If
 2. Enter one path per line. `/api` also opens `/api/v1`. It does not open `/apikeys`.
 3. Select **Save**.
 
+## Protect a domain with several paths
+
+Each path on a domain has its own protection, so you can protect `/` and leave `/docs` public. Each path keeps its own sign-in, and the **Protection** dialog lists the paths on the domain that are still public.
+
+A path you add to a domain that already has protection starts with the same protection. To make it public, open its **Protection** dialog and select **None**.
+
+:::caution
+A public path skips the sign-in check before the request reaches your app. If a public path and a protected path point to the same app, use **Public paths** instead, which checks each request first.
+:::
+
 ## Skip protection from scripts
 
 Scripts and CI can skip sign-in with a bypass header. After you save protection, reopen the **Protection** dialog to copy the header from **Bypass header**.
