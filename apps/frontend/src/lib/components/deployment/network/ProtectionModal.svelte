@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { Shield } from 'lucide-svelte';
 	import {
+		Alert,
 		Button,
 		Field,
 		FieldGrid,
@@ -47,6 +48,7 @@
 	let password = $state('');
 	let paths = $state('');
 	let secret = $state<string | null>(null);
+	let openPaths = $state<string[]>([]);
 	let loadedFor: string | null = null;
 
 	$effect.pre(() => {
@@ -60,6 +62,7 @@
 		password = '';
 		paths = (target.protectionBypassPaths ?? []).join('\n');
 		secret = null;
+		openPaths = [];
 		void loadSecret(target.id);
 	});
 
@@ -73,8 +76,9 @@
 			const res = await apiFetch(`/apiv1/projects/${projectId}/ingresses/${id}/protection`);
 			if (!res.ok) return;
 			const data = await res.json().catch(() => null);
-			if (loadedFor === id && typeof data?.protectionBypassSecret === 'string')
-				secret = data.protectionBypassSecret;
+			if (loadedFor !== id) return;
+			if (typeof data?.protectionBypassSecret === 'string') secret = data.protectionBypassSecret;
+			if (Array.isArray(data?.openPaths)) openPaths = data.openPaths;
 		} catch {
 			secret = null;
 		}
@@ -135,6 +139,15 @@
 			<Swap key={mode}>
 				{#if mode !== 'none'}
 					<div class="stack">
+						{#if openPaths.length > 0}
+							<Alert tone="warning">
+								{openPaths.join(', ')}
+								{openPaths.length === 1 ? 'is' : 'are'} still public on this domain. Protect {openPaths.length ===
+								1
+									? 'it'
+									: 'each one'} separately.
+							</Alert>
+						{/if}
 						{#if mode === 'password'}
 							<Field
 								label="Password"

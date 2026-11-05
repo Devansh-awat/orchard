@@ -1740,6 +1740,13 @@ export function deploymentRoutes(r: Router, { store }: MockContext) {
 		}
 		return { ok: true };
 	});
+	r.get('/projects/:pid/ingresses/:iid/protection', () => ({
+		protectionMode: 'none',
+		protectionUsername: null,
+		protectionBypassSecret: null,
+		openPaths: ['/docs']
+	}));
+
 	r.put('/projects/:pid/ingresses/:iid', ({ body, params }) => {
 		const d = store.deploymentsOf(params.pid).find((x) => uid(`ing:${x.id}`) === params.iid);
 		if (d && body?.host) {
