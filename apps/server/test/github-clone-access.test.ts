@@ -10,6 +10,7 @@ const INSTALL = 42n;
 function harness(
   opts: {
     userSees?: string[];
+    maintains?: string[];
     gitmodules?: Record<string, string>;
     installationSees?: string[];
     failMintWhenMoreThanOne?: boolean;
@@ -31,6 +32,8 @@ function harness(
       verified.push([userId, repo]);
       return (opts.userSees ?? []).includes(repo);
     },
+    userMaintainsRepo: async (_userId: string, _owner: string, repo: string) =>
+      (opts.maintains ?? []).includes(repo),
     isRepoAccessibleByInstallation: async (_id: bigint, _owner: string, repo: string) =>
       opts.installationSees ? opts.installationSees.includes(repo) : true,
     getFileContent: async (_token: string, _owner: string, repo: string) => {
@@ -180,9 +183,40 @@ test('an app linked while its repo was public gets no token once nobody vouches 
   assert.deepEqual(minted, []);
 });
 
-test('an unbound app whose linker can see the repo gets its token', async () => {
-  const { access } = harness({ userSees: ['app'] });
+test('an unbound app whose linker maintains the repo gets its token', async () => {
+  const { access } = harness({ maintains: ['app'] });
   assert.equal((await access({ bound: null }))?.installationId, INSTALL);
+});
+
+test('seeing a public repo does not earn the App token', async () => {
+  const { access, minted } = harness({ userSees: ['app'] });
+  assert.equal(await access({ bound: null }), null);
+  assert.deepEqual(minted, []);
+});
+
+test('maintaining a repo means private access or push rights, not just seeing it', async () => {
+  const svc = new GitHubService(
+    {} as any,
+    {} as any,
+    {} as any,
+    {} as any,
+    new SecretCryptoService()
+  );
+  Object.assign(svc, { getValidUserToken: async () => 'user-token' });
+  const realFetch = globalThis.fetch;
+  const answer = (status: number, body: unknown) => {
+    globalThis.fetch = (async () => new Response(JSON.stringify(body), { status })) as any;
+    return svc.userMaintainsRepo('u', 'acme', 'app');
+  };
+  try {
+    assert.equal(await answer(200, { private: true, permissions: { pull: true } }), true);
+    assert.equal(await answer(200, { private: false, permissions: { push: true } }), true);
+    assert.equal(await answer(200, { private: false, permissions: { pull: true } }), false);
+    assert.equal(await answer(200, { private: false }), false);
+    assert.equal(await answer(404, {}), false);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
 });
 
 test('a binding to a different installation is not trusted', async () => {
@@ -191,7 +225,7 @@ test('a binding to a different installation is not trusted', async () => {
 });
 
 test('with no linker and no binding nothing is granted', async () => {
-  const { access } = harness({ userSees: ['app'] });
+  const { access } = harness({ maintains: ['app'] });
   assert.equal(await access({ bound: null, linkedBy: null }), null);
 });
 

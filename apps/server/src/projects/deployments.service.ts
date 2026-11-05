@@ -3343,9 +3343,10 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       }
     }
 
-    const repoInstallation = canAccess
-      ? await this.githubService.findInstallationForRepo(parsed.owner, parsed.repo)
-      : null;
+    const repoInstallation =
+      canAccess && (await this.githubService.userMaintainsRepo(user.id, parsed.owner, parsed.repo))
+        ? await this.githubService.findInstallationForRepo(parsed.owner, parsed.repo)
+        : null;
 
     const repoChanged = repoUrl !== deployment.githubRepo;
     // Auto-deploy webhooks are matched on githubInstallationId, so it must be
@@ -4843,14 +4844,14 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         );
       }
       if (deployment.githubInstallationId !== installation.installationId) {
-        const canAccess = await this.githubService.verifyUserCanAccessRepo(
+        const maintains = await this.githubService.userMaintainsRepo(
           user.id,
           repoInfo.owner,
           repoInfo.repo
         );
-        if (!canAccess) {
+        if (!maintains) {
           throw new ForbiddenException(
-            "You don't have access to this repository on GitHub. Connect your GitHub account or request access."
+            'Auto-deploy needs write access to this repository on GitHub. Connect your GitHub account or request access.'
           );
         }
         relinkedBy = user.id;
@@ -7197,9 +7198,11 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       // installation with a colliding repo full_name.
       // For public repos without the app installed, installationId will be null
       // (auto-deploy won't work, but manual builds can clone without auth).
-      repoInstallation = canAccess
-        ? await this.githubService.findInstallationForRepo(parsed.owner, parsed.repo)
-        : null;
+      repoInstallation =
+        canAccess &&
+        (await this.githubService.userMaintainsRepo(user.id, parsed.owner, parsed.repo))
+          ? await this.githubService.findInstallationForRepo(parsed.owner, parsed.repo)
+          : null;
 
       // Auto-deploy defaults ON when the installation covers the repo, because
       // push webhooks can then actually fire. Honouring a request for it without

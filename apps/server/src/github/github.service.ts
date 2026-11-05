@@ -1674,6 +1674,24 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
     return response.ok;
   }
 
+  async userMaintainsRepo(userId: string, owner: string, repo: string): Promise<boolean> {
+    const token = await this.getValidUserToken(userId);
+    if (!token) return false;
+    const response = await fetch(
+      `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/vnd.github+json',
+          'X-GitHub-Api-Version': '2022-11-28'
+        }
+      }
+    );
+    if (!response.ok) return false;
+    const data = await response.json();
+    return data.private === true || data.permissions?.push === true;
+  }
+
   // Full repo set visible to an installation token, paginated in parallel via
   // the Link header. Used only to (re)seed the mirror table.
   private async listInstallationRepos(installationToken: string): Promise<any[]> {
@@ -2184,7 +2202,7 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
     const { installationId } = installation;
     if (
       boundInstallationId !== installationId &&
-      !(linkedBy && (await this.verifyUserCanAccessRepo(linkedBy, owner, repo)))
+      !(linkedBy && (await this.userMaintainsRepo(linkedBy, owner, repo)))
     ) {
       return null;
     }
