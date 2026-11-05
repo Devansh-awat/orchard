@@ -117,7 +117,12 @@ import {
   summarizeBlueGreen,
   summarizeRollout
 } from '../kubernetes/rollout-strategy';
-import { assertImageOwnedByProject, assertIngressNameFree } from './image-ownership';
+import {
+  assertImageOwnedByProject,
+  assertIngressNameFree,
+  assertRepoNameFree,
+  newImageTag
+} from './image-ownership';
 
 const ROLLBACK_GATE_TIMEOUT_MS = 90_000;
 
@@ -5222,12 +5227,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       imageParts[imageParts.length - 1] || `${deployment.project.namespace}-${deployment.name}`;
     const [imageName] = imageNameWithTag.split(':');
 
-    const timestamp = new Date()
-      .toISOString()
-      .replace(/[-:]/g, '')
-      .replace(/\..+/, '')
-      .slice(0, 14);
-    const uniqueTag = `v${timestamp}`;
+    const uniqueTag = newImageTag();
 
     const service = deployment.services[0];
     const rawPorts =
@@ -7229,6 +7229,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     }
 
     await assertIngressNameFree(this.prisma, environment.namespace, name, project.id);
+    await assertRepoNameFree(this.prisma, project.namespace, name, project.id);
 
     const existingDeployment = await this.prisma.deployment.findFirst({
       where: { environmentId: environment.id, name }
@@ -7240,12 +7241,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
 
     const imageName = `${project.namespace}-${name}`;
 
-    const timestamp = new Date()
-      .toISOString()
-      .replace(/[-:]/g, '')
-      .replace(/\..+/, '')
-      .slice(0, 14);
-    const uniqueTag = `v${timestamp}`;
+    const uniqueTag = newImageTag();
 
     const envEntries = Array.isArray(data.env)
       ? data.env
@@ -7612,6 +7608,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     }
 
     await assertIngressNameFree(this.prisma, environment.namespace, name, project.id);
+    await assertRepoNameFree(this.prisma, project.namespace, name, project.id);
 
     const existingDeployment = await this.prisma.deployment.findFirst({
       where: { environmentId: environment.id, name }
@@ -7808,12 +7805,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     await this.storage.putBuildContext(key, file.buffer);
     const previousKey = deployment.buildContextKey;
 
-    const timestamp = new Date()
-      .toISOString()
-      .replace(/[-:]/g, '')
-      .replace(/\..+/, '')
-      .slice(0, 14);
-    const uniqueTag = `v${timestamp}`;
+    const uniqueTag = newImageTag();
     const imageName = `${deployment.project.namespace}-${deployment.name}`;
     const buildMethodLabel = deployment.buildType === 'railpack' ? 'Railpack' : 'Dockerfile';
 
@@ -9260,12 +9252,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       imageParts[imageParts.length - 1] || `${deployment.project.namespace}-${deployment.name}`;
     const [imageName] = imageNameWithTag.split(':');
 
-    const timestamp = new Date()
-      .toISOString()
-      .replace(/[-:]/g, '')
-      .replace(/\..+/, '')
-      .slice(0, 14);
-    const uniqueTag = `v${timestamp}`;
+    const uniqueTag = newImageTag();
 
     const service = deployment.services[0];
     const rawPorts =

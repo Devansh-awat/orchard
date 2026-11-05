@@ -471,7 +471,7 @@ Both off by default, and both need the runtime on every node first, or pods fail
 | `builderSandbox.enabled` | `false` | Run build Jobs under a VM runtime and render the RuntimeClass. |
 | `builderSandbox.runtimeClassName` / `handler` | `kata` / `kata` | RuntimeClass for build Jobs, as `BUILDER_RUNTIME_CLASS`. |
 | `builderSandbox.depotRuntimeClassName` | `gvisor` | RuntimeClass for super builds (Depot), which never execute repo code. It must exist, and `tenantSandbox` renders it. `""` reuses `runtimeClassName`. |
-| `builderSandbox.sidecarPush` | `false` | Move BuildKit to an init container with no registry credentials and push from a separate container. |
+| `builderSandbox.sidecarPush` | `true` | Move BuildKit to an init container with no registry credentials and push from a separate container. |
 | `builderSandbox.pusherImage` | `quay.io/skopeo/stable:latest` | Image for that container. Must have `skopeo` on `PATH`. |
 | `builderSandbox.tmpfsWorkspace` | `false` | Back workspace and output `emptyDir`s with memory. Counts against the container's memory limit. |
 | `builderSandbox.scratch.mode` | `""` | `tmpfs`, `disk` or `block`. Empty follows the isolation setting. |

@@ -35,6 +35,10 @@ export function sanitizeBuildLogMessage(
     /(password|passwd|pwd|secret|key|token)[\s]*[=:]['"]?([^\s'"]+)/gi,
     '$1=***REDACTED***'
   );
+  sanitized = sanitized.replace(
+    /"(auth|password|identitytoken|registrytoken)"\s*:\s*"[^"]*"/gi,
+    '"$1":"***REDACTED***"'
+  );
   for (const host of registryHosts) {
     const escaped = host.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     sanitized = sanitized.replace(new RegExp(escaped, 'g'), '***registry***');

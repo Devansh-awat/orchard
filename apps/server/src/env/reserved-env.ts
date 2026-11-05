@@ -52,6 +52,17 @@ export const BUILDER_RESERVED_ENV_KEYS = new Set([
   'DOCKER_CONFIG'
 ]);
 
+const BUILDER_ENV_NAME =
+  /^(DOCKER_|BUILDX_|BUILDKIT|BUILDCTL|ROOTLESSKIT|CONTAINERD|RUNC_|LD_|OTEL_|DEPOT_|COMPOSE_|ORCHARD_BUILD_SECRET_)|^(HTTPS?_PROXY|NO_PROXY|ALL_PROXY|FTP_PROXY|SSL_CERT_FILE|SSL_CERT_DIR|PATH|HOME|TMPDIR|XDG_[A-Z_]+|GODEBUG|IFS|ENV|BASH_ENV)$/i;
+
+export function isBuilderEnvName(key: string): boolean {
+  return BUILDER_ENV_NAME.test(key);
+}
+
+function reachesBuild(key: string): boolean {
+  return !BUILDER_RESERVED_ENV_KEYS.has(key) && !isBuilderEnvName(key);
+}
+
 export interface SecretEnvRef {
   name: string;
   valueFrom: { secretKeyRef: { name: string; key: string } };
@@ -62,7 +73,7 @@ export function builderContainerEnv(
   secretName: string
 ): SecretEnvRef[] {
   return Object.keys(envVars)
-    .filter((key) => !BUILDER_RESERVED_ENV_KEYS.has(key))
+    .filter(reachesBuild)
     .map((name) => ({ name, valueFrom: { secretKeyRef: { name: secretName, key: name } } }));
 }
 
@@ -81,7 +92,5 @@ export function builderContainerEnv(
  * its own `ENV PATH` fails on a variable the user only ever meant for runtime.
  */
 export function buildSafeEnv(envVars: Record<string, string>): Record<string, string> {
-  return Object.fromEntries(
-    Object.entries(envVars).filter(([key]) => !BUILDER_RESERVED_ENV_KEYS.has(key))
-  );
+  return Object.fromEntries(Object.entries(envVars).filter(([key]) => reachesBuild(key)));
 }

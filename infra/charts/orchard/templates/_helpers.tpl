@@ -248,16 +248,14 @@ true
             {{- if .Values.tenantSandbox.enabled }}
             - { name: TENANT_RUNTIME_CLASS, value: {{ .Values.tenantSandbox.runtimeClassName | quote }} }
             {{- end }}
+            - { name: BUILDER_SIDECAR_PUSH, value: {{ .Values.builderSandbox.sidecarPush | quote }} }
+            - { name: BUILDER_PUSHER_IMAGE, value: {{ .Values.builderSandbox.pusherImage | quote }} }
             {{- if .Values.builderSandbox.enabled }}
             {{- if .Values.builderSandbox.runtimeClassName }}
             - { name: BUILDER_RUNTIME_CLASS, value: {{ .Values.builderSandbox.runtimeClassName | quote }} }
             {{- end }}
             {{- if .Values.builderSandbox.depotRuntimeClassName }}
             - { name: BUILDER_DEPOT_RUNTIME_CLASS, value: {{ .Values.builderSandbox.depotRuntimeClassName | quote }} }
-            {{- end }}
-            {{- if .Values.builderSandbox.sidecarPush }}
-            - { name: BUILDER_SIDECAR_PUSH, value: "true" }
-            - { name: BUILDER_PUSHER_IMAGE, value: {{ .Values.builderSandbox.pusherImage | quote }} }
             {{- end }}
             {{- if .Values.builderSandbox.tmpfsWorkspace }}
             - { name: BUILDER_WORKSPACE_TMPFS, value: "true" }

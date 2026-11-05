@@ -757,17 +757,14 @@ tenantSandbox:
 # Talos system extension installed on every node, plus KVM available on
 # the host (bare-metal Hetzner nodes have KVM natively).
 #
-# Two independent toggles, both default off so behaviour is unchanged on
-# upgrade:
+# Two independent toggles:
 #   runtimeClassName: if non-empty, build Jobs run with this runtimeClass.
 #                     Set to "kata" once the extension is rolled out.
-#   sidecarPush:      if true, BuildKit moves to an init container with
-#                     NO Harbor push creds mounted, and a small `crane`
-#                     pusher container becomes the main container with
-#                     the creds. A malicious Dockerfile that exfiltrates
-#                     `/root/.docker/config.json` from BuildKit gets
-#                     nothing because the file isn't there during the
-#                     build step.
+#   sidecarPush:      on by default. BuildKit runs as an init container with
+#                     NO registry login mounted, and a small pusher container
+#                     becomes the main container with the login. A Dockerfile
+#                     can't pull another tenant's image, or read the login,
+#                     because it isn't there during the build step.
 builderSandbox:
   enabled: false
   runtimeClassName: kata
@@ -777,7 +774,7 @@ builderSandbox:
   # VM per build is wasted; gVisor is enough. Requires the RuntimeClass to
   # exist (tenantSandbox renders it) — set to "" to reuse runtimeClassName.
   depotRuntimeClassName: gvisor
-  sidecarPush: false
+  sidecarPush: true
   # Image used by the pusher container in sidecarPush mode. Must contain
   # the `skopeo` binary on PATH.
   #

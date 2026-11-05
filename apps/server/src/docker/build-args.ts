@@ -1,3 +1,5 @@
+import { isBuilderEnvName } from '../env/reserved-env';
+
 export function buildArgDeclarations(keys: string[]): string {
   return keys.map((key) => `ARG ${key}`).join('\n');
 }
@@ -81,12 +83,7 @@ export interface LocalBuildArgs {
   env: Record<string, string>;
 }
 
-const BUILDER_ENV_NAME =
-  /^(DOCKER_|BUILDX_|BUILDKIT_|DEPOT_|COMPOSE_|ORCHARD_BUILD_SECRET_)|^(HTTPS?_PROXY|NO_PROXY|ALL_PROXY|FTP_PROXY|SSL_CERT_FILE|SSL_CERT_DIR|PATH|HOME|TMPDIR|XDG_[A-Z_]+)$/i;
-
-export function isBuilderEnvName(key: string): boolean {
-  return BUILDER_ENV_NAME.test(key);
-}
+export { isBuilderEnvName };
 
 export function localBuildArgs(
   envVars: Record<string, string>,

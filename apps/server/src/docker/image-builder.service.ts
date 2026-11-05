@@ -149,6 +149,20 @@ const BUILD_META_VOLUME = 'build-meta';
 const BUILD_META_PATH = '/orchard-build';
 const BUILD_DIR_FILE = `${BUILD_META_PATH}/dir`;
 
+export function dockerfileDirGuard(dockerfilePath?: string): string {
+  const slash = dockerfilePath?.lastIndexOf('/') ?? -1;
+  if (!dockerfilePath || slash <= 0) return '';
+  const dir = `'${dockerfilePath.slice(0, slash).replace(/'/g, `'\\''`)}'`;
+  return `
+if [ -d ${dir} ]; then
+  case "$(cd ${dir} && pwd -P)" in
+    /workspace|/workspace/*) ;;
+    *) echo "ERROR: refusing to build outside /workspace: ${dockerfilePath.replace(/["$`\\]/g, '')}"; exit 1 ;;
+  esac
+fi
+`;
+}
+
 type BuildctlArg = string | { shell: string };
 
 const shellQuote = (arg: string) =>
@@ -309,12 +323,11 @@ export class ImageBuilderService {
   private readonly depotRuntimeClass =
     (process.env.BUILDER_DEPOT_RUNTIME_CLASS || '').trim() || undefined;
 
-  private readonly sidecarPushEnabled = process.env.BUILDER_SIDECAR_PUSH === 'true';
+  private readonly sidecarPushEnabled = process.env.BUILDER_SIDECAR_PUSH !== 'false';
 
   private readonly sourceCpuLimit = (process.env.BUILDER_SOURCE_CPU_LIMIT || '').trim() || '2';
 
-  private readonly pusherImage =
-    process.env.BUILDER_PUSHER_IMAGE || 'gcr.io/go-containerregistry/crane:latest';
+  private readonly pusherImage = process.env.BUILDER_PUSHER_IMAGE || 'quay.io/skopeo/stable:latest';
 
   private readonly workspaceTmpfs = process.env.BUILDER_WORKSPACE_TMPFS === 'true';
 
@@ -1652,7 +1665,10 @@ ls -la /workspace
     }
 
     const dockerfileBuildArgEnv = buildType === 'dockerfile' ? buildArgEnv : [];
-    const buildDirPreamble = buildType === 'railpack' ? ImageBuilderService.BUILD_DIR_PREAMBLE : '';
+    const buildDirPreamble =
+      buildType === 'railpack'
+        ? ImageBuilderService.BUILD_DIR_PREAMBLE
+        : dockerfileDirGuard(dockerfilePath);
     const buildMetaMount: k8s.V1VolumeMount[] =
       buildType === 'railpack'
         ? [{ name: BUILD_META_VOLUME, mountPath: BUILD_META_PATH, readOnly: true }]
@@ -4562,6 +4578,28 @@ fi
     }
   }
 
+  private async deleteRepositoryTags(repoName: string, authHeader: string): Promise<void> {
+    const host = this.harborRegistryPush;
+    if (!host) return;
+    const scheme = this.plainHttpRegistries.has(host) ? 'http' : 'https';
+    const base = `${scheme}://${host}/v2/${this.harborProject}/${repoName}`;
+    const headers = { Authorization: authHeader };
+    const list = await fetch(`${base}/tags/list`, { headers });
+    if (!list.ok) return;
+    const tags: string[] = (await list.json()).tags ?? [];
+    const accept =
+      'application/vnd.oci.image.manifest.v1+json, application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.v2+json, application/vnd.docker.distribution.manifest.list.v2+json';
+    for (const tag of tags) {
+      const head = await fetch(`${base}/manifests/${encodeURIComponent(tag)}`, {
+        method: 'HEAD',
+        headers: { ...headers, Accept: accept }
+      });
+      const digest = head.headers.get('docker-content-digest');
+      if (!head.ok || !digest) continue;
+      await fetch(`${base}/manifests/${digest}`, { method: 'DELETE', headers });
+    }
+  }
+
   /**
    * Delete an entire repository from Harbor.
    * Used when a deployment is fully deleted and all images should be removed.
@@ -4578,16 +4616,14 @@ fi
       const response = await fetch(deleteUrl, {
         method: 'DELETE',
         headers: { Authorization: auth.authHeader }
-      });
+      }).catch(() => null);
 
-      if (response.ok) {
+      if (response?.ok) {
         console.log(
           `[ImageBuilder] Deleted repository from registry: ${this.harborProject}/${repoName}`
         );
-      } else if (response.status === 404) {
-        console.warn(
-          `[ImageBuilder] Repository not found in registry (already deleted?): ${this.harborProject}/${repoName}`
-        );
+      } else if (!response || response.status === 404) {
+        await this.deleteRepositoryTags(repoName, auth.authHeader);
       } else {
         const body = await response.text();
         console.error(

@@ -31,7 +31,15 @@ import { assertIngressNameFree } from '../src/projects/image-ownership';
 import { ApiThrottlerGuard } from '../src/auth/api-throttler.guard';
 import { traefikSelector } from '../src/metrics/ingress/traefik';
 import { haproxySelector } from '../src/metrics/ingress/haproxy';
-import { assertImageOwnedByProject } from '../src/projects/image-ownership';
+import {
+  assertImageOwnedByProject,
+  assertRepoNameFree,
+  newImageTag
+} from '../src/projects/image-ownership';
+import { versionLabel } from '../src/observability/changes';
+import { buildSafeEnv, builderContainerEnv } from '../src/env/reserved-env';
+import { dockerfileDirGuard } from '../src/docker/image-builder.service';
+import { sanitizeBuildLogMessage } from '../src/docker/build-log-redaction';
 import { stripOperationSecrets } from '../src/projects/strip-operation-secrets.interceptor';
 
 test('pod names cannot carry a path', () => {
@@ -124,10 +132,14 @@ test('starting SSO from a Hack Club session links the local user, not the Hack C
   assert.equal(await login.signedInUser('t'), undefined);
 });
 
-function ownership(others: string[] = []) {
+function ownership(others: string[] = [], builtElsewhere: string[] = []) {
   return {
     project: { findMany: async () => others.map((namespace) => ({ namespace })) },
-    environment: { findMany: async () => [] }
+    environment: { findMany: async () => [] },
+    deployment: {
+      findFirst: async ({ where }: any) =>
+        builtElsewhere.some((repo) => where.image.contains === `/${repo}:`) ? { id: 'other' } : null
+    }
   } as any;
 }
 
@@ -154,6 +166,96 @@ test('platform images belong to the project whose namespace built them', async (
       ),
     ForbiddenException
   );
+});
+
+test('a repo another project built stays theirs, whichever namespace is longer', async () => {
+  process.env.DOCKER_REGISTRY_PULL = 'registry.example';
+  const longer = { id: 'p2', namespace: 'acme-web-api' };
+  const image = 'registry.example/orchard/acme-web-api-server:v1';
+  await assert.rejects(
+    () => assertImageOwnedByProject(ownership([], ['acme-web-api-server']), image, longer),
+    ForbiddenException
+  );
+  await assertImageOwnedByProject(ownership(), image, longer);
+});
+
+test('other registry paths to the platform login are refused', async () => {
+  process.env.DOCKER_REGISTRY_PULL = 'registry.example';
+  const mine = { id: 'p1', namespace: 'acme-a' };
+  for (const image of [
+    '127.0.0.1:5000/orchard/acme-a-web:v1',
+    'localhost:5000/orchard/other-web:v1',
+    '[::1]:5000/orchard/other-web:v1',
+    'registry.example/secret-project/app:v1',
+    'registry.example/orchard/acme-a-web/nested:v1'
+  ]) {
+    await assert.rejects(
+      () => assertImageOwnedByProject(ownership(), image, mine),
+      ForbiddenException,
+      image
+    );
+  }
+});
+
+test('new image tags cannot be guessed from the build time', () => {
+  const [a, b] = [newImageTag(), newImageTag()];
+  assert.match(a, /^v\d{8}T\d{5}-[0-9a-f]{12}$/);
+  assert.notEqual(a, b);
+  assert.equal(versionLabel({ tag: a, commitSha: 'abcdef123' }), 'abcdef1');
+});
+
+test('an app name is refused when its image repo splits into another project', async () => {
+  let where: any;
+  const prisma = {
+    deployment: {
+      findFirst: async (args: any) => {
+        where = args.where;
+        return { id: 'taken' };
+      }
+    }
+  } as any;
+  await assert.rejects(() => assertRepoNameFree(prisma, 'acme-web', 'api-server', 'p1'));
+  assert.deepEqual(where.projectId, { not: 'p1' });
+  assert.ok(
+    where.OR.some((c: any) => c.name === 'server' && c.project?.namespace === 'acme-web-api')
+  );
+  assert.ok(where.OR.some((c: any) => c.image?.contains === '/acme-web-api-server:'));
+});
+
+test('env vars that steer the builder never reach a build', () => {
+  for (const key of [
+    'BUILDKITD',
+    'BUILDCTL',
+    'ROOTLESSKIT',
+    'BUILDKIT_HOST',
+    'HTTP_PROXY',
+    'https_proxy',
+    'NO_PROXY',
+    'SSL_CERT_FILE',
+    'LD_AUDIT'
+  ]) {
+    assert.equal(buildSafeEnv({ [key]: 'x' })[key], undefined, key);
+    assert.deepEqual(builderContainerEnv({ [key]: 'x' }, 's'), [], key);
+  }
+  assert.deepEqual(buildSafeEnv({ NODE_ENV: 'production', API_URL: 'x' }), {
+    NODE_ENV: 'production',
+    API_URL: 'x'
+  });
+});
+
+test('a Dockerfile directory must really be inside the workspace', () => {
+  assert.equal(dockerfileDirGuard('Dockerfile'), '');
+  assert.equal(dockerfileDirGuard(undefined), '');
+  const guard = dockerfileDirGuard('docker/app/Dockerfile');
+  assert.match(guard, /cd 'docker\/app' && pwd -P/);
+  assert.match(guard, /\/workspace\|\/workspace\/\*\) ;;/);
+  assert.match(guard, /exit 1/);
+});
+
+test('credentials quoted from a JSON file are masked in build logs', () => {
+  const out = sanitizeBuildLogMessage('{"auths":{"h":{"auth":"c2VjcmV0","password":"hunter2"}}}');
+  assert.ok(!out.includes('c2VjcmV0'));
+  assert.ok(!out.includes('hunter2'));
 });
 
 test('operation records never carry the stored database password', () => {

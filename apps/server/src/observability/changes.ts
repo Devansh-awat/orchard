@@ -86,7 +86,7 @@ export function toneOf(kind: ChangeKind): ChangeTone {
   return TONES[kind];
 }
 
-const TIMESTAMP_TAG = /^v\d{8}(?:T?\d+)?$/;
+const TIMESTAMP_TAG = /^v\d{8}(?:T?\d+)?(?:-[0-9a-f]+)?$/;
 
 export function versionLabel(h: { tag: string | null; commitSha: string | null }): string {
   if (h.tag && !TIMESTAMP_TAG.test(h.tag)) return h.tag;
