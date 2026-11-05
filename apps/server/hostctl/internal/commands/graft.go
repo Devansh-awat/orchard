@@ -31,6 +31,7 @@ const (
 	graftAdminScript       = "dist/scripts/graft-admin.js"
 	graftTrustWarning      = "Grafts run with the same access as Orchard, including your database and your users' data. Only install grafts you trust."
 	graftUnsignedWarning   = "This graft is NOT signed by Orchard or a publisher key you added."
+	graftThirdPartyWarning = "!! NOT MADE BY ORCHARD !!\n  This graft runs inside Orchard with no sandbox. It can read your secrets and database,\n  sign in as any user, and change the apps on this cluster. Orchard can't limit what it\n  does, and nobody at Orchard reviews its updates. Only continue if you would give its\n  publisher full control of this server."
 	graftHistoryFile       = "graft-history.json"
 	graftSnapshotDirectory = "graft-snapshots"
 )
@@ -167,6 +168,7 @@ Flags for add and upgrade:
   --dry-run    verify the graft and list its database changes, change nothing
   --apply      roll Orchard out afterwards (otherwise run orchardctl update)
   --allow-chart  accept a graft's Helm chart without typing its id, for use with --yes
+  --allow-third-party  accept a graft not made by Orchard without typing its id, for use with --yes
 
 ` + graftTrustWarning + `
 
@@ -590,6 +592,9 @@ func graftDescribe(c *cli.Context, ref string) error {
 	case g.Tier == "community":
 		c.Printf("\n  %s\n", communityCopy(g.Publisher, g.Repo))
 	}
+	if tapName != "" || g.Tier == "community" {
+		c.Printf("\n  %s\n", graftThirdPartyWarning)
+	}
 	c.Printf("\n")
 	sort.Slice(g.Versions, func(i, j int) bool { return versionLess(g.Versions[j].Version, g.Versions[i].Version) })
 	for _, v := range g.Versions {
@@ -822,6 +827,9 @@ func printCheck(c *cli.Context, values *cli.Values, spec graftSpec, report graft
 	}
 	c.Printf("\n  %s\n", graftTrustWarning)
 	c.Printf("  %s\n", signatureCopy(values, spec, report.Signature))
+	if thirdPartyGraft(spec, report.Signature) {
+		c.Printf("\n  %s\n", graftThirdPartyWarning)
+	}
 	if len(m.Capabilities) > 0 {
 		c.Printf("\n  asks for:        %s\n", strings.Join(m.Capabilities, ", "))
 	}
@@ -1089,7 +1097,10 @@ func installSpec(c *cli.Context, values *cli.Values, spec graftSpec, archive []b
 			return errors.New("cancelled")
 		}
 	}
-	if !flags["yes"] && !confirm(c, fmt.Sprintf("%s %s?", map[bool]string{true: "Upgrade", false: "Install"}[prev != nil], report.Manifest.Name)) {
+	if err := confirmThirdParty(c, flags, spec, report.Signature, report.Manifest.ID); err != nil {
+		return err
+	}
+	if !flags["yes"] && !thirdPartyGraft(spec, report.Signature) && !confirm(c, fmt.Sprintf("%s %s?", map[bool]string{true: "Upgrade", false: "Install"}[prev != nil], report.Manifest.Name)) {
 		return errors.New("cancelled")
 	}
 	if len(report.Migrations.Pending) > 0 {

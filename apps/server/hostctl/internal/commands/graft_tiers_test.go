@@ -288,3 +288,82 @@ func TestGraftTrustAcceptsNewLevels(t *testing.T) {
 		t.Fatalf("the default should read as listed:\n%s", out)
 	}
 }
+
+func TestThirdPartyGraftsNeedTheirIDTyped(t *testing.T) {
+	str := func(s string) *string { return &s }
+	official := &graftSignature{Tier: str("official")}
+	community := &graftSignature{Tier: str("community"), Publisher: "acme"}
+	publisher := &graftSignature{Tier: str("publisher")}
+	tap := graftSpec{ID: "a", Tap: "acme"}
+	plain := graftSpec{ID: "a"}
+
+	if thirdPartyGraft(plain, official) {
+		t.Error("an official graft counted as third party")
+	}
+	if thirdPartyGraft(tap, official) {
+		t.Error("an official graft from a tap counted as third party")
+	}
+	for name, got := range map[string]bool{
+		"community": thirdPartyGraft(plain, community),
+		"publisher": thirdPartyGraft(plain, publisher),
+		"tap":       thirdPartyGraft(tap, publisher),
+		"unsigned":  thirdPartyGraft(plain, nil),
+	} {
+		if !got {
+			t.Errorf("%s graft got no warning", name)
+		}
+	}
+
+	out, err := os.CreateTemp(t.TempDir(), "out")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer out.Close()
+	ctx := &cli.Context{Stdout: out, Stderr: out}
+	answer := func(text string) {
+		t.Helper()
+		f, err := os.CreateTemp(t.TempDir(), "in")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := f.WriteString(text); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := f.Seek(0, 0); err != nil {
+			t.Fatal(err)
+		}
+		previous := os.Stdin
+		os.Stdin = f
+		t.Cleanup(func() { os.Stdin = previous; f.Close() })
+	}
+
+	if err := confirmThirdParty(ctx, map[string]bool{}, plain, official, "a"); err != nil {
+		t.Errorf("official graft was stopped: %v", err)
+	}
+	err = confirmThirdParty(ctx, map[string]bool{"yes": true}, plain, community, "a")
+	if err == nil || !strings.Contains(err.Error(), "--allow-third-party") {
+		t.Errorf("--yes alone let a community graft through: %v", err)
+	}
+	if err := confirmThirdParty(ctx, map[string]bool{"yes": true, "allow-third-party": true}, plain, community, "a"); err != nil {
+		t.Errorf("--allow-third-party was refused: %v", err)
+	}
+	answer("y\n")
+	if err := confirmThirdParty(ctx, map[string]bool{}, plain, community, "a"); err == nil {
+		t.Error("answering y let a community graft through")
+	}
+	answer("a\n")
+	if err := confirmThirdParty(ctx, map[string]bool{}, plain, community, "a"); err != nil {
+		t.Errorf("typing the id was refused: %v", err)
+	}
+}
+
+func TestThirdPartyWarningIsScaryAndClean(t *testing.T) {
+	for _, want := range []string{"NOT MADE BY ORCHARD", "no sandbox", "secrets", "any user", "full control"} {
+		if !strings.Contains(graftThirdPartyWarning, want) {
+			t.Errorf("warning lost %q", want)
+		}
+	}
+	if strings.Contains(graftThirdPartyWarning, "\u2014") {
+		t.Error("warning has an em dash")
+	}
+}

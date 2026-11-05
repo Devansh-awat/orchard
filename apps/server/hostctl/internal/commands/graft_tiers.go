@@ -341,7 +341,7 @@ func tapTrustCopy(name, url string) string {
 	return fmt.Sprintf("From the %s tap at %s. Orchard hasn't checked anything in this tap. Install it only if you trust %s.", name, url, name)
 }
 
-func signatureCopy(values *cli.Values, spec graftSpec, sig *graftSignature) string {
+func graftTier(spec graftSpec, sig *graftSignature) string {
 	tier := ""
 	if sig != nil && sig.Tier != nil {
 		tier = *sig.Tier
@@ -351,6 +351,28 @@ func signatureCopy(values *cli.Values, spec graftSpec, sig *graftSignature) stri
 	if spec.Tap != "" && tier != "official" {
 		tier = "tap"
 	}
+	return tier
+}
+
+func thirdPartyGraft(spec graftSpec, sig *graftSignature) bool {
+	return graftTier(spec, sig) != "official"
+}
+
+func confirmThirdParty(c *cli.Context, flags map[string]bool, spec graftSpec, sig *graftSignature, id string) error {
+	if !thirdPartyGraft(spec, sig) || flags["allow-third-party"] {
+		return nil
+	}
+	if flags["yes"] {
+		return errors.New("this graft wasn't made by Orchard and can take over this server; add --allow-third-party to accept that with --yes")
+	}
+	if !confirmTyped(c, "This graft wasn't made by Orchard and can take over this server.", id) {
+		return errors.New("cancelled")
+	}
+	return nil
+}
+
+func signatureCopy(values *cli.Values, spec graftSpec, sig *graftSignature) string {
+	tier := graftTier(spec, sig)
 	switch tier {
 	case "official":
 		return "Signed by Orchard."
