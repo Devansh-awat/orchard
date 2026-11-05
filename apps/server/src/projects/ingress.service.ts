@@ -16,7 +16,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { KubernetesService } from '../kubernetes/kubernetes.service';
 import { K8sNetworkService } from '../kubernetes/k8s-network.service';
 import { UsersService } from '../users/users.service';
-import { AuthorizationService, ProjectAccess } from '../auth/authorization.service';
+import { AuthorizationService } from '../auth/authorization.service';
 import { normalizeBypassPath } from '../auth/protection.service';
 import { AuditService } from '../audit/audit.service';
 import { ProjectAccessService } from './project-access.service';
