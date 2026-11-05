@@ -47,6 +47,20 @@ The policy blocks the following:
 
 Orchard restores this policy if someone changes it with `kubectl`.
 
+### Images from other projects
+
+Every node can pull from Orchard's registry, so a pod could otherwise run any image it can name. A cluster rule stops this: a pod in a project's namespace can only use that project's images from Orchard's registry. Images from other registries are not affected.
+
+The `REGISTRY_IMAGE_POLICY` variable sets what the rule does:
+
+| Value     | Effect                                                               |
+| --------- | -------------------------------------------------------------------- |
+| `enforce` | Kubernetes refuses the pod. The installer sets this value.           |
+| `warn`    | The pod runs, and Kubernetes reports a warning. This is the default. |
+| `off`     | Orchard removes the rule.                                            |
+
+Orchard labels namespaces and restores the rule every five minutes.
+
 ### Host firewalls
 
 A `ufw` deny rule does not close ports `80` and `443` on a machine that runs the installer. Traffic to these ports is forwarded to pods and does not pass through the rules that `ufw` applies to the machine. The installer leaves your deny rule in place and warns you. To close a port, use a firewall in front of the machine.
