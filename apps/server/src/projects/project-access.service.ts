@@ -11,6 +11,14 @@ import { MembershipCacheService } from '../auth/membership-cache.service';
 import { requestAuthStorage } from '../auth/request-context';
 import { hostOf } from '../instance-network/hostnames';
 import { optionalDomain } from '../env/platform-domains';
+import { InstanceSettingsService } from '../instance-settings/instance-settings.service';
+import { platformWildcardDomains } from './projects.utils';
+import {
+  domainProofRecordName,
+  domainProofToken,
+  lookupDomainProof,
+  parentDomains
+} from './domain-proof';
 
 /**
  * Centralized RBAC/access guards for projects, deployments, databases,
@@ -23,7 +31,8 @@ export class ProjectAccessService {
     private readonly prisma: PrismaService,
     private readonly usersService: UsersService,
     private readonly authz: AuthorizationService,
-    private readonly membershipCache: MembershipCacheService
+    private readonly membershipCache: MembershipCacheService,
+    private readonly instanceSettings: InstanceSettingsService
   ) {}
 
   /**
@@ -106,6 +115,59 @@ export class ProjectAccessService {
     if (conflict || vanity || statusPage) {
       throw new ConflictException(`Hostname ${rawHost} is unavailable. Choose a different domain.`);
     }
+
+    const proof = await this.domainProofStatus(host, projectId);
+    if (proof && !proof.found) {
+      throw new BadRequestException({
+        error: 'domain_proof_required',
+        message: `Prove you own ${host}: add a TXT record named ${proof.fullName} with the value ${proof.record.value}, then try again.`,
+        records: [proof.record]
+      });
+    }
+  }
+
+  protected lookupProof = lookupDomainProof;
+
+  async domainProofStatus(
+    rawHost: string,
+    projectId: string
+  ): Promise<{
+    found: boolean;
+    fullName: string;
+    record: { type: 'TXT'; name: string; value: string };
+  } | null> {
+    const host = rawHost.trim().toLowerCase().replace(/\.$/, '');
+    if (!(await this.instanceSettings.isCustomDomainVerificationRequired())) return null;
+    if (platformWildcardDomains().some((wildcard) => host.endsWith(wildcard.suffix))) return null;
+    const [held, project] = await Promise.all([
+      this.prisma.ingress.findFirst({
+        where: { host: { equals: host, mode: 'insensitive' }, projectId },
+        select: { id: true }
+      }),
+      this.prisma.project.findUnique({
+        where: { id: projectId },
+        select: { organizationId: true }
+      })
+    ]);
+    if (held) return null;
+    if (project) {
+      const verified = await this.prisma.orgDomain.findFirst({
+        where: {
+          organizationId: project.organizationId,
+          domain: { in: parentDomains(host) },
+          verifiedAt: { not: null }
+        },
+        select: { id: true }
+      });
+      if (verified) return null;
+    }
+    const value = domainProofToken(projectId, host);
+    const found = (await this.lookupProof(host)).includes(value);
+    return {
+      found,
+      fullName: `_orchard-challenge.${host}`,
+      record: { type: 'TXT', name: domainProofRecordName(host), value }
+    };
   }
 
   /**

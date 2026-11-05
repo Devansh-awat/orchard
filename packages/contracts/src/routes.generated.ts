@@ -18,6 +18,8 @@ export const routes: GeneratedRoute[] = [
   { method: 'PUT', path: '/admin/instance-config/:id', auth: 'superadmin' },
   { method: 'POST', path: '/admin/instance-config/email/test', auth: 'superadmin' },
   { method: 'POST', path: '/admin/instance-config/storage/test', auth: 'superadmin' },
+  { method: 'GET', path: '/admin/instance-settings/custom-domain-verification', auth: 'superadmin' },
+  { method: 'PATCH', path: '/admin/instance-settings/custom-domain-verification', auth: 'superadmin' },
   { method: 'GET', path: '/admin/instance-settings/databases', auth: 'superadmin' },
   { method: 'PATCH', path: '/admin/instance-settings/databases', auth: 'superadmin' },
   { method: 'GET', path: '/admin/instance-settings/image-scanning', auth: 'superadmin' },

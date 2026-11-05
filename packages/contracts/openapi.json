@@ -623,6 +623,79 @@
         ]
       }
     },
+    "/admin/instance-settings/custom-domain-verification": {
+      "get": {
+        "description": "Auth: superadmin",
+        "operationId": "admin_instance_settings_custom_domain_verification_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {},
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "GET /admin/instance-settings/custom-domain-verification",
+        "tags": [
+          "admin"
+        ]
+      },
+      "patch": {
+        "description": "Auth: superadmin",
+        "operationId": "admin_instance_settings_custom_domain_verification_update",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": {},
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {},
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "PATCH /admin/instance-settings/custom-domain-verification",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
     "/admin/instance-settings/databases": {
       "get": {
         "description": "Auth: superadmin",

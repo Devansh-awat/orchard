@@ -96,7 +96,7 @@ function isWildcardTlsSecret(name: string | null): boolean {
 import { ingressLimitReached, ingressLimits } from './ingress-limits';
 import { LeaderElectionService } from '../events/leader-election.service';
 
-export type DnsRecordHint = { type: 'CNAME' | 'A'; name: string; value: string };
+export type DnsRecordHint = { type: 'CNAME' | 'A' | 'TXT'; name: string; value: string };
 
 export const MIN_PROTECTION_PASSWORD_LENGTH = 8;
 
@@ -247,6 +247,20 @@ export class IngressService implements OnModuleInit {
   }
 
   async validateIngressDns(
+    domain: string,
+    projectId: string
+  ): Promise<{ valid: boolean; message: string; records: DnsRecordHint[] }> {
+    const result = await this.checkIngressDns(domain);
+    const proof = await this.access.domainProofStatus(domain, projectId);
+    if (!proof) return result;
+    return {
+      valid: result.valid && proof.found,
+      message: proof.found ? result.message : `Add the TXT record to prove you own this domain.`,
+      records: [...result.records, proof.record]
+    };
+  }
+
+  private async checkIngressDns(
     domain: string
   ): Promise<{ valid: boolean; message: string; records: DnsRecordHint[] }> {
     const expectedCname = this.instanceConfig.value(INGRESS, 'cname') || '';

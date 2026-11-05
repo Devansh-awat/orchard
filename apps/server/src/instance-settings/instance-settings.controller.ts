@@ -33,6 +33,17 @@ export class InstanceSettingsController {
     return this.settings.getMcpState();
   }
 
+  @Get('custom-domain-verification')
+  async getCustomDomainVerification() {
+    return this.settings.getCustomDomainVerificationState();
+  }
+
+  @Patch('custom-domain-verification')
+  async setCustomDomainVerification(@Body() body: { enabled?: boolean }) {
+    await this.settings.setCustomDomainVerification(Boolean(body?.enabled));
+    return this.settings.getCustomDomainVerificationState();
+  }
+
   @Get('databases')
   async getDatabaseToggles() {
     return this.settings.databaseTogglesView();

@@ -8,6 +8,8 @@ const USERSPACE_NODE_SCHEDULING_ENV = 'USERSPACE_NODE_SCHEDULING';
 export const MCP_ENABLED_KEY = 'mcp_enabled';
 const MCP_ENABLED_ENV = 'MCP_ENABLED';
 
+export const CUSTOM_DOMAIN_VERIFICATION_KEY = 'custom_domain_verification';
+export const CUSTOM_DOMAIN_VERIFICATION_ENV = 'CUSTOM_DOMAIN_VERIFICATION';
 export const SSO_ENFORCED_KEY = 'sso_enforced';
 export const SSO_ENFORCED_ENV = 'SSO_ENFORCED';
 
@@ -214,6 +216,19 @@ export class InstanceSettingsService implements OnModuleInit {
   async setMcp(value: boolean): Promise<void> {
     this.assertUnlocked(MCP_ENABLED_ENV);
     await this.setBool(MCP_ENABLED_KEY, value);
+  }
+
+  isCustomDomainVerificationRequired(): Promise<boolean> {
+    return this.resolveBool(CUSTOM_DOMAIN_VERIFICATION_KEY, CUSTOM_DOMAIN_VERIFICATION_ENV);
+  }
+
+  getCustomDomainVerificationState(): Promise<ToggleState> {
+    return this.toggleState(CUSTOM_DOMAIN_VERIFICATION_KEY, CUSTOM_DOMAIN_VERIFICATION_ENV);
+  }
+
+  async setCustomDomainVerification(value: boolean): Promise<void> {
+    this.assertUnlocked(CUSTOM_DOMAIN_VERIFICATION_ENV);
+    await this.setBool(CUSTOM_DOMAIN_VERIFICATION_KEY, value);
   }
 
   isSsoEnforced(): Promise<boolean> {

@@ -277,7 +277,7 @@ export class ProjectsController {
       lastName: req.user.lastName,
       imageUrl: req.user.imageUrl
     });
-    return this.ingress.validateIngressDns(body.domain);
+    return this.ingress.validateIngressDns(body.domain, body.projectId);
   }
 
   @Post()

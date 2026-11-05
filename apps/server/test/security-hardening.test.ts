@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ConflictException, ForbiddenException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException } from '@nestjs/common';
 import { IngressService } from '../src/projects/ingress.service';
 import { ProtectionService, pathIsAmbiguous } from '../src/auth/protection.service';
 import { parseRepoUrl } from '../src/docker/repo-url';
@@ -37,7 +37,12 @@ import {
   newImageTag,
   splitRegistryCleanup
 } from '../src/projects/image-ownership';
-import { databaseClusterName, truncateKeepingSuffix } from '../src/projects/projects.utils';
+import {
+  databaseClusterName,
+  platformWildcardDomains,
+  truncateKeepingSuffix
+} from '../src/projects/projects.utils';
+import { domainProofRecordName, domainProofToken } from '../src/projects/domain-proof';
 import { versionLabel } from '../src/observability/changes';
 import { ProjectAccessService } from '../src/projects/project-access.service';
 import { DatabaseTrashService } from '../src/projects/database-trash.service';
@@ -265,6 +270,7 @@ test('credentials quoted from a JSON file are masked in build logs', () => {
 function hostAccess(found: { ingress?: boolean; org?: boolean; page?: boolean }) {
   const calls: any[] = [];
   const service = Object.create(ProjectAccessService.prototype) as any;
+  service.instanceSettings = { isCustomDomainVerificationRequired: async () => false };
   service.prisma = {
     ingress: {
       findFirst: async (args: any) => {
@@ -297,6 +303,92 @@ test('hostname checks ignore case', async () => {
   const { service, calls } = hostAccess({});
   await service.assertHostnameAvailable('Foo.Example.COM', 'p');
   assert.deepEqual(calls[0].host, { equals: 'foo.example.com', mode: 'insensitive' });
+});
+
+function proofAccess(opts: { on?: boolean; txt?: string[]; held?: boolean; orgDomain?: boolean }) {
+  const service = Object.create(ProjectAccessService.prototype) as any;
+  service.instanceSettings = {
+    isCustomDomainVerificationRequired: async () => opts.on ?? true
+  };
+  service.lookupProof = async () => opts.txt ?? [];
+  let orgWhere: any;
+  service.prisma = {
+    ingress: {
+      findFirst: async ({ where }: any) =>
+        where.projectId === 'p' && opts.held ? { id: 'i' } : null
+    },
+    organization: { findUnique: async () => null },
+    statusPage: { findUnique: async () => null },
+    project: { findUnique: async () => ({ organizationId: 'org' }) },
+    orgDomain: {
+      findFirst: async ({ where }: any) => {
+        orgWhere = where;
+        return opts.orgDomain ? { id: 'd' } : null;
+      }
+    }
+  };
+  return { service, orgWhere: () => orgWhere };
+}
+
+test('with the setting off, any free domain can be added without proof', async () => {
+  await proofAccess({ on: false }).service.assertHostnameAvailable('app.example.com', 'p');
+});
+
+test('with the setting on, a domain needs the TXT record for this project', async () => {
+  const previous = process.env.JWT_SECRET;
+  process.env.JWT_SECRET = 'test-secret';
+  try {
+    const { service } = proofAccess({});
+    const err: any = await service
+      .assertHostnameAvailable('App.Example.com', 'p')
+      .catch((e: any) => e);
+    assert.ok(err instanceof BadRequestException);
+    const body = err.getResponse();
+    assert.equal(body.error, 'domain_proof_required');
+    assert.equal(body.records[0].type, 'TXT');
+    assert.equal(body.records[0].name, '_orchard-challenge.app');
+    assert.match(body.message, /_orchard-challenge\.app\.example\.com/);
+    const value = domainProofToken('p', 'app.example.com');
+    assert.equal(body.records[0].value, value);
+    await proofAccess({ txt: ['unrelated', value] }).service.assertHostnameAvailable(
+      'app.example.com',
+      'p'
+    );
+    await assert.rejects(() =>
+      proofAccess({
+        txt: [domainProofToken('other', 'app.example.com')]
+      }).service.assertHostnameAvailable('app.example.com', 'p')
+    );
+  } finally {
+    process.env.JWT_SECRET = previous;
+  }
+});
+
+test('proof is skipped for hosts already held, verified org domains and generated URLs', async () => {
+  await proofAccess({ held: true }).service.assertHostnameAvailable('app.example.com', 'p');
+  const verified = proofAccess({ orgDomain: true });
+  await verified.service.assertHostnameAvailable('a.b.example.com', 'p');
+  assert.deepEqual(verified.orgWhere().domain.in, [
+    'a.b.example.com',
+    'b.example.com',
+    'example.com'
+  ]);
+  const previous = process.env.PUBLIC_DEPLOYMENT_BASE_DOMAIN;
+  process.env.PUBLIC_DEPLOYMENT_BASE_DOMAIN = 'apps.orchard.example';
+  try {
+    const hit = platformWildcardDomains()[0]?.suffix;
+    if (hit) {
+      await proofAccess({}).service.assertHostnameAvailable(`web-1${hit}`, 'p');
+    }
+  } finally {
+    if (previous === undefined) delete process.env.PUBLIC_DEPLOYMENT_BASE_DOMAIN;
+    else process.env.PUBLIC_DEPLOYMENT_BASE_DOMAIN = previous;
+  }
+});
+
+test('the TXT record name is relative to the zone', () => {
+  assert.equal(domainProofRecordName('example.com'), '_orchard-challenge');
+  assert.equal(domainProofRecordName('a.b.example.com'), '_orchard-challenge.a.b');
 });
 
 function trashHarness(live: boolean) {
