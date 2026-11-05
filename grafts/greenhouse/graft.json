@@ -1,7 +1,7 @@
 {
   "id": "greenhouse",
   "name": "Greenhouse",
-  "version": "1.5.2",
+  "version": "1.5.3",
   "publisher": "orchard",
   "description": "Cloud dev sandboxes with coding agents, live editing, previews and share links.",
   "homepage": "https://docs.orchard.my/greenhouse/",

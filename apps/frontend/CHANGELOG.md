@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.80.0](https://github.com/hackclub/orchard/compare/frontend/v1.79.0...frontend/v1.80.0) (2026-11-05)
+
+
+### Features
+
+* **frontend:** show which org a token works in ([0bb307c](https://github.com/hackclub/orchard/commit/0bb307cf610348653d872291e6f4570f5b2b1d4e))
+
+
+### Bug Fixes
+
+* **frontend:** catch timed out view transitions ([0d5e08d](https://github.com/hackclub/orchard/commit/0d5e08ddd43e7bc69c03efec50cd19938aecd9a5))
+* **frontend:** keep secrets out of session replay ([693f6b3](https://github.com/hackclub/orchard/commit/693f6b3e49643b260b47c0909eeb67f9627d92c7))
+* **frontend:** offer every sign-in on protected apps ([f8ca4a0](https://github.com/hackclub/orchard/commit/f8ca4a00768e69969e1f5a364675b5d094bed7e8))
+* **frontend:** serve only raster images from proxy ([70cef13](https://github.com/hackclub/orchard/commit/70cef1349b1449ed3560b2bc7a7c3923580c107e))
+* **server:** limit protection return urls ([97f90ce](https://github.com/hackclub/orchard/commit/97f90ce43baf7af1ae61713ee4981cfeb8e9ff45))
+
 ## [1.79.0](https://github.com/hackclub/orchard/compare/frontend/v1.78.0...frontend/v1.79.0) (2026-11-02)
 
 

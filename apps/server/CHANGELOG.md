@@ -1,5 +1,44 @@
 # Changelog
 
+## [2.89.0](https://github.com/hackclub/orchard/compare/server/v2.88.0...server/v2.89.0) (2026-11-05)
+
+
+### Features
+
+* **server:** check release signatures on hosts ([c66adca](https://github.com/hackclub/orchard/commit/c66adcae35d006b04a9eb81bbd9fadf497298ee5))
+* **server:** refuse other projects' images at admission ([8e9bc65](https://github.com/hackclub/orchard/commit/8e9bc6567140f05914c469d47f9ea02553807854))
+* **server:** require org sso for tokens and mcp ([6fdbde2](https://github.com/hackclub/orchard/commit/6fdbde2e66d49caeb606307fb5109008bba3f3b2))
+* **server:** sign host commands in release images ([68e3ba7](https://github.com/hackclub/orchard/commit/68e3ba75a1495e6db638addebb62ee764a6f8d2c))
+* **server:** update bundled images from upstream ([22ee3e2](https://github.com/hackclub/orchard/commit/22ee3e286adc90708e2793f2785b0061cec2fdf7))
+
+
+### Bug Fixes
+
+* **frontend:** serve only raster images from proxy ([70cef13](https://github.com/hackclub/orchard/commit/70cef1349b1449ed3560b2bc7a7c3923580c107e))
+* **grafts:** disclose charts and database access ([ea39796](https://github.com/hackclub/orchard/commit/ea397963d18ed2562c1f733acffdd8d6592c5283))
+* **server:** bind sso callbacks to the browser ([52da90b](https://github.com/hackclub/orchard/commit/52da90b1c00279d6b7c56d11c28163d5cd083c3c))
+* **server:** block tenant traffic to the platform ([45e7291](https://github.com/hackclub/orchard/commit/45e7291afce9053f63dc0ed17784ad2d13969a03))
+* **server:** cap submodule access checks ([6620d90](https://github.com/hackclub/orchard/commit/6620d90fc90f23814eb2b6acdad90fa1500087b3))
+* **server:** end log streams when access is lost ([c37bb09](https://github.com/hackclub/orchard/commit/c37bb09e2e570e908e9b64bf77a2006f84a57b04))
+* **server:** keep access logs per tenant ([ffc7024](https://github.com/hackclub/orchard/commit/ffc7024c056c9549c18f7a903eafe187c44b5d05))
+* **server:** keep clone tokens out of builds ([24567df](https://github.com/hackclub/orchard/commit/24567df96f1c146c8428f2352ab5b0adee1c501b))
+* **server:** keep env values out of mcp replies ([8a9e1cc](https://github.com/hackclub/orchard/commit/8a9e1ccfe04ee283058ab40bcb587c9f49661894))
+* **server:** keep registry login out of tenant builds ([8bf4e19](https://github.com/hackclub/orchard/commit/8bf4e1937914926a6ea56fd29053320096ebc1c9))
+* **server:** keep tenant names independent ([97d2e59](https://github.com/hackclub/orchard/commit/97d2e59b202c45bf787579e80f616ab15d146f57))
+* **server:** keep token org limit in terminals ([f8991a9](https://github.com/hackclub/orchard/commit/f8991a903f905cf860d288710b212fdaaa382674))
+* **server:** let sso sessions use auth routes ([d58ab9e](https://github.com/hackclub/orchard/commit/d58ab9e75d863b3f1e3ea1efde4b6f8f2de1f579))
+* **server:** limit clone tokens to allowed repos ([ac8060a](https://github.com/hackclub/orchard/commit/ac8060a4930d559bb280e226306f0f0093ee30eb))
+* **server:** limit protection return urls ([97f90ce](https://github.com/hackclub/orchard/commit/97f90ce43baf7af1ae61713ee4981cfeb8e9ff45))
+* **server:** limit what api tokens can reach ([50217f3](https://github.com/hackclub/orchard/commit/50217f3c41511a476833a9decffb3696792e3772))
+* **server:** move to zod 4 ([5fe7fe4](https://github.com/hackclub/orchard/commit/5fe7fe4c11c69f909e65ae2d920dab26e2678c0a))
+* **server:** pin search path for superuser sql ([fb9ec53](https://github.com/hackclub/orchard/commit/fb9ec533ca8cb1328d3b7913d3c895561bf9ca0e))
+* **server:** refuse private database and backup hosts ([5c95aca](https://github.com/hackclub/orchard/commit/5c95aca369cc02f11931683dbdbbf94644817331))
+* **server:** require write access to bind github app ([92c61f3](https://github.com/hackclub/orchard/commit/92c61f3e7ec15e97eb23cb8f3a53599699c8b581))
+* **server:** stop name collisions across tenants ([1761cdd](https://github.com/hackclub/orchard/commit/1761cddf2edd7c981c1ead2110e25643653e7eff))
+* **server:** stop returning github install tokens ([309c5ba](https://github.com/hackclub/orchard/commit/309c5ba5db772cc835b3465a6b9172e5dbfe1a03))
+* **server:** throttle unknown tokens by ip ([66008d6](https://github.com/hackclub/orchard/commit/66008d673c823f97a28f5cb58b298644a3b2d186))
+* **server:** tighten moves, hostnames and backups ([47b4ca2](https://github.com/hackclub/orchard/commit/47b4ca2ac45ec13304d18d7744b37bd8265df8d5))
+
 ## [2.88.0](https://github.com/hackclub/orchard/compare/server/v2.87.0...server/v2.88.0) (2026-11-02)
 
 

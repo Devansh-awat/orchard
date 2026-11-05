@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.7.1](https://github.com/hackclub/orchard/compare/r2-proxy/v0.7.0...r2-proxy/v0.7.1) (2026-11-05)
+
+
+### Bug Fixes
+
+* **r2-proxy:** refuse ambiguous requests ([f275e73](https://github.com/hackclub/orchard/commit/f275e73cb6b6ebaaa8f62293020b3eb5bde92916))
+* **server:** move to zod 4 ([5fe7fe4](https://github.com/hackclub/orchard/commit/5fe7fe4c11c69f909e65ae2d920dab26e2678c0a))
+
 ## [0.7.0](https://github.com/hackclub/orchard/compare/r2-proxy/v0.6.3...r2-proxy/v0.7.0) (2026-11-01)
 
 

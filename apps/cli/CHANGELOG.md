@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.37.1](https://github.com/hackclub/orchard/compare/cli/v0.37.0...cli/v0.37.1) (2026-11-05)
+
+
+### Bug Fixes
+
+* **cli:** explain org sso refusals ([30fd077](https://github.com/hackclub/orchard/commit/30fd077698b14ee18a7e5ceaad3c9328cab23297))
+* **cli:** keep secrets out of orchard up ([db762ee](https://github.com/hackclub/orchard/commit/db762eec15605c10abb88b8730098be31a5eead8))
+* **server:** move to zod 4 ([5fe7fe4](https://github.com/hackclub/orchard/commit/5fe7fe4c11c69f909e65ae2d920dab26e2678c0a))
+
 ## [0.37.0](https://github.com/hackclub/orchard/compare/cli/v0.36.0...cli/v0.37.0) (2026-11-02)
 
 

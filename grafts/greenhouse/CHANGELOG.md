@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.5.3](https://github.com/hackclub/orchard/compare/greenhouse/v1.5.2...greenhouse/v1.5.3) (2026-11-05)
+
+
+### Bug Fixes
+
+* **grafts:** apply org sso to sandbox tokens ([b227663](https://github.com/hackclub/orchard/commit/b227663679fa3d8d71f5e1b1d791a6ca103609db))
+* **grafts:** end guest access when guests leave ([e2dd0ad](https://github.com/hackclub/orchard/commit/e2dd0ad94607d9faf8e823b9510567e5420869d6))
+* **grafts:** use zod 4 in greenhouse ([9dfd33f](https://github.com/hackclub/orchard/commit/9dfd33fd975ca78b26c0f2777c7b5653584aa58b))
+
 ## [1.5.2](https://github.com/hackclub/orchard/compare/greenhouse/v1.5.1...greenhouse/v1.5.2) (2026-10-23)
 
 

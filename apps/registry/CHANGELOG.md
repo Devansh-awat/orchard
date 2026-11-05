@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.7.2](https://github.com/hackclub/orchard/compare/registry/v0.7.1...registry/v0.7.2) (2026-11-05)
+
+
+### Bug Fixes
+
+* **grafts:** disclose charts and database access ([ea39796](https://github.com/hackclub/orchard/commit/ea397963d18ed2562c1f733acffdd8d6592c5283))
+* **server:** move to zod 4 ([5fe7fe4](https://github.com/hackclub/orchard/commit/5fe7fe4c11c69f909e65ae2d920dab26e2678c0a))
+
 ## [0.7.1](https://github.com/hackclub/orchard/compare/registry/v0.7.0...registry/v0.7.1) (2026-10-21)
 
 

@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.4](https://github.com/hackclub/orchard/compare/fc-builder/v1.0.3...fc-builder/v1.0.4) (2026-11-05)
+
+
+### Bug Fixes
+
+* **fc-builder:** widen long cache key hash ([c16c2d5](https://github.com/hackclub/orchard/commit/c16c2d5079d22c8e08f26ed526d411af40c580df))
+* **server:** move to zod 4 ([5fe7fe4](https://github.com/hackclub/orchard/commit/5fe7fe4c11c69f909e65ae2d920dab26e2678c0a))
+
 ## [1.0.3](https://github.com/hackclub/orchard/compare/fc-builder/v1.0.2...fc-builder/v1.0.3) (2026-10-21)
 
 
