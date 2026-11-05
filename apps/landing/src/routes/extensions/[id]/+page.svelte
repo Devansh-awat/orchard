@@ -131,8 +131,11 @@
 			</div>
 			{#if community}
 				<p class="title-in note mt-6" style:animation-delay="0.28s">
-					Published by {data.publisher}{#if data.repo}&nbsp;(github.com/{data.repo}){/if}, not by
-					Orchard. Orchard checked it when it was listed, but does not review its updates.
+					<strong>Not made by Orchard.</strong> Published by {data.publisher}{#if data.repo}&nbsp;(github.com/{data.repo}){/if}.
+					It runs inside your Orchard with no sandbox. It can read your secrets and database, sign
+					in as any user, and change the apps on your cluster. Orchard checked it when it was
+					listed, but does not review its updates. Only install it if you would give {data.publisher}
+					full control of your server.
 				</p>
 			{/if}
 			{#if m.homepage || data.repo}
