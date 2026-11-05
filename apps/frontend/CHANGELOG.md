@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.82.0](https://github.com/hackclub/orchard/compare/frontend/v1.81.0...frontend/v1.82.0) (2026-11-05)
+
+
+### Features
+
+* **frontend:** warn about third-party grafts ([66d8324](https://github.com/hackclub/orchard/commit/66d83245c827cf27fd5c979d67d391ef2d578bbc))
+
 ## [1.81.0](https://github.com/hackclub/orchard/compare/frontend/v1.80.0...frontend/v1.81.0) (2026-11-05)
 
 

@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.91.0](https://github.com/hackclub/orchard/compare/server/v2.90.0...server/v2.91.0) (2026-11-05)
+
+
+### Features
+
+* **server:** warn before installing third-party grafts ([176ccc2](https://github.com/hackclub/orchard/commit/176ccc202b8cb2ddf3cfd477598f642c0528d54e))
+
 ## [2.90.0](https://github.com/hackclub/orchard/compare/server/v2.89.0...server/v2.90.0) (2026-11-05)
 
 
