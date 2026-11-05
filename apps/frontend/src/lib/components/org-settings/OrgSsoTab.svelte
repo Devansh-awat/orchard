@@ -447,7 +447,7 @@
 				checked={settings.enforced}
 				disabled={locked || !settings.enabled || savingSettings}
 				label="Require single sign-on"
-				hint="Blocks email codes, passkeys and instance providers, and signs out members who signed in another way"
+				hint="Blocks email codes, passkeys and instance providers, and signs out members who signed in another way. API tokens and MCP connections made without it stop working in this organization."
 				onchange={() => patchSettings({ enforced: !settings.enforced })}
 			/>
 		</SettingsList>

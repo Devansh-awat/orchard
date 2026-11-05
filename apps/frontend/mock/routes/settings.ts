@@ -549,6 +549,14 @@ export function settingsRoutes(r: Router, { store }: MockContext) {
 			lastUsedAt: store.createdAgo(90),
 			expiresAt: null,
 			createdAt: store.createdAgo(60 * 24 * 30)
+		},
+		{
+			id: uid('token:sso'),
+			name: 'deploy bot',
+			scopeOrganizationName: 'YSWS',
+			lastUsedAt: store.createdAgo(20),
+			expiresAt: null,
+			createdAt: store.createdAgo(60 * 24 * 3)
 		}
 	]);
 	r.post('/auth/tokens', () => ({

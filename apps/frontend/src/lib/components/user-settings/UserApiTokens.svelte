@@ -28,6 +28,7 @@
 	interface ApiToken {
 		id: string;
 		name: string;
+		scopeOrganizationName?: string | null;
 		lastUsedAt: string | null;
 		expiresAt: string | null;
 		createdAt: string;
@@ -239,6 +240,7 @@
 							{#if token.lastUsedAt}Used <RelativeTime date={token.lastUsedAt} />{:else}Never used{/if}
 							· Created <RelativeTime date={token.createdAt} />
 							{#if token.expiresAt}· Expires {formatDate(token.expiresAt)}{/if}
+							{#if token.scopeOrganizationName}· Only works in {token.scopeOrganizationName}{/if}
 						</span>
 					{/snippet}
 					{#snippet actions()}
