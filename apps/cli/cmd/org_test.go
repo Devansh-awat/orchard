@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -8,7 +9,10 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
+
+	"github.com/hackclub/orchard/cli/internal/api"
 )
 
 // orgTestServer points client() at an httptest server and neutralizes any
@@ -54,6 +58,35 @@ func TestOrgList(t *testing.T) {
 	}
 	if gotMethod != http.MethodGet || gotPath != "/apiv1/organizations/user" {
 		t.Errorf("request = %s %s, want GET /apiv1/organizations/user", gotMethod, gotPath)
+	}
+}
+
+func TestOrgGetShowsWhySSORefusedIt(t *testing.T) {
+	const why = "This organization requires single sign-on."
+	mux := http.NewServeMux()
+	mux.HandleFunc("/apiv1/organizations/slug/hq", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+		io.WriteString(w, `{"error":"org_sso_required","message":"`+why+`"}`)
+	})
+	orgTestServer(t, mux)
+	err := runOrg(t, "get", "hq")
+	if err == nil || !strings.Contains(err.Error(), why) {
+		t.Fatalf("org get error = %v, want the server's reason", err)
+	}
+}
+
+func TestProjectNotFoundNamesOrgsBehindSSO(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/apiv1/projects", func(w http.ResponseWriter, r *http.Request) {
+		io.WriteString(w, `[]`)
+	})
+	mux.HandleFunc("/apiv1/organizations/user", func(w http.ResponseWriter, r *http.Request) {
+		io.WriteString(w, `[{"slug":"open"},{"slug":"acme","ssoRequired":true}]`)
+	})
+	srv := orgTestServer(t, mux)
+	_, err := resolveProject(context.Background(), api.New(srv.URL, "tok"), "web")
+	if err == nil || !strings.Contains(err.Error(), "single sign-on: acme") {
+		t.Fatalf("resolveProject error = %v, want the SSO hint", err)
 	}
 }
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"net/url"
 	"os"
 	"strings"
@@ -128,10 +129,36 @@ func requireOrg(ctx context.Context, cl *api.Client, cfg *config.Config) (string
 	return str(m["id"]), nil
 }
 
+func isForbidden(err error) bool {
+	var apiErr *api.APIError
+	return errors.As(err, &apiErr) && apiErr.Status == http.StatusForbidden
+}
+
+func ssoHint(ctx context.Context, cl *api.Client) string {
+	var raw any
+	if err := cl.GetJSON(ctx, "/organizations/user", &raw); err != nil {
+		return ""
+	}
+	blocked := []string{}
+	for _, o := range asList(raw) {
+		if required, _ := o["ssoRequired"].(bool); required {
+			blocked = append(blocked, str(o["slug"]))
+		}
+	}
+	if len(blocked) == 0 {
+		return ""
+	}
+	return fmt.Sprintf(" (this token can't see organizations that require single sign-on: %s)", strings.Join(blocked, ", "))
+}
+
 func resolveOrg(ctx context.Context, cl *api.Client, v string) (map[string]any, error) {
 	var m map[string]any
-	if err := cl.GetJSON(ctx, "/organizations/slug/"+url.PathEscape(v), &m); err == nil && str(m["id"]) != "" {
+	err := cl.GetJSON(ctx, "/organizations/slug/"+url.PathEscape(v), &m)
+	if err == nil && str(m["id"]) != "" {
 		return m, nil
+	}
+	if isForbidden(err) {
+		return nil, err
 	}
 	if err := cl.GetJSON(ctx, "/organizations/"+url.PathEscape(v), &m); err != nil {
 		return nil, fmt.Errorf("organization %q not found by slug or id: %w", v, err)
@@ -141,12 +168,19 @@ func resolveOrg(ctx context.Context, cl *api.Client, v string) (map[string]any, 
 
 func resolveProject(ctx context.Context, cl *api.Client, v string) (map[string]any, error) {
 	var m map[string]any
-	if err := cl.GetJSON(ctx, "/projects/slug/"+url.PathEscape(v), &m); err == nil && str(m["id"]) != "" {
+	err := cl.GetJSON(ctx, "/projects/slug/"+url.PathEscape(v), &m)
+	if err == nil && str(m["id"]) != "" {
 		return m, nil
+	}
+	if isForbidden(err) {
+		return nil, err
 	}
 	idErr := cl.GetJSON(ctx, "/projects/"+url.PathEscape(v), &m)
 	if idErr == nil {
 		return m, nil
+	}
+	if isForbidden(idErr) {
+		return nil, idErr
 	}
 	var raw any
 	if err := cl.GetJSON(ctx, "/projects", &raw); err != nil {
@@ -160,7 +194,7 @@ func resolveProject(ctx context.Context, cl *api.Client, v string) (map[string]a
 	}
 	switch len(matches) {
 	case 0:
-		return nil, fmt.Errorf("project %q not found by slug or id: %w", v, idErr)
+		return nil, fmt.Errorf("project %q not found by slug or id: %w%s", v, idErr, ssoHint(ctx, cl))
 	case 1:
 		return matches[0], nil
 	default:
