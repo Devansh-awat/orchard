@@ -15,7 +15,7 @@ To build and run an app from a GitHub repository, create an app with a GitHub so
 - A GitHub account linked to Orchard. Go to **Account settings** > **GitHub and Tailscale**, and in **GitHub**, select **Connect**.
 - The GitHub App installed on the account that owns the repository. Go to **Account settings** > **GitHub and Tailscale**, and in **Repository access**, select **Add account**.
 
-You can deploy a public repository without these items. In the repository search field, paste `owner/repo`. Auto-deploy still needs the GitHub App.
+You can deploy a public repository without these items. In the repository search field, paste `owner/repo`. Auto-deploy still needs the GitHub App. If the repository later becomes private, builds stop until someone with access to it links it again.
 
 Orchard lists only the repositories your own GitHub account granted to the GitHub App. Two people in the same project can see different lists.
 
@@ -146,6 +146,18 @@ orchard deploy auto-deploy status <id>
 ```
 
 `enabled` is the setting you chose. `deliverable` shows whether a push can reach the app. When `deliverable` is false, the output gives the reason.
+
+## Private submodules
+
+Orchard clones submodules when it builds. A private submodule works when all of the following are true:
+
+- It is in the same GitHub account or organization as the app's repository.
+- The [GitHub App](#prerequisites) can see it.
+- The person who linked the repository to the app can see it on GitHub, with their GitHub account connected to Orchard.
+
+Otherwise, the build stops at the clone step with an authentication error. To fix this, give that person access to the submodule, or have someone with access link the repository again.
+
+Anyone who can push to the repository can add a submodule. It can read any repository that the person who linked it can see, so limit who can push to repositories that deploy on Orchard.
 
 ## Build arguments
 
