@@ -642,8 +642,14 @@ export class DatabasesService {
     // Postgres identifiers are limited to 63 characters; dbUser has "u_" prefix so max 61 for the base
     const maxLen = 61;
     const dbBase = fullDbName.length > maxLen ? fullDbName.substring(0, maxLen) : fullDbName;
-    const dbName = dbBase;
-    const dbUser = `u_${dbBase}`;
+    const dbNameTaken = await this.prisma.database.findFirst({
+      where: { dbName: dbBase, forkedFromId: null },
+      select: { id: true }
+    });
+    const dbName = dbNameTaken
+      ? `${dbBase.substring(0, maxLen - 7)}_${randomBytes(3).toString('hex')}`
+      : dbBase;
+    const dbUser = `u_${dbName}`;
     const dbPassword = this.generatePassword();
 
     // Check uniqueness in our records (per environment)
@@ -652,12 +658,6 @@ export class DatabasesService {
     });
     if (existing)
       throw new BadRequestException('A database with this name already exists in this environment');
-
-    const dbNameExists = await this.prisma.database.findFirst({
-      where: { dbName, forkedFromId: null }
-    });
-    if (dbNameExists)
-      throw new BadRequestException('A database with this identifier already exists');
 
     // K8s resource name must match DNS-1123 (lowercase, hyphens, ≤53 chars to leave room for suffixes).
     const clusterName = databaseClusterName(formatSlug(nameInput));

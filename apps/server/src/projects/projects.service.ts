@@ -1,3 +1,4 @@
+import { randomBytes } from 'crypto';
 import {
   Injectable,
   NotFoundException,
@@ -38,15 +39,15 @@ import {
   redactDatabaseForViewer,
   scrubIngress,
   sealDatabaseCredentials,
-  assertDeleteConfirmation
+  assertDeleteConfirmation,
+  truncateKeepingSuffix
 } from './projects.utils';
-import { truncateKeepingSuffix } from './projects.utils';
 import { parseMemory } from '../kubernetes/quantity';
 import { projectedFill, sizeToResumeWrites, WRITE_GUARD_EXIT } from '../kubernetes/volume-stats';
 import { deriveDbTuning } from '../kubernetes/db-tuning';
 import { requestAuthStorage } from '../auth/request-context';
 
-const MAX_NAMESPACE_ATTEMPTS = 1000;
+const MAX_NAMESPACE_ATTEMPTS = 20;
 
 @Injectable()
 export class ProjectsService {
@@ -167,6 +168,31 @@ export class ProjectsService {
     'cert-manager'
   ]);
 
+  private async freshNamespace(parts: string[]): Promise<string> {
+    for (let attempt = 0; attempt < MAX_NAMESPACE_ATTEMPTS; attempt++) {
+      const namespace = this.buildNamespace(parts, `-${randomBytes(3).toString('hex')}`);
+      const taken =
+        (await this.prisma.project.findFirst({
+          where: { namespace },
+          select: { id: true }
+        })) ??
+        (await this.prisma.environment.findUnique({
+          where: { namespace },
+          select: { id: true }
+        })) ??
+        (await this.prisma.retiredNamespace.findUnique({
+          where: { namespace },
+          select: { namespace: true }
+        })) ??
+        (await this.prisma.deletedDatabase.findFirst({
+          where: { namespace, purgedAt: null, restoredAs: null },
+          select: { id: true }
+        }));
+      if (!taken) return namespace;
+    }
+    throw new BadRequestException("Couldn't pick a namespace for this project. Try again.");
+  }
+
   private buildNamespace(parts: string[], suffix = '') {
     const sanitized = parts.map((part) => formatSlug(part)).filter((part) => part.length > 0);
 
@@ -235,62 +261,19 @@ export class ProjectsService {
     }
 
     let slug = baseSlug;
-    let namespace = this.buildNamespace([organization.slug, slug]);
     let suffixCounter = 0;
-    let retiredCounter = 0;
-
-    while (true) {
-      const slugInUse = await this.prisma.project.findUnique({
+    while (
+      await this.prisma.project.findUnique({
         where: { organizationId_slug: { organizationId, slug } }
-      });
-      // Environments own namespaces too, so a project namespace has to clear
-      // both tables or a new project lands in another project's environment.
-      const namespaceInUse = slugInUse
-        ? null
-        : ((await this.prisma.project.findFirst({ where: { namespace } })) ??
-          (await this.prisma.environment.findUnique({
-            where: { namespace },
-            select: { id: true }
-          })));
-      const namespaceRetired =
-        slugInUse || namespaceInUse
-          ? null
-          : ((await this.prisma.retiredNamespace.findUnique({
-              where: { namespace },
-              select: { namespace: true }
-            })) ??
-            (await this.prisma.deletedDatabase.findFirst({
-              where: { namespace, purgedAt: null, restoredAs: null },
-              select: { id: true }
-            })));
-
-      if (!slugInUse && !namespaceInUse && !namespaceRetired) {
-        break;
-      }
-
-      if (namespaceRetired || (namespaceInUse && retiredCounter > 0)) {
-        retiredCounter += 1;
-        if (retiredCounter > MAX_NAMESPACE_ATTEMPTS) {
-          throw new BadRequestException('Generated namespace is already in use');
-        }
-        namespace = this.buildNamespace([organization.slug, slug], `-${retiredCounter}`);
-        continue;
-      }
-
+      })
+    ) {
       if (slugExplicitlyProvided) {
-        if (slugInUse) {
-          throw new BadRequestException('A project with this slug already exists');
-        }
-        throw new BadRequestException('Generated namespace is already in use');
+        throw new BadRequestException('A project with this slug already exists');
       }
-
       suffixCounter += 1;
-      if (suffixCounter > MAX_NAMESPACE_ATTEMPTS) {
-        throw new BadRequestException('Generated namespace is already in use');
-      }
       slug = `${baseSlug}-${suffixCounter}`;
-      namespace = this.buildNamespace([organization.slug, baseSlug], `-${suffixCounter}`);
     }
+    const namespace = await this.freshNamespace([organization.slug, slug]);
 
     const adminRole = await this.prisma.role.findFirst({ where: { name: 'admin' } });
 

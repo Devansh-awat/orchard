@@ -1,5 +1,4 @@
 import { createHash } from 'crypto';
-import { createHash } from 'crypto';
 import { BadRequestException } from '@nestjs/common';
 /**
  * Pure helpers shared between ProjectsService, DatabasesService and friends.
@@ -102,9 +101,9 @@ export function truncateK8sName(name: string, max = 63): string {
 }
 
 export function databaseClusterName(slug: string): string {
-  if (slug.length <= 48) return `pg-${slug}`.replace(/-+$/, '');
+  if (slug.length <= 47) return `pg-${slug}`.replace(/-+$/, '');
   const hash = createHash('sha256').update(slug).digest('hex').slice(0, 6);
-  return truncateKeepingSuffix(`pg-${slug}`, `-${hash}`, 51);
+  return truncateKeepingSuffix(`pg-${slug}`, `-${hash}`, 50);
 }
 
 export function truncateKeepingSuffix(name: string, suffix: string, max = 63): string {

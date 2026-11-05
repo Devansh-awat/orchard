@@ -329,7 +329,7 @@ export class DatabaseOperationsService {
         startedAt: new Date(),
         targetNamespace: src.namespace,
         targetClusterName: rehearse
-          ? truncateKeepingSuffix(src.clusterName, `-up${suffix.slice(-5)}`, 53)
+          ? truncateKeepingSuffix(src.clusterName, `-up${suffix.slice(-5)}`, 50)
           : src.clusterName,
         targetDatabaseId: src.databaseId,
         deadlineAt: new Date(Date.now() + RECOVERY_DEADLINE_MS)
@@ -360,7 +360,7 @@ export class DatabaseOperationsService {
         targetClusterName: truncateKeepingSuffix(
           src.clusterName.replace(/-r[0-9a-z]{6,}$/, ''),
           `-r${suffix}`,
-          53
+          50
         ),
         targetDatabaseId: src.databaseId
       });

@@ -33,7 +33,6 @@ import { traefikSelector } from '../src/metrics/ingress/traefik';
 import { haproxySelector } from '../src/metrics/ingress/haproxy';
 import {
   assertImageOwnedByProject,
-  assertIngressNameFree,
   assertRepoNameFree,
   newImageTag,
   splitRegistryCleanup
@@ -394,15 +393,16 @@ test('only images Orchard built can be deleted from the registry', async () => {
 test('long names keep what makes them different when they get cut', () => {
   const long = 'customer-analytics-warehouse-events-production-eu';
   assert.equal(truncateKeepingSuffix(long, '-rabc123').endsWith('-rabc123'), true);
-  const first = truncateKeepingSuffix(`pg-${long}`, '-raaaaaaaa', 53);
+  const first = truncateKeepingSuffix(`pg-${long}`, '-raaaaaaaa', 50);
   const second = truncateKeepingSuffix(first.replace(/-r[0-9a-z]{6,}$/, ''), '-rbbbbbbbb', 53);
   assert.notEqual(first, second);
-  assert.ok(second.length <= 53);
+  assert.ok(second.length <= 50);
   assert.equal(databaseClusterName('short-name'), 'pg-short-name');
   const one = databaseClusterName(`${'a'.repeat(50)}-one`);
   const two = databaseClusterName(`${'a'.repeat(50)}-two`);
   assert.notEqual(one, two);
-  assert.ok(one.length <= 51);
+  assert.ok(one.length <= 50);
+  assert.equal(databaseClusterName('a'.repeat(47)).length, 50);
 });
 
 test('operation records never carry the stored database password', () => {

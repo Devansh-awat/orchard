@@ -1,4 +1,4 @@
-import { truncateKeepingSuffix } from './projects.utils';
+import { randomBytes } from 'crypto';
 import {
   Injectable,
   Logger,
@@ -11,7 +11,7 @@ import { K8sNamespaceService } from '../kubernetes/k8s-namespace.service';
 import { QuotasService } from '../quotas/quotas.service';
 import { AuditService } from '../audit/audit.service';
 import { OrgEventsService } from '../events/org-events.service';
-import { assertDeleteConfirmation, formatSlug } from './projects.utils';
+import { assertDeleteConfirmation, formatSlug, truncateKeepingSuffix } from './projects.utils';
 import { RegistryCredentialsService } from './registry-credentials.service';
 import { NamespaceTeardownService } from './namespace-teardown.service';
 
@@ -128,10 +128,8 @@ export class EnvironmentsService {
   }
 
   private async deconflictNamespace(base: string[]): Promise<string> {
-    const baseSlug = base[base.length - 1];
-    let attempt = 0;
-    let namespace = this.buildEnvNamespace(base);
-    while (true) {
+    for (let attempt = 0; attempt < 20; attempt++) {
+      const namespace = this.buildEnvNamespace(base, `-${randomBytes(3).toString('hex')}`);
       const [envUse, projUse, trashUse, retired] = await Promise.all([
         this.prisma.environment.findFirst({ where: { namespace }, select: { id: true } }),
         this.prisma.project.findFirst({ where: { namespace }, select: { id: true } }),
@@ -145,10 +143,8 @@ export class EnvironmentsService {
         })
       ]);
       if (!envUse && !projUse && !trashUse && !retired) return namespace;
-      attempt += 1;
-      if (attempt > 1000) throw new ConflictException("This environment name isn't available");
-      namespace = this.buildEnvNamespace(base, `-${attempt}`);
     }
+    throw new ConflictException("Couldn't pick a namespace for this environment. Try again.");
   }
 
   async createEnvironment(
