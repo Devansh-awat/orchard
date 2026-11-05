@@ -168,7 +168,7 @@ interface CachedRepos {
 
 const MAX_SUBMODULE_DEPTH = 5;
 
-const MAX_SUBMODULE_REPOS = 25;
+const MAX_SUBMODULE_CHECKS = 25;
 
 @Injectable()
 export class GitHubService implements OnModuleInit, OnModuleDestroy {
@@ -2230,7 +2230,7 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
         ).catch(() => null);
         if (!gitmodules) continue;
         for (const name of submoduleRepos(gitmodules, owner, source.repo)) {
-          if (seen.has(name.toLowerCase()) || allowed.length >= MAX_SUBMODULE_REPOS) continue;
+          if (seen.has(name.toLowerCase()) || seen.size > MAX_SUBMODULE_CHECKS) continue;
           seen.add(name.toLowerCase());
           const permitted =
             (await this.verifyUserCanAccessRepo(linkedBy, owner, name).catch(() => false)) &&

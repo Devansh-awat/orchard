@@ -149,6 +149,14 @@ test('nested submodules are checked too, and a repo that cannot be reached stops
   assert.deepEqual(minted, [['app', 'lib', 'deep']]);
 });
 
+test('a .gitmodules full of guesses only costs a bounded number of checks', async () => {
+  const guesses = Array.from({ length: 8000 }, (_, i) => module(`../guess-${i}`)).join('');
+  const { access, minted, verified } = harness({ gitmodules: { app: guesses } });
+  await access();
+  assert.equal(verified.length, 25);
+  assert.deepEqual(minted, [['app']]);
+});
+
 test('with no linker on record, no private submodule gets in', async () => {
   const { access, minted } = harness({ gitmodules: { app: module('../lib.git') } });
   await access({ linkedBy: null });
