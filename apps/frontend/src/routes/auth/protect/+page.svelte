@@ -5,6 +5,7 @@
 	import { Loader2, Lock, ShieldX } from 'lucide-svelte';
 	import { Button, Input } from '$lib/components/ui';
 	import Turnstile from '$lib/components/Turnstile.svelte';
+	import ConsentSignIn from '$lib/components/login/ConsentSignIn.svelte';
 	import { motionStagger } from '$lib/utils/motion.svelte';
 	import { apiFetch, initApiBase, user, isSignedIn } from '$lib/stores';
 	import { env } from '$env/dynamic/public';
@@ -141,14 +142,6 @@
 			exchanging = false;
 		}
 	}
-
-	function signIn() {
-		if (!browser) return;
-		const currentUrl = window.location.href;
-		sessionStorage.setItem('inviteRedirect', currentUrl);
-		const apiBase = env.PUBLIC_API_BASE || '';
-		window.location.href = `${apiBase}/apiv1/auth/login`;
-	}
 </script>
 
 <svelte:head>
@@ -224,10 +217,10 @@
 				{:else if error}
 					<p class="protect-error">{error}</p>
 					{#if !$isSignedIn}
-						<Button variant="primary" class="w-full" onclick={signIn}>Continue with Orchard</Button>
+						<ConsentSignIn returnTo={$page.url.pathname + $page.url.search} />
 					{/if}
 				{:else if !$isSignedIn}
-					<Button variant="primary" class="w-full" onclick={signIn}>Continue with Orchard</Button>
+					<ConsentSignIn returnTo={$page.url.pathname + $page.url.search} />
 				{:else}
 					<Button variant="primary" class="w-full" title={$user?.email} onclick={attemptExchange}>
 						Continue as {$user?.email}
