@@ -1,4 +1,5 @@
 import {
+  Inject,
   BadRequestException,
   ForbiddenException,
   Injectable,
@@ -18,6 +19,9 @@ import { parseRepoUrl, withoutRepoCredentials } from './sandbox-repo-url';
 import { SandboxRunnerId, refOf } from './runners/sandbox-runner';
 import { SandboxAccessService, SandboxRole } from './sandbox-access.service';
 import { ApplyQueueService } from '../core/apply.service';
+import { Doors } from '@orchardlabs/graft-sdk/server';
+import { sandboxMcpDevice } from './sandbox-mcp-scope';
+import type { McpRotationSessions } from './sandbox-member-offboarding';
 
 const DEFAULT_SANDBOX_IMAGE = 'ghcr.io/hackclub/orchard/sandbox:latest';
 const NAME_RE = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/;
@@ -117,7 +121,8 @@ export class SandboxesService {
     private readonly crypto: SecretCryptoService,
     private readonly registry: SandboxRunnerRegistry,
     private readonly access: SandboxAccessService,
-    @Optional() private readonly applyQueue?: ApplyQueueService
+    @Optional() private readonly applyQueue?: ApplyQueueService,
+    @Optional() @Inject(Doors.auth) private readonly auth?: McpRotationSessions
   ) {}
 
   async retryApply(
@@ -592,6 +597,9 @@ export class SandboxesService {
       where: { id: row.id },
       data: { desiredState: 'deleted', status: 'deleting' }
     });
+    await this.auth
+      ?.revokeDeviceSessions(row.userId, [sandboxMcpDevice(row.organizationId, row.id)])
+      .catch((e: any) => this.logger.warn(`could not revoke the machine token: ${e?.message}`));
     await runner.requestDestroy(refOf(row), userId);
     this.audit
       .log({

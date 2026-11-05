@@ -21,6 +21,7 @@ import { SandboxMembersService } from './sandbox-members.service';
 import { SandboxLiveService } from './live/sandbox-live.service';
 import { SandboxPreviewService } from './preview/sandbox-preview.service';
 import { SandboxAttentionService } from './sandbox-attention.service';
+import { SandboxMemberSweepService } from './sandbox-member-sweep.service';
 import { SandboxProjectEnvService } from './links/sandbox-project-env.service';
 import { SandboxProjectLinksService } from './links/sandbox-project-links.service';
 import { SandboxPreviewDeployService } from './links/sandbox-preview-deploy.service';
@@ -100,6 +101,7 @@ const REAPER_INTERVAL_MS = 60_000;
     SandboxMembersService,
     SandboxPreviewService,
     SandboxAttentionService,
+    SandboxMemberSweepService,
     SandboxProjectEnvService,
     SandboxProjectLinksService,
     SandboxPreviewDeployService,

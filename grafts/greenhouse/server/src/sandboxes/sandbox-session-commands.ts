@@ -951,8 +951,9 @@ export function isScriptedTerminal(target: { sessionId: string | null; index: st
 }
 
 export function terminalTmuxName(target: SessionTerminalTarget, engineSessionId: string): string {
-  if (!target.sessionId) return `orchard-${engineSessionId.toLowerCase()}`;
-  const base = tmuxSessionName(target.sessionId, target.index);
+  const base = target.sessionId
+    ? tmuxSessionName(target.sessionId, target.index)
+    : `orchard-${engineSessionId.toLowerCase()}`;
   if (isScriptedTerminal(target) || !target.terminalUserId) return base;
   if (!isUuid(target.terminalUserId)) throw new Error('invalid terminal owner');
   return `${base}-u${target.terminalUserId.replace(/-/g, '').toLowerCase()}`;

@@ -19,6 +19,7 @@ import { SandboxLiveService } from './live/sandbox-live.service';
 import { LIVE_MAX_COMMENT_CHARS, TokenBucket, isChatId, sanitizeText } from './live/live-protocol';
 import { OPENCODE_MESSAGE_ID_RE } from './sandbox-opencode-policy';
 import { isUuid } from './sandbox-session-commands';
+import { SANDBOX_REF_SELECT } from './runners/sandbox-runner';
 import {
   endGuestShells,
   rotateMachineSecrets,
@@ -218,7 +219,7 @@ export class SandboxMembersService {
     const count = await this.prisma.sandboxMember.count({ where: { sandboxId: sandbox.id } });
     const existing = await this.prisma.sandboxMember.findUnique({
       where: { sandboxId_userId: { sandboxId: sandbox.id, userId: invitee.id } },
-      select: { id: true }
+      select: { id: true, role: true }
     });
     if (!existing && count >= MAX_MEMBERS) {
       throw new BadRequestException(`A sandbox can be shared with at most ${MAX_MEMBERS} people`);
@@ -247,7 +248,61 @@ export class SandboxMembersService {
       })
       .catch(() => {});
     await this.live.aclChanged(sandbox.id, invitee.id);
+    if (existing?.role === 'collaborator' && role !== 'collaborator') {
+      void this.offboardGuest(sandbox, invitee.id, actor.id);
+    }
     return this.toMember(row);
+  }
+
+  async sweepDeparted(): Promise<number> {
+    const rows = await this.prisma.sandboxMember.findMany({
+      where: { sandbox: { organizationId: { not: null }, desiredState: { not: 'deleted' } } },
+      select: {
+        id: true,
+        userId: true,
+        role: true,
+        sandbox: {
+          select: {
+            ...SANDBOX_REF_SELECT,
+            name: true,
+            status: true,
+            organizationId: true
+          }
+        }
+      }
+    });
+    if (rows.length === 0) return 0;
+    const members = await this.prisma.organizationMember.findMany({
+      where: {
+        organizationId: { in: [...new Set(rows.map((r) => r.sandbox.organizationId!))] },
+        userId: { in: [...new Set(rows.map((r) => r.userId))] }
+      },
+      select: { organizationId: true, userId: true }
+    });
+    const present = new Set(members.map((m) => `${m.organizationId}:${m.userId}`));
+    let removed = 0;
+    for (const row of rows) {
+      const { sandbox } = row;
+      if (present.has(`${sandbox.organizationId}:${row.userId}`)) continue;
+      await this.prisma.sandboxMember.delete({ where: { id: row.id } }).catch(() => null);
+      removed += 1;
+      this.audit
+        .log({
+          action: 'sandbox.member.remove',
+          actorUserId: sandbox.userId,
+          organizationId: sandbox.organizationId ?? undefined,
+          targetType: 'sandbox',
+          targetId: sandbox.id,
+          targetLabel: sandbox.name,
+          metadata: { memberUserId: row.userId, role: row.role, reason: 'left_organization' }
+        })
+        .catch(() => {});
+      await this.live.aclChanged(sandbox.id, row.userId);
+      if (row.role === 'collaborator') {
+        await this.offboardGuest(sandbox as any, row.userId, sandbox.userId);
+      }
+    }
+    return removed;
   }
 
   async update(

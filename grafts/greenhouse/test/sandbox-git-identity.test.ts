@@ -547,3 +547,16 @@ test('creating a PR pushes first as the actor and forwards draft to GitHub', asy
     globalThis.fetch = realFetch;
   }
 });
+
+test('a guest terminal with no session can still be found when the guest is removed', () => {
+  const guest = '11111111-1111-4111-8111-111111111111';
+  const name = terminalTmuxName(
+    { sessionId: null, index: '0', mode: 'rw', terminalUserId: guest } as any,
+    'ENGINE'
+  );
+  assert.equal(name, `orchard-engine-u${guest.replace(/-/g, '')}`);
+  assert.equal(
+    terminalTmuxName({ sessionId: null, index: '0', mode: 'rw', terminalUserId: null } as any, 'E'),
+    'orchard-e'
+  );
+});
