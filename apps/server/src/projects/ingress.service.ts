@@ -1953,13 +1953,12 @@ export class IngressService implements OnModuleInit {
       throw new NotFoundException('Domain not found');
     }
 
-    let access: ProjectAccess;
     try {
-      ({ access } = await this.access.assertProjectAccess(
+      await this.access.assertProjectAccess(
         ingress.project.id,
         user.id,
         ingress.project.organizationId
-      ));
+      );
     } catch (e) {
       if (e instanceof NotFoundException) {
         throw new NotFoundException('Domain not found');
@@ -2007,10 +2006,6 @@ export class IngressService implements OnModuleInit {
       routes: k8sRoutes,
       basicAuthEnabled: hasBasicAuth,
       protectionMode: ingress.protectionMode,
-      protectionBypassSecret:
-        access.canEdit && ingress.protectionMode !== 'none'
-          ? this.crypto.open(ingress.protectionBypassSecret)
-          : null,
       protectionBypassPaths: ingress.protectionBypassPaths ?? [],
       project: ingress.project
     };
