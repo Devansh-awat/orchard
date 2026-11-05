@@ -1,6 +1,12 @@
 import './support';
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { SandboxesController } from '../server/src/sandboxes/sandboxes.controller';
+import { SandboxForkController } from '../server/src/sandboxes/sandbox-fork.controller';
+import { SandboxMembersController } from '../server/src/sandboxes/sandbox-members.controller';
+import { SandboxShareLinksController } from '../server/src/sandboxes/sandbox-share-links.controller';
+import { SshIdentitiesController } from '../server/src/ssh-identities/ssh-identities.controller';
+import { UserContextController } from '../server/src/sandboxes/context/user-context.controller';
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -590,4 +596,40 @@ test('a guest who left the organization loses the machine and its secrets rotate
   assert.deepEqual(deleted, ['gone']);
   assert.ok(rotated.includes('epoch'));
   assert.ok(rotated.some((name) => name.includes('sb1')));
+});
+
+test('anything that gets code or a login onto a machine needs an exec token', () => {
+  const scopeOf = (controller: any, method: string) =>
+    Reflect.getMetadata('required_scope', controller.prototype[method]);
+
+  const exec: [any, string][] = [
+    [SandboxesController, 'create'],
+    [SandboxesController, 'update'],
+    [SandboxesController, 'addRepo'],
+    [SandboxForkController, 'fork'],
+    [SandboxMembersController, 'add'],
+    [SandboxMembersController, 'update'],
+    [SandboxShareLinksController, 'create'],
+    [SshIdentitiesController, 'create'],
+    [SshIdentitiesController, 'importGithub'],
+    [UserContextController, 'upsert'],
+    [UserContextController, 'import'],
+    [UserContextController, 'update']
+  ];
+  for (const [controller, method] of exec) {
+    assert.equal(scopeOf(controller, method), 'exec', `${controller.name}.${method}`);
+  }
+
+  const notExec: [any, string][] = [
+    [SandboxesController, 'start'],
+    [SandboxesController, 'stop'],
+    [SandboxesController, 'remove'],
+    [SandboxMembersController, 'remove'],
+    [SandboxShareLinksController, 'revoke'],
+    [SshIdentitiesController, 'remove'],
+    [UserContextController, 'remove']
+  ];
+  for (const [controller, method] of notExec) {
+    assert.notEqual(scopeOf(controller, method), 'exec', `${controller.name}.${method}`);
+  }
 });

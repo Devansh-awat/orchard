@@ -1,5 +1,5 @@
 import { Body, Controller, Param, ParseUUIDPipe, Post, Req, UseGuards } from '@nestjs/common';
-import { Auth } from '@orchardlabs/graft-sdk/server';
+import { Auth, RequireScope } from '@orchardlabs/graft-sdk/server';
 import { UsersService } from '../core/users.service';
 import { AnalyticsService } from '../core/analytics.service';
 import { SandboxEnabledGuard } from './sandbox-enabled.guard';
@@ -19,6 +19,7 @@ export class SandboxForkController {
   ) {}
 
   @Post(':id/fork')
+  @RequireScope('exec')
   async fork(
     @Req() req: any,
     @Param('id', ParseUUIDPipe) id: string,

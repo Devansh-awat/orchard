@@ -12,7 +12,7 @@ import {
   UseGuards
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
-import { Auth } from '@orchardlabs/graft-sdk/server';
+import { Auth, RequireScope } from '@orchardlabs/graft-sdk/server';
 import { UsersService } from '../core/users.service';
 import { AnalyticsService } from '../core/analytics.service';
 import { SandboxEnabledGuard } from './sandbox-enabled.guard';
@@ -39,6 +39,7 @@ export class SandboxShareLinksController {
   }
 
   @Post(':id/share-links')
+  @RequireScope('exec')
   async create(
     @Req() req: any,
     @Param('id', ParseUUIDPipe) id: string,

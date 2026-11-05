@@ -48,19 +48,19 @@ export class UserContextController {
   }
 
   @Put('me/context')
-  @RequireScope('deploy')
+  @RequireScope('exec')
   async upsert(@Req() req: any, @Body() body: unknown) {
     return this.context.upsert((await this.user(req)).id, body);
   }
 
   @Post('me/context/import')
-  @RequireScope('deploy')
+  @RequireScope('exec')
   async import(@Req() req: any, @Body() body: unknown) {
     return this.context.import((await this.user(req)).id, body);
   }
 
   @Patch('me/context/:itemId')
-  @RequireScope('deploy')
+  @RequireScope('exec')
   async update(
     @Req() req: any,
     @Param('itemId', ParseUUIDPipe) itemId: string,

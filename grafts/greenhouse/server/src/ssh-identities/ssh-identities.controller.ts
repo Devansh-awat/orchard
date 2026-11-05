@@ -9,7 +9,7 @@ import {
   Post,
   Req
 } from '@nestjs/common';
-import { Auth } from '@orchardlabs/graft-sdk/server';
+import { Auth, RequireScope } from '@orchardlabs/graft-sdk/server';
 import { UsersService } from '../core/users.service';
 import { AnalyticsService } from '../core/analytics.service';
 import { SshIdentitiesService } from './ssh-identities.service';
@@ -42,11 +42,13 @@ export class SshIdentitiesController {
   }
 
   @Post()
+  @RequireScope('exec')
   async create(@Req() req: any, @Body() body: { name?: string; publicKey?: string }) {
     return this.identities.create(await this.userId(req), body || {});
   }
 
   @Post('import-github')
+  @RequireScope('exec')
   async importGithub(@Req() req: any) {
     return { identities: await this.identities.importFromGithub(await this.userId(req)) };
   }

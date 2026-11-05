@@ -54,6 +54,7 @@ export class SandboxMembersController {
   }
 
   @Post(':id/members')
+  @RequireScope('exec')
   async add(
     @Req() req: any,
     @Param('id', ParseUUIDPipe) id: string,
@@ -64,6 +65,7 @@ export class SandboxMembersController {
   }
 
   @Patch(':id/members/:userId')
+  @RequireScope('exec')
   async update(
     @Req() req: any,
     @Param('id', ParseUUIDPipe) id: string,

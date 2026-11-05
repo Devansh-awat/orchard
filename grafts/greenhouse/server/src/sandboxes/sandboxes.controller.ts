@@ -81,6 +81,7 @@ export class SandboxesController {
   }
 
   @Post()
+  @RequireScope('exec')
   async create(
     @Req() req: any,
     @Body()
@@ -161,7 +162,7 @@ export class SandboxesController {
   }
 
   @Post(':id/repos')
-  @RequireScope('deploy')
+  @RequireScope('exec')
   async addRepo(
     @Req() req: any,
     @Param('id', ParseUUIDPipe) id: string,
@@ -613,6 +614,7 @@ export class SandboxesController {
   }
 
   @Patch(':id')
+  @RequireScope('exec')
   async update(
     @Req() req: any,
     @Param('id', ParseUUIDPipe) id: string,
