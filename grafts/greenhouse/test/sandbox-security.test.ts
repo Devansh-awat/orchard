@@ -544,3 +544,50 @@ test('a removed or downgraded guest loses the shells that hold their GitHub toke
   await endGuestShells(registry as any, { id: SANDBOX, status: 'stopped' } as any, guest);
   assert.equal(execs.length, 1);
 });
+
+test('a guest who left the organization loses the machine and its secrets rotate', async () => {
+  const deleted: string[] = [];
+  const rotated: string[] = [];
+  const sandbox = {
+    id: 'sb1',
+    userId: 'host',
+    name: 'box',
+    status: 'stopped',
+    organizationId: 'org1',
+    runner: 'kubernetes',
+    podName: null,
+    namespace: null,
+    externalId: null,
+    runnerState: null
+  };
+  const prisma = {
+    sandboxMember: {
+      findMany: async () => [
+        { id: 'gone', userId: 'left', role: 'collaborator', sandbox },
+        { id: 'kept', userId: 'stays', role: 'collaborator', sandbox }
+      ],
+      delete: async ({ where }: any) => deleted.push(where.id)
+    },
+    organizationMember: {
+      findMany: async () => [{ organizationId: 'org1', userId: 'stays' }]
+    },
+    sandbox: { updateMany: async () => rotated.push('epoch') }
+  };
+  const members = new SandboxMembersService(
+    prisma as any,
+    { log: async () => {} } as any,
+    { setCommentSink() {}, aclChanged: async () => {} } as any,
+    undefined,
+    undefined,
+    {
+      revokeDeviceSessions: async (_user: string, names: string[]) => {
+        rotated.push(...names);
+        return 1;
+      }
+    }
+  );
+  assert.equal(await members.sweepDeparted(), 1);
+  assert.deepEqual(deleted, ['gone']);
+  assert.ok(rotated.includes('epoch'));
+  assert.ok(rotated.some((name) => name.includes('sb1')));
+});
