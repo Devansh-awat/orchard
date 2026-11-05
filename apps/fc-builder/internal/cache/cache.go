@@ -50,10 +50,10 @@ func New(dir, size string) (*Store, error) {
 
 func Key(tenant string) string {
 	clean := strings.Trim(unsafeChars.ReplaceAllString(strings.ToLower(tenant), "-"), "-")
-	if len(clean) > 48 {
-		clean = clean[:48]
-	}
 	sum := sha256.Sum256([]byte(tenant))
+	if len(clean) > 48 {
+		return clean[:48] + "-" + hex.EncodeToString(sum[:16])
+	}
 	return clean + "-" + hex.EncodeToString(sum[:4])
 }
 
