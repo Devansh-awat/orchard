@@ -302,6 +302,9 @@
 
 				{#if error}
 					<Alert tone="error">{error}</Alert>
+					{#if error.startsWith('Prove you own') && normalizedHost}
+						<DnsSetup host={normalizedHost} {onCheckDns} />
+					{/if}
 				{/if}
 			</form>
 		{/if}

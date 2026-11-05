@@ -1701,11 +1701,35 @@ export function deploymentRoutes(r: Router, { store }: MockContext) {
 						{ type: 'A', name: '@', value: '203.0.113.10' },
 						{ type: 'A', name: '@', value: '203.0.113.11' }
 					];
+		if (store.requireDomainProof) {
+			const relative = labels.slice(0, -2).join('.');
+			records.push({
+				type: 'TXT',
+				name: relative ? `_orchard-challenge.${relative}` : '_orchard-challenge',
+				value: `orchard-domain=${sha(host).slice(0, 40)}`
+			});
+		}
 		checks.set(host, (checks.get(host) ?? 0) + 1);
 		const valid = (checks.get(host) ?? 0) > 2;
 		return { valid, message: valid ? 'Connected' : 'Waiting', records };
 	});
 	r.post('/projects/:pid/ingresses', ({ params, body }) => {
+		const proofHost = String(body?.host ?? '').toLowerCase();
+		if (store.requireDomainProof && (checks.get(proofHost) ?? 0) <= 2) {
+			const relative = proofHost.split('.').slice(0, -2).join('.');
+			const value = `orchard-domain=${sha(proofHost).slice(0, 40)}`;
+			return reply(400, {
+				error: 'domain_proof_required',
+				message: `Prove you own ${proofHost}: add a TXT record named _orchard-challenge.${proofHost} with the value ${value}, then try again.`,
+				records: [
+					{
+						type: 'TXT',
+						name: relative ? `_orchard-challenge.${relative}` : '_orchard-challenge',
+						value
+					}
+				]
+			});
+		}
 		const d =
 			store.deployment(body?.deploymentId ?? '') ??
 			store.deploymentsOf(params.pid).find((x) => x.name === body?.routes?.[0]?.serviceName);

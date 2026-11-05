@@ -197,6 +197,7 @@ const PHASES: { step: BuildStep; ms: number; lines: string[] }[] = [
 
 export class Store {
 	state: MockState;
+	requireDomainProof = false;
 	private timers = new Map<string, ReturnType<typeof setTimeout>[]>();
 	private metrics: ReturnType<typeof setInterval>;
 

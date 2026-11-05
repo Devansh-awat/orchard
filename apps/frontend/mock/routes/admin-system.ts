@@ -427,6 +427,17 @@ export function adminSystemRoutes(r: Router, { store }: MockContext) {
 		return mcpView();
 	});
 
+	const domainProofView = () => ({
+		enabled: store.requireDomainProof,
+		dbValue: store.requireDomainProof,
+		envOverride: null
+	});
+	r.get('/admin/instance-settings/custom-domain-verification', () => domainProofView());
+	r.patch('/admin/instance-settings/custom-domain-verification', ({ body }) => {
+		store.requireDomainProof = Boolean(body?.enabled);
+		return domainProofView();
+	});
+
 	r.get('/admin/telemetry/preview', () => ({
 		event: 'instance_report',
 		distinctId: 'a3f0c1d2-7b1e-4b6a-9f55-2c8d90e4b7aa',
