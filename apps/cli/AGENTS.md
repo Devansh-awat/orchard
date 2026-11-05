@@ -22,7 +22,7 @@ Tokens carry scopes, and each higher scope includes the lower ones (read is a su
 | ------ | ----------------------------------------------------------------------- |
 | read   | most GET / HEAD / OPTIONS; `orchard api describe <op>` shows exceptions |
 | deploy | read, plus every mutation (create, update, delete, scale, restart)      |
-| exec   | deploy, plus interactive terminals: `pod exec`, `pod shell`, `db psql`  |
+| exec   | deploy, plus interactive terminals: `pod exec`, `pod shell`, `db psql`, and creating or editing sandboxes, SSH identities and `claude import` |
 
 Mint a token from an already-authenticated CLI (the secret prints once, default scope read, lifetime capped at 90 days):
 
