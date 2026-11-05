@@ -327,26 +327,37 @@ export class K8sNetworkService implements OnModuleInit {
     if (live === null) return 'ingress-missing';
     const backends: { path: string; serviceName: string; servicePort: number }[] = [];
     for (const row of rows) {
-      if (!row.service) continue;
-      const path = row.path || '/';
-      const onCluster = live.get(path);
-      const persisted = row.servicePort;
-      const seen = onCluster && onCluster.name === row.service.name ? onCluster.port : null;
-      const known = new Set<number>([
-        ...row.service.ports.map((p) => p.port),
-        ...(row.service.port ? [row.service.port] : [])
-      ]);
-      let port: number | null = persisted && known.has(persisted) ? persisted : null;
-      if (port === null && seen && known.has(seen)) port = seen;
-      if (port === null) port = row.service.ports[0]?.port ?? row.service.port ?? null;
-      if (!port) continue;
-      if (row.servicePort !== port) {
-        await this.prisma.ingress.update({ where: { id: row.id }, data: { servicePort: port } });
-      }
-      backends.push({ path, serviceName: row.service.name, servicePort: port });
+      const backend = await this.directBackend(row, live.get(row.path || '/'));
+      if (backend) backends.push(backend);
     }
     if (backends.length === 0) return 'unchanged';
     return this.setIngressBackends(namespace, name, backends);
+  }
+
+  private async directBackend(
+    row: {
+      id: string;
+      path: string | null;
+      servicePort: number | null;
+      service: { name: string; port: number | null; ports: { port: number }[] } | null;
+    },
+    onCluster?: { name: string; port: number }
+  ): Promise<{ path: string; serviceName: string; servicePort: number } | null> {
+    if (!row.service) return null;
+    const persisted = row.servicePort;
+    const seen = onCluster && onCluster.name === row.service.name ? onCluster.port : null;
+    const known = new Set<number>([
+      ...row.service.ports.map((p) => p.port),
+      ...(row.service.port ? [row.service.port] : [])
+    ]);
+    let port: number | null = persisted && known.has(persisted) ? persisted : null;
+    if (port === null && seen && known.has(seen)) port = seen;
+    if (port === null) port = row.service.ports[0]?.port ?? row.service.port ?? null;
+    if (!port) return null;
+    if (row.servicePort !== port) {
+      await this.prisma.ingress.update({ where: { id: row.id }, data: { servicePort: port } });
+    }
+    return { path: row.path || '/', serviceName: row.service.name, servicePort: port };
   }
 
   private async syncUnprotectedBackends(): Promise<void> {
@@ -803,7 +814,8 @@ export class K8sNetworkService implements OnModuleInit {
   // the case that has to be loud.
   async enableProtectionProxy(
     namespace: string,
-    ingressName: string
+    ingressName: string,
+    protectingPaths: string[] = []
   ): Promise<ProtectionProxyResult> {
     this.ensureKubeConfig();
 
@@ -893,12 +905,37 @@ export class K8sNetworkService implements OnModuleInit {
     const networkingApi = this.kc.makeApiClient(k8s.NetworkingV1Api);
     try {
       const ingress = await networkingApi.readNamespacedIngress(cleanName, cleanNamespace);
+      const rows = await this.prisma.ingress.findMany({
+        where: { namespace: cleanNamespace, name: cleanName },
+        include: { service: { include: { ports: true } } }
+      });
+      const openRows = new Map(
+        rows
+          .filter(
+            (row) =>
+              row.protectionMode === 'none' &&
+              row.redirectTarget === null &&
+              !protectingPaths.includes(row.path || '/')
+          )
+          .map((row) => [row.path || '/', row])
+      );
       const rules = ingress.body.spec?.rules || [];
       for (const rule of rules) {
         for (const path of rule.http?.paths || []) {
-          path.backend = {
-            service: { name: proxyServiceName, port: { number: authServerPort } }
-          };
+          const openRow = openRows.get(path.path || '/');
+          if (!openRow) {
+            path.backend = {
+              service: { name: proxyServiceName, port: { number: authServerPort } }
+            };
+            continue;
+          }
+          if (path.backend?.service?.name !== proxyServiceName) continue;
+          const direct = await this.directBackend(openRow);
+          if (direct) {
+            path.backend = {
+              service: { name: direct.serviceName, port: { number: direct.servicePort } }
+            };
+          }
         }
       }
       const updated = await networkingApi.replaceNamespacedIngress(
@@ -918,7 +955,10 @@ export class K8sNetworkService implements OnModuleInit {
         );
         return 'failed';
       }
-      const stillDirect = paths.filter((path) => path.backend?.service?.name !== proxyServiceName);
+      const stillDirect = paths.filter(
+        (path) =>
+          !openRows.has(path.path || '/') && path.backend?.service?.name !== proxyServiceName
+      );
       if (stillDirect.length > 0) {
         this.logger.error(
           `Protection proxy NOT applied to ${cleanNamespace}/${cleanName}: ` +
@@ -936,36 +976,28 @@ export class K8sNetworkService implements OnModuleInit {
     }
   }
 
-  async disableProtectionProxy(
-    namespace: string,
-    ingressName: string,
-    originalServiceName: string,
-    originalServicePort: number
-  ): Promise<void> {
+  async disableProtectionProxy(namespace: string, ingressName: string): Promise<void> {
     this.ensureKubeConfig();
 
     const cleanNamespace = String(namespace || '').trim();
     const cleanName = String(ingressName || '').trim();
     if (!cleanNamespace || !cleanName) return;
 
-    const networkingApi = this.kc.makeApiClient(k8s.NetworkingV1Api);
     try {
-      const ingress = await networkingApi.readNamespacedIngress(cleanName, cleanNamespace);
-      const rules = ingress.body.spec?.rules || [];
-      for (const rule of rules) {
-        for (const path of rule.http?.paths || []) {
-          path.backend = {
-            service: { name: originalServiceName, port: { number: originalServicePort } }
-          };
-        }
+      const result = await this.syncIngressBackends(cleanNamespace, cleanName);
+      if (result === 'failed') {
+        this.logger.error(
+          `Backends not restored on ${cleanNamespace}/${cleanName}; Orchard retries within 10 minutes`
+        );
       }
-      await networkingApi.replaceNamespacedIngress(cleanName, cleanNamespace, ingress.body);
     } catch (error) {
-      console.error(`Failed to restore ingress backend: ${error.message}`);
+      this.logger.error(
+        `Failed to restore backends on ${cleanNamespace}/${cleanName}: ${k8sErrorMessage(error)}`
+      );
     }
 
     try {
-      await this.cleanupProtectionProxy(cleanNamespace, cleanName);
+      await this.cleanupProtectionProxy(cleanNamespace);
     } catch (error) {
       console.error(`Failed to clean up protection proxy: ${error.message}`);
     }

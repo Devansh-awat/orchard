@@ -1627,6 +1627,7 @@ export class IngressService implements OnModuleInit {
         ? mergeTarget.entrypoints
         : [];
       const mergedTlsEnabled = !!mergeTarget.tlsSecretName;
+      const walled = existingForHost.find((e) => e.protectionMode !== 'none');
 
       await this.k8sNetwork.updateIngress({
         namespace: mergeTarget.namespace,
@@ -1662,7 +1663,16 @@ export class IngressService implements OnModuleInit {
                 : undefined,
             statusAddress: mergeTarget.statusAddress,
             servicePort: pb.servicePort,
-            templateInstanceId: data.templateInstanceId ?? null
+            templateInstanceId: data.templateInstanceId ?? null,
+            ...(walled
+              ? {
+                  protectionMode: walled.protectionMode,
+                  protectionUsername: walled.protectionUsername,
+                  protectionPasswordHash: walled.protectionPasswordHash,
+                  protectionBypassSecret: walled.protectionBypassSecret,
+                  protectionBypassPaths: walled.protectionBypassPaths
+                }
+              : {})
           }
         });
 
@@ -1672,6 +1682,19 @@ export class IngressService implements OnModuleInit {
             where: { id: pb.serviceId },
             data: { domain: rawHost }
           });
+        }
+      }
+
+      if (walled) {
+        const result = await this.k8sNetwork.enableProtectionProxy(
+          mergeTarget.namespace,
+          mergeTarget.name
+        );
+        if (result !== 'applied') {
+          this.logger.error(
+            `Protection proxy not applied to ${mergeTarget.namespace}/${mergeTarget.name} (${result}); ` +
+              'Orchard retries within 10 minutes'
+          );
         }
       }
 
@@ -2217,10 +2240,7 @@ export class IngressService implements OnModuleInit {
 
     const firstRoute = pathBackends[0];
 
-    await this.syncBasicAuthOnUpdate(ingress, basicAuthPlan, clearBasicAuth, {
-      serviceName: firstRoute.serviceName,
-      servicePort: firstRoute.servicePort
-    });
+    await this.syncBasicAuthOnUpdate(ingress, basicAuthPlan, clearBasicAuth);
 
     await this.prisma.ingress.update({
       where: { id: ingressId },
@@ -2771,10 +2791,7 @@ export class IngressService implements OnModuleInit {
       throw new BadRequestException(`Couldn't update the domain in Kubernetes: ${error.message}`);
     }
 
-    await this.syncBasicAuthOnUpdate(ingress, basicAuthPlan, clearBasicAuth, {
-      serviceName: targetService.name,
-      servicePort: selectedPort.port
-    });
+    await this.syncBasicAuthOnUpdate(ingress, basicAuthPlan, clearBasicAuth);
 
     const annotationsPayload =
       Object.keys(sanitizedAnnotations).length > 0
@@ -2895,9 +2912,20 @@ export class IngressService implements OnModuleInit {
   private async enableProxyBasicAuth(
     namespace: string,
     ingressName: string,
-    plan: { username: string; passwordHash: string }
+    plan: { username: string; passwordHash: string },
+    onlyPath?: string | null
   ): Promise<void> {
-    const result = await this.k8sNetwork.enableProtectionProxy(namespace, ingressName);
+    const where = {
+      namespace,
+      name: ingressName,
+      ...(onlyPath === undefined ? {} : { path: onlyPath })
+    };
+    const rows = await this.prisma.ingress.findMany({ where, select: { path: true } });
+    const result = await this.k8sNetwork.enableProtectionProxy(
+      namespace,
+      ingressName,
+      rows.map((row) => row.path || '/')
+    );
     if (result !== 'applied') {
       throw new BadRequestException(
         "Couldn't put this domain behind basic auth, so it would have no password. " +
@@ -2906,7 +2934,7 @@ export class IngressService implements OnModuleInit {
     }
 
     await this.prisma.ingress.updateMany({
-      where: { namespace, name: ingressName },
+      where,
       data: {
         protectionMode: 'basic',
         protectionUsername: plan.username,
@@ -2924,25 +2952,22 @@ export class IngressService implements OnModuleInit {
    * blip and ten minutes of an unprotected host.
    */
   private async syncBasicAuthOnUpdate(
-    ingress: { id: string; namespace: string; name: string; protectionMode: IngressProtectionMode },
+    ingress: {
+      id: string;
+      namespace: string;
+      name: string;
+      path: string | null;
+      protectionMode: IngressProtectionMode;
+    },
     plan: BasicAuthPlan,
-    disableRequested: boolean,
-    upstream: { serviceName: string; servicePort: number } | null
+    disableRequested: boolean
   ): Promise<void> {
     if (plan.via === 'proxy') {
-      await this.enableProxyBasicAuth(ingress.namespace, ingress.name, plan);
+      await this.enableProxyBasicAuth(ingress.namespace, ingress.name, plan, ingress.path);
       return;
     }
 
     if (disableRequested && ingress.protectionMode === 'basic') {
-      if (upstream) {
-        await this.k8sNetwork.disableProtectionProxy(
-          ingress.namespace,
-          ingress.name,
-          upstream.serviceName,
-          upstream.servicePort
-        );
-      }
       await this.prisma.ingress.update({
         where: { id: ingress.id },
         data: {
@@ -2952,10 +2977,21 @@ export class IngressService implements OnModuleInit {
           protectionBypassSecret: null
         }
       });
+      await this.k8sNetwork.disableProtectionProxy(ingress.namespace, ingress.name);
       return;
     }
 
-    if (ingress.protectionMode === 'none') return;
+    if (ingress.protectionMode === 'none') {
+      const walledSiblings = await this.prisma.ingress.count({
+        where: {
+          namespace: ingress.namespace,
+          name: ingress.name,
+          id: { not: ingress.id },
+          OR: [{ protectionMode: { not: 'none' } }, { redirectTarget: { not: null } }]
+        }
+      });
+      if (walledSiblings === 0) return;
+    }
 
     const result = await this.k8sNetwork.enableProtectionProxy(ingress.namespace, ingress.name);
     if (result === 'applied') return;
@@ -3064,21 +3100,10 @@ export class IngressService implements OnModuleInit {
       normalizedBypassPaths = [];
     }
 
-    if (wasProtected && !willProtect) {
-      const serviceName = ingress.service?.name;
-      const servicePort = ingress.service?.ports?.[0]?.port || ingress.service?.port;
-      if (serviceName && servicePort) {
-        await this.k8sNetwork.disableProtectionProxy(
-          ingress.namespace,
-          ingress.name,
-          serviceName,
-          Number(servicePort)
-        );
-      }
-    }
-
     if (willProtect) {
-      const result = await this.k8sNetwork.enableProtectionProxy(ingress.namespace, ingress.name);
+      const result = await this.k8sNetwork.enableProtectionProxy(ingress.namespace, ingress.name, [
+        ingress.path || '/'
+      ]);
       if (result === 'failed') {
         // Saying "protected" while the app is still served directly is the one
         // outcome worth failing the request over. The 10-minute reconciler
@@ -3109,6 +3134,10 @@ export class IngressService implements OnModuleInit {
       }
     });
 
+    if (wasProtected && !willProtect) {
+      await this.k8sNetwork.disableProtectionProxy(ingress.namespace, ingress.name);
+    }
+
     void this.audit.log({
       action: willProtect ? 'ingress.protection.enabled' : 'ingress.protection.disabled',
       actorUserId: userId,
@@ -3123,8 +3152,23 @@ export class IngressService implements OnModuleInit {
     return {
       protectionMode: mode,
       protectionBypassSecret: willProtect ? protectionBypassSecret : null,
-      protectionBypassPaths: normalizedBypassPaths
+      protectionBypassPaths: normalizedBypassPaths,
+      openPaths: await this.openPathsBeside(projectId, ingress.host, ingressId)
     };
+  }
+
+  private async openPathsBeside(projectId: string, host: string, ingressId: string) {
+    const rows = await this.prisma.ingress.findMany({
+      where: {
+        projectId,
+        host,
+        id: { not: ingressId },
+        protectionMode: 'none',
+        redirectTarget: null
+      },
+      select: { path: true }
+    });
+    return rows.map((row) => row.path || '/').sort();
   }
 
   async getIngressProtection(projectId: string, ingressId: string, userId: string) {
@@ -3159,7 +3203,8 @@ export class IngressService implements OnModuleInit {
       protectionMode: ingress.protectionMode,
       protectionUsername: ingress.protectionMode === 'basic' ? ingress.protectionUsername : null,
       protectionBypassSecret:
-        ingress.protectionMode !== 'none' ? this.crypto.open(ingress.protectionBypassSecret) : null
+        ingress.protectionMode !== 'none' ? this.crypto.open(ingress.protectionBypassSecret) : null,
+      openPaths: await this.openPathsBeside(projectId, ingress.host, ingressId)
     };
   }
 }

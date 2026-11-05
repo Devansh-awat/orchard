@@ -643,6 +643,8 @@ Modes:
 
 \`bypassPaths\` stay reachable without auth, which is how you keep a webhook endpoint or \`/health\` working behind protection.
 
+Each path on a domain is protected on its own. The reply lists the other paths on this domain that are still public in \`openPaths\`.
+
 Not available on redirect domains. Switching away from \`password\`/\`basic\` discards the stored credential, so re-enabling means setting a new one.`,
       inputSchema: {
         projectId: z.guid().describe('The project UUID that owns the ingress'),

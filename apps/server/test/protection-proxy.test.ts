@@ -41,10 +41,14 @@ function notFound() {
 
 // Builds a service with just enough wiring for enableProtectionProxy to run.
 // `onReplace` decides what the API server "persists" and hands back.
-function buildService(opts: { readIngress: () => any; onReplace?: (body: any) => any }) {
+function buildService(opts: {
+  readIngress: () => any;
+  onReplace?: (body: any) => any;
+  rows?: any[];
+}) {
   const svc = Object.create(K8sNetworkService.prototype) as any;
   svc.logger = { error() {}, warn() {}, log() {} };
-  svc.prisma = {};
+  svc.prisma = { ingress: { findMany: async () => opts.rows ?? [], update: async () => ({}) } };
   // kc is a prototype getter that reads through to KubernetesService, so the
   // stub has to go there rather than on the instance.
   svc.kubernetes = {
@@ -268,7 +272,7 @@ function teardownHarness(count: () => Promise<number>) {
   const deleted: string[] = [];
   const svc = Object.create(K8sNetworkService.prototype) as any;
   svc.logger = { error() {}, warn() {}, log() {} };
-  svc.prisma = { ingress: { count } };
+  svc.prisma = { ingress: { count, findMany: async () => [] } };
   svc.kubernetes = {
     ensureKubeConfig() {},
     kc: {
@@ -315,4 +319,147 @@ test('a failed count keeps the proxy', async () => {
   });
   await svc.disableProtectionProxy('ns', 'app-ing', 'app', 80);
   assert.deepEqual(deleted, []);
+});
+
+function pathIngress(paths: { path: string; service: string; port?: number }[]) {
+  return {
+    body: {
+      metadata: { name: 'app-ing', namespace: 'ns' },
+      spec: {
+        rules: [
+          {
+            host: 'app.example.com',
+            http: {
+              paths: paths.map((p) => ({
+                path: p.path,
+                backend: { service: { name: p.service, port: { number: p.port ?? 80 } } }
+              }))
+            }
+          }
+        ]
+      }
+    }
+  };
+}
+
+function backendsOf(body: any) {
+  return Object.fromEntries(
+    body.spec.rules[0].http.paths.map((p: any) => [p.path, p.backend.service.name])
+  );
+}
+
+function pathRow(path: string, mode: string, service: string, port = 80) {
+  return {
+    id: `row${path}`,
+    path,
+    protectionMode: mode,
+    redirectTarget: null,
+    servicePort: port,
+    service: { name: service, port, ports: [{ port }] }
+  };
+}
+
+test('an open path keeps its own app while its sibling goes behind the proxy', async () => {
+  let saved: any;
+  const svc = buildService({
+    readIngress: () =>
+      pathIngress([
+        { path: '/', service: 'web' },
+        { path: '/docs', service: 'docs' }
+      ]),
+    rows: [pathRow('/', 'password', 'web'), pathRow('/docs', 'none', 'docs')],
+    onReplace: (body) => {
+      saved = body;
+      return { body };
+    }
+  });
+  assert.equal(await svc.enableProtectionProxy('ns', 'app-ing'), 'applied');
+  assert.deepEqual(backendsOf(saved), { '/': PROXY, '/docs': 'docs' });
+});
+
+test('a path going behind the proxy is walled before its row says so', async () => {
+  let saved: any;
+  const svc = buildService({
+    readIngress: () => pathIngress([{ path: '/', service: 'web' }]),
+    rows: [pathRow('/', 'none', 'web')],
+    onReplace: (body) => {
+      saved = body;
+      return { body };
+    }
+  });
+  assert.equal(await svc.enableProtectionProxy('ns', 'app-ing', ['/']), 'applied');
+  assert.deepEqual(backendsOf(saved), { '/': PROXY });
+});
+
+test('a path with no row goes behind the proxy', async () => {
+  let saved: any;
+  const svc = buildService({
+    readIngress: () =>
+      pathIngress([
+        { path: '/', service: 'web' },
+        { path: '/new', service: 'web' }
+      ]),
+    rows: [pathRow('/', 'password', 'web')],
+    onReplace: (body) => {
+      saved = body;
+      return { body };
+    }
+  });
+  assert.equal(await svc.enableProtectionProxy('ns', 'app-ing'), 'applied');
+  assert.deepEqual(backendsOf(saved), { '/': PROXY, '/new': PROXY });
+});
+
+test('a path just made public leaves the proxy for its own app and port', async () => {
+  let saved: any;
+  const svc = buildService({
+    readIngress: () =>
+      pathIngress([
+        { path: '/', service: PROXY, port: 3001 },
+        { path: '/docs', service: PROXY, port: 3001 }
+      ]),
+    rows: [pathRow('/', 'password', 'web'), pathRow('/docs', 'none', 'docs', 8080)],
+    onReplace: (body) => {
+      saved = body;
+      return { body };
+    }
+  });
+  assert.equal(await svc.enableProtectionProxy('ns', 'app-ing'), 'applied');
+  const docs = saved.spec.rules[0].http.paths.find((p: any) => p.path === '/docs');
+  assert.equal(docs.backend.service.name, 'docs');
+  assert.equal(docs.backend.service.port.number, 8080);
+});
+
+test('a database failure changes nothing and reports the wall as failed', async () => {
+  let replaced = false;
+  const svc = buildService({
+    readIngress: () => pathIngress([{ path: '/', service: 'web' }]),
+    onReplace: (body) => {
+      replaced = true;
+      return { body };
+    }
+  });
+  (svc as any).prisma.ingress.findMany = async () => {
+    throw new Error('database down');
+  };
+  assert.equal(await svc.enableProtectionProxy('ns', 'app-ing'), 'failed');
+  assert.equal(replaced, false);
+});
+
+test('turning protection off sends every path back to its own app', async () => {
+  let saved: any;
+  const svc = buildService({
+    readIngress: () =>
+      pathIngress([
+        { path: '/', service: PROXY, port: 3001 },
+        { path: '/api', service: PROXY, port: 3001 }
+      ]),
+    rows: [pathRow('/', 'none', 'web'), pathRow('/api', 'none', 'api', 9000)],
+    onReplace: (body) => {
+      saved = body;
+      return { body };
+    }
+  });
+  (svc as any).cleanupProtectionProxy = async () => {};
+  await svc.disableProtectionProxy('ns', 'app-ing');
+  assert.deepEqual(backendsOf(saved), { '/': 'web', '/api': 'api' });
 });

@@ -61399,6 +61399,12 @@
                 "schema": {
                   "additionalProperties": {},
                   "properties": {
+                    "openPaths": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
                     "protectionBypassSecret": {
                       "type": [
                         "string",
@@ -61491,6 +61497,12 @@
                 "schema": {
                   "additionalProperties": {},
                   "properties": {
+                    "openPaths": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
                     "protectionBypassSecret": {
                       "type": [
                         "string",

@@ -470,7 +470,8 @@ const githubDeploymentRecord = z
 const protectionResponse = z
   .object({
     protectionMode: z.enum(['none', 'password', 'orchard']),
-    protectionBypassSecret: z.string().nullable()
+    protectionBypassSecret: z.string().nullable(),
+    openPaths: z.array(z.string()).optional()
   })
   .passthrough();
 

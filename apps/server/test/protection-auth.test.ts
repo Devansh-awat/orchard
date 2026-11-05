@@ -6,7 +6,12 @@ process.env.JWT_SECRET = 'protection-auth-test-secret';
 process.env.FRONTEND_URL = 'https://orchard.test';
 
 // oxlint-disable-next-line import/first
-import { ProtectionService } from '../src/auth/protection.service';
+import {
+  ProtectionService,
+  pickIngressForPath,
+  protectionCookieName,
+  upstreamPortFor
+} from '../src/auth/protection.service';
 import { SecretCryptoService } from '../src/crypto/secret-crypto.service';
 
 // Everything a user's private app is worth sits behind checkProtection. These
@@ -39,7 +44,9 @@ function buildService(row: Record<string, unknown> | null) {
   svc.basicAuthFailures = new Map();
   svc.throttle = offlineThrottle();
   svc.crypto = new SecretCryptoService();
-  svc.prisma = { ingress: { findFirst: async () => row, findUnique: async () => row } };
+  svc.prisma = {
+    ingress: { findMany: async () => (row ? [row] : []), findUnique: async () => row }
+  };
   svc.authz = { resolveProjectAccess: async () => ({ canView: true }) };
   return svc as ProtectionService;
 }
@@ -384,9 +391,9 @@ test('a second lookup returning nothing cannot slip past the wall', async () => 
   let calls = 0;
   (svc as any).prisma = {
     ingress: {
-      findFirst: async () => {
+      findMany: async () => {
         calls += 1;
-        return calls === 1 ? protectedRow() : null;
+        return calls === 1 ? [protectedRow()] : [];
       }
     }
   };
@@ -750,4 +757,97 @@ test('the protection cookie is only marked Secure on an https domain', async () 
     await cookieFor({ id: 'i1', tlsSecretName: null, entrypoints: ['web'] }),
     /Secure/
   );
+});
+
+test('a request answers to the longest protected path it falls under', () => {
+  const rows = [{ path: '/' }, { path: '/admin' }, { path: '/admin/keys/' }];
+  assert.equal(pickIngressForPath(rows, '/x')?.path, '/');
+  assert.equal(pickIngressForPath(rows, '/admin')?.path, '/admin');
+  assert.equal(pickIngressForPath(rows, '/admin/x?y=1')?.path, '/admin');
+  assert.equal(pickIngressForPath(rows, '/admin/keys/1')?.path, '/admin/keys/');
+  assert.equal(pickIngressForPath(rows, '/%61dmin/x')?.path, '/admin');
+  assert.equal(pickIngressForPath(rows, '/x/../admin')?.path, '/admin');
+});
+
+test('a path that fits no protected row still meets a challenge', () => {
+  const rows = [{ path: '/admin' }, { path: '/billing' }];
+  assert.equal(pickIngressForPath(rows, '/other')?.path, '/admin');
+  assert.equal(pickIngressForPath(rows, '/adminish')?.path, '/admin');
+  assert.equal(pickIngressForPath([], '/other'), null);
+});
+
+test('a path two parsers could read differently never picks between rows', () => {
+  const rows = [{ path: '/' }, { path: '/admin' }];
+  assert.equal(pickIngressForPath(rows, '/x/%2e%2e/admin'), null);
+  assert.equal(pickIngressForPath([{ path: '/' }], '/x/%2e%2e/admin')?.path, '/');
+});
+
+test('the upstream port comes from the row only when the service has it', () => {
+  const service = { port: 3000, ports: [{ port: 3000 }, { port: 8080 }] };
+  assert.equal(upstreamPortFor({ servicePort: 8080, service }), 8080);
+  assert.equal(upstreamPortFor({ servicePort: 80, service }), 3000);
+  assert.equal(upstreamPortFor({ servicePort: null, service }), 3000);
+  assert.equal(upstreamPortFor({ servicePort: 80, service: null }), null);
+});
+
+test('signing in to one path does not sign anyone out of another', async () => {
+  const admin = protectedRow({ id: 'aaaa-bbbb', path: '/admin', protectionMode: 'password' });
+  const root = protectedRow({ id: 'cccc-dddd', path: '/', protectionMode: 'password' });
+  const svc = buildService(null);
+  (svc as any).prisma.ingress.findMany = async () => [root, admin];
+  assert.equal(protectionCookieName(root as any), '_orchard_protection');
+  assert.equal(protectionCookieName(admin as any), '_orchard_protection_aaaabbbb');
+
+  const rootCookie = await svc.generateProtectionCookie('cccc-dddd', 'password');
+  const adminCookie = await svc.generateProtectionCookie('aaaa-bbbb', 'password');
+  const both = `_orchard_protection=${rootCookie}; _orchard_protection_aaaabbbb=${adminCookie}`;
+
+  assert.equal((await svc.checkProtection(HOST, '/admin/x', both, undefined)).allow, true);
+  assert.equal((await svc.checkProtection(HOST, '/', both, undefined)).allow, true);
+  const rootOnly = await svc.checkProtection(
+    HOST,
+    '/admin/x',
+    `_orchard_protection=${rootCookie}`,
+    undefined
+  );
+  assert.equal(rootOnly.allow, false);
+});
+
+test('a cookie for one path does not open another under a different name', async () => {
+  const admin = protectedRow({ id: 'aaaa-bbbb', path: '/admin', protectionMode: 'password' });
+  const root = protectedRow({ id: 'cccc-dddd', path: '/', protectionMode: 'password' });
+  const svc = buildService(null);
+  (svc as any).prisma.ingress.findMany = async () => [root, admin];
+  const rootCookie = await svc.generateProtectionCookie('cccc-dddd', 'password');
+  const forged = `_orchard_protection_aaaabbbb=${rootCookie}`;
+  assert.equal((await svc.checkProtection(HOST, '/admin', forged, undefined)).allow, false);
+});
+
+test('the proxy forwards to the app behind the path that was asked for', async () => {
+  const web = protectedRow({
+    id: 'web-row',
+    path: '/',
+    service: { name: 'web', port: 3000, ports: [{ port: 3000 }] }
+  });
+  const api = protectedRow({
+    id: 'api-row',
+    path: '/api',
+    servicePort: 9000,
+    service: { name: 'api', port: 8000, ports: [{ port: 8000 }, { port: 9000 }] }
+  });
+  const svc = buildService(null);
+  (svc as any).prisma.ingress.findMany = async () => [web, api];
+  const seen: [string, number][] = [];
+  (svc as any).proxyToUpstream = async (_req: any, _res: any, host: string, port: number) => {
+    seen.push([host, port]);
+  };
+  const res: any = { setHeader() {}, status: () => ({ send() {} }) };
+  const cookie = await svc.generateProtectionCookie('api-row', 'u1');
+  const request = {
+    hostname: HOST,
+    headers: { cookie: `_orchard_protection_apirow=${cookie}` },
+    originalUrl: '/api/things'
+  } as any;
+  assert.equal(await svc.handleProxyRequest(request, res), true);
+  assert.deepEqual(seen, [['api.ns.svc.cluster.local', 9000]]);
 });

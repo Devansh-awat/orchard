@@ -33,8 +33,13 @@ interface CachedIngress {
   host: string;
   tlsSecretName: string | null;
   entrypoints: string[];
+  path: string | null;
   upstreamHost: string | null;
   upstreamPort: number | null;
+}
+
+interface CachedHost {
+  rows: CachedIngress[];
   expiresAt: number;
 }
 
@@ -69,6 +74,42 @@ export function normalizeRequestPath(originalUrl: string): string {
     segments.push(segment);
   }
   return `/${segments.join('/')}`;
+}
+
+function rowPrefix(row: { path?: string | null }): string {
+  return (row.path || '/').replace(/\/+$/, '');
+}
+
+// Only paths behind the wall reach the proxy, so every request answers to one
+// of these rows. A path that fits none of them still gets a row's challenge.
+export function pickIngressForPath<T extends { path?: string | null }>(
+  rows: T[],
+  requestUrl: string
+): T | null {
+  if (rows.length <= 1) return rows[0] ?? null;
+  if (pathIsAmbiguous(requestUrl)) return null;
+  const requestPath = normalizeRequestPath(requestUrl);
+  const longestFirst = [...rows].sort((a, b) => rowPrefix(b).length - rowPrefix(a).length);
+  return (
+    longestFirst.find((row) => requestPath.startsWith(rowPrefix(row))) ??
+    longestFirst[longestFirst.length - 1]
+  );
+}
+
+export function upstreamPortFor(row: {
+  servicePort?: number | null;
+  service?: { port?: number | null; ports?: { port: number }[] } | null;
+}): number | null {
+  const known = [row.service?.port, ...(row.service?.ports ?? []).map((p) => p.port)].filter(
+    (port): port is number => !!port
+  );
+  if (row.servicePort && known.includes(row.servicePort)) return row.servicePort;
+  return known[0] ?? null;
+}
+
+export function protectionCookieName(row: { id: string; path?: string | null }): string {
+  const prefix = rowPrefix(row);
+  return prefix ? `_orchard_protection_${row.id.replace(/-/g, '')}` : '_orchard_protection';
 }
 
 export function redirectLocationFor(requestTarget: string, redirectTarget: string): string {
@@ -156,7 +197,7 @@ export class ProtectionService {
 
   private readonly frontendUrl: string;
 
-  private readonly ingressCache = new Map<string, CachedIngress>();
+  private readonly ingressCache = new Map<string, CachedHost>();
 
   private readonly negativeCache = new Map<string, number>();
 
@@ -176,14 +217,18 @@ export class ProtectionService {
     this.frontendUrl = process.env.FRONTEND_URL || 'https://orchard.my';
   }
 
-  async resolveIngressFromHost(host: string): Promise<CachedIngress | null> {
+  async resolveIngressFromHost(host: string, requestUrl = '/'): Promise<CachedIngress | null> {
+    return pickIngressForPath(await this.walledRowsForHost(host), requestUrl);
+  }
+
+  private async walledRowsForHost(host: string): Promise<CachedIngress[]> {
     const cached = this.ingressCache.get(host);
-    if (cached && cached.expiresAt > Date.now()) return cached;
+    if (cached && cached.expiresAt > Date.now()) return cached.rows;
 
     const negativeExpiry = this.negativeCache.get(host);
-    if (negativeExpiry && negativeExpiry > Date.now()) return null;
+    if (negativeExpiry && negativeExpiry > Date.now()) return [];
 
-    const ingress = await this.prisma.ingress.findFirst({
+    const ingresses = await this.prisma.ingress.findMany({
       where: {
         host,
         OR: [{ protectionMode: { not: 'none' } }, { redirectTarget: { not: null } }]
@@ -192,6 +237,8 @@ export class ProtectionService {
         id: true,
         projectId: true,
         namespace: true,
+        path: true,
+        servicePort: true,
         protectionMode: true,
         protectionUsername: true,
         protectionPasswordHash: true,
@@ -203,26 +250,25 @@ export class ProtectionService {
         tlsSecretName: true,
         entrypoints: true,
         project: { select: { organizationId: true, name: true } },
-        service: { select: { name: true, port: true } }
+        service: { select: { name: true, port: true, ports: { select: { port: true } } } }
       }
     });
 
-    if (!ingress) {
+    if (ingresses.length === 0) {
       this.negativeCache.set(host, Date.now() + 30_000);
-      return null;
+      return [];
     }
 
-    const entry: CachedIngress = {
+    const rows: CachedIngress[] = ingresses.map((ingress) => ({
       ...ingress,
       protectionBypassSecret: this.crypto.open(ingress.protectionBypassSecret),
       upstreamHost: ingress.service
         ? `${ingress.service.name}.${ingress.namespace}.svc.cluster.local`
         : null,
-      upstreamPort: ingress.service?.port ?? null,
-      expiresAt: Date.now() + 5_000
-    };
-    this.ingressCache.set(host, entry);
-    return entry;
+      upstreamPort: upstreamPortFor(ingress)
+    }));
+    this.ingressCache.set(host, { rows, expiresAt: Date.now() + 5_000 });
+    return rows;
   }
 
   async checkProtection(
@@ -233,7 +279,7 @@ export class ProtectionService {
     authorizationHeader?: string | undefined,
     clientIp?: string | undefined
   ): Promise<ProtectionDecision> {
-    const ingress = await this.resolveIngressFromHost(host);
+    const ingress = await this.resolveIngressFromHost(host, originalPath);
     // Fail closed. A host we cannot resolve is not a host we can vouch for,
     // and handleProxyRequest resolves the ingress separately before calling
     // this, so returning allow here would proxy to an upstream we just
@@ -321,13 +367,13 @@ export class ProtectionService {
           status: 302,
           headers: {
             location: `${origin}${cleanPath}`,
-            'set-cookie': `_orchard_protection=${cookieJwt}; Path=/; HttpOnly;${secureFlag} SameSite=Lax; Max-Age=604800`
+            'set-cookie': `${protectionCookieName(ingress)}=${cookieJwt}; Path=/; HttpOnly;${secureFlag} SameSite=Lax; Max-Age=604800`
           }
         };
       }
     }
 
-    const protectionCookie = this.extractCookie(cookieHeader, '_orchard_protection');
+    const protectionCookie = this.extractCookie(cookieHeader, protectionCookieName(ingress));
     if (protectionCookie) {
       const payload = await this.verifyProtectionJwt(protectionCookie, 'protection', ingress.id);
       if (payload) return { allow: true };
@@ -533,7 +579,7 @@ export class ProtectionService {
 
   async handleProxyRequest(req: Request, res: Response): Promise<boolean> {
     const host = (req.hostname || req.headers.host || '').toLowerCase().replace(/:\d+$/, '');
-    const ingress = await this.resolveIngressFromHost(host);
+    const ingress = await this.resolveIngressFromHost(host, req.originalUrl || req.url);
     if (!ingress) return false;
 
     if (ingress.redirectTarget) {
@@ -581,7 +627,7 @@ export class ProtectionService {
     const host = String(req.headers.host || '')
       .toLowerCase()
       .replace(/:\d+$/, '');
-    const ingress = await this.resolveIngressFromHost(host);
+    const ingress = await this.resolveIngressFromHost(host, req.url || '/');
     if (!ingress) return false;
 
     if (ingress.redirectTarget) {
@@ -637,7 +683,7 @@ export class ProtectionService {
       }
     }
     if (!allowed && ingress.protectionMode !== 'basic') {
-      const cookie = this.extractCookie(req.headers.cookie, '_orchard_protection');
+      const cookie = this.extractCookie(req.headers.cookie, protectionCookieName(ingress));
       if (cookie) {
         allowed = !!(await this.verifyProtectionJwt(cookie, 'protection', ingress.id));
       }
