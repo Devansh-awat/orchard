@@ -27,6 +27,14 @@ At any access level, a token cannot register a passkey, set a password, or call 
 
 Tokens cannot manage an organization's SSO or SCIM, or change passkeys. A token restricted to projects can also not use account routes, such as sessions, tokens, GitHub, or invitations, apart from reading its own user.
 
+## Tokens and single sign-on
+
+An organization that [requires single sign-on](/teams/sso/#require-single-sign-on) only accepts tokens created after signing in through its provider. Such a token works in that organization and nowhere else, and its row in the list says so. It also can't create more tokens.
+
+A token created any other way gets a `403` with the error `org_sso_required` in that organization, and keeps working in your other organizations. To fix this, sign in through the organization's provider and create a new token at **Account settings** > **API tokens**.
+
+Owners of the organization are exempt.
+
 ## Create a token
 
 <Tabs syncKey="dashPlusCli">

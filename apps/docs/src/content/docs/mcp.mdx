@@ -124,6 +124,8 @@ Before you approve, check the following:
 
 The API enforces the scope on every call. Access tokens last one day and the client refreshes them. A connection that is unused for 30 days must sign in again.
 
+An organization that [requires single sign-on](/teams/sso/#require-single-sign-on) refuses connections made without its provider. Sign in through the provider, then connect the client again. That connection only reaches that organization.
+
 ### Limit a connection with the URL
 
 Add `scope` to the server URL to lower what a connection can get. This parameter cannot raise access.

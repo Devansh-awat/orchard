@@ -68,10 +68,16 @@ Requiring single sign-on applies at two levels, depending on who owns the member
 | Email on one of your [verified domains](#verify-an-email-domain) | Orchard blocks email codes, passkeys, passwords, and instance providers for the whole account, and signs out sessions that used them.       |
 | Any other email                                                  | The person keeps their Orchard account and their other organizations. They need your provider to open this organization. Owners are exempt. |
 
+Requiring single sign-on also applies to API tokens and [MCP connections](/mcp/). One made without your provider can't reach this organization and gets a `403` with the error `org_sso_required`. It keeps working in the person's other organizations. Owners and superadmins are exempt.
+
+To regain access, members sign in through your provider, then create a new [API token](/account/tokens/#tokens-and-single-sign-on) or reconnect their MCP client. Scripts and CI jobs that use an older token stop working in this organization until someone replaces it.
+
+[Deployment webhooks](/run/webhooks/) and [SCIM](/teams/scim/) tokens are not tied to anyone's sign-in, and keep working.
+
 Your provider can only sign in as an existing account if its email is on a verified domain, or the person started the sign-in from their own Orchard session. Otherwise Orchard asks them to sign in to Orchard first.
 
 :::caution
-Test a connection before you turn this on. A provider that fails blocks members on your verified domains from Orchard, and every other member except owners from this organization. Superadmins are never blocked.
+Test a connection before you turn this on. A provider that fails blocks members on your verified domains from Orchard, and every other member except owners from this organization. Superadmins are never blocked. Replace the API tokens your scripts and CI jobs use before you turn this on.
 :::
 
 1. In **Single sign-on**, turn on **Require single sign-on**.
