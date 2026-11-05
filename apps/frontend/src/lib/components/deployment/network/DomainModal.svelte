@@ -300,11 +300,13 @@
 					>
 				{/if}
 
-				{#if error}
+				{#if error?.startsWith('Prove you own') && normalizedHost}
+					<Alert tone="warning"
+						>Add these records to prove you own {normalizedHost}, then add the domain again.</Alert
+					>
+					<DnsSetup host={normalizedHost} {onCheckDns} />
+				{:else if error}
 					<Alert tone="error">{error}</Alert>
-					{#if error.startsWith('Prove you own') && normalizedHost}
-						<DnsSetup host={normalizedHost} {onCheckDns} />
-					{/if}
 				{/if}
 			</form>
 		{/if}
