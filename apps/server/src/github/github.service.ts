@@ -1896,7 +1896,9 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
       where: {
         githubInstallationId: installationId,
         autoDeployEnabled: true,
-        ...(repoId == null ? byUrl : { OR: [byUrl, { githubRepoId: repoId }] })
+        ...(repoId == null
+          ? byUrl
+          : { OR: [{ ...byUrl, githubRepoId: null }, { githubRepoId: repoId }] })
       },
       include: {
         project: {

@@ -121,7 +121,8 @@ import {
   assertImageOwnedByProject,
   assertIngressNameFree,
   assertRepoNameFree,
-  newImageTag
+  newImageTag,
+  splitRegistryCleanup
 } from './image-ownership';
 
 const ROLLBACK_GATE_TIMEOUT_MS = 90_000;
@@ -2066,12 +2067,17 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     // Delete all associated repositories from Harbor in the background
     if (imageHistoryEntries.length > 0) {
       const imageRefs = imageHistoryEntries.map((entry) => entry.image);
-      this.dockerService.deleteRepositoriesFromRegistry(imageRefs).catch((err) => {
-        console.error(
-          `[Projects] Failed to delete repositories from registry for deployment ${deploymentId}:`,
-          err
-        );
-      });
+      splitRegistryCleanup(this.prisma, deploymentId, imageRefs)
+        .then(async ({ repositories, tags }) => {
+          await this.dockerService.deleteRepositoriesFromRegistry(repositories);
+          await this.dockerService.deleteArtifactsFromRegistry(tags);
+        })
+        .catch((err) => {
+          console.error(
+            `[Projects] Failed to delete repositories from registry for deployment ${deploymentId}:`,
+            err
+          );
+        });
     }
 
     void this.audit.log({
@@ -2177,8 +2183,21 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
               .map(volumeClaim)
           )
         : new Set<string>();
+    const databaseClusters = deleteVolumes
+      ? await this.prisma.database.findMany({
+          where: { namespace: deployment.namespace },
+          select: { clusterName: true }
+        })
+      : [];
+    const backsDatabase = (claim: string) =>
+      databaseClusters.some((db) => db.clusterName && claim.startsWith(`${db.clusterName}-`));
     for (const volume of deleteVolumes ? volumes : []) {
-      if (volume.type === 'pvc' && volume.pvcName && !heldElsewhere.has(volume.pvcName)) {
+      if (
+        volume.type === 'pvc' &&
+        volume.pvcName &&
+        !heldElsewhere.has(volume.pvcName) &&
+        !backsDatabase(volume.pvcName)
+      ) {
         try {
           await this.kubernetesService.deletePVC(deployment.namespace, volume.pvcName);
         } catch (error) {
@@ -4051,6 +4070,12 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     if (existingServiceWithName) {
       throw new BadRequestException('A port with this name already exists in this project');
     }
+    await assertIngressNameFree(
+      this.prisma,
+      deployment.namespace,
+      normalizedName,
+      deployment.projectId
+    );
 
     const portsPayload = this.normalizeServicePortInputs(data.ports, {
       requireAtLeastOne: true

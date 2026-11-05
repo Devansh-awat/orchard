@@ -1,3 +1,4 @@
+import { truncateKeepingSuffix } from './projects.utils';
 import {
   Injectable,
   Logger,
@@ -116,9 +117,9 @@ export class EnvironmentsService {
     });
   }
 
-  private buildEnvNamespace(parts: string[]): string {
+  private buildEnvNamespace(parts: string[], suffix = ''): string {
     const sanitized = parts.map((p) => formatSlug(p)).filter((p) => p.length > 0);
-    const namespace = sanitized.join('-').substring(0, 63);
+    const namespace = sanitized.length ? truncateKeepingSuffix(sanitized.join('-'), suffix) : '';
     if (!namespace) throw new BadRequestException('Failed to build namespace');
     if (RESERVED_NAMESPACES.has(namespace)) {
       throw new ConflictException("This environment name isn't available");
@@ -131,17 +132,22 @@ export class EnvironmentsService {
     let attempt = 0;
     let namespace = this.buildEnvNamespace(base);
     while (true) {
-      const [envUse, projUse, trashUse] = await Promise.all([
+      const [envUse, projUse, trashUse, retired] = await Promise.all([
         this.prisma.environment.findFirst({ where: { namespace }, select: { id: true } }),
         this.prisma.project.findFirst({ where: { namespace }, select: { id: true } }),
         this.prisma.deletedDatabase.findFirst({
           where: { namespace, purgedAt: null, restoredAs: null },
           select: { id: true }
+        }),
+        this.prisma.retiredNamespace.findUnique({
+          where: { namespace },
+          select: { namespace: true }
         })
       ]);
-      if (!envUse && !projUse && !trashUse) return namespace;
+      if (!envUse && !projUse && !trashUse && !retired) return namespace;
       attempt += 1;
-      namespace = this.buildEnvNamespace([...base.slice(0, -1), `${baseSlug}-${attempt}`]);
+      if (attempt > 1000) throw new ConflictException("This environment name isn't available");
+      namespace = this.buildEnvNamespace(base, `-${attempt}`);
     }
   }
 

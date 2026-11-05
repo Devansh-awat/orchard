@@ -38,6 +38,7 @@ import { ProjectAccessService } from './project-access.service';
 import { EnvironmentsService } from './environments.service';
 import { BackupSyncService } from './backup-sync.service';
 import {
+  databaseClusterName,
   formatSlug,
   redactDatabaseForViewer,
   sealDatabaseCredentials,
@@ -659,8 +660,15 @@ export class DatabasesService {
       throw new BadRequestException('A database with this identifier already exists');
 
     // K8s resource name must match DNS-1123 (lowercase, hyphens, ≤53 chars to leave room for suffixes).
-    const clusterName = `pg-${formatSlug(nameInput).substring(0, 48)}`.replace(/^-+|-+$/g, '');
+    const clusterName = databaseClusterName(formatSlug(nameInput));
     const namespace = dbEnv?.namespace ?? project.namespace;
+    const clusterTaken = await this.prisma.database.findFirst({
+      where: { namespace, clusterName },
+      select: { id: true }
+    });
+    if (clusterTaken) {
+      throw new BadRequestException('A database with a very similar name already exists here');
+    }
 
     const org = await this.prisma.organization.findUnique({
       where: { id: project.organizationId },

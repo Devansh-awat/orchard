@@ -1,3 +1,4 @@
+import { splitRegistryCleanup } from './image-ownership';
 import { Injectable, Logger } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
 import { PrismaService } from '../prisma/prisma.service';
@@ -67,6 +68,14 @@ export class NamespaceTeardownService {
       this.logger.warn(`teardown of ${scope.namespace} ${message}`);
     };
 
+    await this.prisma.retiredNamespace
+      .upsert({
+        where: { namespace: scope.namespace },
+        create: { namespace: scope.namespace },
+        update: {}
+      })
+      .catch((err: unknown) => fail('retire the namespace', err));
+
     const deployments = await this.prisma.deployment.findMany({
       where,
       select: {
@@ -90,8 +99,14 @@ export class NamespaceTeardownService {
       const images = scope.keepData ? [] : deployment.imageHistory.map((entry) => entry.image);
       if (images.length > 0) {
         try {
-          await this.docker.deleteRepositoriesFromRegistry(images);
-          summary.registryRepositories += new Set(images.map((i) => i.split(':')[0])).size;
+          const { repositories, tags } = await splitRegistryCleanup(
+            this.prisma,
+            deployment.id,
+            images
+          );
+          await this.docker.deleteRepositoriesFromRegistry(repositories);
+          await this.docker.deleteArtifactsFromRegistry(tags);
+          summary.registryRepositories += new Set(repositories.map((i) => i.split(':')[0])).size;
         } catch (err) {
           fail(`delete registry repositories for ${deployment.name}`, err);
         }

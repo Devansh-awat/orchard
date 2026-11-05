@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import * as k8s from '@kubernetes/client-node';
-import { truncateK8sName } from '../projects/projects.utils';
+import { createHash } from 'crypto';
+import { truncateK8sName, truncateKeepingSuffix } from '../projects/projects.utils';
 import { loadKubeConfigFromPathOrBase64 } from '../kubernetes/kubeconfig';
 import { BUILDER_NAMESPACE } from './builder-namespace';
 import { buildArchNodeSelector } from './build-platform';
@@ -90,7 +91,10 @@ export class BuildKitPoolService {
   }
 
   private podName(tenantKey: string): string {
-    return truncateK8sName(`buildkitd-${this.sanitizeLabel(tenantKey)}`, 63);
+    const name = `buildkitd-${this.sanitizeLabel(tenantKey)}`;
+    if (name.length < 63 && tenantKey.toLowerCase() === this.sanitizeLabel(tenantKey)) return name;
+    const hash = createHash('sha256').update(tenantKey).digest('hex').slice(0, 8);
+    return truncateKeepingSuffix(name, `-${hash}`);
   }
 
   /**

@@ -33,14 +33,17 @@ import { traefikSelector } from '../src/metrics/ingress/traefik';
 import { haproxySelector } from '../src/metrics/ingress/haproxy';
 import {
   assertImageOwnedByProject,
+  assertIngressNameFree,
   assertRepoNameFree,
-  newImageTag
+  newImageTag,
+  splitRegistryCleanup
 } from '../src/projects/image-ownership';
+import { databaseClusterName, truncateKeepingSuffix } from '../src/projects/projects.utils';
 import { versionLabel } from '../src/observability/changes';
 import { ProjectAccessService } from '../src/projects/project-access.service';
 import { DatabaseTrashService } from '../src/projects/database-trash.service';
 import { buildSafeEnv, builderContainerEnv } from '../src/env/reserved-env';
-import { dockerfileDirGuard } from '../src/docker/image-builder.service';
+import { ImageBuilderService, dockerfileDirGuard } from '../src/docker/image-builder.service';
 import { sanitizeBuildLogMessage } from '../src/docker/build-log-redaction';
 import { stripOperationSecrets } from '../src/projects/strip-operation-secrets.interceptor';
 
@@ -336,6 +339,72 @@ test('a deleted database with no successor still gets its backups purged', async
   assert.equal(updates.length, 1);
 });
 
+test('app and port names are checked against other projects, in both shapes', async () => {
+  let where: any;
+  const prisma = {
+    deployment: {
+      findFirst: async (args: any) => {
+        where = args.where;
+        return null;
+      }
+    }
+  } as any;
+  await assertIngressNameFree(prisma, 'acme', 'labs-web', 'p1');
+  const split = where.OR.find((c: any) => c.namespace === 'acme-labs');
+  assert.deepEqual(split.OR, [{ name: 'web' }, { services: { some: { name: 'web' } } }]);
+  await assert.rejects(
+    () => assertIngressNameFree(prisma, 'acme-web-orchard', 'protection-proxy', 'p1'),
+    ConflictException
+  );
+});
+
+test('deleting an app keeps a repo another app still uses', async () => {
+  const prisma = {
+    deployment: {
+      findFirst: async ({ where }: any) =>
+        where.OR[0].image.contains === '/acme-shop-web:' ? { id: 'prod' } : null
+    }
+  } as any;
+  const result = await splitRegistryCleanup(prisma, 'staging', [
+    'r/orchard/acme-shop-web:v1',
+    'r/orchard/acme-shop-api:v1'
+  ]);
+  assert.deepEqual(result.tags, ['r/orchard/acme-shop-web:v1']);
+  assert.deepEqual(result.repositories, ['r/orchard/acme-shop-api:v1']);
+});
+
+test('only images Orchard built can be deleted from the registry', async () => {
+  const builder = Object.create(ImageBuilderService.prototype) as any;
+  Object.assign(builder, {
+    harborRegistryPush: 'push.example',
+    harborRegistryPull: 'pull.example',
+    pusherRegistryHost: 'push.example',
+    harborProject: 'orchard'
+  });
+  assert.equal(builder.parseImageRef('acme-web-api:latest'), null);
+  assert.equal(builder.parseImageRef('orchard/acme-web-api:latest'), null);
+  assert.equal(builder.parseImageRef('docker.io/orchard/acme-web-api:latest'), null);
+  assert.equal(builder.parseImageRef('pull.example/other/acme-web-api:v1'), null);
+  assert.deepEqual(builder.parseImageRef('pull.example/orchard/acme-web-api:v1'), {
+    repoName: 'acme-web-api',
+    tag: 'v1'
+  });
+});
+
+test('long names keep what makes them different when they get cut', () => {
+  const long = 'customer-analytics-warehouse-events-production-eu';
+  assert.equal(truncateKeepingSuffix(long, '-rabc123').endsWith('-rabc123'), true);
+  const first = truncateKeepingSuffix(`pg-${long}`, '-raaaaaaaa', 53);
+  const second = truncateKeepingSuffix(first.replace(/-r[0-9a-z]{6,}$/, ''), '-rbbbbbbbb', 53);
+  assert.notEqual(first, second);
+  assert.ok(second.length <= 53);
+  assert.equal(databaseClusterName('short-name'), 'pg-short-name');
+  const one = databaseClusterName(`${'a'.repeat(50)}-one`);
+  const two = databaseClusterName(`${'a'.repeat(50)}-two`);
+  assert.notEqual(one, two);
+  assert.ok(one.length <= 51);
+});
+
 test('operation records never carry the stored database password', () => {
   const at = new Date();
   const out = stripOperationSecrets({
@@ -507,11 +576,14 @@ test('an app name that collides with another project is refused', async () => {
     () => assertIngressNameFree(prisma(true), 'acme-a', 'b-web', 'p1'),
     /clashes/
   );
-  assert.deepEqual(seen[0].OR, [
-    { namespace: 'acme', name: 'a-b-web' },
-    { namespace: 'acme-a', name: 'b-web' },
-    { namespace: 'acme-a-b', name: 'web' }
-  ]);
+  assert.deepEqual(
+    seen[0].OR.map((c: any) => [c.namespace, c.OR[0].name]),
+    [
+      ['acme', 'a-b-web'],
+      ['acme-a', 'b-web'],
+      ['acme-a-b', 'web']
+    ]
+  );
   await assertIngressNameFree(prisma(false), 'acme-a', 'b-web', 'p1');
 });
 

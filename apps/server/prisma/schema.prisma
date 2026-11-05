@@ -1638,6 +1638,13 @@ model DatabaseCheckpoint {
   @@map("database_checkpoints")
 }
 
+model RetiredNamespace {
+  namespace String   @id @db.VarChar(100)
+  retiredAt DateTime @default(now()) @map("retired_at") @db.Timestamp(6)
+
+  @@map("retired_namespaces")
+}
+
 model DeletedDatabase {
   id                String    @id @db.Uuid
   projectId         String    @map("project_id") @db.Uuid

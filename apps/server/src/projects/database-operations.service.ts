@@ -42,7 +42,13 @@ import { normalizeBackupEndpointURL } from '../kubernetes/k8s-cnpg.service';
 import { clusterSettled } from '../kubernetes/postgres-images';
 import { clusterSnapshot } from '../kubernetes/cnpg-status';
 import { k8sErrorMessage } from '../kubernetes/k8s-error';
-import { defaultBackupCronFor, formatSlug, toQuartzCron, truncateK8sName } from './projects.utils';
+import {
+  defaultBackupCronFor,
+  formatSlug,
+  toQuartzCron,
+  truncateK8sName,
+  truncateKeepingSuffix
+} from './projects.utils';
 import type { DatabasesService } from './databases.service';
 import { EnvironmentsService } from './environments.service';
 import { hasBackupRoute } from '../instance-config/object-storage';
@@ -323,7 +329,7 @@ export class DatabaseOperationsService {
         startedAt: new Date(),
         targetNamespace: src.namespace,
         targetClusterName: rehearse
-          ? truncateK8sName(`${src.clusterName}-up${suffix.slice(-5)}`, 53)
+          ? truncateKeepingSuffix(src.clusterName, `-up${suffix.slice(-5)}`, 53)
           : src.clusterName,
         targetDatabaseId: src.databaseId,
         deadlineAt: new Date(Date.now() + RECOVERY_DEADLINE_MS)
@@ -351,8 +357,9 @@ export class DatabaseOperationsService {
       await this.setPhase(op, 'provisioning', {
         startedAt: new Date(),
         targetNamespace: src.namespace,
-        targetClusterName: truncateK8sName(
-          `${src.clusterName.replace(/-r[0-9a-z]{6,}$/, '')}-r${suffix}`,
+        targetClusterName: truncateKeepingSuffix(
+          src.clusterName.replace(/-r[0-9a-z]{6,}$/, ''),
+          `-r${suffix}`,
           53
         ),
         targetDatabaseId: src.databaseId
@@ -1281,6 +1288,25 @@ export class DatabaseOperationsService {
       const retired = (op.result as any)?.retired;
       if (!retired || retired.deleted || Date.parse(retired.retireAfter) > Date.now()) continue;
       try {
+        const stillLive = await this.prisma.database.findFirst({
+          where: { namespace: retired.namespace, clusterName: retired.clusterName },
+          select: { id: true }
+        });
+        if (stillLive) {
+          this.logger.warn(
+            `not retiring ${retired.namespace}/${retired.clusterName}: it holds a live database`
+          );
+          await this.prisma.databaseOperation.update({
+            where: { id: op.id },
+            data: {
+              result: {
+                ...(op.result as object),
+                retired: { ...retired, deleted: true, skipped: 'live' }
+              } as Prisma.InputJsonValue
+            }
+          });
+          continue;
+        }
         await this.k8sCnpg.deleteScheduledBackup(retired.namespace, retired.clusterName, {
           keepBackups: true
         });

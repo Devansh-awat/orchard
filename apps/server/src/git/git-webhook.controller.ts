@@ -64,7 +64,9 @@ export class GitWebhookController {
       where: {
         gitConnectionId: connectionId,
         autoDeployEnabled: true,
-        ...(push.externalRepoId ? { OR: [byUrl, { externalRepoId: push.externalRepoId }] } : byUrl)
+        ...(push.externalRepoId
+          ? { OR: [{ ...byUrl, externalRepoId: null }, { externalRepoId: push.externalRepoId }] }
+          : byUrl)
       }
     });
     const onBranch = rows.filter((d) => autoDeployMatchesBranch(d, push.branch));

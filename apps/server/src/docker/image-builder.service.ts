@@ -4436,8 +4436,9 @@ fi
 
   async imageExistsInRegistry(image: string): Promise<boolean | null> {
     try {
-      const { repoName, tag } = this.parseImageRef(image);
-      if (!tag) return null;
+      const parsed = this.parseImageRef(image);
+      if (!parsed?.tag) return null;
+      const { repoName, tag } = parsed;
       const auth = this.getHarborAuth();
       if (!auth) return null;
       const url = `${auth.registryUrl}/api/v2.0/projects/${this.harborProject}/repositories/${encodeURIComponent(repoName)}/artifacts/${encodeURIComponent(tag)}`;
@@ -4458,21 +4459,16 @@ fi
    * Parse an image string (e.g. registry.example.com/orchard/namespace-name:tag)
    * and return the repo name (without project prefix) and tag.
    */
-  private parseImageRef(image: string): { repoName: string; tag: string | null } {
-    const tagIndex = image.lastIndexOf(':');
-    const imagePath = tagIndex !== -1 ? image.substring(0, tagIndex) : image;
-    const tag = tagIndex !== -1 ? image.substring(tagIndex + 1) : null;
-
-    const registryPrefixes = [this.harborRegistryPush, this.harborRegistryPull];
-    let repo = imagePath;
-    for (const prefix of registryPrefixes) {
-      if (repo.startsWith(`${prefix}/`)) {
-        repo = repo.substring(prefix.length + 1);
-        break;
-      }
+  private parseImageRef(image: string): { repoName: string; tag: string | null } | null {
+    const [host, project, ref, ...rest] = image.split('/');
+    const hosts = [this.harborRegistryPush, this.harborRegistryPull, this.pusherRegistryHost];
+    if (rest.length > 0 || !ref || project !== this.harborProject || !hosts.includes(host)) {
+      return null;
     }
-    const repoName = repo.replace(`${this.harborProject}/`, '');
-    return { repoName, tag };
+    const tagIndex = ref.lastIndexOf(':');
+    return tagIndex === -1
+      ? { repoName: ref, tag: null }
+      : { repoName: ref.substring(0, tagIndex), tag: ref.substring(tagIndex + 1) };
   }
 
   private getHarborAuth(): { authHeader: string; registryUrl: string } | null {
@@ -4497,11 +4493,12 @@ fi
    */
   async deleteArtifactFromRegistry(image: string): Promise<void> {
     try {
-      const { repoName, tag } = this.parseImageRef(image);
-      if (!tag) {
-        console.warn(`[ImageBuilder] Cannot delete artifact without tag: ${image}`);
+      const parsed = this.parseImageRef(image);
+      if (!parsed?.tag) {
+        console.warn(`[ImageBuilder] Not deleting an image Orchard didn't build: ${image}`);
         return;
       }
+      const { repoName, tag } = parsed;
 
       const auth = this.getHarborAuth();
       if (!auth) return;
@@ -4606,7 +4603,9 @@ fi
    */
   async deleteRepositoryFromRegistry(image: string): Promise<void> {
     try {
-      const { repoName } = this.parseImageRef(image);
+      const parsed = this.parseImageRef(image);
+      if (!parsed) return;
+      const { repoName } = parsed;
 
       const auth = this.getHarborAuth();
       if (!auth) return;
@@ -4648,8 +4647,8 @@ fi
   async deleteRepositoriesFromRegistry(images: string[]): Promise<void> {
     const seenRepos = new Set<string>();
     for (const image of images) {
-      const { repoName } = this.parseImageRef(image);
-      if (!seenRepos.has(repoName)) {
+      const repoName = this.parseImageRef(image)?.repoName;
+      if (repoName && !seenRepos.has(repoName)) {
         seenRepos.add(repoName);
         await this.deleteRepositoryFromRegistry(image);
       }

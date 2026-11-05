@@ -109,13 +109,52 @@ export async function assertIngressNameFree(
   name: string,
   projectId: string
 ): Promise<void> {
-  const taken = await prisma.deployment.findFirst({
-    where: { projectId: { not: projectId }, OR: nameSplits(namespace, name) },
-    select: { id: true }
-  });
+  const reserved = `${namespace}-${name}`.endsWith('-orchard-protection-proxy');
+  const taken =
+    reserved ||
+    (await prisma.deployment.findFirst({
+      where: {
+        projectId: { not: projectId },
+        OR: nameSplits(namespace, name).map((split) => ({
+          namespace: split.namespace,
+          OR: [{ name: split.name }, { services: { some: { name: split.name } } }]
+        }))
+      },
+      select: { id: true }
+    }));
   if (taken) {
     throw new ConflictException(
       'This app name clashes with an app in another project. Choose a different name.'
     );
   }
+}
+
+function repoOf(image: string): string {
+  return (image.split('/').pop() ?? image).split(/[:@]/)[0];
+}
+
+export async function splitRegistryCleanup(
+  prisma: Pick<PrismaService, 'deployment'>,
+  deploymentId: string,
+  images: string[]
+): Promise<{ repositories: string[]; tags: string[] }> {
+  const repositories: string[] = [];
+  const tags: string[] = [];
+  const shared = new Map<string, boolean>();
+  for (const image of images) {
+    const repo = repoOf(image);
+    if (!shared.has(repo)) {
+      const contains = `/${repo}:`;
+      const other = await prisma.deployment.findFirst({
+        where: {
+          id: { not: deploymentId },
+          OR: [{ image: { contains } }, { imageHistory: { some: { image: { contains } } } }]
+        },
+        select: { id: true }
+      });
+      shared.set(repo, Boolean(other));
+    }
+    (shared.get(repo) ? tags : repositories).push(image);
+  }
+  return { repositories, tags };
 }

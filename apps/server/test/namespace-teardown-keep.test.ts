@@ -6,7 +6,9 @@ function harness() {
   const purged: string[] = [];
   const registry: string[][] = [];
   const prisma = {
+    retiredNamespace: { upsert: async () => ({}) },
     deployment: {
+      findFirst: async () => null,
       findMany: async () => [
         {
           id: 'd1',
@@ -32,7 +34,10 @@ function harness() {
   };
   const service = new NamespaceTeardownService(
     prisma as any,
-    { deleteRepositoriesFromRegistry: async (images: string[]) => registry.push(images) } as any,
+    {
+      deleteRepositoriesFromRegistry: async (images: string[]) => registry.push(images),
+      deleteArtifactsFromRegistry: async () => {}
+    } as any,
     { deleteBuildContext: async () => {} } as any,
     { purgeScope: async () => {} } as any,
     { removeBinding: async () => {} } as any,
@@ -40,7 +45,8 @@ function harness() {
     { log: async () => {} } as any,
     {
       get: () => ({
-        purgeBackupObjects: async (db: { name: string }) => purged.push(db.name)
+        purgeBackupObjects: async (db: { name: string }) => purged.push(db.name),
+        purgeForProject: async () => {}
       })
     } as any
   );
