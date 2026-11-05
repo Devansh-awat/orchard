@@ -33,6 +33,7 @@ export class ApiTokensController {
       apiTokenId?: string;
       tokenScopes?: string[];
       tokenProjectIds?: string[];
+      sessionOrgId?: string;
     };
     const expiresAt = body.expiresAt ? new Date(body.expiresAt) : undefined;
     return this.apiTokensService.create(
@@ -43,7 +44,8 @@ export class ApiTokensController {
       body.restrictedProjectIds,
       auth.apiTokenId
         ? { scopes: auth.tokenScopes ?? [], projectIds: auth.tokenProjectIds ?? [] }
-        : undefined
+        : undefined,
+      auth.sessionOrgId
     );
   }
 

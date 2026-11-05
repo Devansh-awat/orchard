@@ -30,15 +30,25 @@ import { scopeFromHeader } from '../mcp/mcp-scopes';
  * A session minted by one org's identity provider is confined to that org
  * (see RequestAuthContext.sessionOrgId), and the confinement is only worth
  * anything if the session cannot trade itself in for an unconfined one. Each
- * of these is a way to do exactly that: mint an API token, enrol a passkey,
- * move the account's email, adopt an SSH key, or accept an invitation into
- * some other tenant. The org tree itself is gated in AuthorizationService.
+ * of these is a way to do exactly that: enrol a passkey, move the account's
+ * email, adopt an SSH key, or accept an invitation into some other tenant. The
+ * org tree itself is gated in AuthorizationService.
+ *
+ * A browser session from the org's IdP may still mint an API token or an MCP
+ * grant, because both carry the same org limit. Tokens and devices themselves
+ * stay on the strict list, so a sandbox can't mint anything.
  *
  * Read-only self-identity stays reachable so the app can render.
  */
 
 // Method-qualified: reading your own identity is fine, editing it is not.
 const ORG_SCOPED_ALLOW = ['GET auth/me', 'POST auth/logout'];
+
+const ORG_SSO_SESSION_ALLOW = [
+  'POST auth/tokens',
+  'POST auth/mcp-token',
+  'POST auth/protect/exchange/orchard'
+];
 
 const API_TOKEN_DENY = [
   'auth/passkey/register',
@@ -136,6 +146,13 @@ export function deniedToOrgScopedSession(method: string, path: string): boolean 
     .replace(/\/+$/, '');
   if (ORG_SCOPED_ALLOW.includes(`${method.toUpperCase()} ${p}`)) return false;
   return ORG_SCOPED_DENY.some((d) => p === d.replace(/\/$/, '') || p.startsWith(d));
+}
+
+export function deniedToOrgSsoSession(method: string, path: string): boolean {
+  if (ORG_SSO_SESSION_ALLOW.includes(`${method.toUpperCase()} ${normalizedPath(path)}`)) {
+    return false;
+  }
+  return deniedToOrgScopedSession(method, path);
 }
 
 /**
@@ -374,7 +391,7 @@ export class SuperAdminGuard implements CanActivate {
       // Sessions minted by an organization's own IdP carry that org, and are
       // confined to it for the rest of the request.
       const orgScope = payload.orgScope as string | undefined;
-      if (orgScope && deniedToOrgScopedSession(request.method, request.path)) {
+      if (orgScope && deniedToOrgSsoSession(request.method, request.path)) {
         // Recorded rather than thrown: this block's catch falls through to the
         // API-token path, which would turn the refusal into a generic 401.
         orgScopeDenied = true;
@@ -452,23 +469,30 @@ export class SuperAdminGuard implements CanActivate {
       if (restrictedProjectIds.length > 0 && deniedToProjectToken(request.method, request.path)) {
         throw new ForbiddenException("A project token can't use account routes.");
       }
+      const tokenOrgScope = apiToken.scopeOrganizationId ?? undefined;
+      if (tokenOrgScope && deniedToOrgScopedSession(request.method, request.path)) {
+        throw new ForbiddenException('This token is scoped to a single organization');
+      }
       request['auth'] = {
         userId: user.id,
         apiTokenId: apiToken.id,
         tokenScopes: scopes,
-        tokenProjectIds: restrictedProjectIds
+        tokenProjectIds: restrictedProjectIds,
+        ...(tokenOrgScope ? { sessionOrgId: tokenOrgScope } : {})
       };
       request['tokenScopes'] = scopes;
       publishAuthContext({
         apiTokenId: apiToken.id,
         tokenScopes: scopes,
-        tokenProjectIds: restrictedProjectIds
+        tokenProjectIds: restrictedProjectIds,
+        ...(tokenOrgScope ? { sessionOrgId: tokenOrgScope } : {})
       });
       request['user'] = {
         sub: user.id,
         email: user.email,
         name,
-        externalAuthId: user.externalAuthId
+        externalAuthId: user.externalAuthId,
+        ...(tokenOrgScope ? { orgScope: tokenOrgScope } : {})
       };
       setTraceUser(user.id);
 

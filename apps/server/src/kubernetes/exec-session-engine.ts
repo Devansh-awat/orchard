@@ -275,7 +275,7 @@ export async function authenticateUpgrade(
       userId: apiToken.user.id,
       actorEmail: apiToken.user.email,
       browserSessionId: undefined,
-      sessionOrgScope: undefined,
+      sessionOrgScope: apiToken.scopeOrganizationId ?? undefined,
       tokenAuthCtx: {
         apiTokenId: apiToken.id,
         tokenScopes: scopes,

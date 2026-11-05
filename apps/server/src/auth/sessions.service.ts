@@ -4,6 +4,7 @@ import { UAParser } from 'ua-parser-js';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { deviceLabel } from './org-scoped-devices';
 
 // M-1: Geo enrichment uses ipwho.is over HTTPS with a short timeout. Plain HTTP
 // would leak every login IP in cleartext and let a network attacker forge the
@@ -87,7 +88,7 @@ export class SessionsService {
       userId: params.userId,
       sessionId: session.id,
       authMethod: params.authMethod ?? null,
-      deviceName,
+      deviceName: deviceLabel(deviceName),
       location,
       ipAddress: params.ipAddress ?? null
     });
@@ -216,7 +217,7 @@ export class SessionsService {
       }
     });
 
-    return sessions;
+    return sessions.map((s) => ({ ...s, deviceName: deviceLabel(s.deviceName) }));
   }
 
   async revokeSession(userId: string, sessionId: string): Promise<boolean> {

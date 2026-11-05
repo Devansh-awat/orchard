@@ -109,6 +109,7 @@ model ApiToken {
   // IDs are not FK-enforced: project deletion is rare, and a stale ID is simply
   // unmatchable, which is the safe direction.
   restrictedProjectIds String[]  @default([]) @map("restricted_project_ids") @db.Uuid
+  scopeOrganizationId  String?   @map("scope_organization_id") @db.Uuid
   userId               String    @map("user_id") @db.Uuid
   lastUsedAt           DateTime? @map("last_used_at") @db.Timestamp(6)
   expiresAt            DateTime? @map("expires_at") @db.Timestamp(6)

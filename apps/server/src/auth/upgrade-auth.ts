@@ -117,7 +117,7 @@ export async function authenticateUpgrade(
     userId: apiToken.user.id,
     email: apiToken.user.email ?? null,
     sessionId: null,
-    orgScope: null,
+    orgScope: apiToken.scopeOrganizationId ?? null,
     via: 'api-token'
   };
 }

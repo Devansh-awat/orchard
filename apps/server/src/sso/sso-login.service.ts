@@ -130,7 +130,17 @@ export class SsoLoginService {
       const payload = await this.oauthService.verifySessionToken(sessionToken);
       if (payload.orgScope || !payload.sessionId) return undefined;
       if (!(await this.sessionsService.validateSession(payload.sessionId))) return undefined;
-      return payload.sub;
+      if (!payload.externalAuthId) return payload.sub;
+      const user =
+        (await this.prisma.user.findUnique({
+          where: { externalAuthId: payload.externalAuthId },
+          select: { id: true }
+        })) ??
+        (await this.prisma.user.findUnique({
+          where: { email: payload.email },
+          select: { id: true }
+        }));
+      return user?.id;
     } catch {
       return undefined;
     }

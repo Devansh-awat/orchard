@@ -775,8 +775,34 @@ describe('Org isolation', () => {
     for (const path of ['/auth/tokens', '/auth/sessions']) {
       assert.equal((await req(path, scoped)).status, 403, path);
     }
-    const mint = await req('/auth/mcp-token', scoped, { method: 'POST' });
-    assert.equal(mint.status, 403);
+  });
+
+  test('what its SSO session mints stays inside that org', async () => {
+    const scoped = await orgScopedToken(pepito.id, enforcing.id);
+
+    const mcp = await req('/auth/mcp-token', scoped, { method: 'POST' });
+    assert.equal(mcp.status, 200);
+    const { token: mcpToken } = await mcp.json();
+    assert.equal((await req(`/projects/${enforcingProject.id}`, mcpToken)).status, 200);
+    assert.equal((await req(`/projects/${ownProject.id}`, mcpToken)).status, 404);
+
+    const created = await req('/auth/tokens', scoped, {
+      method: 'POST',
+      body: JSON.stringify({ name: `${tag}-sso-cli`, scopes: ['read'] })
+    });
+    assert.equal(created.status, 201);
+    const { token: apiToken } = await created.json();
+    assert.equal((await req(`/projects/${enforcingProject.id}`, apiToken)).status, 200);
+    assert.equal((await req(`/organizations/${own.id}`, apiToken)).status, 404);
+    assert.equal((await req(`/projects/${ownProject.id}`, apiToken)).status, 404);
+    for (const path of ['/auth/tokens', '/auth/sessions']) {
+      assert.equal((await req(path, apiToken)).status, 403, path);
+    }
+    const again = await req('/auth/tokens', apiToken, {
+      method: 'POST',
+      body: JSON.stringify({ name: `${tag}-sso-cli-2`, scopes: ['read'] })
+    });
+    assert.equal(again.status, 403);
   });
 
   test('removal by the org keeps him signed in everywhere else', async () => {

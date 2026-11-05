@@ -1,6 +1,8 @@
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-const devicePrefixes = new Set<string>();
+export const MCP_ORG_DEVICE = 'mcp-org';
+
+const devicePrefixes = new Set<string>([MCP_ORG_DEVICE]);
 
 export const ORG_SCOPED_DENY = [
   'auth/',
@@ -31,6 +33,16 @@ export function orgScopedDevice(
   subject: string
 ): string {
   return `${prefix}:${organizationId || 'personal'}:${subject}`;
+}
+
+export function plainDeviceName(name: string): string {
+  return name.replaceAll(':', ' ');
+}
+
+export function deviceLabel(deviceName: string | null): string | null {
+  const prefix = `${MCP_ORG_DEVICE}:`;
+  if (!deviceName?.startsWith(prefix)) return deviceName;
+  return deviceName.slice(prefix.length).split(':').slice(1).join(':');
 }
 
 export function deviceOrgScope(deviceName: string | null | undefined): string | undefined {

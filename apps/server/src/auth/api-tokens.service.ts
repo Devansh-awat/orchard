@@ -85,7 +85,8 @@ export class ApiTokensService {
     expiresAt?: Date,
     scopes?: unknown,
     restrictedProjectIds?: unknown,
-    ceiling?: { scopes: string[]; projectIds: string[] }
+    ceiling?: { scopes: string[]; projectIds: string[] },
+    scopeOrganizationId?: string
   ) {
     const now = Date.now();
     const cap = new Date(now + MAX_TOKEN_LIFETIME_MS);
@@ -134,6 +135,7 @@ export class ApiTokensService {
         tokenHash,
         scopes: resolvedScopes,
         restrictedProjectIds: resolvedRestrictedProjects,
+        scopeOrganizationId,
         userId,
         expiresAt: resolvedExpiresAt
       }

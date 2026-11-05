@@ -8,6 +8,7 @@ import {
 } from '../auth/sessions.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { hashApiToken } from '../auth/api-tokens.service';
+import { MCP_ORG_DEVICE, orgScopedDevice, plainDeviceName } from '../auth/org-scoped-devices';
 import {
   checkRefreshGeneration,
   hashClientSecret,
@@ -404,9 +405,6 @@ export class McpOAuthService {
     if (payload.type) {
       return { error: 'Consent needs a browser session, not a derived token' };
     }
-    if (payload.orgScope) {
-      return { error: "A sign-in scoped to one organization can't authorize an MCP client" };
-    }
     if (!(await this.sessions.validateSession(payload.sessionId))) {
       return { error: 'Session expired, sign in again' };
     }
@@ -419,10 +417,13 @@ export class McpOAuthService {
       };
     }
 
+    const deviceName = plainDeviceName(client.name);
     const mcpSessionId = await this.sessions.createSession({
       userId: payload.sub,
       authMethod: MCP_SESSION_AUTH_METHOD,
-      deviceName: client.name,
+      deviceName: payload.orgScope
+        ? orgScopedDevice(MCP_ORG_DEVICE, payload.orgScope, deviceName)
+        : deviceName,
       ttlMs: MCP_SESSION_TTL_MS
     });
 

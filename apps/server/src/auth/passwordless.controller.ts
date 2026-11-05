@@ -570,7 +570,8 @@ export class PasswordlessController {
       user.email,
       displayName,
       req.user.authMethod || 'otp',
-      req.user.sessionId
+      req.user.sessionId,
+      req.user.orgScope
     );
 
     res.status(200).json({ token });

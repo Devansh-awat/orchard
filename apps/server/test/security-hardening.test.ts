@@ -10,6 +10,7 @@ import { isValidPodName } from '../src/kubernetes/pod-name';
 import {
   deniedToApiToken,
   deniedToOrgScopedSession,
+  deniedToOrgSsoSession,
   deniedToProjectToken,
   isPublicCredentialPost
 } from '../src/auth/superadmin.guard';
@@ -18,6 +19,13 @@ import { createHash } from 'node:crypto';
 import { firstValueFrom, timeout } from 'rxjs';
 import { SseStreamLimiter } from '../src/events/sse-stream-limiter';
 import { SsoLoginService } from '../src/sso/sso-login.service';
+import {
+  MCP_ORG_DEVICE,
+  deviceLabel,
+  deviceOrgScope,
+  orgScopedDevice,
+  plainDeviceName
+} from '../src/auth/org-scoped-devices';
 import { tenantDenyPolicy } from '../src/kubernetes/security-policies';
 import { assertIngressNameFree } from '../src/projects/image-ownership';
 import { ApiThrottlerGuard } from '../src/auth/api-throttler.guard';
@@ -47,6 +55,64 @@ test('org-scoped sessions cannot reach account credentials', () => {
   assert.equal(deniedToOrgScopedSession('GET', '/apiv1/auth/me'), false);
   assert.equal(deniedToOrgScopedSession('POST', '/apiv1/auth/logout'), false);
   assert.equal(deniedToOrgScopedSession('GET', '/apiv1/projects'), false);
+});
+
+test('an org SSO session may mint what carries its org, and nothing else', () => {
+  for (const path of [
+    '/apiv1/auth/tokens',
+    '/apiv1/auth/mcp-token',
+    '/apiv1/auth/protect/exchange/orchard'
+  ]) {
+    assert.equal(deniedToOrgSsoSession('POST', path), false, path);
+    assert.equal(deniedToOrgScopedSession('POST', path), true, path);
+  }
+  for (const [method, path] of [
+    ['GET', '/apiv1/auth/tokens'],
+    ['DELETE', '/apiv1/auth/tokens/1'],
+    ['POST', '/apiv1/auth/passkey/register'],
+    ['POST', '/apiv1/ssh-identities'],
+    ['GET', '/apiv1/admin/users']
+  ]) {
+    assert.equal(deniedToOrgSsoSession(method, path), true, path);
+  }
+});
+
+test('an MCP client name cannot claim an org scope', () => {
+  const org = '11111111-1111-4111-8111-111111111111';
+  const spoof = plainDeviceName(`${MCP_ORG_DEVICE}:${org}:x`);
+  assert.equal(deviceOrgScope(`${MCP_ORG_DEVICE}:${org}:x`), org);
+  assert.equal(deviceOrgScope(spoof), undefined);
+  const scoped = orgScopedDevice(MCP_ORG_DEVICE, org, plainDeviceName('Claude: Code'));
+  assert.equal(deviceOrgScope(scoped), org);
+  assert.equal(deviceLabel(scoped), 'Claude  Code');
+  assert.equal(deviceLabel('Chrome on macOS'), 'Chrome on macOS');
+});
+
+test('starting SSO from a Hack Club session links the local user, not the Hack Club id', async () => {
+  const login = Object.create(SsoLoginService.prototype) as any;
+  const users: Record<string, { id: string } | null> = {
+    'hc-1': { id: 'local-1' },
+    'moved@example.com': { id: 'local-2' }
+  };
+  login.prisma = {
+    user: {
+      findUnique: async ({ where }: any) => users[where.externalAuthId ?? where.email] ?? null
+    }
+  };
+  login.sessionsService = { validateSession: async () => true };
+  let payload: Record<string, unknown> = {};
+  login.oauthService = { verifySessionToken: async () => payload };
+
+  payload = { sub: 'hc-1', externalAuthId: 'hc-1', email: 'a@example.com', sessionId: 's' };
+  assert.equal(await login.signedInUser('t'), 'local-1');
+  payload = { sub: 'hc-2', externalAuthId: 'hc-2', email: 'moved@example.com', sessionId: 's' };
+  assert.equal(await login.signedInUser('t'), 'local-2');
+  payload = { sub: 'hc-3', externalAuthId: 'hc-3', email: 'nobody@example.com', sessionId: 's' };
+  assert.equal(await login.signedInUser('t'), undefined);
+  payload = { sub: 'local-3', email: 'b@example.com', sessionId: 's' };
+  assert.equal(await login.signedInUser('t'), 'local-3');
+  payload = { sub: 'hc-1', externalAuthId: 'hc-1', orgScope: 'o', sessionId: 's' };
+  assert.equal(await login.signedInUser('t'), undefined);
 });
 
 function ownership(others: string[] = []) {
