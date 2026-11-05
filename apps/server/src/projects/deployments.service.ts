@@ -3366,6 +3366,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         githubInstallationId: repoInstallation?.installationId ?? null,
         autoDeployEnabled: keepAutoDeploy,
         autoDeployBranch,
+        ...(repoChanged || canAccess ? { repoLinkedBy: user.id } : {}),
         ...(repoChanged
           ? {
               githubRepoId: null,
@@ -4819,6 +4820,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     // path, so it needs no GitHub App installation. The hook itself is put on
     // the forge here, best effort; the status endpoint says whether it took.
     let installation: { installationId: bigint } | null = null;
+    let relinkedBy: string | null = null;
     let webhook: Awaited<ReturnType<GitConnectionsService['registerWebhook']>> | null = null;
     if (deployment.gitConnectionId) {
       webhook = await this.gitConnections.registerWebhook(
@@ -4839,6 +4841,19 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         throw new BadRequestException(
           this.githubService.autoDeployUnavailableMessage(repoInfo.owner, repoInfo.repo)
         );
+      }
+      if (deployment.githubInstallationId !== installation.installationId) {
+        const canAccess = await this.githubService.verifyUserCanAccessRepo(
+          user.id,
+          repoInfo.owner,
+          repoInfo.repo
+        );
+        if (!canAccess) {
+          throw new ForbiddenException(
+            "You don't have access to this repository on GitHub. Connect your GitHub account or request access."
+          );
+        }
+        relinkedBy = user.id;
       }
     }
 
@@ -4874,6 +4889,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         autoDeployEnabled: true,
         autoDeployBranch: branch,
         githubInstallationId: installation?.installationId ?? null,
+        ...(relinkedBy ? { repoLinkedBy: relinkedBy } : {}),
         ...(watchPaths !== undefined ? { autoDeployPaths: watchPaths } : {})
       },
       include: {
@@ -5084,16 +5100,22 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
 
     if (repoInfo) {
       try {
-        const installation = await this.githubService.findInstallationForRepo(
-          repoInfo.owner,
-          repoInfo.repo
-        );
-        if (installation) {
-          installationId = installation.installationId;
-
-          // Get installation access token for cloning the repo
-          installationAccessToken =
-            await this.githubService.getOrRefreshInstallationToken(installationId);
+        const access = await this.githubService.resolveCloneAccess({
+          owner: repoInfo.owner,
+          repo: repoInfo.repo,
+          branch: deployment.autoDeployBranch || deployment.githubBranch,
+          boundInstallationId: deployment.githubInstallationId,
+          linkedBy: deployment.repoLinkedBy ?? deployment.createdBy
+        });
+        if (access) {
+          installationId = access.installationId;
+          installationAccessToken = access.token;
+          if (deployment.githubInstallationId !== installationId) {
+            await this.prisma.deployment.update({
+              where: { id: deploymentId },
+              data: { githubInstallationId: installationId }
+            });
+          }
 
           const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
           const orgSlug = deployment.project?.organization?.slug;

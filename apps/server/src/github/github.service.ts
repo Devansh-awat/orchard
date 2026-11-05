@@ -13,6 +13,7 @@ import { OAuthService } from '../auth/oauth.service';
 import { LeaderElectionService } from '../events/leader-election.service';
 import { canonicalRepoUrl, isNullSha, repoUrlVariants } from './auto-deploy-match';
 import { changedFilesFromCompare } from './watch-paths';
+import { submoduleRepos } from './submodules';
 import { GithubAppConfigService } from './github-app-config.service';
 import { SecretCryptoService } from '../crypto/secret-crypto.service';
 import { parseDockerfileEnvVars } from './dockerfile-env';
@@ -164,6 +165,10 @@ interface CachedRepos {
   repos: GitHubRepo[];
   timestamp: number;
 }
+
+const MAX_SUBMODULE_DEPTH = 5;
+
+const MAX_SUBMODULE_REPOS = 25;
 
 @Injectable()
 export class GitHubService implements OnModuleInit, OnModuleDestroy {
@@ -1299,7 +1304,8 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
   }
 
   async getInstallationAccessToken(
-    installationId: bigint
+    installationId: bigint,
+    cloneRepos?: string[]
   ): Promise<{ token: string; expiresAt: Date }> {
     const jwt = this.generateAppJwt();
 
@@ -1310,8 +1316,17 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
         headers: {
           Authorization: `Bearer ${jwt}`,
           Accept: 'application/vnd.github+json',
+          'Content-Type': 'application/json',
           'X-GitHub-Api-Version': '2022-11-28'
-        }
+        },
+        ...(cloneRepos
+          ? {
+              body: JSON.stringify({
+                repositories: cloneRepos,
+                permissions: { contents: 'read' }
+              })
+            }
+          : {})
       }
     );
 
@@ -2156,6 +2171,82 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
   }
 
   // Resolve an access token for a specific repo: prefers App installation token, falls back to user OAuth token.
+  async resolveCloneAccess(input: {
+    owner: string;
+    repo: string;
+    branch: string;
+    boundInstallationId: bigint | null;
+    linkedBy: string | null;
+  }): Promise<{ installationId: bigint; token: string } | null> {
+    const { owner, repo, branch, boundInstallationId, linkedBy } = input;
+    const installation = await this.findInstallationForRepo(owner, repo);
+    if (!installation) return null;
+    const { installationId } = installation;
+    if (
+      boundInstallationId !== installationId &&
+      !(linkedBy && (await this.verifyUserCanAccessRepo(linkedBy, owner, repo)))
+    ) {
+      return null;
+    }
+    const submodules = await this.allowedSubmodules(installationId, owner, repo, branch, linkedBy);
+    if (submodules.length > 0) {
+      try {
+        const { token } = await this.getInstallationAccessToken(installationId, [
+          repo,
+          ...submodules
+        ]);
+        return { installationId, token };
+      } catch (e) {
+        console.warn(
+          `[GitHub] Clone token with submodules failed for ${owner}/${repo}: ${(e as Error).message}`
+        );
+      }
+    }
+    const { token } = await this.getInstallationAccessToken(installationId, [repo]);
+    return { installationId, token };
+  }
+
+  private async allowedSubmodules(
+    installationId: bigint,
+    owner: string,
+    repo: string,
+    branch: string,
+    linkedBy: string | null
+  ): Promise<string[]> {
+    if (!linkedBy) return [];
+    const token = await this.getOrRefreshInstallationToken(installationId);
+    const allowed: string[] = [];
+    const seen = new Set([repo.toLowerCase()]);
+    let frontier: Array<{ repo: string; ref?: string }> = [{ repo, ref: branch }];
+    for (let depth = 0; depth < MAX_SUBMODULE_DEPTH && frontier.length > 0; depth++) {
+      const next: Array<{ repo: string }> = [];
+      for (const source of frontier) {
+        const gitmodules = await this.getFileContent(
+          token,
+          owner,
+          source.repo,
+          '.gitmodules',
+          source.ref
+        ).catch(() => null);
+        if (!gitmodules) continue;
+        for (const name of submoduleRepos(gitmodules, owner, source.repo)) {
+          if (seen.has(name.toLowerCase()) || allowed.length >= MAX_SUBMODULE_REPOS) continue;
+          seen.add(name.toLowerCase());
+          const permitted =
+            (await this.verifyUserCanAccessRepo(linkedBy, owner, name).catch(() => false)) &&
+            (await this.isRepoAccessibleByInstallation(installationId, owner, name).catch(
+              () => false
+            ));
+          if (!permitted) continue;
+          allowed.push(name);
+          next.push({ repo: name });
+        }
+      }
+      frontier = next;
+    }
+    return allowed;
+  }
+
   async resolveRepoToken(userId: string, owner: string, repo: string): Promise<string | null> {
     const installation = await this.findInstallationForRepo(owner, repo);
     if (installation) {

@@ -730,6 +730,7 @@ model Deployment {
   // repo's credentials and webhook secret. When set, `githubInstallationId`
   // is null and auto-deploy is scoped to this connection instead.
   gitConnectionId String? @map("git_connection_id") @db.Uuid
+  repoLinkedBy    String? @map("repo_linked_by") @db.Uuid
   // The provider's own id for the repo, a string because Bitbucket uses
   // UUIDs. Matched first on push so a rename does not detach the app.
   externalRepoId  String? @map("external_repo_id") @db.VarChar(120)

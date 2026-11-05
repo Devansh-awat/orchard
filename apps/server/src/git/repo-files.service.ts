@@ -10,6 +10,7 @@ export interface RepoSource {
   gitConnectionId?: string | null;
   accessToken?: string | null;
   userId?: string | null;
+  appAuthorized?: boolean;
 }
 
 /**
@@ -52,7 +53,9 @@ export class RepoFilesService {
     if (!repo) return null;
     let token: string | null = source.accessToken ?? null;
     if (!token && source.userId) {
-      token = await this.github.resolveRepoToken(source.userId, repo.owner, repo.repo);
+      token = source.appAuthorized
+        ? await this.github.resolveRepoToken(source.userId, repo.owner, repo.repo)
+        : await this.github.getValidUserToken(source.userId);
     }
     if (!token) return null;
     return wrap((path) =>
@@ -71,6 +74,7 @@ export class RepoFilesService {
         githubBranch: true,
         autoDeployBranch: true,
         gitConnectionId: true,
+        githubInstallationId: true,
         createdBy: true
       }
     });
@@ -80,7 +84,8 @@ export class RepoFilesService {
       branch: dep.autoDeployBranch || dep.githubBranch || 'main',
       gitConnectionId: dep.gitConnectionId,
       accessToken: extra.accessToken,
-      userId: extra.userId ?? dep.createdBy
+      userId: extra.userId ?? dep.createdBy,
+      appAuthorized: dep.githubInstallationId !== null
     });
   }
 }
