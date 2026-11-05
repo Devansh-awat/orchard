@@ -22,6 +22,7 @@ export async function requireSandboxAccess(
 export interface SandboxGateScope {
   sessionOrgId?: string | null;
   tokenProjectIds?: string[] | null;
+  apiTokenId?: string | null;
   browserSession?: boolean;
 }
 
@@ -35,6 +36,7 @@ export async function sandboxTerminalMode(
   const ctx = {
     ...(scope.sessionOrgId ? { sessionOrgId: scope.sessionOrgId } : {}),
     ...(scope.tokenProjectIds?.length ? { tokenProjectIds: scope.tokenProjectIds } : {}),
+    ...(scope.apiTokenId ? { apiTokenId: scope.apiTokenId } : {}),
     ...(scope.browserSession ? { browserSession: true } : {})
   };
   return requestAuthStorage.run(ctx, () => terminalMode(access, sandboxId, userId, requested));
@@ -65,6 +67,7 @@ export async function sandboxSshAccess(
   const ctx = {
     ...(scope.sessionOrgId ? { sessionOrgId: scope.sessionOrgId } : {}),
     ...(scope.tokenProjectIds?.length ? { tokenProjectIds: scope.tokenProjectIds } : {}),
+    ...(scope.apiTokenId ? { apiTokenId: scope.apiTokenId } : {}),
     ...(scope.browserSession ? { browserSession: true } : {})
   };
   return requestAuthStorage.run(ctx, () =>

@@ -108,6 +108,7 @@ export function attachSandboxSshWebSocket(
     const scope: SandboxGateScope = {
       sessionOrgId: auth.sessionOrgScope ?? null,
       tokenProjectIds: auth.tokenAuthCtx?.tokenProjectIds ?? null,
+      apiTokenId: auth.tokenAuthCtx?.apiTokenId ?? null,
       browserSession: !auth.tokenAuthCtx
     };
     const authorize = async (): Promise<{ ok: boolean; ref?: SandboxRef }> => {

@@ -143,6 +143,7 @@ export function sandboxTerminalHooks(deps: SandboxTerminalDeps): SandboxExecRout
       const scope = {
         sessionOrgId: auth.sessionOrgScope ?? null,
         tokenProjectIds: auth.tokenAuthCtx?.tokenProjectIds ?? null,
+        apiTokenId: auth.tokenAuthCtx?.apiTokenId ?? null,
         browserSession: !auth.tokenAuthCtx
       };
       const access = await sandboxTerminalMode(
