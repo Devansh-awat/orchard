@@ -416,6 +416,9 @@ func domainProtectionSetCmd() *cobra.Command {
 				return err
 			}
 			output.Successf("protection on %s set to %s", pick(ing, "host"), m)
+			if open, ok := raw["openPaths"].([]any); ok && len(open) > 0 && m != "none" {
+				output.Warnf("still public on this domain: %v", open)
+			}
 			if fmtFlag() == output.FormatJSON {
 				return output.JSON(raw)
 			}
