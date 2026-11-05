@@ -110,6 +110,8 @@ export interface RequestAuthContext {
   tokenScopes?: string[];
   tokenProjectIds?: string[];
   sessionOrgId?: string;
+  browserSession?: boolean;
+  mcpGateway?: boolean;
 }
 
 export interface UpgradeIdentity {

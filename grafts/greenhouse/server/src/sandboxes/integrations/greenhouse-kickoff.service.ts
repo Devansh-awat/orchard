@@ -1,6 +1,7 @@
 import { Injectable, Logger, Optional } from '@nestjs/common';
 import { Prisma, type Sandbox } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma.service';
+import { requestAuthStorage } from '../../core/request-context';
 import { AuditService } from '../../core/audit.service';
 import { AnalyticsService } from '../../core/analytics.service';
 import { RedisThrottleService } from '../../core/rate-limit.service';
@@ -129,6 +130,16 @@ export function chooseMachine(input: {
     message:
       'I could not tell which repo to use. Mention one (owner/name or the name of a repo cloned on your machine), or start a session in Orchard first'
   };
+}
+
+export interface KickoffInput {
+  provider: KickoffProvider;
+  userId: string;
+  target: KickoffTarget;
+  prompt: string;
+  title?: string;
+  issue?: IssueContext | null;
+  contentAuthorUserId?: string | null;
 }
 
 @Injectable()
@@ -272,15 +283,11 @@ export class GreenhouseKickoffService {
     return chooseMachine({ target, running: candidates, recent });
   }
 
-  async start(input: {
-    provider: KickoffProvider;
-    userId: string;
-    target: KickoffTarget;
-    prompt: string;
-    title?: string;
-    issue?: IssueContext | null;
-    contentAuthorUserId?: string | null;
-  }): Promise<KickoffResult> {
+  start(input: KickoffInput): Promise<KickoffResult> {
+    return requestAuthStorage.run({ browserSession: true }, () => this.startAs(input));
+  }
+
+  private async startAs(input: KickoffInput): Promise<KickoffResult> {
     const { provider, userId } = input;
     if (!(await this.enabledFor(userId))) {
       return { kind: 'failed', reason: 'Greenhouse is not enabled for your account' };

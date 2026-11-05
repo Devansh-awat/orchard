@@ -1,3 +1,5 @@
+import { requestAuthStorage } from '../server/src/core/request-context';
+import { IntegrationsController } from '../server/src/sandboxes/integrations/integrations.controller';
 import './support';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -1273,4 +1275,35 @@ test('linear key is validated against Linear and stored encrypted', async () => 
   claimedBy = 'u1';
   await assert.rejects(service.connectLinear('u2', 'lin_api_good'), /another Orchard user/);
   assert.equal(stored.length, 1);
+});
+
+test('a kickoff is treated as a person acting, so org single sign-on applies', async () => {
+  const seen: unknown[] = [];
+  const { service } = kickoffHarness({ role: true });
+  (service as any).access.requireSandboxRole = async () => {
+    seen.push(requestAuthStorage.getStore());
+    throw new Error('refused');
+  };
+  const result = await service.start({
+    provider: 'slack',
+    userId: 'u1',
+    target: { kind: 'hint', text: 'do it' },
+    prompt: 'do it'
+  });
+  assert.equal(result.kind, 'failed');
+  assert.deepEqual(seen, [{ browserSession: true }]);
+});
+
+test('linking an account refuses mcp connections as well as api tokens', () => {
+  const guard = (IntegrationsController.prototype as any).requireAccountSession;
+  const opts = { refuseApiTokens: true };
+  assert.throws(
+    () => requestAuthStorage.run({ mcpGateway: true }, () => guard(opts)),
+    /regular Orchard session/
+  );
+  assert.throws(
+    () => requestAuthStorage.run({ apiTokenId: 't' }, () => guard(opts)),
+    /regular Orchard session/
+  );
+  requestAuthStorage.run({ browserSession: true }, () => guard(opts));
 });

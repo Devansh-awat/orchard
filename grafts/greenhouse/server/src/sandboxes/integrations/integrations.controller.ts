@@ -54,7 +54,7 @@ export class IntegrationsController {
     if (
       ctx?.sessionOrgId ||
       ctx?.tokenProjectIds?.length ||
-      (opts.refuseApiTokens && ctx?.apiTokenId)
+      (opts.refuseApiTokens && (ctx?.apiTokenId || ctx?.mcpGateway))
     ) {
       throw new ForbiddenException('Manage linked accounts from a regular Orchard session');
     }
