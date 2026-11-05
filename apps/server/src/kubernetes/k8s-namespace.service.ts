@@ -1,4 +1,5 @@
 import { Injectable, Logger, BadRequestException, OnModuleInit } from '@nestjs/common';
+import { REGISTRY_PREFIX_LABEL } from './registry-image-policy';
 import * as k8s from '@kubernetes/client-node';
 import { clusterPods, clusterServiceCounts, type SnapshotRead } from './cluster-snapshot';
 import { PrismaService } from '../prisma/prisma.service';
@@ -238,7 +239,7 @@ export class K8sNamespaceService implements OnModuleInit {
   // Patch resources on a CNPG Cluster (rolling update of postgres pods).
   // Patch a deployment's pod-template container resources (triggers rolling restart).
 
-  async createNamespace(namespace: string) {
+  async createNamespace(namespace: string, registryPrefix?: string) {
     this.ensureKubeConfig();
 
     const cleanNamespace = String(namespace || '').trim();
@@ -254,6 +255,7 @@ export class K8sNamespaceService implements OnModuleInit {
           name: cleanNamespace,
           labels: {
             'orchard.my/managed': 'true',
+            ...(registryPrefix ? { [REGISTRY_PREFIX_LABEL]: registryPrefix } : {}),
             name: cleanNamespace,
             // PodSecurity `baseline` blocks the classic container-escape
             // primitives at admission: hostPath, privileged, hostNetwork,

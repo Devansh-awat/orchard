@@ -3527,6 +3527,7 @@ server:
     - { name: DOCKER_REGISTRY_PULL, value: $REGISTRY_HOST }
     - { name: REGISTRY_HTTP_HOSTS, value: zot.orchard.svc.cluster.local:5000 }
     - { name: REGISTRY_PROJECT, value: orchard }
+    - { name: REGISTRY_IMAGE_POLICY, value: enforce }
     - { name: HARBOR_USERNAME, value: $REGISTRY_USER }
     - { name: HARBOR_PASSWORD, value: "$REGISTRY_PASSWORD" }
     - { name: BUILDER_SCRATCH_STORAGE_CLASS, value: local-path }

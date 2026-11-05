@@ -283,7 +283,7 @@ export class ProjectsService {
       );
     }
 
-    const namespaceResult = await this.k8sNamespace.createNamespace(namespace);
+    const namespaceResult = await this.k8sNamespace.createNamespace(namespace, namespace);
 
     if (!namespaceResult.created) {
       throw new BadRequestException('Kubernetes namespace already exists');

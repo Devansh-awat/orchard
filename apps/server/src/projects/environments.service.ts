@@ -157,6 +157,7 @@ export class EnvironmentsService {
       select: {
         id: true,
         slug: true,
+        namespace: true,
         organizationId: true,
         organization: { select: { slug: true } }
       }
@@ -180,7 +181,7 @@ export class EnvironmentsService {
       slug
     ]);
 
-    const nsResult = await this.k8sNamespace.createNamespace(namespace);
+    const nsResult = await this.k8sNamespace.createNamespace(namespace, project.namespace);
     if (!nsResult.created) {
       throw new ConflictException('Kubernetes namespace already exists');
     }
