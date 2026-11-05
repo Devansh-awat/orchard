@@ -31,6 +31,8 @@ interface CachedIngress {
   redirectStatus: number | null;
   project: { organizationId: string; name: string };
   host: string;
+  tlsSecretName: string | null;
+  entrypoints: string[];
   upstreamHost: string | null;
   upstreamPort: number | null;
   expiresAt: number;
@@ -198,6 +200,8 @@ export class ProtectionService {
         redirectTarget: true,
         redirectStatus: true,
         host: true,
+        tlsSecretName: true,
+        entrypoints: true,
         project: { select: { organizationId: true, name: true } },
         service: { select: { name: true, port: true } }
       }
@@ -243,6 +247,16 @@ export class ProtectionService {
     ) {
       return { allow: true };
     }
+
+    const { origin, protocol } = new URL(
+      ingressPublicUrl({
+        host,
+        path: null,
+        tlsSecretName: ingress.tlsSecretName,
+        entrypoints: ingress.entrypoints
+      })
+    );
+    const secureFlag = protocol === 'https:' ? ' Secure;' : '';
 
     if (bypassHeader && ingress.protectionBypassSecret) {
       const a = Buffer.from(bypassHeader);
@@ -306,8 +320,8 @@ export class ProtectionService {
           allow: false,
           status: 302,
           headers: {
-            location: `https://${host}${cleanPath}`,
-            'set-cookie': `_orchard_protection=${cookieJwt}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=604800`
+            location: `${origin}${cleanPath}`,
+            'set-cookie': `_orchard_protection=${cookieJwt}; Path=/; HttpOnly;${secureFlag} SameSite=Lax; Max-Age=604800`
           }
         };
       }
@@ -319,7 +333,7 @@ export class ProtectionService {
       if (payload) return { allow: true };
     }
 
-    const returnTo = `https://${host}${originalPath}`;
+    const returnTo = `${origin}${originalPath}`;
     const params = new URLSearchParams({
       ingressId: ingress.id,
       returnTo

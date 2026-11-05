@@ -718,3 +718,36 @@ test('the throttle map does not grow without bound', async () => {
   const d = await svc.checkProtection(HOST, '/secret', undefined, undefined, wrong, '203.0.113.9');
   assert.equal(d.status, 401, 'pruning must not break the normal path');
 });
+
+test('sign-in goes back to where the domain is really served', async () => {
+  const redirectFor = async (row: Record<string, unknown>) => {
+    const svc = buildService(protectedRow(row));
+    const d = await svc.checkProtection(HOST, '/secret', undefined, undefined);
+    return new URL(d.headers!.location).searchParams.get('returnTo');
+  };
+  assert.equal(await redirectFor({ tlsSecretName: 'tls' }), `https://${HOST}/secret`);
+  assert.equal(
+    await redirectFor({ tlsSecretName: null, entrypoints: ['web'] }),
+    `http://${HOST}/secret`
+  );
+  process.env.PUBLIC_HTTPS_PORT = '8443';
+  try {
+    assert.equal(await redirectFor({ tlsSecretName: 'tls' }), `https://${HOST}:8443/secret`);
+  } finally {
+    delete process.env.PUBLIC_HTTPS_PORT;
+  }
+});
+
+test('the protection cookie is only marked Secure on an https domain', async () => {
+  const cookieFor = async (row: Record<string, unknown>) => {
+    const svc = buildService(protectedRow(row));
+    const token = await sign('protection_exchange', 'i1');
+    const d = await svc.checkProtection(HOST, `/a?__orchard_token=${token}`, undefined, undefined);
+    return d.headers!['set-cookie'];
+  };
+  assert.match(await cookieFor({ id: 'i1', tlsSecretName: 'tls' }), /; Secure;/);
+  assert.doesNotMatch(
+    await cookieFor({ id: 'i1', tlsSecretName: null, entrypoints: ['web'] }),
+    /Secure/
+  );
+});
