@@ -165,25 +165,38 @@ export class ApiTokensService {
     };
   }
 
-  async list(userId: string) {
-    return this.prisma.apiToken.findMany({
-      where: { userId },
+  async list(userId: string, scopeOrganizationId?: string) {
+    const tokens = await this.prisma.apiToken.findMany({
+      where: { userId, ...(scopeOrganizationId ? { scopeOrganizationId } : {}) },
       select: {
         id: true,
         name: true,
         scopes: true,
         restrictedProjectIds: true,
+        scopeOrganizationId: true,
         lastUsedAt: true,
         expiresAt: true,
         createdAt: true
       },
       orderBy: { createdAt: 'desc' }
     });
+    const orgIds = [...new Set(tokens.flatMap((t) => t.scopeOrganizationId ?? []))];
+    const orgs = orgIds.length
+      ? await this.prisma.organization.findMany({
+          where: { id: { in: orgIds } },
+          select: { id: true, name: true }
+        })
+      : [];
+    const orgNames = new Map(orgs.map((org) => [org.id, org.name]));
+    return tokens.map(({ scopeOrganizationId: orgId, ...token }) => ({
+      ...token,
+      scopeOrganizationName: orgId ? (orgNames.get(orgId) ?? null) : null
+    }));
   }
 
-  async revoke(userId: string, tokenId: string) {
+  async revoke(userId: string, tokenId: string, scopeOrganizationId?: string) {
     const token = await this.prisma.apiToken.findFirst({
-      where: { id: tokenId, userId }
+      where: { id: tokenId, userId, ...(scopeOrganizationId ? { scopeOrganizationId } : {}) }
     });
 
     if (!token) {
@@ -203,13 +216,13 @@ export class ApiTokensService {
     return true;
   }
 
-  async rename(userId: string, tokenId: string, name: string) {
+  async rename(userId: string, tokenId: string, name: string, scopeOrganizationId?: string) {
     const trimmed = String(name || '').trim();
     if (!trimmed) throw new BadRequestException('Name is required');
     if (trimmed.length > 255) throw new BadRequestException('Name is too long');
 
     const token = await this.prisma.apiToken.findFirst({
-      where: { id: tokenId, userId }
+      where: { id: tokenId, userId, ...(scopeOrganizationId ? { scopeOrganizationId } : {}) }
     });
 
     if (!token) {

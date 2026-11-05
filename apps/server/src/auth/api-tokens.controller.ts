@@ -52,15 +52,15 @@ export class ApiTokensController {
   @Auth()
   @Get()
   async list(@Req() req: Request) {
-    const userId = req['auth'].userId;
-    return this.apiTokensService.list(userId);
+    const { userId, sessionOrgId } = req['auth'];
+    return this.apiTokensService.list(userId, sessionOrgId);
   }
 
   @Auth()
   @Patch(':id')
   async rename(@Req() req: Request, @Param('id') id: string, @Body() body: { name?: string }) {
-    const userId = req['auth'].userId;
-    const result = await this.apiTokensService.rename(userId, id, body?.name ?? '');
+    const { userId, sessionOrgId } = req['auth'];
+    const result = await this.apiTokensService.rename(userId, id, body?.name ?? '', sessionOrgId);
     if (!result) {
       throw new NotFoundException('Token not found');
     }
@@ -70,8 +70,8 @@ export class ApiTokensController {
   @Auth()
   @Delete(':id')
   async revoke(@Req() req: Request, @Param('id') id: string) {
-    const userId = req['auth'].userId;
-    const result = await this.apiTokensService.revoke(userId, id);
+    const { userId, sessionOrgId } = req['auth'];
+    const result = await this.apiTokensService.revoke(userId, id, sessionOrgId);
     if (!result) {
       throw new NotFoundException('Token not found');
     }

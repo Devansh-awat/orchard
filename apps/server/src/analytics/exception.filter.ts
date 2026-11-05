@@ -16,6 +16,7 @@ import { redactSensitivePath } from './url-redaction';
 import { getClientIp } from '../auth/client-ip';
 import { k8sHttpException } from '../kubernetes/k8s-error';
 import { prismaHttpException } from '../prisma/prisma-error';
+import { orgSsoRefusal } from '../auth/org-sso-refusal';
 
 /**
  * Global filter that forwards every unhandled error to PostHog Error
@@ -42,7 +43,8 @@ export class AnalyticsExceptionFilter extends BaseExceptionFilter implements Exc
     // caller sees. Report the original (it carries the stack), respond with the
     // unwrapped one.
     const malformedId = prismaHttpException(exception);
-    const normalized = k8sHttpException(exception) ?? malformedId ?? exception;
+    const normalized =
+      orgSsoRefusal(exception) ?? k8sHttpException(exception) ?? malformedId ?? exception;
 
     try {
       if (host.getType() === 'http') {

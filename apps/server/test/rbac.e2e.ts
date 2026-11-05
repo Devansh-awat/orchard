@@ -772,9 +772,8 @@ describe('Org isolation', () => {
       overview.projects.some((p: any) => p.id === ownProject.id),
       false
     );
-    for (const path of ['/auth/tokens', '/auth/sessions']) {
-      assert.equal((await req(path, scoped)).status, 403, path);
-    }
+    assert.equal((await req('/auth/tokens', scoped)).status, 200);
+    assert.equal((await req('/auth/sessions', scoped)).status, 403);
   });
 
   test('what its SSO session mints stays inside that org', async () => {
@@ -803,6 +802,71 @@ describe('Org isolation', () => {
       body: JSON.stringify({ name: `${tag}-sso-cli-2`, scopes: ['read'] })
     });
     assert.equal(again.status, 403);
+  });
+
+  test('a token made without its SSO stays out of the org and hears why', async () => {
+    const raw = `orch_${RUN_TAG}_plain_${Date.now()}`;
+    const plain = await prisma.apiToken.create({
+      data: {
+        userId: pepito.id,
+        name: `${tag}-plain`,
+        tokenHash: createHash('sha256').update(raw).digest('hex'),
+        scopes: ['deploy'],
+        expiresAt: new Date(Date.now() + 3600_000)
+      } as any
+    });
+    for (const path of [
+      `/organizations/${enforcing.id}`,
+      `/projects/${enforcingProject.id}`,
+      `/overview/orgs/${enforcing.slug}`
+    ]) {
+      const refused = await req(path, raw);
+      assert.equal(refused.status, 403, path);
+      assert.equal((await refused.json()).error, 'org_sso_required', path);
+    }
+    assert.equal((await req(`/organizations/${own.id}`, raw)).status, 200);
+    assert.equal((await req(`/projects/${ownProject.id}`, raw)).status, 200);
+    const orgs = await (await req('/organizations/user', raw)).json();
+    assert.equal(orgs.find((o: any) => o.id === enforcing.id).ssoRequired, true);
+
+    const missing = await req(`/organizations/${randomUUID()}`, raw);
+    assert.equal(missing.status, 404);
+
+    await prisma.apiToken.delete({ where: { id: plain.id } });
+  });
+
+  test('its SSO session manages only the tokens made inside that org', async () => {
+    const scoped = await orgScopedToken(pepito.id, enforcing.id);
+    const inside = await (
+      await req('/auth/tokens', scoped, {
+        method: 'POST',
+        body: JSON.stringify({ name: `${tag}-inside`, scopes: ['read'] })
+      })
+    ).json();
+    const raw = `orch_${RUN_TAG}_outside_${Date.now()}`;
+    const outside = await prisma.apiToken.create({
+      data: {
+        userId: pepito.id,
+        name: `${tag}-outside`,
+        tokenHash: createHash('sha256').update(raw).digest('hex'),
+        scopes: ['read'],
+        expiresAt: new Date(Date.now() + 3600_000)
+      } as any
+    });
+    const listed = await (await req('/auth/tokens', scoped)).json();
+    assert.ok(listed.some((t: any) => t.id === inside.id));
+    assert.equal(listed.find((t: any) => t.id === inside.id).scopeOrganizationName, enforcing.name);
+    assert.equal(
+      listed.some((t: any) => t.id === outside.id),
+      false
+    );
+    const rename = { method: 'PATCH', body: JSON.stringify({ name: `${tag}-renamed` }) };
+    assert.equal((await req(`/auth/tokens/${outside.id}`, scoped, rename)).status, 404);
+    assert.equal((await req(`/auth/tokens/${inside.id}`, scoped, rename)).status, 200);
+    const del = { method: 'DELETE' };
+    assert.equal((await req(`/auth/tokens/${outside.id}`, scoped, del)).status, 404);
+    assert.equal((await req(`/auth/tokens/${inside.id}`, scoped, del)).status, 200);
+    await prisma.apiToken.delete({ where: { id: outside.id } });
   });
 
   test('removal by the org keeps him signed in everywhere else', async () => {

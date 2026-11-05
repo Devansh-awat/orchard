@@ -1,9 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { UnauthorizedException } from '@nestjs/common';
+import { ForbiddenException, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { parseManifest } from '../src/grafts/manifest';
 import { AuthorizationService } from '../src/auth/authorization.service';
+import { orgSsoRefusal } from '../src/auth/org-sso-refusal';
 import { requestAuthStorage } from '../src/auth/request-context';
+import { execRequestContext } from '../src/kubernetes/exec-session-engine';
 import { OrganizationsService } from '../src/organizations/organizations.service';
 import { SsoLoginService } from '../src/sso/sso-login.service';
 
@@ -63,11 +65,83 @@ test('owners keep a way in when their provider breaks', async () => {
   });
 });
 
-test('background work and API tokens are not gated', async () => {
+test('background work and public routes are not gated', async () => {
   const authz = buildAuthz({ [ENFORCING]: 'member' });
   assert.equal((await authz.getOrgAccess(ENFORCING, 'pepito'))?.role, 'member');
-  await requestAuthStorage.run({ apiTokenId: 't', tokenScopes: ['read'] }, async () => {
+  await requestAuthStorage.run({}, async () => {
     assert.equal((await authz.getOrgAccess(ENFORCING, 'pepito'))?.role, 'member');
+  });
+});
+
+for (const [name, credential] of [
+  ['an API token', { apiTokenId: 't', tokenScopes: ['deploy'], tokenProjectIds: [] }],
+  ['a project token', { apiTokenId: 't', tokenScopes: ['deploy'], tokenProjectIds: ['p'] }],
+  ['an MCP connection', { mcpGateway: true }]
+] as const) {
+  test(`${name} made without SSO stays out of an enforcing org and keeps the others`, async () => {
+    const authz = buildAuthz({ [ENFORCING]: 'member', [OTHER]: 'member' });
+    await requestAuthStorage.run({ ...credential }, async () => {
+      assert.equal(await authz.getOrgAccess(ENFORCING, 'pepito'), null);
+      assert.equal(await authz.resolveProjectAccess('p', ENFORCING, 'pepito'), null);
+      assert.equal(await authz.orgRequiresSso(ENFORCING, 'pepito'), true);
+      assert.deepEqual(await authz.ssoBlockedOrgIds('pepito'), [ENFORCING]);
+      assert.equal((await authz.getOrgAccess(OTHER, 'pepito'))?.role, 'member');
+    });
+  });
+
+  test(`${name} made from that org's SSO gets in, and stays confined to it`, async () => {
+    const authz = buildAuthz({ [ENFORCING]: 'member', [OTHER]: 'member' });
+    await requestAuthStorage.run({ ...credential, sessionOrgId: ENFORCING }, async () => {
+      assert.equal((await authz.getOrgAccess(ENFORCING, 'pepito'))?.role, 'member');
+      assert.equal(await authz.getOrgAccess(OTHER, 'pepito'), null);
+      assert.deepEqual(await authz.ssoBlockedOrgIds('pepito'), []);
+    });
+  });
+
+  test(`${name} of an owner keeps working when their provider breaks`, async () => {
+    const authz = buildAuthz({ [ENFORCING]: 'owner' });
+    await requestAuthStorage.run({ ...credential }, async () => {
+      assert.equal((await authz.getOrgAccess(ENFORCING, 'owner'))?.role, 'owner');
+    });
+  });
+}
+
+test('a token refused by SSO is told why instead of getting a 404', async () => {
+  const authz = buildAuthz({ [ENFORCING]: 'member' });
+  await requestAuthStorage.run({ apiTokenId: 't' }, async () => {
+    assert.equal(orgSsoRefusal(new NotFoundException()), null);
+    await authz.getOrgAccess(ENFORCING, 'pepito');
+    const refusal = orgSsoRefusal(new NotFoundException());
+    assert.ok(refusal instanceof ForbiddenException);
+    assert.equal((refusal.getResponse() as any).error, 'org_sso_required');
+    assert.ok(orgSsoRefusal(new ForbiddenException()) instanceof ForbiddenException);
+    assert.equal(orgSsoRefusal(new UnauthorizedException()), null);
+    assert.equal(orgSsoRefusal(new Error('boom')), null);
+  });
+});
+
+test('a browser session and a token confined elsewhere keep the plain 404', async () => {
+  const authz = buildAuthz({ [ENFORCING]: 'member' });
+  await requestAuthStorage.run(session(), async () => {
+    await authz.getOrgAccess(ENFORCING, 'pepito');
+    assert.equal(orgSsoRefusal(new NotFoundException()), null);
+  });
+  await requestAuthStorage.run({ apiTokenId: 't', sessionOrgId: OTHER }, async () => {
+    await authz.resolveProjectAccess('p', ENFORCING, 'pepito');
+    assert.equal(orgSsoRefusal(new NotFoundException()), null);
+  });
+});
+
+test('a terminal keeps the org limit of the token that opened it', () => {
+  const tokenAuthCtx = { apiTokenId: 't', tokenScopes: ['exec'], tokenProjectIds: [] };
+  assert.deepEqual(execRequestContext({ sessionOrgScope: ENFORCING, tokenAuthCtx }), {
+    ...tokenAuthCtx,
+    sessionOrgId: ENFORCING
+  });
+  assert.deepEqual(execRequestContext({ sessionOrgScope: undefined, tokenAuthCtx }), tokenAuthCtx);
+  assert.deepEqual(execRequestContext({ sessionOrgScope: ENFORCING, tokenAuthCtx: null }), {
+    sessionOrgId: ENFORCING,
+    browserSession: true
   });
 });
 

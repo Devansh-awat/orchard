@@ -45,10 +45,13 @@ import { scopeFromHeader } from '../mcp/mcp-scopes';
 const ORG_SCOPED_ALLOW = ['GET auth/me', 'POST auth/logout'];
 
 const ORG_SSO_SESSION_ALLOW = [
+  'GET auth/tokens',
   'POST auth/tokens',
   'POST auth/mcp-token',
   'POST auth/protect/exchange/orchard'
 ];
+
+const ORG_SSO_SESSION_TOKEN_EDIT = /^(PATCH|DELETE) auth\/tokens\/[^/]+$/;
 
 const API_TOKEN_DENY = [
   'auth/passkey/register',
@@ -149,7 +152,8 @@ export function deniedToOrgScopedSession(method: string, path: string): boolean 
 }
 
 export function deniedToOrgSsoSession(method: string, path: string): boolean {
-  if (ORG_SSO_SESSION_ALLOW.includes(`${method.toUpperCase()} ${normalizedPath(path)}`)) {
+  const route = `${method.toUpperCase()} ${normalizedPath(path)}`;
+  if (ORG_SSO_SESSION_ALLOW.includes(route) || ORG_SSO_SESSION_TOKEN_EDIT.test(route)) {
     return false;
   }
   return deniedToOrgScopedSession(method, path);
@@ -299,7 +303,10 @@ export class SuperAdminGuard implements CanActivate {
         viaMcpGateway: true,
         ...(gatewayOrgScope ? { orgScope: gatewayOrgScope } : {})
       };
-      publishAuthContext(gatewayOrgScope ? { sessionOrgId: gatewayOrgScope } : {});
+      publishAuthContext({
+        mcpGateway: true,
+        ...(gatewayOrgScope ? { sessionOrgId: gatewayOrgScope } : {})
+      });
       setTraceUser(dbUserId, actingSessionId);
 
       const requiresSuperadminGw = this.reflector.getAllAndOverride<boolean>(

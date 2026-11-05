@@ -2,7 +2,7 @@ import { Injectable, ForbiddenException, NotFoundException } from '@nestjs/commo
 import { OrganizationRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { InstanceSettingsService } from '../instance-settings/instance-settings.service';
-import { requestAuthStorage } from './request-context';
+import { requestAuthStorage, type RequestAuthContext } from './request-context';
 
 export type ProjectRoleName = 'admin' | 'member' | 'viewer';
 
@@ -67,6 +67,10 @@ export interface ProjectAccess {
 const SUPERADMIN_TTL_MS = 1_000;
 
 const ENFORCING_SSO = { enforced: true, enabled: true, platformEnabled: true };
+
+function actsForPerson(ctx: RequestAuthContext | undefined): boolean {
+  return Boolean(ctx?.browserSession || ctx?.apiTokenId || ctx?.mcpGateway);
+}
 
 function emailDomain(email: string | null | undefined): string {
   return (email ?? '').split('@')[1]?.toLowerCase() ?? '';
@@ -155,7 +159,7 @@ export class AuthorizationService {
 
   async ssoBlockedOrgIds(userId: string): Promise<string[]> {
     const ctx = requestAuthStorage.getStore();
-    if (!ctx?.browserSession || ctx.sessionOrgId || (await this.isSuperAdmin(userId))) return [];
+    if (!actsForPerson(ctx) || ctx?.sessionOrgId || (await this.isSuperAdmin(userId))) return [];
     const rows = await this.prisma.organizationMember.findMany({
       where: {
         userId,
@@ -169,7 +173,7 @@ export class AuthorizationService {
 
   private sessionNeedsOrgSso(organizationId: string): boolean {
     const ctx = requestAuthStorage.getStore();
-    return Boolean(ctx?.browserSession) && ctx?.sessionOrgId !== organizationId;
+    return actsForPerson(ctx) && ctx?.sessionOrgId !== organizationId;
   }
 
   private async blockedByOrgSso(organizationId: string, role: string): Promise<boolean> {
@@ -178,6 +182,8 @@ export class AuthorizationService {
       where: { organizationId, ...ENFORCING_SSO },
       select: { organizationId: true }
     });
+    const ctx = requestAuthStorage.getStore();
+    if (settings && ctx && !ctx.sessionOrgId) ctx.orgSsoRefused = true;
     return Boolean(settings);
   }
 

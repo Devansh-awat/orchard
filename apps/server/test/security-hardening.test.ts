@@ -68,7 +68,16 @@ test('an org SSO session may mint what carries its org, and nothing else', () =>
   }
   for (const [method, path] of [
     ['GET', '/apiv1/auth/tokens'],
-    ['DELETE', '/apiv1/auth/tokens/1'],
+    ['PATCH', '/apiv1/auth/tokens/1'],
+    ['DELETE', '/apiv1/auth/tokens/1']
+  ]) {
+    assert.equal(deniedToOrgSsoSession(method, path), false, path);
+    assert.equal(deniedToOrgScopedSession(method, path), true, path);
+  }
+  for (const [method, path] of [
+    ['POST', '/apiv1/auth/tokens/1'],
+    ['DELETE', '/apiv1/auth/tokens/1/x'],
+    ['DELETE', '/apiv1/auth/sessions/1'],
     ['POST', '/apiv1/auth/passkey/register'],
     ['POST', '/apiv1/ssh-identities'],
     ['GET', '/apiv1/admin/users']

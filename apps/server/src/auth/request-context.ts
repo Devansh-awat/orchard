@@ -12,6 +12,8 @@ export interface RequestAuthContext {
   // other tenants its users happen to belong to.
   sessionOrgId?: string;
   browserSession?: boolean;
+  mcpGateway?: boolean;
+  orgSsoRefused?: boolean;
 }
 
 export const requestAuthStorage = new AsyncLocalStorage<RequestAuthContext>();
