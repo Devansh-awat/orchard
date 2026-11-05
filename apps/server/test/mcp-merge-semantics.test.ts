@@ -4,6 +4,7 @@ import { readdir, readFile } from 'node:fs/promises';
 import { registerConfigurationTools } from '../src/mcp/tools/configuration';
 import { registerEnvironmentTools } from '../src/mcp/tools/environments';
 import { registerQueryTools } from '../src/mcp/tools/query';
+import { json } from '../src/mcp/tools/reply';
 import { catalogServer, parseToolsets } from '../src/mcp/catalog';
 
 interface Call {
@@ -209,6 +210,41 @@ test('get_deployment omits the build log so it cannot flood the caller', async (
   const payload = JSON.parse(res.content[0].text);
   assert.equal(payload.name, 'web');
   assert.equal(payload.buildLogs, '<omitted, call get_build_logs>');
+});
+
+test('get_deployment names env vars and leaves their values out', async () => {
+  const { tools } = harness(registerQueryTools, {
+    '/deployments/d1': {
+      id: 'd1',
+      replicas: 1,
+      envVars: [{ key: 'DATABASE_URL', value: 'postgres://x', secret: false }],
+      imageHistory: [{ replicas: 1, envSnapshot: [{ key: 'OLD', value: 'postgres://x' }] }]
+    }
+  });
+
+  const res = await tools.get('get_deployment')!.handler({ deploymentId: 'd1' });
+  assert.equal(res.content[0].text.includes('postgres://x'), false);
+  assert.deepEqual(JSON.parse(res.content[0].text).envVars, {
+    names: ['DATABASE_URL'],
+    values: '<omitted, call get_env_vars>'
+  });
+  assert.deepEqual(res.structuredContent.envVars.names, ['DATABASE_URL']);
+  assert.deepEqual(res.structuredContent.imageHistory[0].envSnapshot.names, ['OLD']);
+});
+
+test('get_env_vars still returns the values', async () => {
+  const envVars = [{ key: 'A', value: '1', secret: false }];
+  const { tools } = harness(registerQueryTools, {
+    '/deployments/d1': { id: 'd1', replicas: 1, envVars }
+  });
+
+  const res = await tools.get('get_env_vars')!.handler({ deploymentId: 'd1' });
+  assert.deepEqual(JSON.parse(res.content[0].text), envVars);
+});
+
+test('a job step keeps its env vars, it has no other way to read them', () => {
+  const step = { steps: [{ name: 'a', envVars: [{ key: 'A', value: '1' }] }] };
+  assert.deepEqual(JSON.parse(json(step).content[0].text), step);
 });
 
 test('list_deployments goes cross-project when no projectId is given', async () => {

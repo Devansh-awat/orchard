@@ -471,9 +471,9 @@ Use \`find\` instead when you know the app by name and want its UUID.`,
   server.registerTool(
     'get_deployment',
     {
-      description: `Get deployment details: status, image, replicas, env vars, services, ingresses, volumes, health check, build config, placement and recent image history.
+      description: `Get deployment details: status, image, replicas, env var names, services, ingresses, volumes, health check, build config, placement and recent image history.
 
-The build log is omitted here because it is often megabytes. Read it with \`get_build_logs\`. Runtime logs are \`get_deployment_logs\`.`,
+The build log is omitted here because it is often megabytes. Read it with \`get_build_logs\`. Env var values are omitted too; read them with \`get_env_vars\`. Runtime logs are \`get_deployment_logs\`.`,
       inputSchema: {
         deploymentId: z.guid().describe('The deployment UUID')
       },

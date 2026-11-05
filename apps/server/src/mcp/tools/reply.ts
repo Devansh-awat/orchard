@@ -8,12 +8,25 @@
  */
 const BUILD_LOGS_OMITTED = '<omitted, call get_build_logs>';
 
-function omitBuildLogs(key: string, value: unknown) {
-  return key === 'buildLogs' && value ? BUILD_LOGS_OMITTED : value;
+const ENV_VALUES_OMITTED = '<omitted, call get_env_vars>';
+
+function envNames(value: unknown) {
+  const names = Array.isArray(value)
+    ? value.map((v: { key?: string }) => v.key)
+    : Object.keys(value as object);
+  return { names, values: ENV_VALUES_OMITTED };
+}
+
+function omitLargeFields(this: object, key: string, value: unknown) {
+  if (key === 'buildLogs' && value) return BUILD_LOGS_OMITTED;
+  if ((key === 'envVars' || key === 'envSnapshot') && value && 'replicas' in this) {
+    return envNames(value);
+  }
+  return value;
 }
 
 export function json(value: unknown) {
-  return { content: [{ type: 'text' as const, text: JSON.stringify(value, omitBuildLogs) }] };
+  return { content: [{ type: 'text' as const, text: JSON.stringify(value, omitLargeFields) }] };
 }
 
 /** For results that are already prose or a raw log, not a structure. */
@@ -22,7 +35,7 @@ export function text(value: string) {
 }
 
 export function structured<T extends Record<string, unknown>>(value: T) {
-  const text = JSON.stringify(value, omitBuildLogs);
+  const text = JSON.stringify(value, omitLargeFields);
   return {
     content: [{ type: 'text' as const, text }],
     structuredContent: JSON.parse(text) as T
