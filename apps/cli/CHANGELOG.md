@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.38.0](https://github.com/hackclub/orchard/compare/cli/v0.37.1...cli/v0.38.0) (2026-11-05)
+
+
+### Features
+
+* **cli:** warn about open paths on a domain ([8132f0a](https://github.com/hackclub/orchard/commit/8132f0a4bcfcf9e31e1de34c3e7e43f1e11aee74))
+
+
+### Bug Fixes
+
+* **grafts:** require exec to set sandbox credentials ([72add1b](https://github.com/hackclub/orchard/commit/72add1b40ed462b173b891db4a51795a51ec754b))
+
 ## [0.37.1](https://github.com/hackclub/orchard/compare/cli/v0.37.0...cli/v0.37.1) (2026-11-05)
 
 

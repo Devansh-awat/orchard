@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.5.4](https://github.com/hackclub/orchard/compare/greenhouse/v1.5.3...greenhouse/v1.5.4) (2026-11-05)
+
+
+### Bug Fixes
+
+* **grafts:** apply sso and mcp limits to integrations ([37a8bd1](https://github.com/hackclub/orchard/commit/37a8bd122e6d39ed414b1afed41bc7b7f79da207))
+* **grafts:** require exec to create or edit sandboxes ([b57d12b](https://github.com/hackclub/orchard/commit/b57d12b778311bc37dffe0aa85202734aafd453d))
+* **grafts:** require exec to set sandbox credentials ([72add1b](https://github.com/hackclub/orchard/commit/72add1b40ed462b173b891db4a51795a51ec754b))
+
 ## [1.5.3](https://github.com/hackclub/orchard/compare/greenhouse/v1.5.2...greenhouse/v1.5.3) (2026-11-05)
 
 

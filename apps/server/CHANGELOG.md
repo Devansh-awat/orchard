@@ -1,5 +1,20 @@
 # Changelog
 
+## [2.90.0](https://github.com/hackclub/orchard/compare/server/v2.89.0...server/v2.90.0) (2026-11-05)
+
+
+### Features
+
+* **server:** add optional proof for custom domains ([0ac6f81](https://github.com/hackclub/orchard/commit/0ac6f81bf4dc7e33d1e92a9764d4735af765e680))
+
+
+### Bug Fixes
+
+* **server:** keep bypass secret out of domain reads ([2a85165](https://github.com/hackclub/orchard/commit/2a85165c1a99bbcf18d371d9ee71a6677553ab3f))
+* **server:** keep env values out of all mcp replies ([a702770](https://github.com/hackclub/orchard/commit/a7027706a671bd1d1e5255cac9d11363dc49a003))
+* **server:** protect each domain path separately ([1483bad](https://github.com/hackclub/orchard/commit/1483bade8ac6c66bf35c7b585005d32124116193))
+* **server:** use real origin for protection sign-in ([f45faf5](https://github.com/hackclub/orchard/commit/f45faf550705cf1c0fb5e18ca40ed61b4a887a4b))
+
 ## [2.89.0](https://github.com/hackclub/orchard/compare/server/v2.88.0...server/v2.89.0) (2026-11-05)
 
 

@@ -1,6 +1,6 @@
 {
   "name": "@orchardlabs/graft-sdk",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "license": "MIT",
   "description": "Build, pack and sign Orchard grafts (Orchard's extensions)",
   "repository": {

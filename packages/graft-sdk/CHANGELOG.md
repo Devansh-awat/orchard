@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.1](https://github.com/hackclub/orchard/compare/graft-sdk/v1.4.0...graft-sdk/v1.4.1) (2026-11-05)
+
+
+### Bug Fixes
+
+* **grafts:** apply sso and mcp limits to integrations ([37a8bd1](https://github.com/hackclub/orchard/commit/37a8bd122e6d39ed414b1afed41bc7b7f79da207))
+
 ## [1.4.0](https://github.com/hackclub/orchard/compare/graft-sdk/v1.3.0...graft-sdk/v1.4.0) (2026-10-17)
 
 

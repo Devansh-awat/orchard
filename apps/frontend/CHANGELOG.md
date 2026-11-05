@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.81.0](https://github.com/hackclub/orchard/compare/frontend/v1.80.0...frontend/v1.81.0) (2026-11-05)
+
+
+### Features
+
+* **frontend:** add custom domain proof setting ([dc1ba0f](https://github.com/hackclub/orchard/commit/dc1ba0fcb13ba64acfdb30cc0a4c569ece23d867))
+* **frontend:** warn about open paths on a domain ([74645a7](https://github.com/hackclub/orchard/commit/74645a717c0f44466748c545ce2324f140c2ee3f))
+
+
+### Bug Fixes
+
+* **frontend:** show dns records for domain proof ([be82c03](https://github.com/hackclub/orchard/commit/be82c036f25a3aaeeb7f0a301b3c8db18f0e1e96))
+
 ## [1.80.0](https://github.com/hackclub/orchard/compare/frontend/v1.79.0...frontend/v1.80.0) (2026-11-05)
 
 
