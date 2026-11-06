@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { safeHttpUrl } from '$lib/utils/html';
 	import { onMount } from 'svelte';
 	import { ArrowUpRight, CircleArrowUp, RefreshCw, ShieldCheck } from 'lucide-svelte';
 	import { apiFetch, toasts } from '$lib/stores';
@@ -187,7 +188,7 @@
 					</span>
 				{:else if col.id === 'cve'}
 					<div class="ident">
-						<a class="cve" href={v.url} target="_blank" rel="noopener noreferrer"
+						<a class="cve" href={safeHttpUrl(v.url)} target="_blank" rel="noopener noreferrer"
 							>{v.cve}<ArrowUpRight size={12} aria-hidden="true" /></a
 						>
 						<span class="desc" title={v.description}>{v.description}</span>

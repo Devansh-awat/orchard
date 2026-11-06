@@ -1,3 +1,5 @@
+import { escapeHtml } from './html';
+
 export type ToHtml = (line: string) => string | undefined;
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
@@ -40,7 +42,17 @@ const PUSH_RE =
 export function escapeLine(line: string): string | undefined {
 	const plain = line.replace(ANSI_RE, '');
 	if (!plain.trim()) return undefined;
-	return plain.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+	return escapeHtml(plain);
+}
+
+export function podLabel(podName: string): string {
+	const parts = podName.split('-');
+	return parts.length >= 2 ? parts[parts.length - 1] : podName;
+}
+
+export function podBadge(raw: unknown): { label: string; html: string } {
+	const label = typeof raw === 'string' && raw ? podLabel(raw) : '';
+	return { label, html: label ? `<span class="log-pod">${escapeHtml(label)}</span>` : '' };
 }
 
 export function htmlToText(html: string): string {

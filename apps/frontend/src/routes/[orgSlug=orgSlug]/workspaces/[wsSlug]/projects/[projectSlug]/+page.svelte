@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { safeHttpUrl } from '$lib/utils/html';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { onDestroy, onMount } from 'svelte';
@@ -426,9 +427,9 @@
 					<code class="pj-stat-code">{project.namespace}</code>
 				</div>
 			{/if}
-			{#if project.repositoryUrl}
+			{#if safeHttpUrl(project.repositoryUrl)}
 				<a
-					href={project.repositoryUrl}
+					href={safeHttpUrl(project.repositoryUrl)}
 					target="_blank"
 					rel="noopener noreferrer"
 					class="pj-stat pj-stat-link"

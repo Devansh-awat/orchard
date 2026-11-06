@@ -533,10 +533,7 @@ export function portal(node: HTMLElement) {
 }
 
 /** Get the short suffix from a pod name: "backend-cb974cb4c-vjvfb" → "vjvfb" */
-export function podLabel(podName: string): string {
-	const parts = podName.split('-');
-	return parts.length >= 2 ? parts[parts.length - 1] : podName;
-}
+export { podLabel } from './log-lines';
 
 /** Parse raw .env text into key-value pairs */
 export function rawToEnvVars(raw: string): { key: string; value: string }[] {

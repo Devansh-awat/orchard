@@ -698,7 +698,7 @@ export class SsoService {
     actor: { userId: string; email?: string }
   ) {
     const existing = await this.requireProvider(id, organizationId);
-    const iconUrl = await this.storage.uploadFile(file, 'sso-icons');
+    const iconUrl = await this.storage.uploadImage(file, 'sso-icons');
     const updated = await this.prisma.identityProvider.update({
       where: { id },
       data: { iconUrl }

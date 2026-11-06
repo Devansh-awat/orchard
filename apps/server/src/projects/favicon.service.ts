@@ -8,6 +8,7 @@ import {
   objectStorageGeneration,
   s3ClientConfig
 } from '../instance-config/object-storage';
+import { reencodeImage } from '../organizations/image-reencode';
 import { assertPublicUrl, guardedFetch } from '../notifications/webhook-guard';
 
 const FETCH_HEADERS = { 'User-Agent': 'Mozilla/5.0 (compatible; OrchardBot/1.0)' };
@@ -43,6 +44,8 @@ export class FaviconService {
   // Same idea for og:image banners (key: domain)
   private bannerCache = new Map<string, { url: string | null; ts: number }>();
 
+  private static MAX_INPUT_PIXELS = 16_000_000;
+  private static MAX_DOWNLOAD_BYTES = 5 * 1024 * 1024;
   private static MEMORY_TTL = 24 * 60 * 60 * 1000; // 24h in-memory
 
   private pendingFetches = new Map<string, Promise<string | null>>();
@@ -331,22 +334,15 @@ export class FaviconService {
   }
 
   private async resizeBanner(
-    buffer: Buffer,
-    contentType: string
+    buffer: Buffer
   ): Promise<{ buffer: Buffer; contentType: string }> {
-    try {
-      const sharp = (await import('sharp')).default;
-      const resized = await sharp(buffer)
-        .resize(1280, 720, { fit: 'inside', withoutEnlargement: true })
-        .jpeg({ quality: 82 })
-        .toBuffer();
-      if (resized.length < buffer.length || contentType.includes('svg')) {
-        return { buffer: resized, contentType: 'image/jpeg' };
-      }
-    } catch {
-      if (contentType.includes('svg')) throw new Error('Refusing to store an unconverted svg');
-    }
-    return { buffer, contentType };
+    const image = await reencodeImage(buffer, {
+      format: 'webp',
+      maxDimension: 1280,
+      maxPixels: FaviconService.MAX_INPUT_PIXELS,
+      allowSvg: true
+    });
+    return { buffer: image.buffer, contentType: image.contentType };
   }
 
   /** Download + store the page's og:image banner. Keyed banners/<domain>.png */
@@ -360,7 +356,7 @@ export class FaviconService {
       const img = await this.downloadImage(bannerUrl);
       if (!img) return setNull();
       if (!this.s3Client || !this.bucketName) return setNull();
-      const { buffer, contentType } = await this.resizeBanner(img.buffer, img.contentType);
+      const { buffer, contentType } = await this.resizeBanner(img.buffer);
       const key = `banners/${domain}.png`;
       await this.s3Client.send(
         new PutObjectCommand({
@@ -518,7 +514,10 @@ export class FaviconService {
         return null;
       }
 
+      const declared = Number(res.headers.get('content-length'));
+      if (Number.isFinite(declared) && declared > FaviconService.MAX_DOWNLOAD_BYTES) return null;
       const arrayBuffer = await res.arrayBuffer();
+      if (arrayBuffer.byteLength > FaviconService.MAX_DOWNLOAD_BYTES) return null;
       const buffer = Buffer.from(arrayBuffer);
 
       // Sanity check: at least 100 bytes (skip empty/error responses)
@@ -530,33 +529,17 @@ export class FaviconService {
     }
   }
 
-  // Downscale icons before storing: apple-touch-icons can be 512px/250KB+
-  // while the dashboard renders them at ~20px. Falls back to the original
-  // bytes if sharp is unavailable or the format is unsupported (e.g. some
-  // .ico variants).
-  private async resizeIcon(
-    buffer: Buffer,
-    contentType: string
-  ): Promise<{ buffer: Buffer; contentType: string }> {
-    try {
-      const sharp = (await import('sharp')).default;
-      const resized = await sharp(buffer)
-        .resize(64, 64, { fit: 'inside', withoutEnlargement: true })
-        .png()
-        .toBuffer();
-      const dematted = await this.trimWhiteMatte(resized);
-      // Only keep the resized version when it actually shrinks the payload.
-      if (
-        dematted.length < buffer.length ||
-        dematted.length !== resized.length ||
-        contentType.includes('svg')
-      ) {
-        return { buffer: dematted, contentType: 'image/png' };
-      }
-    } catch {
-      if (contentType.includes('svg')) throw new Error('Refusing to store an unconverted svg');
-    }
-    return { buffer, contentType };
+  // Icons are only ever stored as PNG bytes the server produced itself from
+  // successfully decoded pixels. Anything that fails to decode is rejected.
+  private async resizeIcon(buffer: Buffer): Promise<{ buffer: Buffer; contentType: string }> {
+    const image = await reencodeImage(buffer, {
+      format: 'png',
+      maxDimension: 64,
+      maxPixels: FaviconService.MAX_INPUT_PIXELS,
+      allowSvg: true
+    });
+    const dematted = await this.trimWhiteMatte(image.buffer);
+    return { buffer: dematted, contentType: 'image/png' };
   }
 
   // Many favicons ship with an opaque white matte that looks like a white
@@ -629,7 +612,7 @@ export class FaviconService {
       return null;
     }
 
-    const icon = await this.resizeIcon(buffer, contentType).catch(() => null);
+    const icon = await this.resizeIcon(buffer).catch(() => null);
     if (!icon) {
       this.memoryCache.set(domain, { url: null, ts: Date.now() });
       return null;

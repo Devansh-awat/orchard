@@ -1088,6 +1088,16 @@ export function groupLines(rawLines: string[]): LogEntry[] {
   return entries;
 }
 
+const RESERVED_METADATA_KEYS = new Set([
+  'pod',
+  'container',
+  'namespace',
+  'level',
+  'deployment',
+  'node',
+  'source'
+]);
+
 function buildEntry(header: RawLine, lines: RawLine[]): LogEntry {
   // Single-line JSON log: surface its own level/message/timestamp.
   if (lines.length === 1) {
@@ -1111,8 +1121,12 @@ function buildEntry(header: RawLine, lines: RawLine[]): LogEntry {
             time: _ti,
             ts: _tss,
             '@timestamp': _at,
-            ...metadata
+            ...tenantMetadata
           } = obj;
+          const metadata: Record<string, any> = {};
+          for (const [k, v] of Object.entries(tenantMetadata)) {
+            if (!RESERVED_METADATA_KEYS.has(k)) metadata[k] = v;
+          }
           return {
             timestamp: timestamp != null ? String(timestamp) : undefined,
             level: level != null ? normalizeLevel(String(level)) : undefined,

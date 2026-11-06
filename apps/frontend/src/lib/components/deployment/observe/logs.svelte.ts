@@ -1,6 +1,6 @@
 import { apiFetch } from '$lib/stores';
-import { ansiToHtml, podLabel } from '$lib/utils/format';
-import { htmlToText, type LogFilters, type LogLine } from '$lib/utils/log-lines';
+import { ansiToHtml } from '$lib/utils/format';
+import { htmlToText, podBadge, type LogFilters, type LogLine } from '$lib/utils/log-lines';
 
 export type LogEntry = {
 	timestamp?: string;
@@ -8,7 +8,7 @@ export type LogEntry = {
 	message?: string;
 	lines?: string[];
 	raw?: string;
-	metadata?: { pod?: string };
+	metadata?: { pod?: unknown };
 	_key?: string;
 };
 
@@ -57,7 +57,7 @@ function keyed(next: LogEntry[], prev: LogEntry[]): LogEntry[] {
 
 export function entryLine(e: LogEntry): LogLine {
 	const body = stripLeadingTime((e.lines?.length ? e.lines : [e.message ?? '']).join('\n'));
-	const pod = e.metadata?.pod ? podLabel(e.metadata.pod) : '';
+	const { label: pod, html: podHtml } = podBadge(e.metadata?.pod);
 	const time = clock(e.timestamp);
 	const message = ansiToHtml(body);
 	const ts = e.timestamp ? new Date(e.timestamp).getTime() : NaN;
@@ -67,7 +67,7 @@ export function entryLine(e: LogEntry): LogLine {
 		ts: Number.isFinite(ts) ? ts : null,
 		source: pod || null,
 		text: [time, pod, htmlToText(message)].filter(Boolean).join(' '),
-		html: `<span class="log-ts">${time}</span>${pod ? `<span class="log-pod">${pod}</span>` : ''}${message}`
+		html: `<span class="log-ts">${time}</span>${podHtml}${message}`
 	};
 }
 

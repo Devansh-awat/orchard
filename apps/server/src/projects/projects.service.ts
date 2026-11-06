@@ -209,6 +209,22 @@ export class ProjectsService {
     return namespace;
   }
 
+  static normalizeRepositoryUrl(value: unknown): string | null {
+    if (value === undefined || value === null) return null;
+    const trimmed = String(value).trim();
+    if (!trimmed) return null;
+    let parsed: URL;
+    try {
+      parsed = new URL(trimmed);
+    } catch {
+      throw new BadRequestException('Repository URL must be a valid http(s) URL');
+    }
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      throw new BadRequestException('Repository URL must be a valid http(s) URL');
+    }
+    return trimmed;
+  }
+
   async createProject(
     organizationId: string,
     data: {
@@ -295,7 +311,7 @@ export class ProjectsService {
         name,
         slug,
         description: data.description?.trim() || null,
-        repositoryUrl: data.repositoryUrl?.trim() || null,
+        repositoryUrl: ProjectsService.normalizeRepositoryUrl(data.repositoryUrl),
         icon: data.icon?.trim() || null,
         backgroundImage: data.backgroundImage?.trim() || null,
         namespace,
@@ -959,7 +975,7 @@ export class ProjectsService {
       updates.description = data.description?.toString().trim() || null;
     }
     if (data.repositoryUrl !== undefined) {
-      updates.repositoryUrl = data.repositoryUrl?.toString().trim() || null;
+      updates.repositoryUrl = ProjectsService.normalizeRepositoryUrl(data.repositoryUrl);
     }
     if (data.icon !== undefined) {
       const v = data.icon?.toString().trim();
@@ -1002,7 +1018,7 @@ export class ProjectsService {
     field: 'icon' | 'backgroundImage',
     file: Express.Multer.File,
     storageService: {
-      uploadFile: (f: Express.Multer.File, folder: string) => Promise<string>;
+      uploadImage: (f: Express.Multer.File, folder: string) => Promise<string>;
       deleteFile: (url: string) => Promise<void>;
     },
     clerkId: string,
@@ -1022,7 +1038,7 @@ export class ProjectsService {
     await this.authz.requireProjectEdit(projectId, user.id, 'update project assets');
 
     const folder = field === 'icon' ? 'project-icons' : 'project-backgrounds';
-    const url = await storageService.uploadFile(file, folder);
+    const url = await storageService.uploadImage(file, folder);
 
     const previous = existing[field];
     if (previous) {

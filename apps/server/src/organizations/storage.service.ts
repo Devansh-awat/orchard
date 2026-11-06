@@ -13,6 +13,7 @@ import {
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { randomUUID } from 'crypto';
 import { Readable } from 'stream';
+import { reencodeImage } from './image-reencode';
 import {
   BuildContextStorage,
   LOCAL_DEPLOYS_NEED_S3,
@@ -54,6 +55,20 @@ export class StorageService {
     const client = new S3Client(s3ClientConfig(target));
     this.uploadClient = { generation, client, target };
     return this.uploadClient;
+  }
+
+  async uploadImage(file: Express.Multer.File, folder = 'organizations'): Promise<string> {
+    const image = await reencodeImage(file.buffer);
+    return this.uploadFile(
+      {
+        ...file,
+        buffer: image.buffer,
+        size: image.buffer.length,
+        mimetype: image.contentType,
+        originalname: `image.${image.extension}`
+      },
+      folder
+    );
   }
 
   async uploadFile(file: Express.Multer.File, folder = 'organizations'): Promise<string> {

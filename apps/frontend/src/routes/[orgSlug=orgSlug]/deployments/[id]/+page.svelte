@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { escapeHtml } from '$lib/utils/html';
 	import { settled } from '$lib/utils/view-transition';
 	import './deployment-page.css';
 	import { page } from '$app/stores';
@@ -3457,7 +3458,7 @@
 	<ConfirmModal
 		bind:open={showRollbackModal}
 		title="Promote this image to production?"
-		description={`Your app restarts with the image tagged <strong>${rollbackTargetTag.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</strong>.`}
+		description={`Your app restarts with the image tagged <strong>${escapeHtml(rollbackTargetTag)}</strong>.`}
 		html
 		confirmLabel="Promote"
 		danger={false}

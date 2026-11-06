@@ -682,7 +682,7 @@ export class OrganizationsService {
       throw new NotFoundException('Organization not found');
     }
 
-    const avatarUrl = await storageService.uploadFile(file, 'organizations');
+    const avatarUrl = await storageService.uploadImage(file, 'organizations');
 
     if (organization.avatarUrl) {
       try {

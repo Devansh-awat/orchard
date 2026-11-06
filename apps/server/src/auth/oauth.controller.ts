@@ -377,7 +377,7 @@ export class OAuthController {
 
     const user = await this.resolveUser(req);
 
-    const imageUrl = await this.storageService.uploadFile(file, 'users');
+    const imageUrl = await this.storageService.uploadImage(file, 'users');
 
     if (user.imageUrl) {
       await this.storageService.deleteFile(user.imageUrl).catch(() => {});

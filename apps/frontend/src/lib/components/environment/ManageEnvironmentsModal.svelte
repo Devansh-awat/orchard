@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { escapeHtml } from '$lib/utils/html';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { Star, Trash2, Plus, Pencil, Check, X } from 'lucide-svelte';
 	import { apiFetch, toasts } from '$lib/stores';
@@ -231,7 +232,7 @@
 	<ConfirmModal
 		bind:open={showDelete}
 		title={`Delete "${toDelete.name}"?`}
-		description={`This <strong>permanently deletes the environment</strong> <code>${toDelete.namespace}</code>: ${describeContents(toDelete)}. You can't undo this.`}
+		description={`This <strong>permanently deletes the environment</strong> <code>${escapeHtml(toDelete.namespace)}</code>: ${describeContents(toDelete)}. You can't undo this.`}
 		html
 		confirmText={toDelete.name}
 		confirmLabel="Delete environment forever"
