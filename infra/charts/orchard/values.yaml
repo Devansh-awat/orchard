@@ -646,6 +646,12 @@ r2Proxy:
   # Bucket used for organizations that never configured their own backup
   # storage. Pair it with R2_BACKUP_BUCKET on the server.
   defaultBucket: ""
+  # Buckets the proxy signs with the platform credentials. Defaults to
+  # defaultBucket. With r2Proxy.upstream.endpoint set, one of the two is
+  # required: an empty list would otherwise mean "every bucket", so the render
+  # fails and the proxy refuses to start instead. Requests for any other bucket
+  # are refused, whatever an organization names as its backup bucket.
+  allowedBuckets: []
   # Password for the read-only orchard_r2_proxy postgres role. Left empty, the
   # chart keeps whatever the orchard-r2-proxy-db secret already holds, or mints
   # one on first install.

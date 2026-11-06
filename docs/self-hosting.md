@@ -966,7 +966,14 @@ per-cluster key that only works for its own prefix. The proxy verifies the
 SigV4 signature on every request, refuses copy operations and every
 bucket-level write except a multi-object delete whose keys all sit inside the
 caller's prefix, and only serves the buckets named in `ALLOWED_BUCKETS`
-(default: the platform bucket). An organization that brought its own bucket
+(default: the platform bucket). With an upstream endpoint configured and
+neither `ALLOWED_BUCKETS` nor `DEFAULT_BACKUP_BUCKET` set, the proxy refuses to
+start and the chart refuses to render; an empty list never means "every
+bucket". A bucket name an organization stores as its backup bucket is not
+trusted by the proxy. Requests are also restricted to the operations barman
+and the server use (object get/put/head/delete, list, multipart, multi-object
+delete), with a canonical path and query, and `x-amz-*` headers on a short
+allowlist. An organization that brought its own bucket
 and keys talks to it directly and never goes through the proxy.
 
 The proxy reads its bindings from the platform database as `orchard_r2_proxy`,

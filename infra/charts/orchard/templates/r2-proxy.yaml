@@ -26,6 +26,9 @@ metadata:
 type: Opaque
 stringData:
 {{- if .Values.r2Proxy.upstream.endpoint }}
+  {{- if not (or .Values.r2Proxy.defaultBucket .Values.r2Proxy.allowedBuckets) }}
+  {{- fail "r2Proxy.upstream.endpoint needs r2Proxy.defaultBucket or r2Proxy.allowedBuckets: the proxy only signs requests with the platform credentials for buckets named there, and refuses to start with none" }}
+  {{- end }}
   R2_ENDPOINT: {{ .Values.r2Proxy.upstream.endpoint | quote }}
   R2_REGION: {{ .Values.r2Proxy.upstream.region | quote }}
   {{- if eq (toString .Values.r2Proxy.upstream.pathStyle) "false" }}
@@ -34,6 +37,9 @@ stringData:
   R2_ACCESS_KEY: {{ .Values.r2Proxy.upstream.accessKey | quote }}
   R2_SECRET_KEY: {{ .Values.r2Proxy.upstream.secretKey | quote }}
   DEFAULT_BACKUP_BUCKET: {{ .Values.r2Proxy.defaultBucket | default "" | quote }}
+  {{- if .Values.r2Proxy.allowedBuckets }}
+  ALLOWED_BUCKETS: {{ join "," .Values.r2Proxy.allowedBuckets | quote }}
+  {{- end }}
 {{- else if .Values.objectStorage.local.enabled }}
   R2_ENDPOINT: {{ include "orchard.objectStorageEndpoint" . | quote }}
   R2_REGION: {{ .Values.objectStorage.local.region | quote }}
@@ -80,7 +86,7 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/upstream: {{ dict "upstream" .Values.r2Proxy.upstream "defaultBucket" .Values.r2Proxy.defaultBucket "objectStorage" .Values.objectStorage | toJson | sha256sum }}
+        checksum/upstream: {{ dict "upstream" .Values.r2Proxy.upstream "defaultBucket" .Values.r2Proxy.defaultBucket "allowedBuckets" .Values.r2Proxy.allowedBuckets "objectStorage" .Values.objectStorage | toJson | sha256sum }}
       labels:
         app.kubernetes.io/name: r2-proxy
         app.kubernetes.io/instance: {{ .Release.Name }}

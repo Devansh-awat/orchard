@@ -21,7 +21,7 @@
 //	R2_ACCESS_KEY     real access key id
 //	R2_SECRET_KEY     real secret access key
 //	DATABASE_URL      postgres URL pointing at orchard's database (read-only role recommended)
-//	ALLOWED_BUCKETS   comma-separated buckets a binding may name (default: DEFAULT_BACKUP_BUCKET)
+//	ALLOWED_BUCKETS   comma-separated buckets the platform credentials serve (default: DEFAULT_BACKUP_BUCKET); R2_ENDPOINT with neither set refuses to start
 //	STORED_UPSTREAMS_FILE  JSON the server writes when storage is set in the UI, re-read while running
 //
 // Only the subset of S3 that barman/CNPG actually uses is supported:
@@ -47,6 +47,7 @@ import (
 	"net/url"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -61,7 +62,6 @@ var Version = "dev"
 type Binding struct {
 	AccessKey    string
 	Secret       string
-	Bucket       string
 	Prefix       string
 	ReadPrefixes []string
 }
@@ -88,27 +88,17 @@ const (
 // A small TTL cache absorbs the steady-state load (barman makes many requests
 // per backup) while still picking up new databases within ~missTTL of creation.
 type bindingStore struct {
-	db            *sql.DB
-	defaultBucket string
-	defaults      func() string
+	db *sql.DB
 
 	mu    sync.RWMutex
 	cache map[string]cacheEntry
 }
 
-func newBindingStore(db *sql.DB, defaultBucket string) *bindingStore {
+func newBindingStore(db *sql.DB) *bindingStore {
 	return &bindingStore{
-		db:            db,
-		defaultBucket: defaultBucket,
-		cache:         map[string]cacheEntry{},
+		db:    db,
+		cache: map[string]cacheEntry{},
 	}
-}
-
-func (s *bindingStore) fallbackBucket() string {
-	if s.defaults != nil {
-		return s.defaults()
-	}
-	return s.defaultBucket
 }
 
 func (s *bindingStore) get(ak string) (Binding, bool) {
@@ -161,17 +151,13 @@ func (s *bindingStore) lookup(ak string) (Binding, bool, error) {
 		SELECT d.r2_proxy_access_key,
 		       d.r2_proxy_secret,
 		       d.namespace,
-		       d.cluster_name,
-		       COALESCE(o.backup_r2_bucket, NULLIF($2, ''))
+		       d.cluster_name
 		FROM databases d
-		JOIN projects p      ON p.id = d.project_id
-		JOIN organizations o ON o.id = p.organization_id
 		WHERE d.r2_proxy_access_key = $1
 		  AND d.r2_proxy_access_key IS NOT NULL
 		  AND d.r2_proxy_secret     IS NOT NULL
 		  AND d.namespace           IS NOT NULL
 		  AND d.cluster_name        IS NOT NULL
-		  AND COALESCE(o.backup_r2_bucket, NULLIF($2, '')) IS NOT NULL
 		LIMIT 1`
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -179,15 +165,17 @@ func (s *bindingStore) lookup(ak string) (Binding, bool, error) {
 
 	var b Binding
 	var ns, cluster string
-	err := s.db.QueryRowContext(ctx, q, ak, s.fallbackBucket()).Scan(&b.AccessKey, &b.Secret, &ns, &cluster, &b.Bucket)
+	err := s.db.QueryRowContext(ctx, q, ak).Scan(&b.AccessKey, &b.Secret, &ns, &cluster)
 	if errors.Is(err, sql.ErrNoRows) {
 		return s.lookupRestore(ctx, ak)
 	}
 	if err != nil {
 		return Binding{}, false, err
 	}
-	// Trailing slash on the prefix so "ns/db1" doesn't accidentally match "ns/db10/...".
 	b.Prefix = ns + "/" + cluster + "/"
+	if !validPrefix(b.Prefix) {
+		return Binding{}, false, nil
+	}
 	return b, true, nil
 }
 
@@ -197,22 +185,18 @@ func (s *bindingStore) lookupRestore(ctx context.Context, ak string) (Binding, b
 		       d.r2_restore_secret,
 		       d.namespace,
 		       d.r2_restore_cluster_name,
-		       d.cluster_name,
-		       COALESCE(o.backup_r2_bucket, NULLIF($2, ''))
+		       d.cluster_name
 		FROM databases d
-		JOIN projects p      ON p.id = d.project_id
-		JOIN organizations o ON o.id = p.organization_id
 		WHERE d.r2_restore_access_key = $1
 		  AND d.r2_restore_secret       IS NOT NULL
 		  AND d.r2_restore_cluster_name IS NOT NULL
 		  AND d.namespace               IS NOT NULL
 		  AND d.cluster_name            IS NOT NULL
-		  AND COALESCE(o.backup_r2_bucket, NULLIF($2, '')) IS NOT NULL
 		LIMIT 1`
 
 	var b Binding
 	var ns, restoreCluster, sourceCluster string
-	err := s.db.QueryRowContext(ctx, q, ak, s.fallbackBucket()).Scan(&b.AccessKey, &b.Secret, &ns, &restoreCluster, &sourceCluster, &b.Bucket)
+	err := s.db.QueryRowContext(ctx, q, ak).Scan(&b.AccessKey, &b.Secret, &ns, &restoreCluster, &sourceCluster)
 	if errors.Is(err, sql.ErrNoRows) {
 		return s.lookupScoped(ctx, ak)
 	}
@@ -222,6 +206,9 @@ func (s *bindingStore) lookupRestore(ctx context.Context, ak string) (Binding, b
 	}
 	b.Prefix = ns + "/" + restoreCluster + "/"
 	b.ReadPrefixes = []string{ns + "/" + sourceCluster + "/"}
+	if !validPrefix(b.Prefix) || !validPrefix(b.ReadPrefixes[0]) {
+		return Binding{}, false, nil
+	}
 	return b, true, nil
 }
 
@@ -232,19 +219,16 @@ func (s *bindingStore) lookupScoped(ctx context.Context, ak string) (Binding, bo
 		SELECT k.access_key,
 		       k.secret,
 		       k.write_prefix,
-		       k.read_prefixes,
-		       COALESCE(o.backup_r2_bucket, NULLIF($2, ''))
+		       k.read_prefixes
 		FROM storage_access_keys k
-		JOIN organizations o ON o.id = k.organization_id
 		WHERE k.access_key = $1
 		  AND k.expires_at > (NOW() AT TIME ZONE 'UTC')
 		  AND k.write_prefix <> ''
-		  AND COALESCE(o.backup_r2_bucket, NULLIF($2, '')) IS NOT NULL
 		LIMIT 1`
 
 	var b Binding
 	var reads pq.StringArray
-	err := s.db.QueryRowContext(ctx, q, ak, s.fallbackBucket()).Scan(&b.AccessKey, &b.Secret, &b.Prefix, &reads, &b.Bucket)
+	err := s.db.QueryRowContext(ctx, q, ak).Scan(&b.AccessKey, &b.Secret, &b.Prefix, &reads)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Binding{}, false, nil
 	}
@@ -253,12 +237,32 @@ func (s *bindingStore) lookupScoped(ctx context.Context, ak string) (Binding, bo
 		return Binding{}, false, nil
 	}
 	b.Prefix = withSlash(b.Prefix)
+	if !validPrefix(b.Prefix) {
+		return Binding{}, false, nil
+	}
 	for _, r := range reads {
-		if r != "" {
-			b.ReadPrefixes = append(b.ReadPrefixes, withSlash(r))
+		if r == "" {
+			continue
 		}
+		r = withSlash(r)
+		if !validPrefix(r) {
+			return Binding{}, false, nil
+		}
+		b.ReadPrefixes = append(b.ReadPrefixes, r)
 	}
 	return b, true, nil
+}
+
+func validPrefix(p string) bool {
+	if len(p) < 2 || !strings.HasSuffix(p, "/") || strings.HasPrefix(p, "/") || strings.Contains(p, "//") {
+		return false
+	}
+	for i := 0; i < len(p); i++ {
+		if p[i] < 0x20 || p[i] == 0x7f {
+			return false
+		}
+	}
+	return !hasDotSegment(p)
 }
 
 func withSlash(prefix string) string {
@@ -276,14 +280,15 @@ type upstream struct {
 	pathStyle bool
 }
 
-func (u *upstream) requestURL(bucket, key, path string) url.URL {
-	out := *u.url
+func (u *upstream) requestURL(bucket, key, path, rawQuery string) *url.URL {
+	out := &url.URL{Scheme: u.url.Scheme, Host: u.url.Host, RawQuery: rawQuery}
 	if u.pathStyle {
 		out.Path = path
-		return out
+	} else {
+		out.Host = bucket + "." + u.url.Host
+		out.Path = "/" + key
 	}
-	out.Host = bucket + "." + u.url.Host
-	out.Path = "/" + key
+	out.RawPath = canonicalURI(out.Path)
 	return out
 }
 
@@ -298,7 +303,7 @@ func (t *upstreamTable) forBucket(bucket string) *upstream {
 	if u, ok := t.stored[bucket]; ok {
 		return u
 	}
-	if t.base != nil && (len(t.baseBuckets) == 0 || t.baseBuckets[bucket]) {
+	if t.base != nil && t.baseBuckets[bucket] {
 		return t.base
 	}
 	return nil
@@ -387,6 +392,16 @@ func (p *Proxy) reloadStored(path string, base upstreamTable, last *[]byte) {
 	log.Printf("[r2-proxy] upstreams: %d stored, default bucket %q", len(next.stored), next.defaultBucket)
 }
 
+func parseAllowedBuckets(raw string) map[string]bool {
+	allowed := map[string]bool{}
+	for _, b := range strings.Split(raw, ",") {
+		if b = strings.TrimSpace(b); b != "" {
+			allowed[b] = true
+		}
+	}
+	return allowed
+}
+
 func baseUpstream() (*upstream, error) {
 	endpoint := os.Getenv("R2_ENDPOINT")
 	if endpoint == "" {
@@ -435,14 +450,12 @@ func main() {
 	}
 
 	defaultBucket := envDefault("DEFAULT_BACKUP_BUCKET", "")
-	allowed := map[string]bool{}
-	for _, b := range strings.Split(envDefault("ALLOWED_BUCKETS", defaultBucket), ",") {
-		if b = strings.TrimSpace(b); b != "" {
-			allowed[b] = true
-		}
+	allowed := parseAllowedBuckets(envDefault("ALLOWED_BUCKETS", defaultBucket))
+	if base != nil && len(allowed) == 0 {
+		log.Fatal("R2_ENDPOINT is set but neither ALLOWED_BUCKETS nor DEFAULT_BACKUP_BUCKET names a bucket; refusing to start rather than serve every bucket with the platform credentials")
 	}
 
-	store := newBindingStore(db, defaultBucket)
+	store := newBindingStore(db)
 	p := &Proxy{
 		upstreamService: "s3",
 		policy:          store,
@@ -452,7 +465,6 @@ func main() {
 		// proxy add idle-timeout there.
 		client: &http.Client{},
 	}
-	store.defaults = func() string { return p.upstreams.Load().defaultBucket }
 
 	storedPath := envDefault("STORED_UPSTREAMS_FILE", "/etc/r2-proxy/stored/upstreams.json")
 	baseTable := upstreamTable{base: base, baseBuckets: allowed, defaultBucket: defaultBucket}
@@ -512,17 +524,17 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Enforce bucket + prefix. Path-style addressing only: barman uses uri-style=path.
+	if code, msg, ok := validateTarget(r); !ok {
+		denyAndLog(w, r, authz.AccessKey, code, msg)
+		return
+	}
+
 	bucket, key := splitPathStyle(r.URL.Path)
 	if bucket == "" {
 		denyAndLog(w, r, authz.AccessKey, "AccessDenied", "missing bucket in path")
 		return
 	}
 	table := p.upstreams.Load()
-	if bucket != binding.Bucket && !(table.isPlatform(binding.Bucket) && table.isPlatform(bucket)) {
-		denyAndLog(w, r, authz.AccessKey, "AccessDenied", "bucket not allowed for this key")
-		return
-	}
 	up := table.forBucket(bucket)
 	if up == nil {
 		denyAndLog(w, r, authz.AccessKey, "AccessDenied", "bucket not served by this proxy")
@@ -541,19 +553,16 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	upURL := up.requestURL(bucket, key, r.URL.Path)
-	upURL.RawQuery = r.URL.RawQuery
-
-	outReq, err := http.NewRequestWithContext(r.Context(), r.Method, upURL.String(), payload.reader)
+	outReq, err := http.NewRequestWithContext(r.Context(), r.Method, "http://upstream.invalid/", payload.reader)
 	if err != nil {
 		s3Error(w, http.StatusInternalServerError, "InternalError", "upstream request build failed")
 		return
 	}
+	outReq.URL = up.requestURL(bucket, key, r.URL.Path, r.URL.RawQuery)
 	outReq.ContentLength = payload.length
-	// Carry through most headers but strip auth-related ones; we'll add fresh ones.
 	copyForwardHeaders(r.Header, outReq.Header)
-	outReq.Host = upURL.Host
-	outReq.Header.Set("Host", upURL.Host)
+	outReq.Host = outReq.URL.Host
+	outReq.Header.Set("Host", outReq.URL.Host)
 	outReq.Header.Set("x-amz-content-sha256", contentSha)
 	outReq.Header.Set("x-amz-date", time.Now().UTC().Format("20060102T150405Z"))
 	outReq.Header.Del("Authorization")
@@ -880,52 +889,228 @@ func authorizeBinding(r *http.Request, key string, b Binding, body []byte) (code
 	return code, msg, ok
 }
 
-func authorizeOperation(r *http.Request, key, prefix string, body []byte) (code, msg string, ok bool) {
-	for h := range r.Header {
-		if strings.HasPrefix(strings.ToLower(h), "x-amz-copy-source") {
-			return "AccessDenied", "copy operations are not permitted", false
+const queryBytes = "-._~%=&/:,*!'()$@?"
+
+// validateTarget refuses any request target that two parsers could read
+// differently. What passes here is forwarded byte for byte (the query) or
+// re-encoded canonically from the decoded path, so the bytes that were
+// authorized are the bytes that are signed and sent upstream.
+func validateTarget(r *http.Request) (code, msg string, ok bool) {
+	if strings.Contains(r.RequestURI, "#") || r.URL.Fragment != "" || strings.Contains(r.URL.RawQuery, "#") {
+		return "InvalidURI", "fragments are not allowed", false
+	}
+	if r.RequestURI != "" && !strings.HasPrefix(r.RequestURI, "/") {
+		return "InvalidURI", "request target must be an absolute path", false
+	}
+	if r.URL.Opaque != "" || r.URL.User != nil {
+		return "InvalidURI", "unsupported request target", false
+	}
+	p := r.URL.Path
+	if p == "" || p[0] != '/' || strings.Contains(p, "//") || strings.Contains(p, "\\") || hasDotSegment(p) {
+		return "InvalidURI", "path is not canonical", false
+	}
+	for i := 0; i < len(p); i++ {
+		if p[i] < 0x20 || p[i] == 0x7f {
+			return "InvalidURI", "path has control characters", false
 		}
 	}
-	q := r.URL.Query()
-	inPrefix := func(k string) bool { return prefix == "" || strings.HasPrefix(k, prefix) }
-	if ambiguousQuery(r.URL.RawQuery, q) {
+	if _, ok := strictQuery(r.URL.RawQuery); !ok {
 		return "AccessDenied", "query parameters must be unambiguous", false
+	}
+	return "", "", true
+}
+
+func strictQuery(raw string) (url.Values, bool) {
+	for i := 0; i < len(raw); i++ {
+		c := raw[i]
+		if (c < 'a' || c > 'z') && (c < 'A' || c > 'Z') && (c < '0' || c > '9') && !strings.ContainsRune(queryBytes, rune(c)) {
+			return nil, false
+		}
+	}
+	q, err := url.ParseQuery(raw)
+	if err != nil {
+		return nil, false
+	}
+	seen := make(map[string]bool, len(q))
+	for k, values := range q {
+		lower := strings.ToLower(k)
+		if k == "" || len(values) != 1 || seen[lower] {
+			return nil, false
+		}
+		seen[lower] = true
+		for _, s := range []string{k, values[0]} {
+			for i := 0; i < len(s); i++ {
+				if s[i] < 0x20 || s[i] == 0x7f {
+					return nil, false
+				}
+			}
+		}
+	}
+	return q, true
+}
+
+var forwardedAmzHeaders = map[string]bool{
+	"x-amz-content-sha256":                            true,
+	"x-amz-date":                                      true,
+	"x-amz-security-token":                            true,
+	"x-amz-decoded-content-length":                    true,
+	"x-amz-sdk-checksum-algorithm":                    true,
+	"x-amz-trailer":                                   true,
+	"x-amz-checksum-mode":                             true,
+	"x-amz-storage-class":                             true,
+	"x-amz-tagging":                                   true,
+	"x-amz-user-agent":                                true,
+	"x-amz-expected-bucket-owner":                     true,
+	"x-amz-request-payer":                             true,
+	"x-amz-mp-object-size":                            true,
+	"x-amz-server-side-encryption":                    true,
+	"x-amz-server-side-encryption-customer-algorithm": true,
+	"x-amz-server-side-encryption-customer-key":       true,
+	"x-amz-server-side-encryption-customer-key-md5":   true,
+}
+
+var forwardedAmzPrefixes = []string{"x-amz-meta-", "x-amz-checksum-"}
+
+func checkHeaders(h http.Header) (code, msg string, ok bool) {
+	for name := range h {
+		lower := strings.ToLower(name)
+		if !strings.HasPrefix(strings.ReplaceAll(lower, "_", "-"), "x-amz-") {
+			continue
+		}
+		if strings.HasPrefix(lower, "x-amz-copy-source") {
+			return "AccessDenied", "copy operations are not permitted", false
+		}
+		if forwardedAmzHeaders[lower] {
+			continue
+		}
+		listed := false
+		for _, p := range forwardedAmzPrefixes {
+			if strings.HasPrefix(lower, p) {
+				listed = true
+			}
+		}
+		if !listed {
+			return "AccessDenied", "header " + lower + " is not permitted", false
+		}
+	}
+	return "", "", true
+}
+
+func queryWithin(q url.Values, required []string, optional ...string) bool {
+	allowed := map[string]bool{"x-id": true}
+	for _, k := range required {
+		if !q.Has(k) {
+			return false
+		}
+		allowed[k] = true
+	}
+	for _, k := range optional {
+		allowed[k] = true
+	}
+	for k := range q {
+		if !allowed[k] {
+			return false
+		}
+	}
+	return true
+}
+
+func validUploadID(v string) bool {
+	return v != "" && len(v) <= 1024
+}
+
+func validPartNumber(v string) bool {
+	n, err := strconv.Atoi(v)
+	return err == nil && n >= 1 && n <= 10000 && strconv.Itoa(n) == v
+}
+
+var listParams = []string{
+	"list-type", "prefix", "delimiter", "encoding-type", "max-keys", "marker",
+	"continuation-token", "start-after", "fetch-owner",
+}
+
+func authorizeOperation(r *http.Request, key, prefix string, body []byte) (code, msg string, ok bool) {
+	if code, msg, ok = validateTarget(r); !ok {
+		return code, msg, false
+	}
+	if code, msg, ok = checkHeaders(r.Header); !ok {
+		return code, msg, false
+	}
+	q, _ := strictQuery(r.URL.RawQuery)
+	inPrefix := func(k string) bool { return prefix == "" || strings.HasPrefix(k, prefix) }
+	denied := func() (string, string, bool) {
+		return "AccessDenied", "operation or query parameters not permitted", false
 	}
 
 	if key != "" {
-		if hasDotSegment(key) {
-			return "AccessDenied", "key outside policy prefix", false
-		}
-		if !inPrefix(key) {
+		if hasDotSegment(key) || !inPrefix(key) {
 			return "AccessDenied", "key outside policy prefix", false
 		}
 		switch r.Method {
-		case http.MethodHead, http.MethodGet, http.MethodPut, http.MethodDelete:
-			return "", "", true
-		case http.MethodPost:
-			if q.Has("uploads") || q.Has("uploadId") {
+		case http.MethodHead:
+			if queryWithin(q, nil) {
 				return "", "", true
 			}
+		case http.MethodGet:
+			if q.Has("uploadId") {
+				if validUploadID(q.Get("uploadId")) && queryWithin(q, []string{"uploadId"}, "max-parts", "part-number-marker", "encoding-type") {
+					return "", "", true
+				}
+			} else if queryWithin(q, nil) {
+				return "", "", true
+			}
+		case http.MethodPut:
+			if q.Has("uploadId") || q.Has("partNumber") {
+				if validUploadID(q.Get("uploadId")) && validPartNumber(q.Get("partNumber")) && queryWithin(q, []string{"uploadId", "partNumber"}) {
+					return "", "", true
+				}
+			} else if queryWithin(q, nil) {
+				return "", "", true
+			}
+		case http.MethodDelete:
+			if q.Has("uploadId") {
+				if validUploadID(q.Get("uploadId")) && queryWithin(q, []string{"uploadId"}) {
+					return "", "", true
+				}
+			} else if queryWithin(q, nil) {
+				return "", "", true
+			}
+		case http.MethodPost:
+			if q.Has("uploads") && queryWithin(q, []string{"uploads"}) {
+				return "", "", true
+			}
+			if q.Has("uploadId") && validUploadID(q.Get("uploadId")) && queryWithin(q, []string{"uploadId"}) {
+				return "", "", true
+			}
+		default:
+			return "MethodNotAllowed", "operation not permitted on objects", false
 		}
-		return "MethodNotAllowed", "operation not permitted on objects", false
+		return denied()
 	}
 
 	switch r.Method {
 	case http.MethodHead:
-		return "", "", true
-	case http.MethodGet:
-		if onlyBucketSubresource(q) {
+		if queryWithin(q, nil) {
 			return "", "", true
 		}
-		if q.Has("uploads") {
-			return "AccessDenied", "listing multipart uploads is not permitted", false
+	case http.MethodGet:
+		for _, sub := range []string{"location", "versioning"} {
+			if q.Has(sub) {
+				if queryWithin(q, []string{sub}) {
+					return "", "", true
+				}
+				return denied()
+			}
+		}
+		if !queryWithin(q, nil, listParams...) {
+			return denied()
 		}
 		if !inPrefix(q.Get("prefix")) {
 			return "AccessDenied", "list prefix outside policy scope", false
 		}
 		return "", "", true
 	case http.MethodPost:
-		if !q.Has("delete") {
+		if !q.Has("delete") || !queryWithin(q, []string{"delete"}) {
 			return "MethodNotAllowed", "operation not permitted on the bucket", false
 		}
 		keys, err := deleteRequestKeys(body)
@@ -941,45 +1126,10 @@ func authorizeOperation(r *http.Request, key, prefix string, body []byte) (code,
 			}
 		}
 		return "", "", true
+	default:
+		return "MethodNotAllowed", "operation not permitted on the bucket", false
 	}
-	return "MethodNotAllowed", "operation not permitted on the bucket", false
-}
-
-var bucketSubresources = map[string]bool{
-	"location": true, "versioning": true, "lifecycle": true, "policy": true,
-	"acl": true, "cors": true, "logging": true, "encryption": true,
-}
-
-// A subresource read skips the prefix check, so it may carry nothing a backend
-// could read as a listing. x-id is the operation tag AWS SDKs add.
-func onlyBucketSubresource(q url.Values) bool {
-	found := false
-	for k := range q {
-		switch {
-		case bucketSubresources[k]:
-			found = true
-		case k != "x-id":
-			return false
-		}
-	}
-	return found
-}
-
-// The proxy authorizes its own parse of the query and forwards the raw string.
-// Anything two parsers could read differently is refused.
-func ambiguousQuery(raw string, q url.Values) bool {
-	if strings.Contains(raw, ";") {
-		return true
-	}
-	seen := make(map[string]bool, len(q))
-	for k, values := range q {
-		lower := strings.ToLower(k)
-		if len(values) > 1 || seen[lower] {
-			return true
-		}
-		seen[lower] = true
-	}
-	return false
+	return denied()
 }
 
 func hasDotSegment(key string) bool {

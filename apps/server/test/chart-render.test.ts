@@ -66,6 +66,7 @@ test(
     const out = render([
       'r2Proxy.enabled=true',
       'r2Proxy.upstream.endpoint=https://r2.example.test',
+      'r2Proxy.defaultBucket=platform-backups',
       'r2Proxy.databasePassword=pw-for-test'
     ]);
     const cluster = docs(out).find((d) => /^kind: Cluster$/m.test(d));
@@ -91,6 +92,7 @@ test('an explicit proxy database url still wins', { skip: !helmAvailable() }, ()
   const out = render([
     'r2Proxy.enabled=true',
     'r2Proxy.upstream.endpoint=https://r2.example.test',
+    'r2Proxy.defaultBucket=platform-backups',
     'r2Proxy.databaseUrl=postgresql://ro@elsewhere/orchard'
   ]);
   const dbSecret = docs(out).find((d) => d.includes('name: r2-proxy-db'));
@@ -651,6 +653,7 @@ test(
       'r2Proxy.upstream.endpoint=https://s3.eu-west-1.amazonaws.com',
       'r2Proxy.upstream.region=eu-west-1',
       'r2Proxy.upstream.pathStyle=false',
+      'r2Proxy.defaultBucket=platform-backups',
       'r2Proxy.databasePassword=pw-for-test'
     ]);
     const upstream = docs(out).find(
@@ -665,12 +668,30 @@ test(
     assert.match(server!, /name: BACKUP_PROXY_CHART_UPSTREAM, value: "true"/);
     assert.equal(
       docs(
-        render(['r2Proxy.upstream.endpoint=https://x.example.com', 'r2Proxy.databasePassword=p'])
+        render([
+          'r2Proxy.upstream.endpoint=https://x.example.com',
+          'r2Proxy.defaultBucket=platform-backups',
+          'r2Proxy.databasePassword=p'
+        ])
       )
         .find((d) => d.includes('name: r2-proxy-upstream') && d.includes('kind: Secret'))!
         .includes('R2_PATH_STYLE'),
       false
     );
+  }
+);
+
+test(
+  'an upstream endpoint without a bucket allowlist does not render',
+  { skip: !helmAvailable() },
+  () => {
+    const base = ['r2Proxy.upstream.endpoint=https://x.example.com', 'r2Proxy.databasePassword=p'];
+    assert.throws(() => render(base), /r2Proxy\.defaultBucket or r2Proxy\.allowedBuckets/);
+    const listed = render([...base, 'r2Proxy.allowedBuckets={platform-backups,archive}']);
+    const upstream = docs(listed).find(
+      (d) => d.includes('name: r2-proxy-upstream') && d.includes('kind: Secret')
+    );
+    assert.match(upstream!, /ALLOWED_BUCKETS: "platform-backups,archive"/);
   }
 );
 

@@ -193,6 +193,7 @@ These variables take priority over saved settings, and they lock the matching fi
 
 - Orchard encrypts saved keys, and it never returns them through the API or writes them to logs.
 - Each database gets a key that only reaches its own backups. A backup proxy holds the real key in its own namespace.
+- The proxy signs requests with the real key only for the buckets you configured. A bucket name an organization saves in its settings never adds to that list. If you set `r2Proxy.upstream.endpoint` in your chart values, also set `r2Proxy.defaultBucket` or `r2Proxy.allowedBuckets`. An empty list never means every bucket: the chart does not render and the proxy does not start.
 - If you turn the proxy off with `r2Proxy.enabled=false`, keys saved in Orchard do not reach databases, so those databases have no backups. Keys from `R2_*` variables do reach databases, and anyone who can read a Secret in that namespace can read every database's backups.
 
 ## Verify the setup

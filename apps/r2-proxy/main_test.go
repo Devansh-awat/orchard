@@ -184,9 +184,9 @@ func newProxyWithUpstream(t *testing.T, keepBody bool) (*Proxy, *[]upstreamHit) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	store := newBindingStore(nil, "b")
+	store := newBindingStore(nil)
 	store.cache[testAccessKey] = cacheEntry{
-		binding:   Binding{AccessKey: testAccessKey, Secret: testSecret, Bucket: "b", Prefix: prefix},
+		binding:   Binding{AccessKey: testAccessKey, Secret: testSecret, Prefix: prefix},
 		found:     true,
 		expiresAt: time.Now().Add(time.Hour),
 	}
@@ -442,9 +442,9 @@ func storedProxyFixture(t *testing.T) (*Proxy, *[]capturedRequest, *httptest.Ser
 	if err != nil {
 		t.Fatal(err)
 	}
-	store := newBindingStore(nil, "local")
+	store := newBindingStore(nil)
 	store.cache[testAccessKey] = cacheEntry{
-		binding:   Binding{AccessKey: testAccessKey, Secret: testSecret, Bucket: "local", Prefix: prefix},
+		binding:   Binding{AccessKey: testAccessKey, Secret: testSecret, Prefix: prefix},
 		found:     true,
 		expiresAt: time.Now().Add(time.Hour),
 	}
@@ -542,19 +542,13 @@ func TestStoredBucketDoesNotWidenTheKeyPrefix(t *testing.T) {
 	}
 }
 
-func TestUnknownBucketAndOrgBucketStayRefused(t *testing.T) {
+func TestUnknownBucketStaysRefused(t *testing.T) {
 	proxy, captured, mock, _ := storedProxyFixture(t)
 	loadStored(t, proxy, storedJSON(mock.URL, true, "new"))
-	if rec := objectGet(proxy, "someone-else"); rec.Code != http.StatusForbidden {
-		t.Fatalf("unknown bucket: status %d", rec.Code)
-	}
-	proxy.policy.cache[testAccessKey] = cacheEntry{
-		binding:   Binding{AccessKey: testAccessKey, Secret: testSecret, Bucket: "org-owned", Prefix: prefix},
-		found:     true,
-		expiresAt: time.Now().Add(time.Hour),
-	}
-	if rec := objectGet(proxy, "new"); rec.Code != http.StatusForbidden {
-		t.Fatalf("org bound to its own bucket reached a platform one: status %d", rec.Code)
+	for _, bucket := range []string{"someone-else", "org-owned", "LOCAL", "local.evil"} {
+		if rec := objectGet(proxy, bucket); rec.Code != http.StatusForbidden {
+			t.Fatalf("bucket %q: status %d", bucket, rec.Code)
+		}
 	}
 	if len(*captured) != 0 {
 		t.Fatalf("hits %+v", *captured)
@@ -684,5 +678,338 @@ func TestObjectKeysCannotClimbOutOfThePrefix(t *testing.T) {
 	key := "ns-a/cluster-a/../../ns-b/secret"
 	if _, _, ok := authorizeOperation(request("GET", "/b/"+key, "", nil), key, prefix, nil); ok {
 		t.Fatal("a key with dot segments must be refused")
+	}
+}
+
+func TestEmptyAllowlistServesNoBucketWithPlatformCredentials(t *testing.T) {
+	proxy, hits := newProxyWithUpstream(t, false)
+	table := *proxy.upstreams.Load()
+	table.baseBuckets = map[string]bool{}
+	proxy.upstreams.Store(&table)
+
+	for _, bucket := range []string{"b", "operator-other-bucket", "anything"} {
+		if table.forBucket(bucket) != nil || table.isPlatform(bucket) {
+			t.Fatalf("empty allowlist served %q", bucket)
+		}
+		rec := httptest.NewRecorder()
+		proxy.ServeHTTP(rec, signedRequest(http.MethodPut, "/"+bucket+"/"+prefix+"planted", strings.NewReader("x"), 1, "UNSIGNED-PAYLOAD"))
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("bucket %q: status %d", bucket, rec.Code)
+		}
+		rec = httptest.NewRecorder()
+		proxy.ServeHTTP(rec, signedRequest(http.MethodGet, "/"+bucket+"?policy", http.NoBody, 0, emptySha))
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("bucket %q policy: status %d", bucket, rec.Code)
+		}
+	}
+	if len(*hits) != 0 {
+		t.Fatalf("upstream was reached: %+v", *hits)
+	}
+}
+
+func TestAllowlistParsing(t *testing.T) {
+	if len(parseAllowedBuckets("")) != 0 || len(parseAllowedBuckets(" , ,")) != 0 {
+		t.Fatal("blank allowlist must stay empty")
+	}
+	got := parseAllowedBuckets("a, b ,,c")
+	if len(got) != 3 || !got["a"] || !got["b"] || !got["c"] {
+		t.Fatalf("got %v", got)
+	}
+}
+
+func TestPrefixesFromTheDatabaseMustBeWellFormed(t *testing.T) {
+	for _, p := range []string{"ns/db/", "_drills/op1/"} {
+		if !validPrefix(p) {
+			t.Errorf("%q should be valid", p)
+		}
+	}
+	for _, p := range []string{"", "/", "ns/db", "/ns/db/", "ns//db/", "ns/../db/", "./", "ns/\x00/"} {
+		if validPrefix(p) {
+			t.Errorf("%q should be invalid", p)
+		}
+	}
+}
+
+func serve(proxy *Proxy, method, target string, body string, headers map[string]string) *httptest.ResponseRecorder {
+	r := httptest.NewRequest(method, target, strings.NewReader(body))
+	r.ContentLength = int64(len(body))
+	for k, v := range headers {
+		r.Header.Set(k, v)
+	}
+	sha := "UNSIGNED-PAYLOAD"
+	if body == "" {
+		sha = emptySha
+	}
+	signRequest(r, testAccessKey, testSecret, "auto", "s3", sha)
+	rec := httptest.NewRecorder()
+	proxy.ServeHTTP(rec, r)
+	return rec
+}
+
+func TestFragmentCannotTruncateTheForwardedQuery(t *testing.T) {
+	proxy, hits := newProxyWithUpstream(t, false)
+	for _, target := range []string{
+		"/b?list-type=2#&prefix=ns-a/cluster-a/",
+		"/b?#&prefix=ns-a/cluster-a/",
+		"/b?versions#&prefix=ns-a/cluster-a/",
+		"/b?uploads#&prefix=ns-a/cluster-a/",
+		"/b?list-type=2&prefix=ns-a/cluster-a/#",
+		"/b/ns-a/cluster-a/obj#frag",
+	} {
+		rec := serve(proxy, "GET", target, "", nil)
+		if rec.Code == http.StatusOK {
+			t.Errorf("GET %s reached upstream", target)
+		}
+	}
+	if len(*hits) != 0 {
+		t.Fatalf("upstream was reached: %+v", *hits)
+	}
+}
+
+func TestEveryAcceptedRequestIsForwardedAsAuthorizedAndSignedAsSent(t *testing.T) {
+	proxy, hits := newProxyWithUpstream(t, false)
+	for _, tc := range []struct{ method, target, wantPath, wantQuery string }{
+		{"GET", "/b?list-type=2&prefix=ns-a/cluster-a/&delimiter=/", "/b", "list-type=2&prefix=ns-a/cluster-a/&delimiter=/"},
+		{"GET", "/b?list-type=2&prefix=ns-a%2Fcluster-a%2F", "/b", "list-type=2&prefix=ns-a%2Fcluster-a%2F"},
+		{"GET", "/b/ns-a/cluster-a/a%20b", "/b/ns-a/cluster-a/a b", ""},
+		{"GET", "/b/ns-a/cluster-a/a%2Bb", "/b/ns-a/cluster-a/a+b", ""},
+		{"GET", "/b/ns-a/cluster-a/%252e%252e/x", "/b/ns-a/cluster-a/%2e%2e/x", ""},
+		{"GET", "/b/ns-a/cluster-a/a%23b", "/b/ns-a/cluster-a/a#b", ""},
+		{"PUT", "/b/ns-a/cluster-a/p?partNumber=1&uploadId=abc", "/b/ns-a/cluster-a/p", "partNumber=1&uploadId=abc"},
+	} {
+		before := len(*hits)
+		body := ""
+		if tc.method == "PUT" {
+			body = "x"
+		}
+		rec := serve(proxy, tc.method, tc.target, body, nil)
+		if rec.Code != http.StatusOK || len(*hits) != before+1 {
+			t.Errorf("%s %s: status %d", tc.method, tc.target, rec.Code)
+			continue
+		}
+		h := (*hits)[before]
+		if h.path != tc.wantPath || h.query != tc.wantQuery || !h.signatureOK {
+			t.Errorf("%s %s: upstream saw path %q query %q signed %v", tc.method, tc.target, h.path, h.query, h.signatureOK)
+		}
+	}
+}
+
+func TestTargetsTwoParsersCouldReadDifferentlyAreRefused(t *testing.T) {
+	proxy, hits := newProxyWithUpstream(t, false)
+	for _, target := range []string{
+		"/b/ns-a/cluster-a/../../ns-b/x",
+		"/b/ns-a/cluster-a/%2e%2e/%2e%2e/ns-b/x",
+		"/b/ns-a/cluster-a/%2E%2E%2Fns-b/x",
+		"/b/ns-a/cluster-a/./x",
+		"/b//ns-a/cluster-a/x",
+		"/b/ns-a//cluster-a/x",
+		"//b/ns-a/cluster-a/x",
+		"/b/ns-a/cluster-a/x%5Cy",
+		"/b/ns-a/cluster-a/x%00",
+		"/b/ns-a/cluster-a/x%0d%0ay",
+		"/b/..%2Fns-b/x",
+		"/b?list-type=2&prefix=ns-a/cluster-a/;prefix=",
+		"/b?list-type=2&prefix=ns-a/cluster-a/&prefix=",
+		"/b?list-type=2&prefix=ns-a/cluster-a/&Prefix=",
+		"/b?list-type=2&prefix=ns-a/cluster-a/&pre%66ix=",
+		"/b?list-type=2&prefix=ns-a/cluster-a/+",
+		"/b?list-type=2&prefix=ns-a/cluster-a/%zz",
+		"/b?list-type=2&prefix=ns-a/cluster-a/&=x",
+		"/b?list-type=2&prefix=ns-a/cluster-a/%00",
+	} {
+		rec := serve(proxy, "GET", target, "", nil)
+		if rec.Code == http.StatusOK {
+			t.Errorf("GET %s must be refused", target)
+		}
+	}
+	if len(*hits) != 0 {
+		t.Fatalf("upstream was reached: %+v", *hits)
+	}
+}
+
+func TestAbsoluteFormTargetsAreRefused(t *testing.T) {
+	proxy, hits := newProxyWithUpstream(t, false)
+	r := httptest.NewRequest("GET", "/b/ns-a/cluster-a/x", http.NoBody)
+	r.RequestURI = "http://other.example/b/ns-a/cluster-a/x"
+	signRequest(r, testAccessKey, testSecret, "auto", "s3", emptySha)
+	rec := httptest.NewRecorder()
+	proxy.ServeHTTP(rec, r)
+	if rec.Code == http.StatusOK || len(*hits) != 0 {
+		t.Fatalf("status %d hits %d", rec.Code, len(*hits))
+	}
+}
+
+func TestOnlyTheOperationsBackupClientsNeedAreAllowed(t *testing.T) {
+	obj := "/b/ns-a/cluster-a/base/x"
+	for _, tc := range []struct{ method, target string }{
+		{"GET", "/b?versions&prefix=ns-a/cluster-a/"},
+		{"GET", "/b?uploads&prefix=ns-a/cluster-a/"},
+		{"GET", "/b?list-type=2&prefix=ns-a/cluster-a/&versions"},
+		{"GET", "/b?list-type=2&prefix=ns-a/cluster-a/&key-marker=x"},
+		{"GET", "/b?tagging"},
+		{"GET", "/b?policy"},
+		{"GET", "/b?acl"},
+		{"GET", "/b?cors"},
+		{"GET", "/b?lifecycle"},
+		{"GET", "/b?logging"},
+		{"GET", "/b?encryption"},
+		{"GET", "/b?inventory"},
+		{"GET", "/b?analytics"},
+		{"GET", "/b?metrics"},
+		{"GET", "/b?website"},
+		{"GET", "/b?object-lock"},
+		{"GET", "/b?location&prefix=ns-a/cluster-a/"},
+		{"GET", obj + "?acl"},
+		{"GET", obj + "?tagging"},
+		{"GET", obj + "?torrent"},
+		{"GET", obj + "?attributes"},
+		{"GET", obj + "?versionId=1"},
+		{"GET", obj + "?select&select-type=2"},
+		{"GET", obj + "?response-content-disposition=x"},
+		{"PUT", obj + "?acl"},
+		{"PUT", obj + "?tagging"},
+		{"PUT", obj + "?retention"},
+		{"PUT", obj + "?legal-hold"},
+		{"PUT", obj + "?uploadId=abc"},
+		{"PUT", obj + "?partNumber=1"},
+		{"PUT", obj + "?partNumber=0&uploadId=abc"},
+		{"PUT", obj + "?partNumber=10001&uploadId=abc"},
+		{"PUT", obj + "?partNumber=01&uploadId=abc"},
+		{"PUT", obj + "?partNumber=1&uploadId=abc&acl"},
+		{"POST", obj + "?select&select-type=2"},
+		{"POST", obj + "?restore"},
+		{"POST", obj},
+		{"POST", obj + "?uploads&acl"},
+		{"POST", obj + "?uploads&uploadId=abc"},
+		{"DELETE", obj + "?versionId=1"},
+		{"DELETE", obj + "?tagging"},
+		{"PATCH", obj},
+		{"OPTIONS", obj},
+		{"POST", "/b?delete&versions"},
+		{"POST", "/b?restore"},
+		{"HEAD", "/b?versions"},
+		{"HEAD", obj + "?versionId=1"},
+	} {
+		key := ""
+		if strings.HasPrefix(tc.target, "/b/") {
+			key = strings.TrimPrefix(strings.SplitN(tc.target, "?", 2)[0], "/b/")
+		}
+		body := `<Delete><Object><Key>ns-a/cluster-a/x</Key></Object></Delete>`
+		if _, _, ok := authorizeOperation(request(tc.method, tc.target, body, nil), key, prefix, []byte(body)); ok {
+			t.Errorf("%s %s must be refused", tc.method, tc.target)
+		}
+	}
+}
+
+func TestAmzHeadersThatNameOrChangeObjectsAreRefused(t *testing.T) {
+	obj := "/b/ns-a/cluster-a/base/x"
+	key := "ns-a/cluster-a/base/x"
+	for _, h := range []string{
+		"x-amz-copy-source",
+		"X-Amz-Copy-Source",
+		"x-amz-copy-source-range",
+		"x-amz-copy-source-if-match",
+		"x-amz-copy-source-server-side-encryption-customer-key",
+		"x_amz_copy_source",
+		"x-amz-acl",
+		"x-amz-grant-read",
+		"x-amz-grant-full-control",
+		"x-amz-website-redirect-location",
+		"x-amz-object-lock-mode",
+		"x-amz-object-lock-legal-hold",
+		"x-amz-bypass-governance-retention",
+		"x-amz-metadata-directive",
+		"x-amz-tagging-directive",
+		"x-amz-server-side-encryption-aws-kms-key-id",
+		"x-amz-mfa",
+		"x-amz-unknown-future-header",
+	} {
+		for _, m := range []string{"PUT", "GET", "POST", "DELETE"} {
+			target := obj
+			if m == "POST" {
+				target += "?uploads"
+			}
+			if _, _, ok := authorizeOperation(request(m, target, "", map[string]string{h: "/b/ns-b/cluster-b/base/data.tar"}), key, prefix, nil); ok {
+				t.Errorf("%s with header %s must be refused", m, h)
+			}
+		}
+	}
+	for _, h := range []string{
+		"x-amz-content-sha256", "x-amz-date", "x-amz-meta-anything", "x-amz-checksum-crc32",
+		"x-amz-sdk-checksum-algorithm", "x-amz-storage-class", "x-amz-server-side-encryption",
+		"x-amz-decoded-content-length", "x-amz-tagging", "x-amz-user-agent",
+	} {
+		if _, _, ok := authorizeOperation(request("PUT", obj, "", map[string]string{h: "v"}), key, prefix, nil); !ok {
+			t.Errorf("header %s should be allowed", h)
+		}
+	}
+}
+
+func TestUploadPartCopyIsRefusedEndToEnd(t *testing.T) {
+	proxy, hits := newProxyWithUpstream(t, false)
+	rec := serve(proxy, "PUT", "/b/ns-a/cluster-a/p?partNumber=1&uploadId=abc", "", map[string]string{
+		"x-amz-copy-source":       "/b/ns-b/cluster-b/base/data.tar",
+		"x-amz-copy-source-range": "bytes=0-9",
+	})
+	if rec.Code == http.StatusOK || len(*hits) != 0 {
+		t.Fatalf("status %d hits %d", rec.Code, len(*hits))
+	}
+}
+
+func TestHostHeaderAndVirtualHostedAddressingDoNotChangeTheBucket(t *testing.T) {
+	proxy, hits := newProxyWithUpstream(t, false)
+	for _, host := range []string{"other-bucket.s3.example.com", "b.localhost", "evil.example.com"} {
+		r := httptest.NewRequest("GET", "/b/ns-a/cluster-a/x", http.NoBody)
+		r.Host = host
+		signRequest(r, testAccessKey, testSecret, "auto", "s3", emptySha)
+		rec := httptest.NewRecorder()
+		proxy.ServeHTTP(rec, r)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("host %q: status %d", host, rec.Code)
+		}
+	}
+	for _, h := range *hits {
+		if h.path != "/b/ns-a/cluster-a/x" || !h.signatureOK {
+			t.Fatalf("upstream saw %+v", h)
+		}
+	}
+	rec := serve(proxy, "GET", "/other/ns-a/cluster-a/x", "", nil)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("a bucket from the path that is not served: status %d", rec.Code)
+	}
+}
+
+func TestListingsOutsideThePrefixAreRefusedEndToEnd(t *testing.T) {
+	proxy, hits := newProxyWithUpstream(t, false)
+	for _, target := range []string{
+		"/b?list-type=2",
+		"/b",
+		"/b/",
+		"/b?list-type=2&prefix=",
+		"/b?list-type=2&prefix=ns-b/",
+		"/b?list-type=2&prefix=ns-a/",
+		"/b?list-type=2&prefix=ns-a/cluster-a",
+		"/b?list-type=2&delimiter=/",
+	} {
+		if rec := serve(proxy, "GET", target, "", nil); rec.Code == http.StatusOK {
+			t.Errorf("GET %s must be refused", target)
+		}
+	}
+	if len(*hits) != 0 {
+		t.Fatalf("upstream was reached: %+v", *hits)
+	}
+}
+
+func TestVirtualHostedUpstreamForwardsTheSameBytesItSigned(t *testing.T) {
+	proxy, captured, mock, endpoint := storedProxyFixture(t)
+	loadStored(t, proxy, storedJSON(mock.URL, false, "new"))
+	rec := httptest.NewRecorder()
+	proxy.ServeHTTP(rec, signedRequest(http.MethodGet, "/new?list-type=2&prefix=ns-a/cluster-a/", http.NoBody, 0, emptySha))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d", rec.Code)
+	}
+	hit := (*captured)[0]
+	if hit.host != "new."+endpoint.Host || !hit.verified {
+		t.Fatalf("host %q verified %v", hit.host, hit.verified)
 	}
 }
