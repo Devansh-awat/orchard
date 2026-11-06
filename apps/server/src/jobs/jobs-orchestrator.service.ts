@@ -8,11 +8,7 @@ import {
   buildPlacement,
   ResolvedPlacement
 } from '../kubernetes/kubernetes.service';
-import {
-  isTrustedImage,
-  trustedSecurityContext,
-  hardenedSecurityContext
-} from '../kubernetes/trusted-images';
+import { hardenedSecurityContext, tenantRuntimeClassName } from '../kubernetes/trusted-images';
 import { containerResources, type PodSizing } from '../kubernetes/resource-spec';
 import { QuotasService } from '../quotas/quotas.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -330,7 +326,6 @@ export class JobsOrchestratorService {
       command = ['/bin/sh', '-c', step.shell];
     }
 
-    const trusted = step.type === 'app' && isTrustedImage(step.image);
     const pullSecrets = pullSecretsForImage(step.image, ctx.pullSecretRegistries ?? []);
 
     return {
@@ -347,7 +342,7 @@ export class JobsOrchestratorService {
           spec: {
             restartPolicy: 'Never',
             automountServiceAccountToken: false,
-            runtimeClassName: trusted ? undefined : process.env.TENANT_RUNTIME_CLASS || undefined,
+            runtimeClassName: tenantRuntimeClassName(),
             affinity: pinToBuildArch(ctx.placement?.affinity, step.image),
             tolerations: ctx.placement?.tolerations,
             imagePullSecrets: pullSecrets.length ? pullSecrets : undefined,
@@ -361,7 +356,7 @@ export class JobsOrchestratorService {
                 env,
                 volumeMounts: volumeMounts.length ? volumeMounts : undefined,
                 resources: containerResources(step),
-                securityContext: trusted ? trustedSecurityContext() : hardenedSecurityContext()
+                securityContext: hardenedSecurityContext()
               }
             ],
             volumes: volumes.length ? volumes : undefined

@@ -29,7 +29,7 @@ import {
   noLimitsMetadataPatch,
   type PodSizing
 } from './resource-spec';
-import { isTrustedImage, trustedSecurityContext, hardenedSecurityContext } from './trusted-images';
+import { hardenedSecurityContext, tenantRuntimeClassName } from './trusted-images';
 import {
   buildEnvReplacePatch,
   ENV_HASH_ANNOTATION,
@@ -958,21 +958,7 @@ export class K8sWorkloadService {
         ...(options.args?.length ? { args: options.args } : {}),
         env: envList,
         volumeMounts: volumeMounts.length > 0 ? volumeMounts : undefined,
-        // Defence-in-depth even when the pod runs under gVisor (runsc):
-        // drop every Linux capability except the minimal entrypoint
-        // uid-drop set (see trusted-images.ts), refuse setuid privilege
-        // escalation mid-process, and apply the runtime's default seccomp
-        // profile.
-        // We deliberately do NOT force runAsNonRoot: many tenant images
-        // still chown/listen on :80 as root and would crashloop. gVisor
-        // already neuters root-in-container by virtualising the kernel,
-        // so this is acceptable.
-        //
-        // Trusted images keep the default container caps so their
-        // entrypoints can perform a root→service-user drop (Redis, etc).
-        securityContext: isTrustedImage(cleanImage)
-          ? trustedSecurityContext()
-          : hardenedSecurityContext()
+        securityContext: hardenedSecurityContext()
       };
 
       // Burstable QoS: memory requests == limits, CPU requests a fraction of
@@ -1034,17 +1020,7 @@ export class K8sWorkloadService {
               // pod do `selfsubjectreviews` and (more importantly) carries
               // any unintended RBAC grants out of the namespace.
               automountServiceAccountToken: false,
-              // Run under gVisor (runsc) when configured: a user-space
-              // kernel that intercepts syscalls. A kernel CVE in the
-              // tenant's image no longer reaches the host kernel; a
-              // container escape requires escaping runsc itself.
-              // Falsy env var ⇒ undefined ⇒ default containerd handler.
-              // Trusted first-party images (see trusted-images.ts) skip
-              // the sandbox: runsc rejects some uid/cap transitions that
-              // their entrypoints rely on (e.g. Redis's root→redis drop).
-              runtimeClassName: isTrustedImage(cleanImage)
-                ? undefined
-                : process.env.TENANT_RUNTIME_CLASS || undefined,
+              runtimeClassName: tenantRuntimeClassName(),
               containers: [container],
               imagePullSecrets: options.imagePullSecrets?.length
                 ? options.imagePullSecrets
@@ -2664,6 +2640,7 @@ export class K8sWorkloadService {
       const containerPatch = {
         name: cleanDeploymentName,
         image: cleanImage,
+        securityContext: hardenedSecurityContext(),
         ...(args === undefined ? {} : { args: args?.length ? args : null }),
         ...(resources ? { resources: containerResourcesPatch(resources) } : {}),
         ...(healthCheck
@@ -2692,6 +2669,7 @@ export class K8sWorkloadService {
           progressDeadlineSeconds: ROLLOUT_PROGRESS_DEADLINE_SECONDS,
           template: {
             spec: {
+              runtimeClassName: tenantRuntimeClassName() ?? null,
               containers: [containerPatch]
             }
           }

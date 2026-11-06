@@ -1,4 +1,5 @@
 import type * as k8s from '@kubernetes/client-node';
+import { hardenedSecurityContext, tenantRuntimeClassName } from './trusted-images';
 
 export const ROLLOUT_MIN_READY_SECONDS = 10;
 
@@ -194,11 +195,13 @@ export function buildGreenDeployment(
   const containers = template.spec?.containers ?? [];
   if (containers[0]) {
     containers[0].image = opts.image;
+    containers[0].securityContext = hardenedSecurityContext();
     if (opts.args !== undefined) {
       if (opts.args && opts.args.length) containers[0].args = opts.args;
       else delete containers[0].args;
     }
   }
+  if (template.spec) template.spec.runtimeClassName = tenantRuntimeClassName();
   spec.template = template;
   clone.spec = spec;
   return clone;
