@@ -9,7 +9,7 @@ import { UsersService } from '../users/users.service';
 import { AuthorizationService } from '../auth/authorization.service';
 import { MembershipCacheService } from '../auth/membership-cache.service';
 import { requestAuthStorage } from '../auth/request-context';
-import { hostOf } from '../instance-network/hostnames';
+import { isReservedHost, normalizeHost } from '../instance-network/reserved-hosts';
 import { optionalDomain } from '../env/platform-domains';
 import { InstanceSettingsService } from '../instance-settings/instance-settings.service';
 import { platformWildcardDomains } from './projects.utils';
@@ -53,46 +53,13 @@ export class ProjectAccessService {
    * host first is a low-grade enumeration oracle.
    */
   async assertHostnameAvailable(rawHost: string, projectId: string): Promise<void> {
-    const host = String(rawHost || '')
-      .trim()
-      .toLowerCase();
+    const host = normalizeHost(rawHost);
     if (!host) {
       throw new BadRequestException('Hostname is required');
     }
 
-    // Platform-owned hostnames are never registerable by a tenant. Without
-    // this check a tenant could claim e.g. `app.orchard.my` (the platform
-    // login host): their IngressRoute would then live alongside the
-    // platform's chart-managed Ingress, and depending on Traefik
-    // priority/ordering the tenant route could shadow the platform's and
-    // capture session cookies from logged-in admins. RESERVED_HOSTS holds
-    // exact platform hosts; RESERVED_SUFFIXES holds parent zones whose
-    // subdomains are managed by the platform (Let's Encrypt DNS-01,
-    // wildcards, etc).
-    const reservedExact = new Set<string>(
-      (process.env.RESERVED_HOSTS || '')
-        .split(',')
-        .map((s) => s.trim().toLowerCase())
-        .filter(Boolean)
-    );
-    const mcpHost = hostOf(process.env.MCP_BASE_URL);
-    if (mcpHost) reservedExact.add(mcpHost);
-    const dashboardHost = hostOf(process.env.FRONTEND_URL);
-    if (dashboardHost) reservedExact.add(dashboardHost);
-    const reservedSuffixes = (process.env.RESERVED_HOST_SUFFIXES || '')
-      .split(',')
-      .map((s) => s.trim().toLowerCase().replace(/^\./, ''))
-      .filter(Boolean);
-
-    if (reservedExact.has(host)) {
+    if (isReservedHost(host)) {
       throw new ConflictException(`Hostname ${rawHost} is unavailable. Choose a different domain.`);
-    }
-    for (const suffix of reservedSuffixes) {
-      if (host === suffix || host.endsWith(`.${suffix}`)) {
-        throw new ConflictException(
-          `Hostname ${rawHost} is unavailable. Choose a different domain.`
-        );
-      }
     }
 
     const baseDomain = optionalDomain(process.env.BASE_DOMAIN);

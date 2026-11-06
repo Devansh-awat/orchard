@@ -5,7 +5,12 @@ import { ProjectAccessService } from '../src/projects/project-access.service';
 
 function service() {
   const svc = Object.create(ProjectAccessService.prototype) as ProjectAccessService;
-  (svc as any).prisma = { ingress: { findFirst: async () => null } };
+  (svc as any).prisma = {
+    ingress: { findFirst: async () => null },
+    organization: { findUnique: async () => null },
+    statusPage: { findUnique: async () => null }
+  };
+  (svc as any).instanceSettings = { isCustomDomainVerificationRequired: async () => false };
   return svc;
 }
 

@@ -3,31 +3,11 @@ import { PrismaService } from '../prisma/prisma.service';
 import { K8sNetworkService } from '../kubernetes/k8s-network.service';
 import { optionalDomain } from '../env/platform-domains';
 import { CERT_CLUSTER_ISSUER } from '../projects/projects.utils';
-
-const RESERVED_SUBDOMAINS = new Set([
-  'www',
-  'api',
-  'admin',
-  'mail',
-  'smtp',
-  'imap',
-  'pop',
-  'ftp',
-  'ssh',
-  'ns1',
-  'ns2',
-  'cdn',
-  'app',
-  'dashboard',
-  'login',
-  'auth',
-  'status',
-  'docs',
-  'help',
-  'support',
-  'billing',
-  'blog'
-]);
+import {
+  isReservedSubdomainLabel,
+  lockHostnameClaims,
+  normalizeHost
+} from '../instance-network/reserved-hosts';
 
 /**
  * An org's vanity host. Login lives at /<org-slug> on the main domain, so this
@@ -57,7 +37,7 @@ export class VanityDomainService {
   }
 
   async setSubdomain(organizationId: string, subdomain: string | null) {
-    const normalized = subdomain?.toLowerCase().trim() || null;
+    const normalized = subdomain ? normalizeHost(subdomain) || subdomain.trim().toLowerCase() : null;
 
     if (normalized) {
       if (!this.baseDomain) {
@@ -70,12 +50,13 @@ export class VanityDomainService {
           "Subdomain must be 3 to 50 letters, digits or hyphens, and can't start or end with a hyphen"
         );
       }
-      if (RESERVED_SUBDOMAINS.has(normalized)) {
+      if (isReservedSubdomainLabel(normalized, this.baseDomain)) {
         throw new BadRequestException('This subdomain is reserved');
       }
     }
 
     const { result, oldSubdomain } = await this.prisma.$transaction(async (tx) => {
+      if (normalized) await lockHostnameClaims(tx);
       const current = await tx.organization.findUnique({
         where: { id: organizationId },
         select: { subdomain: true }
@@ -100,10 +81,18 @@ export class VanityDomainService {
         }
       }
 
-      const updated = await tx.organization.update({
-        where: { id: organizationId },
-        data: { subdomain: normalized }
-      });
+      let updated;
+      try {
+        updated = await tx.organization.update({
+          where: { id: organizationId },
+          data: { subdomain: normalized }
+        });
+      } catch (err) {
+        if ((err as { code?: string })?.code === 'P2002') {
+          throw new ConflictException('This subdomain is already taken');
+        }
+        throw err;
+      }
       return { result: updated, oldSubdomain: current?.subdomain ?? null };
     });
 

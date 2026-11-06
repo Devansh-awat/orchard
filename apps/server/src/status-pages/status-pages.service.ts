@@ -10,6 +10,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { K8sNetworkService } from '../kubernetes/k8s-network.service';
 import { AuditService } from '../audit/audit.service';
 import { optionalDomain } from '../env/platform-domains';
+import { isReservedSubdomainLabel, lockHostnameClaims, normalizeHost } from '../instance-network/reserved-hosts';
 import { CERT_CLUSTER_ISSUER } from '../projects/projects.utils';
 import {
   MAX_COMPONENTS,
@@ -39,31 +40,6 @@ interface Actor {
   id: string;
   email?: string | null;
 }
-
-const RESERVED_SUBDOMAINS = new Set([
-  'www',
-  'api',
-  'admin',
-  'mail',
-  'smtp',
-  'imap',
-  'pop',
-  'ftp',
-  'ssh',
-  'ns1',
-  'ns2',
-  'cdn',
-  'app',
-  'dashboard',
-  'login',
-  'auth',
-  'status',
-  'docs',
-  'help',
-  'support',
-  'billing',
-  'blog'
-]);
 
 const RESERVED_SLUGS = new Set(['new', 'edit', 'resolve', 'api', 'admin']);
 const RENDER_CACHE_MS = 15_000;
@@ -184,21 +160,29 @@ export class StatusPagesService {
     if (!org) throw new NotFoundException('Organization not found');
     const slug = this.validateSlug(input.slug ?? org.slug);
     await this.assertSlugFree(slug, null);
-    const subdomain = await this.validateSubdomain(input.subdomain ?? null, null);
+    const requestedSubdomain = this.checkSubdomainShape(input.subdomain ?? null);
     const components = await this.validateComponents(organizationId, input.components ?? []);
     const title = this.validateTitle(input.title ?? `${org.name} status`);
-    const row = await this.prisma.statusPage.create({
-      data: {
-        organizationId,
-        slug,
-        title,
-        description: this.validateDescription(input.description),
-        subdomain,
-        isPublic: input.isPublic !== false,
-        components: components as unknown as Prisma.InputJsonValue,
-        createdById: actor.id
-      }
-    });
+    const description = this.validateDescription(input.description);
+    const { row, subdomain } = await this.withClaimedSubdomain(
+      requestedSubdomain,
+      null,
+      async (db, claimed) => ({
+        subdomain: claimed,
+        row: await db.statusPage.create({
+          data: {
+            organizationId,
+            slug,
+            title,
+            description,
+            subdomain: claimed,
+            isPublic: input.isPublic !== false,
+            components: components as unknown as Prisma.InputJsonValue,
+            createdById: actor.id
+          }
+        })
+      })
+    );
     if (subdomain) await this.attachHost(row.id, subdomain, null);
     this.audit
       .log({
@@ -235,11 +219,18 @@ export class StatusPagesService {
       )) as unknown as Prisma.InputJsonValue;
     }
     let nextSubdomain = existing.subdomain;
-    if (input.subdomain !== undefined) {
-      nextSubdomain = await this.validateSubdomain(input.subdomain, existing.id);
+    let requestedSubdomain: string | null = null;
+    const changingSubdomain = input.subdomain !== undefined;
+    if (changingSubdomain) {
+      requestedSubdomain = this.checkSubdomainShape(input.subdomain ?? null);
+      nextSubdomain = requestedSubdomain;
       data.subdomain = nextSubdomain;
     }
-    const row = await this.prisma.statusPage.update({ where: { id: pageId }, data });
+    const row = await this.withClaimedSubdomain(
+      changingSubdomain ? requestedSubdomain : null,
+      existing.id,
+      (db) => db.statusPage.update({ where: { id: pageId }, data })
+    );
     if (nextSubdomain !== existing.subdomain) {
       await this.attachHost(row.id, nextSubdomain, existing.subdomain);
     }
@@ -546,11 +537,8 @@ export class StatusPagesService {
     return text || null;
   }
 
-  private async validateSubdomain(
-    raw: string | null,
-    exceptId: string | null
-  ): Promise<string | null> {
-    const normalized = raw?.toLowerCase().trim() || null;
+  private checkSubdomainShape(raw: string | null): string | null {
+    const normalized = raw ? normalizeHost(raw) || raw.trim().toLowerCase() : null;
     if (!normalized) return null;
     if (!this.baseDomain) {
       throw new BadRequestException(
@@ -562,23 +550,41 @@ export class StatusPagesService {
         "Subdomain must be 3 to 50 letters, digits or hyphens, and can't start or end with a hyphen"
       );
     }
-    if (RESERVED_SUBDOMAINS.has(normalized))
+    if (isReservedSubdomainLabel(normalized, this.baseDomain)) {
       throw new BadRequestException('This subdomain is reserved');
-    const [org, page, ingress] = await Promise.all([
-      this.prisma.organization.findUnique({
-        where: { subdomain: normalized },
-        select: { id: true }
-      }),
-      this.prisma.statusPage.findUnique({ where: { subdomain: normalized }, select: { id: true } }),
-      this.prisma.ingress.findFirst({
-        where: { host: { equals: `${normalized}.${this.baseDomain}`, mode: 'insensitive' } },
-        select: { id: true }
-      })
-    ]);
-    if (org || ingress || (page && page.id !== exceptId)) {
-      throw new ConflictException('That subdomain is already in use');
     }
     return normalized;
+  }
+
+  private async withClaimedSubdomain<T>(
+    subdomain: string | null,
+    exceptId: string | null,
+    write: (db: Prisma.TransactionClient, subdomain: string | null) => Promise<T>
+  ): Promise<T> {
+    return this.prisma.$transaction(async (db) => {
+      if (subdomain) {
+        await lockHostnameClaims(db);
+        const [org, page, ingress] = await Promise.all([
+          db.organization.findUnique({ where: { subdomain }, select: { id: true } }),
+          db.statusPage.findUnique({ where: { subdomain }, select: { id: true } }),
+          db.ingress.findFirst({
+            where: { host: { equals: `${subdomain}.${this.baseDomain}`, mode: 'insensitive' } },
+            select: { id: true }
+          })
+        ]);
+        if (org || ingress || (page && page.id !== exceptId)) {
+          throw new ConflictException('That subdomain is already in use');
+        }
+      }
+      try {
+        return await write(db, subdomain);
+      } catch (err) {
+        if ((err as { code?: string })?.code === 'P2002') {
+          throw new ConflictException('That subdomain is already in use');
+        }
+        throw err;
+      }
+    });
   }
 
   private async validateComponents(organizationId: string, raw: unknown): Promise<ComponentRef[]> {
