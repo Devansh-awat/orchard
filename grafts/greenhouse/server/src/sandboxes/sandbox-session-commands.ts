@@ -578,6 +578,18 @@ export function buildConfinedPathCheck(root: string, file: string): string {
   ].join('; ');
 }
 
+export function buildDirPresenceCheck(root: string, path: string): string | null {
+  const whole = path === '' || path === '.';
+  const rel = whole ? null : normalizeRelativePath(path);
+  if (!whole && !rel) return null;
+  const target = rel ? `"$__root"/${shellQuote(rel)}` : '"$__root"';
+  return [
+    `[ -d ${shellQuote(root)} ] || exit ${READ_EXIT.missing}`,
+    ...confinedRoot(root),
+    `[ -d ${target} ] || exit ${READ_EXIT.missing}`
+  ].join('; ');
+}
+
 export type FsOp = 'mkdir' | 'rename' | 'delete';
 
 export const FS_EXIT = {

@@ -212,6 +212,51 @@ test('an opencode restarting with a rotated password answers 503, and a dropped 
   }
 });
 
+test('an opencode folder listing that fails on a missing folder answers 404, other failures pass through', async () => {
+  const upstream = createServer((req, res) => {
+    res.writeHead(500, { 'content-type': 'application/json' });
+    res.end('{"name":"UnknownError","data":{"message":"Unexpected server error."}}');
+  });
+  await new Promise<void>((resolve) => upstream.listen(0, '127.0.0.1', resolve));
+  const port = (upstream.address() as any).port;
+  const listing = (exitCode: number) => {
+    const h = proxyHarness(`http://127.0.0.1:${port}`);
+    const scripts: string[] = [];
+    h.service.registry = {
+      for: () => ({
+        httpTarget: async () => ({ kind: 'url', baseUrl: `http://127.0.0.1:${port}`, headers: {} }),
+        exec: async (_ref: unknown, argv: string[]) => {
+          scripts.push(argv[argv.length - 1]);
+          return { stdout: '', ok: exitCode === 0, exitCode };
+        }
+      })
+    };
+    h.req.originalUrl = `/apiv1/sandboxes/${SANDBOX}/opencode/file?directory=%2Fpersist%2Fhome%2Fapp&path=.opencode%2Fplans`;
+    h.req.query = { directory: '/persist/home/app', path: '.opencode/plans' };
+    return { ...h, scripts };
+  };
+  try {
+    const missing = listing(7);
+    await missing.service.proxyOpencode(missing.sandbox, missing.req, missing.res);
+    assert.equal(missing.res.statusCode, 404);
+    assert.equal(missing.scripts.length, 1);
+    assert.match(missing.scripts[0], /\[ -d '\/persist\/home\/app' \]/);
+    assert.match(missing.scripts[0], /\[ -d "\$__root"\/'\.opencode\/plans' \]/);
+    const broken = listing(0);
+    await broken.service.proxyOpencode(broken.sandbox, broken.req, broken.res);
+    assert.equal(broken.res.statusCode, 500);
+    assert.match(broken.body(), /UnknownError/);
+    const other = listing(7);
+    other.req.originalUrl = `/apiv1/sandboxes/${SANDBOX}/opencode/session/x/message`;
+    other.req.query = { directory: '/persist/home/app' };
+    await other.service.proxyOpencode(other.sandbox, other.req, other.res);
+    assert.equal(other.res.statusCode, 500);
+    assert.equal(other.scripts.length, 0);
+  } finally {
+    upstream.close();
+  }
+});
+
 test('a preview domain on the same site as Orchard is refused', () => {
   assert.ok(
     previewDomainConflict('preview.example.com', { frontendUrl: 'https://app.example.com' })

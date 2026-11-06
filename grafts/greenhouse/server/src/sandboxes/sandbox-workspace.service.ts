@@ -43,6 +43,7 @@ import {
   READ_EXIT,
   buildConfinedPathCheck,
   buildConfinedReadScript,
+  buildDirPresenceCheck,
   WORKTREES_ROOT,
   buildFsScript,
   isUuid,
@@ -205,6 +206,18 @@ export interface SandboxChanges {
   files: SandboxChangedFile[];
 }
 
+const LISTING_CHECK_MS = 10_000;
+
+type OpencodeListing = { directory: string; path: string };
+
+function listingOf(req: Request, suffix: string): OpencodeListing | null {
+  if (req.method !== 'GET' || suffix.replace(/\/+$/, '') !== 'file') return null;
+  const directory = normalizeMachinePath(req.query?.directory);
+  const path = req.query?.path;
+  if (!directory || typeof path !== 'string') return null;
+  return { directory, path };
+}
+
 @Injectable()
 export class SandboxWorkspaceService {
   private readonly logger = new Logger(SandboxWorkspaceService.name);
@@ -237,6 +250,7 @@ export class SandboxWorkspaceService {
     const query = queryAt === -1 ? '' : tail.slice(queryAt);
     const hasBody = !['GET', 'HEAD'].includes(req.method) && req.body !== undefined;
     const payload = hasBody ? JSON.stringify(req.body) : null;
+    const listing = listingOf(req, suffix);
     const ref = refOf(sandbox);
     let target: HttpTarget;
     try {
@@ -246,7 +260,7 @@ export class SandboxWorkspaceService {
       return;
     }
     if (target.kind === 'exec') {
-      await this.proxyOpencodeViaExec(sandbox, req, res, suffix, query, payload);
+      await this.proxyOpencodeViaExec(sandbox, req, res, suffix, query, payload, listing);
       return;
     }
     const base = new URL(target.baseUrl);
@@ -279,6 +293,26 @@ export class SandboxWorkspaceService {
               res.status(503).json(OPENCODE_ROTATING);
             } else res.end();
             resolve();
+            return;
+          }
+          if (proxyRes.statusCode === 500 && listing) {
+            const held: Buffer[] = [];
+            proxyRes.on('data', (chunk: Buffer) => held.push(chunk));
+            proxyRes.on('end', () => {
+              void this.answerFailedListing(sandbox, listing, res, {
+                contentType: proxyRes.headers['content-type'],
+                body: Buffer.concat(held)
+              }).finally(resolve);
+            });
+            proxyRes.on('close', () => {
+              if (!proxyRes.complete) resolve();
+            });
+            proxyRes.on('error', () => {
+              if (!res.headersSent)
+                res.status(502).json({ message: 'opencode is not reachable in this sandbox' });
+              else res.end();
+              resolve();
+            });
             return;
           }
           res.status(proxyRes.statusCode || 502);
@@ -1154,7 +1188,8 @@ export class SandboxWorkspaceService {
     res: Response,
     suffix: string,
     query: string,
-    payload: string | null
+    payload: string | null,
+    listing: OpencodeListing | null = null
   ): Promise<void> {
     const isSse =
       String(req.headers.accept || '').includes('text/event-stream') ||
@@ -1175,7 +1210,12 @@ export class SandboxWorkspaceService {
     }
     let headerBuffer = '';
     let headersDone = false;
+    let held: { contentType: string | undefined; chunks: Buffer[] } | null = null;
     stream.stdout.on('data', (chunk: Buffer) => {
+      if (held) {
+        held.chunks.push(chunk);
+        return;
+      }
       if (headersDone) {
         if (!res.writableEnded) res.write(chunk);
         return;
@@ -1187,6 +1227,10 @@ export class SandboxWorkspaceService {
       const rest = Buffer.from(headerBuffer.slice(sep + 4), 'latin1');
       const statusMatch = head.match(/^HTTP\/[\d.]+ (\d{3})/);
       const typeMatch = head.match(/^content-type:\s*(.+)$/im);
+      if (listing && statusMatch && statusMatch[1] === '500') {
+        held = { contentType: typeMatch?.[1], chunks: rest.length ? [rest] : [] };
+        return;
+      }
       res.status(statusMatch ? Number(statusMatch[1]) : 200);
       res.setHeader('content-type', opencodeContentType(typeMatch ? typeMatch[1] : undefined));
       for (const [name, value] of Object.entries(OPENCODE_RESPONSE_HEADERS)) {
@@ -1202,11 +1246,54 @@ export class SandboxWorkspaceService {
     });
     res.on('close', () => stream.kill());
     await stream.done;
+    if (held && listing) {
+      await this.answerFailedListing(sandbox, listing, res, {
+        contentType: held.contentType,
+        body: Buffer.concat(held.chunks)
+      });
+      return;
+    }
     if (!headersDone && !res.headersSent) {
       res.status(502).json({ message: 'opencode is not reachable in this sandbox' });
       return;
     }
     if (!res.writableEnded) res.end();
+  }
+
+  private async answerFailedListing(
+    sandbox: WorkspaceSandbox,
+    listing: OpencodeListing,
+    res: Response,
+    upstream: { contentType: string | undefined; body: Buffer }
+  ): Promise<void> {
+    const missing = await this.listingMissing(sandbox, listing);
+    if (res.headersSent || res.writableEnded) return;
+    if (missing) {
+      res.status(404).json({ message: 'That folder does not exist' });
+      return;
+    }
+    res.status(500);
+    res.setHeader('content-type', opencodeContentType(upstream.contentType));
+    for (const [name, value] of Object.entries(OPENCODE_RESPONSE_HEADERS)) {
+      res.setHeader(name, value);
+    }
+    res.end(upstream.body);
+  }
+
+  private async listingMissing(
+    sandbox: WorkspaceSandbox,
+    listing: OpencodeListing
+  ): Promise<boolean> {
+    const script = buildDirPresenceCheck(listing.directory, listing.path);
+    if (!script) return false;
+    try {
+      const result = await this.registry
+        .for(sandbox)
+        .exec(refOf(sandbox), ['su', '-l', 'dev', '-c', script], { timeoutMs: LISTING_CHECK_MS });
+      return result.exitCode === READ_EXIT.missing;
+    } catch {
+      return false;
+    }
   }
 
   async changes(
