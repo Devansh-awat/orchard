@@ -1617,6 +1617,7 @@ export class ChatSessionStore {
   }
 
   async #loadHistory(thread: SessionThread) {
+    if (isAcpChat(thread.id)) return;
     thread.reset();
     thread.loading = true;
     thread.failed = false;
@@ -2777,6 +2778,7 @@ export class ChatSessionStore {
     const dirs = new Set<string | null>();
     if (this.directory) dirs.add(this.directory);
     for (const thread of this.threads.values()) {
+      if (isAcpChat(thread.id)) continue;
       const dir = this.#sessionDir(thread.id);
       if (dir) dirs.add(dir);
     }
@@ -2804,6 +2806,7 @@ export class ChatSessionStore {
     const listed = new Set(found.map((f) => f.request.id));
     for (const [id, item] of [...this.pending]) {
       if (item.state !== 'open' || item.seen > started || listed.has(id)) continue;
+      if (isAcpChat(item.request.sessionID)) continue;
       if (covered.has(`${item.request.kind}:${item.dir ?? ''}`)) this.pending.delete(id);
     }
     found.sort((a, b) => (a.dir ? 0 : 1) - (b.dir ? 0 : 1));
@@ -2821,6 +2824,7 @@ export class ChatSessionStore {
     const dirs = new Set<string | null>([null]);
     if (this.directory) dirs.add(this.directory);
     for (const thread of this.threads.values()) {
+      if (isAcpChat(thread.id)) continue;
       const dir = this.#sessionDir(thread.id);
       if (dir) dirs.add(dir);
     }
@@ -2845,6 +2849,7 @@ export class ChatSessionStore {
     }
     const now = Date.now();
     for (const thread of this.threads.values()) {
+      if (isAcpChat(thread.id)) continue;
       const current = status[thread.id]?.type;
       if (current === 'busy' || current === 'retry') continue;
       if (!covered.has(this.#sessionDir(thread.id))) continue;
@@ -2865,7 +2870,7 @@ export class ChatSessionStore {
       if (typeof document !== 'undefined' && document.hidden) return;
       let busy = false;
       for (const thread of this.threads.values()) {
-        if (thread.busy && !thread.id.startsWith(TEMP_PREFIX)) busy = true;
+        if (thread.busy && !thread.id.startsWith(TEMP_PREFIX) && !isAcpChat(thread.id)) busy = true;
       }
       if (busy) void this.#syncStatus();
     }, STATUS_POLL_MS);
