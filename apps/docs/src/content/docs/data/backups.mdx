@@ -251,6 +251,12 @@ If your bucket has its own lifecycle rule, keep objects for longer than 30 days.
 
 To set up instance storage, refer to [Add S3 storage](/operate/storage/). The setup flow, **Instance admin**, `orchardctl backups s3`, and the installer all save the same settings. Any S3-compatible service works.
 
+### Organization backup endpoints
+
+The server checks an organization's own backup endpoint when it is saved and again every time it connects, so a hostname that later resolves to a private address is refused. Set `BACKUP_ALLOW_INTERNAL_ENDPOINT=true` to allow private endpoints.
+
+Database pods write their own backups to the endpoint, and the tenant network policy lets them reach any public address. That policy does not limit them to the endpoint an organization saved. If you need an allowlist of backup destinations, enforce it at the node or cloud firewall.
+
 ### The store on the server
 
 The one-command installer runs an S3 store (versitygw) in the `orchard-object-storage` namespace, with the backup proxy, and sends the instance's backups to it. Checkpoints, point-in-time restore, copies, deleted database recovery, and restore tests work from this store.

@@ -2,7 +2,8 @@ import { Module, type DynamicModule } from '@nestjs/common';
 import { UpdatesModule } from './updates/updates.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerModule } from '@nestjs/throttler';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { LargeBodyInterceptor } from './http/large-body.interceptor';
 import { ApiThrottlerGuard, apiThrottlerLimit } from './auth/api-throttler.guard';
 import { HealthModule } from './health/health.module';
 import { AgentSpecModule } from './agent-spec/agent-spec.module';
@@ -113,7 +114,10 @@ import { graftImports } from './grafts/boot';
     GraftsModule,
     GraftDoorsModule
   ],
-  providers: [{ provide: APP_GUARD, useClass: ApiThrottlerGuard }]
+  providers: [
+    { provide: APP_GUARD, useClass: ApiThrottlerGuard },
+    { provide: APP_INTERCEPTOR, useClass: LargeBodyInterceptor }
+  ]
 })
 export class AppModule {
   static withGrafts(grafts: GraftRecord[]): DynamicModule {

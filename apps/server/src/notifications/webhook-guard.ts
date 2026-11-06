@@ -3,6 +3,8 @@ import { lookup as dnsLookup } from 'dns';
 import { Agent, fetch as pinnedFetch } from 'undici';
 import { lookup as dnsLookupAsync } from 'dns/promises';
 import { isIP } from 'net';
+import { Agent as HttpAgent } from 'http';
+import { Agent as HttpsAgent } from 'https';
 
 export const BLOCKED_HOST_SUFFIXES = [
   '.svc',
@@ -64,6 +66,57 @@ export async function assertPublicUrl(raw: string | URL, label = 'URL'): Promise
     throw new BlockedDestinationError(`${label} must resolve to a public address`);
   }
   return url;
+}
+
+export interface ResolvedHost {
+  hostname: string;
+  address: string;
+  family: 4 | 6;
+}
+
+export async function resolvePublicHost(raw: string, label = 'Host'): Promise<ResolvedHost> {
+  const hostname = raw
+    .trim()
+    .toLowerCase()
+    .replace(/\.$/, '')
+    .replace(/^\[|\]$/g, '');
+  const literal = isIP(hostname);
+  if (literal) {
+    if (!isPublicAddress(hostname)) {
+      throw new BlockedDestinationError(`${label} must resolve to a public address`);
+    }
+    return { hostname, address: hostname, family: literal as 4 | 6 };
+  }
+  if (!hostname.includes('.') || BLOCKED_HOST_SUFFIXES.some((s) => hostname.endsWith(s))) {
+    throw new BlockedDestinationError(`${label} must be a public hostname`);
+  }
+  let addresses: { address: string; family: number }[];
+  try {
+    addresses = await dnsLookupAsync(hostname, { all: true, verbatim: true });
+  } catch {
+    throw new BadRequestException(`Could not resolve the ${label.toLowerCase()} host "${hostname}"`);
+  }
+  if (addresses.length === 0 || addresses.some((a) => !isPublicAddress(a.address))) {
+    throw new BlockedDestinationError(`${label} must resolve to a public address`);
+  }
+  return { hostname, address: addresses[0].address, family: addresses[0].family as 4 | 6 };
+}
+
+let guardedHttp: HttpAgent | null = null;
+let guardedHttps: HttpsAgent | null = null;
+
+export function guardedAgents(): { httpAgent: HttpAgent; httpsAgent: HttpsAgent } {
+  guardedHttp ??= new HttpAgent({ keepAlive: true, lookup: guardedLookup } as any);
+  guardedHttps ??= new HttpsAgent({ keepAlive: true, lookup: guardedLookup } as any);
+  return { httpAgent: guardedHttp, httpsAgent: guardedHttps };
+}
+
+export async function guardedS3Options(
+  endpoint: string,
+  label = 'Backup endpoint'
+): Promise<{ requestHandler: { httpAgent: HttpAgent; httpsAgent: HttpsAgent } }> {
+  await assertPublicUrl(endpoint, label);
+  return { requestHandler: guardedAgents() };
 }
 
 export function assertSafeWebhookUrl(raw: string): Promise<URL> {

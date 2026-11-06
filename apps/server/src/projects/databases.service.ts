@@ -80,7 +80,7 @@ import {
   type DbStats,
   type MirroredDbPod
 } from '../kubernetes/cnpg-status';
-import { assertPublicUrl } from '../notifications/webhook-guard';
+import { guardedS3Options, resolvePublicHost, type ResolvedHost } from '../notifications/webhook-guard';
 
 /** The org fields that locate a managed database's backups in R2. */
 export type OrgR2 = {
@@ -485,22 +485,26 @@ export class DatabasesService {
     password: string;
     database: string;
     sslMode?: string;
-  }): Promise<{ sourceSizeBytes: number | null; sourceMajor: number }> {
+  }): Promise<{ sourceSizeBytes: number | null; sourceMajor: number; pinned: ResolvedHost | null }> {
+    let pinned: ResolvedHost | null = null;
     if (process.env.DB_IMPORT_ALLOW_INTERNAL !== 'true') {
       try {
-        await assertPublicUrl(
-          `https://${src.host.includes(':') ? `[${src.host}]` : src.host}/`,
-          'Host'
-        );
+        pinned = await resolvePublicHost(src.host, 'Host');
       } catch (error) {
         throw new BadRequestException(
           `${(error as Error).message}. An operator can allow private addresses with DB_IMPORT_ALLOW_INTERNAL=true.`
         );
       }
     }
-    const ssl = src.sslMode && src.sslMode !== 'disable' ? { rejectUnauthorized: false } : false;
+    const ssl =
+      src.sslMode && src.sslMode !== 'disable'
+        ? {
+            rejectUnauthorized: false,
+            ...(pinned && pinned.hostname !== pinned.address ? { servername: pinned.hostname } : {})
+          }
+        : false;
     const client = new Client({
-      host: src.host,
+      host: pinned ? pinned.address : src.host,
       port: src.port || 5432,
       user: src.user,
       password: src.password,
@@ -573,7 +577,7 @@ export class DatabasesService {
         // Providers that deny pg_database_size shouldn't block the import;
         // the storage guard just doesn't apply.
       }
-      return { sourceSizeBytes, sourceMajor };
+      return { sourceSizeBytes, sourceMajor, pinned };
     } finally {
       try {
         await client.end();
@@ -686,6 +690,7 @@ export class DatabasesService {
     let importFrom:
       | {
           host: string;
+          hostAddr?: string;
           port?: number;
           user: string;
           password: string;
@@ -729,7 +734,8 @@ export class DatabasesService {
       pgMajor = requested;
     }
     if (importFrom) {
-      const { sourceSizeBytes, sourceMajor } = await this.validateImportSource(importFrom);
+      const { sourceSizeBytes, sourceMajor, pinned } = await this.validateImportSource(importFrom);
+      if (pinned) importFrom.hostAddr = pinned.address;
       pgMajor = Math.max(pgMajor, sourceMajor);
       // CNPG's microservice import writes the pg_dump onto the same volume the
       // data is restored into, so the PVC has to hold both at once.
@@ -1515,6 +1521,7 @@ export class DatabasesService {
       let secretAccessKey: string | undefined;
       let region = org?.backupR2Region || 'auto';
       let pathStyle = true;
+      let orgEndpoint = false;
       if (this.r2Proxy.isEnabled() && database.r2ProxyAccessKey && database.r2ProxySecret) {
         endpoint = this.r2Proxy.getEndpoint();
         accessKeyId = database.r2ProxyAccessKey;
@@ -1526,6 +1533,7 @@ export class DatabasesService {
         org.backupR2AccessKey !== 'proxy-managed'
       ) {
         endpoint = org.backupR2Endpoint;
+        orgEndpoint = true;
         accessKeyId = org.backupR2AccessKey;
         secretAccessKey = this.crypto.open(org.backupR2SecretKey);
       } else if (platform) {
@@ -1538,11 +1546,16 @@ export class DatabasesService {
       if (!endpoint || !accessKeyId || !secretAccessKey) return;
 
       const prefix = `${database.namespace}/${database.clusterName}/`;
+      const guard =
+        orgEndpoint && process.env.BACKUP_ALLOW_INTERNAL_ENDPOINT !== 'true'
+          ? await guardedS3Options(endpoint, 'backupR2Endpoint')
+          : {};
       const s3 = new S3Client({
         endpoint,
         region,
         credentials: { accessKeyId, secretAccessKey },
-        forcePathStyle: pathStyle
+        forcePathStyle: pathStyle,
+        ...guard
       });
 
       try {

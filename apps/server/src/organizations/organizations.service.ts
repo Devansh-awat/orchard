@@ -23,7 +23,7 @@ import { RateLimitService } from '../auth/rate-limit.service';
 import { signupMode, signupDeniedError } from '../auth/signup-mode';
 import { PasswordRefused, hashAccountPassword } from '../auth/superadmin-password';
 import { SecretCryptoService } from '../crypto/secret-crypto.service';
-import { assertPublicUrl } from '../notifications/webhook-guard';
+import { assertPublicUrl, guardedS3Options } from '../notifications/webhook-guard';
 
 export function normalizeBackupEndpoint(input: string | null): string | null {
   const raw = (input ?? '').trim().replace(/\/+$/, '');
@@ -185,11 +185,22 @@ export class OrganizationsService {
     accessKey: string;
     secretKey: string;
   }): Promise<void> {
+    let guard = {};
+    if (process.env.BACKUP_ALLOW_INTERNAL_ENDPOINT !== 'true') {
+      try {
+        guard = await guardedS3Options(target.endpoint, 'backupR2Endpoint');
+      } catch (error) {
+        throw new BadRequestException(
+          `${(error as Error).message}. An operator can allow private endpoints with BACKUP_ALLOW_INTERNAL_ENDPOINT=true.`
+        );
+      }
+    }
     const s3 = new S3Client({
       endpoint: target.endpoint,
       region: target.region || 'auto',
       credentials: { accessKeyId: target.accessKey, secretAccessKey: target.secretKey },
-      forcePathStyle: true
+      forcePathStyle: true,
+      ...guard
     });
     const abort = new AbortController();
     const timer = setTimeout(() => abort.abort(), 10_000);

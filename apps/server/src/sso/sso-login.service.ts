@@ -21,6 +21,7 @@ import { signupMode } from '../auth/signup-mode';
 import { isSessionCookieSecure } from '../auth/cookies';
 import { OidcStateStore } from './oidc-state.store';
 import { SamlRequestStore } from './saml-request.store';
+import { assertSafeSamlResponse } from './saml-guard';
 import { SsoCryptoService } from './sso-crypto.service';
 import { SsoService } from './sso.service';
 import { OrgDomainsService } from './org-domains.service';
@@ -427,9 +428,10 @@ export class SsoLoginService {
 
     let identity: { email: string; name: string; subject: string };
     try {
-      precheckSamlResponse(samlResponse, this.sso.callbackUrl(provider));
+      const safeResponse = assertSafeSamlResponse(samlResponse);
+      precheckSamlResponse(safeResponse, this.sso.callbackUrl(provider));
       const saml = this.buildSamlClient(provider);
-      const { profile } = await saml.validatePostResponseAsync({ SAMLResponse: samlResponse });
+      const { profile } = await saml.validatePostResponseAsync({ SAMLResponse: safeResponse });
       if (!profile || profile.inResponseTo !== record.requestId) {
         throw new SamlRejected('InResponseTo does not match this browser session');
       }

@@ -2,12 +2,15 @@ import { ExecutionContext, Inject, Injectable, Optional } from '@nestjs/common';
 import { ThrottlerGuard, type ThrottlerLimitDetail } from '@nestjs/throttler';
 import { PrismaService } from '../prisma/prisma.service';
 import { hashApiToken } from './api-tokens.service';
+import { getClientIp, isCollapsedAddress } from './client-ip';
+import { getClientIp, isCollapsedAddress } from './client-ip';
 
 const KNOWN_TOKEN_TTL_MS = 60_000;
 const KNOWN_TOKEN_MAX = 10_000;
 
 export const IP_RATE_LIMIT = 200;
 export const API_TOKEN_RATE_LIMIT = 600;
+export const COLLAPSED_IP_MULTIPLIER = 10;
 
 // Extracts a PAT from the Authorization header. Mirrors the parsing in
 // SuperAdminGuard.extractToken plus its orch_ prefix check, so the throttler
@@ -27,7 +30,9 @@ export function bearerApiToken(req: Record<string, any>): string | undefined {
 // SSE-driven refetch without loosening the per-IP limit for everyone else.
 export function apiThrottlerLimit(context: ExecutionContext): number {
   if (context.getType() !== 'http') return IP_RATE_LIMIT;
-  return bearerApiToken(context.switchToHttp().getRequest()) ? API_TOKEN_RATE_LIMIT : IP_RATE_LIMIT;
+  const req = context.switchToHttp().getRequest();
+  if (bearerApiToken(req)) return API_TOKEN_RATE_LIMIT;
+  return isCollapsedAddress(getClientIp(req)) ? IP_RATE_LIMIT * COLLAPSED_IP_MULTIPLIER : IP_RATE_LIMIT;
 }
 
 // ThrottlerGuard that keys buckets per API token instead of per IP for
@@ -63,7 +68,7 @@ export class ApiThrottlerGuard extends ThrottlerGuard {
       const hash = hashApiToken(token);
       if (await this.tokenExists(hash)) return `token:${hash}`;
     }
-    return super.getTracker(req);
+    return getClientIp(req as any);
   }
 
   protected async throwThrottlingException(

@@ -152,6 +152,19 @@ true
 
 {{- define "orchard.serverEnv" }}
             - { name: NODE_ENV, value: production }
+            {{- if not (include "orchard.serverEnvHas" (dict "root" . "key" "TRUST_PROXY")) }}
+            - { name: TRUST_PROXY, value: {{ .Values.clientIp.trustProxy | toString | quote }} }
+            {{- end }}
+            {{- if and .Values.clientIp.trustedProxyRanges (not (include "orchard.serverEnvHas" (dict "root" . "key" "TRUSTED_PROXY_RANGES"))) }}
+            - { name: TRUSTED_PROXY_RANGES, value: {{ .Values.clientIp.trustedProxyRanges | quote }} }
+            {{- end }}
+            {{- if and (not .Values.clientIp.trustCloudflare) (not (include "orchard.serverEnvHas" (dict "root" . "key" "TRUST_CLOUDFLARE"))) }}
+            - { name: TRUST_CLOUDFLARE, value: "false" }
+            {{- end }}
+            {{- if and .Values.clientIp.header .Values.clientIp.headerFrom (not (include "orchard.serverEnvHas" (dict "root" . "key" "CLIENT_IP_HEADER"))) }}
+            - { name: CLIENT_IP_HEADER, value: {{ .Values.clientIp.header | quote }} }
+            - { name: CLIENT_IP_HEADER_FROM, value: {{ .Values.clientIp.headerFrom | quote }} }
+            {{- end }}
             - { name: TENANT_SECRETS_CLUSTER_ROLE, value: {{ printf "%s-tenant-secrets" .Release.Name | quote }} }
             {{- if .Values.datadog.enabled }}
             # Datadog agent service with internalTrafficPolicy: Local: each

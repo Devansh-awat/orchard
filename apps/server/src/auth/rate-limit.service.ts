@@ -1,6 +1,12 @@
 import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisThrottleService } from './redis-throttle.service';
+import { isCollapsedAddress } from './client-ip';
+
+export const COLLAPSED_IP_MULTIPLIER = 10;
+export const COLLAPSED_IP_MAX_BLOCK_MS = 5 * 60 * 1000;
+export const CLEANUP_BATCH = 1000;
+export const CLEANUP_MAX_BATCHES = 20;
 
 export interface RateLimitConfig {
   maxAttempts: number;
@@ -70,6 +76,31 @@ export const RATE_LIMIT_CONFIGS: Record<string, RateLimitConfig> = {
     windowMs: 60 * 60 * 1000,
     blockDurationMs: 60 * 60 * 1000
   },
+  otp_request_global: {
+    maxAttempts: 3000,
+    windowMs: 15 * 60 * 1000,
+    blockDurationMs: 5 * 60 * 1000
+  },
+  otp_verify_global: {
+    maxAttempts: 6000,
+    windowMs: 15 * 60 * 1000,
+    blockDurationMs: 5 * 60 * 1000
+  },
+  passkey_auth_global: {
+    maxAttempts: 6000,
+    windowMs: 15 * 60 * 1000,
+    blockDurationMs: 5 * 60 * 1000
+  },
+  password_signin_global: {
+    maxAttempts: 6000,
+    windowMs: 15 * 60 * 1000,
+    blockDurationMs: 5 * 60 * 1000
+  },
+  protection_password_global: {
+    maxAttempts: 6000,
+    windowMs: 15 * 60 * 1000,
+    blockDurationMs: 5 * 60 * 1000
+  },
   protection_password_ingress: {
     maxAttempts: 100,
     windowMs: 15 * 60 * 1000,
@@ -77,7 +108,7 @@ export const RATE_LIMIT_CONFIGS: Record<string, RateLimitConfig> = {
   }
 };
 
-export type RateLimitIdentifierType = 'email' | 'ip' | 'ingress' | 'org' | 'user';
+export type RateLimitIdentifierType = 'email' | 'ip' | 'ingress' | 'org' | 'user' | 'global';
 
 @Injectable()
 export class RateLimitService {
@@ -115,13 +146,34 @@ export class RateLimitService {
     action: string
   ): Promise<void> {
     const configKey = `${action}_${type}`;
-    const config = RATE_LIMIT_CONFIGS[configKey];
+    let config = RATE_LIMIT_CONFIGS[configKey];
 
     if (!config) {
       console.warn(`No rate limit config found for ${configKey}`);
       return;
     }
 
+    if (type === 'ip') {
+      const ceiling = RATE_LIMIT_CONFIGS[`${action}_global`];
+      if (ceiling) await this.consume('all', 'global', action, ceiling);
+      if (isCollapsedAddress(identifier)) {
+        config = {
+          maxAttempts: config.maxAttempts * COLLAPSED_IP_MULTIPLIER,
+          windowMs: config.windowMs,
+          blockDurationMs: Math.min(config.blockDurationMs, COLLAPSED_IP_MAX_BLOCK_MS)
+        };
+      }
+    }
+
+    await this.consume(identifier, type, action, config);
+  }
+
+  private async consume(
+    identifier: string,
+    type: RateLimitIdentifierType,
+    action: string,
+    config: RateLimitConfig
+  ): Promise<void> {
     const shared = await this.throttle.consume(
       RateLimitService.throttleKey(identifier, type, action),
       config
@@ -195,31 +247,27 @@ export class RateLimitService {
     });
   }
 
-  /**
-   * Clean up expired rate limit records.
-   * Should be called periodically (e.g., via cron).
-   */
   async cleanupExpiredRecords(): Promise<number> {
-    const result = await this.prisma.rateLimitRecord.deleteMany({
-      where: {
-        OR: [
-          // Delete records with expired blocks that haven't been updated
-          {
-            blockedUntil: {
-              lt: new Date()
-            }
-          },
-          // Delete records with very old windows (older than max window + block duration)
-          {
-            windowStart: {
-              lt: new Date(Date.now() - 2 * 60 * 60 * 1000) // 2 hours old
-            },
-            blockedUntil: null
-          }
-        ]
-      }
-    });
-
-    return result.count;
+    const now = Date.now();
+    let total = 0;
+    for (let i = 0; i < CLEANUP_MAX_BATCHES; i++) {
+      const stale = await this.prisma.rateLimitRecord.findMany({
+        where: {
+          OR: [
+            { blockedUntil: { lt: new Date(now) } },
+            { windowStart: { lt: new Date(now - 2 * 60 * 60 * 1000) }, blockedUntil: null }
+          ]
+        },
+        select: { id: true },
+        take: CLEANUP_BATCH
+      });
+      if (stale.length === 0) break;
+      const result = await this.prisma.rateLimitRecord.deleteMany({
+        where: { id: { in: stale.map((row) => row.id) } }
+      });
+      total += result.count;
+      if (stale.length < CLEANUP_BATCH) break;
+    }
+    return total;
   }
 }

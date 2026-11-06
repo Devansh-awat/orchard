@@ -78,7 +78,7 @@ function buildController(correctPassword: string) {
   return new ProtectionController(protection as any, rateLimit, turnstile);
 }
 
-const req = (ip: string) => ({ headers: { 'x-real-ip': ip }, ip, socket: {} }) as any;
+const req = (ip: string) => ({ headers: {}, ip, socket: { remoteAddress: ip } }) as any;
 const body = (password: string) => ({ ingressId: ING, password, returnTo: RETURN_TO });
 
 async function attempt(ctrl: ProtectionController, ip: string, password: string) {

@@ -3,6 +3,8 @@ import type { IncomingMessage } from 'http';
 import ipaddr from 'ipaddr.js';
 
 type Headers = IncomingMessage['headers'];
+type Addr = ipaddr.IPv4 | ipaddr.IPv6;
+type Cidr = [Addr, number];
 
 const CLOUDFLARE_RANGES = [
   '173.245.48.0/20',
@@ -29,7 +31,7 @@ const CLOUDFLARE_RANGES = [
   '2c0f:f248::/32'
 ];
 
-const INFRASTRUCTURE_RANGES = new Set([
+const NON_PUBLIC_RANGES = new Set([
   'unspecified',
   'loopback',
   'private',
@@ -40,13 +42,21 @@ const INFRASTRUCTURE_RANGES = new Set([
 
 const MAX_FORWARDED_ENTRIES = 50;
 
-type Cidr = [ipaddr.IPv4 | ipaddr.IPv6, number];
+export interface ProxyTrust {
+  hops: number;
+  ranges: Cidr[];
+}
+
+function bareToCidr(value: string): string {
+  const trimmed = value.trim();
+  return trimmed.includes('/') ? trimmed : `${trimmed}/${trimmed.includes(':') ? 128 : 32}`;
+}
 
 function parseCidrs(values: string[]): Cidr[] {
   const out: Cidr[] = [];
   for (const value of values) {
     try {
-      out.push(ipaddr.parseCIDR(value.trim()) as Cidr);
+      out.push(ipaddr.parseCIDR(bareToCidr(value)) as Cidr);
     } catch {}
   }
   return out;
@@ -66,7 +76,62 @@ function extraRanges(): Cidr[] {
   return extra;
 }
 
-function parse(value: string): ipaddr.IPv4 | ipaddr.IPv6 | null {
+export function parseTrustProxy(raw: string | undefined): ProxyTrust {
+  if (raw === undefined || raw.trim() === '') return { hops: 0, ranges: [] };
+  const value = raw.trim();
+  if (value.toLowerCase() === 'false') return { hops: 0, ranges: [] };
+  if (/^\d+$/.test(value)) {
+    return { hops: Math.min(Number(value), MAX_FORWARDED_ENTRIES), ranges: [] };
+  }
+  return { hops: 0, ranges: parseCidrs(value.split(',')) };
+}
+
+let trustSource: string | undefined;
+let trustParsed: ProxyTrust = { hops: 0, ranges: [] };
+
+function trustConfig(): ProxyTrust {
+  const raw = process.env.TRUST_PROXY;
+  if (raw !== trustSource) {
+    trustSource = raw;
+    trustParsed = parseTrustProxy(raw);
+  }
+  return trustParsed;
+}
+
+export function trustProxySetting(): number | string[] | false {
+  const raw = process.env.TRUST_PROXY;
+  const { hops, ranges } = parseTrustProxy(raw);
+  if (ranges.length > 0) {
+    return (raw as string)
+      .split(',')
+      .map((part) => bareToCidr(part))
+      .filter(Boolean);
+  }
+  return hops > 0 ? hops : false;
+}
+
+interface TrustedHeader {
+  name: string;
+  from: Cidr[];
+}
+
+let headerSource: string | undefined;
+let headerParsed: TrustedHeader | null = null;
+
+function trustedHeader(): TrustedHeader | null {
+  const key = `${process.env.CLIENT_IP_HEADER}|${process.env.CLIENT_IP_HEADER_FROM}`;
+  if (key !== headerSource) {
+    headerSource = key;
+    const name = process.env.CLIENT_IP_HEADER?.trim().toLowerCase();
+    const from = process.env.CLIENT_IP_HEADER_FROM
+      ? parseCidrs(process.env.CLIENT_IP_HEADER_FROM.split(','))
+      : [];
+    headerParsed = name && from.length > 0 ? { name, from } : null;
+  }
+  return headerParsed;
+}
+
+function parse(value: string): Addr | null {
   const bare = value.startsWith('[') ? value.slice(1, value.indexOf(']')) : value.split('%')[0];
   try {
     return ipaddr.process(bare);
@@ -75,7 +140,7 @@ function parse(value: string): ipaddr.IPv4 | ipaddr.IPv6 | null {
   }
 }
 
-function inRanges(addr: ipaddr.IPv4 | ipaddr.IPv6, ranges: Cidr[]): boolean {
+function inRanges(addr: Addr, ranges: Cidr[]): boolean {
   for (const [net, bits] of ranges) {
     if (addr.kind() !== net.kind()) continue;
     if (addr.kind() === 'ipv4') {
@@ -83,11 +148,6 @@ function inRanges(addr: ipaddr.IPv4 | ipaddr.IPv6, ranges: Cidr[]): boolean {
     } else if ((addr as ipaddr.IPv6).match(net as ipaddr.IPv6, bits)) return true;
   }
   return false;
-}
-
-function isInfrastructure(addr: ipaddr.IPv4 | ipaddr.IPv6): boolean {
-  if (INFRASTRUCTURE_RANGES.has(addr.range())) return true;
-  return inRanges(addr, extraRanges());
 }
 
 function trustCloudflare(): boolean {
@@ -113,15 +173,6 @@ function forwardedFor(headers: Headers): string[] {
     .slice(-MAX_FORWARDED_ENTRIES);
 }
 
-function explicitHops(): number | null {
-  const raw = process.env.TRUST_PROXY;
-  if (raw === undefined) return null;
-  if (raw === '0' || raw.toLowerCase() === 'false') return 0;
-  const n = Number(raw);
-  if (Number.isFinite(n) && n >= 0) return n;
-  return null;
-}
-
 function chain(headers: Headers, socketAddress: string | undefined): string[] {
   const out: string[] = [];
   if (socketAddress) out.push(socketAddress);
@@ -130,36 +181,57 @@ function chain(headers: Headers, socketAddress: string | undefined): string[] {
   return out;
 }
 
+function isTrustedHop(index: number, addr: Addr, trust: ProxyTrust): boolean {
+  if (index < trust.hops) return true;
+  if (trust.ranges.length > 0 && inRanges(addr, trust.ranges)) return true;
+  if (inRanges(addr, extraRanges())) return true;
+  return false;
+}
+
 function resolve(headers: Headers, socketAddress: string | undefined): string | null {
-  const hops = explicitHops();
-
-  if (hops !== null) {
-    if (hops === 0) return socketAddress ?? null;
-    const xff = forwardedFor(headers);
-    if (xff.length === 0) return socketAddress ?? null;
-    return xff[Math.max(0, xff.length - hops)] ?? null;
-  }
-
+  const trust = trustConfig();
   const walk = chain(headers, socketAddress);
-  let sawCloudflare = false;
+  if (walk.length === 0) return null;
 
-  for (const candidate of walk) {
-    const addr = parse(candidate);
-    if (!addr) continue;
-    if (isInfrastructure(addr)) continue;
-    if (trustCloudflare() && inRanges(addr, cloudflare)) {
+  let sawCloudflare = false;
+  let client: string | null = null;
+
+  for (let i = 0; i < walk.length; i++) {
+    const addr = parse(walk[i]);
+    if (addr && isTrustedHop(i, addr, trust)) continue;
+    if (addr && i > 0 && trustCloudflare() && inRanges(addr, cloudflare)) {
       sawCloudflare = true;
       continue;
     }
-    return candidate;
+    client = walk[i];
+    break;
   }
 
-  if (sawCloudflare) {
-    const connecting = header(headers, 'cf-connecting-ip');
-    if (connecting) return connecting;
+  if (client === null) {
+    if (sawCloudflare) {
+      const connecting = header(headers, 'cf-connecting-ip');
+      if (connecting && parse(connecting)) return connecting;
+    }
+    return walk[walk.length - 1];
   }
 
-  return header(headers, 'x-real-ip') ?? walk[walk.length - 1] ?? null;
+  const override = trustedHeader();
+  if (override) {
+    const hop = parse(client);
+    if (hop && inRanges(hop, override.from)) {
+      const value = header(headers, override.name);
+      if (value && parse(value)) return value;
+    }
+  }
+
+  return client;
+}
+
+export function isCollapsedAddress(value: string): boolean {
+  const bare = value.replace(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}:/i, '');
+  const addr = parse(bare);
+  if (!addr) return true;
+  return NON_PUBLIC_RANGES.has(addr.range());
 }
 
 export function getClientIp(req: Request): string {

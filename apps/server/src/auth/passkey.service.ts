@@ -14,7 +14,7 @@ import {
 } from '@simplewebauthn/server';
 import { PrismaService } from '../prisma/prisma.service';
 import type { Prisma } from '@prisma/client';
-import { RateLimitService } from './rate-limit.service';
+import { RateLimitService, CLEANUP_BATCH, CLEANUP_MAX_BATCHES } from './rate-limit.service';
 
 const CHALLENGE_EXPIRY_MINUTES = 5;
 
@@ -168,11 +168,11 @@ export class PasskeyService {
       throw new BadRequestException('Invalid email');
     }
     const normalizedEmail = email?.trim().toLowerCase();
-    if (normalizedEmail) {
-      await this.rateLimitService.checkRateLimit(normalizedEmail, 'email', 'passkey_auth');
-    }
     if (ipAddress) {
       await this.rateLimitService.checkRateLimit(ipAddress, 'ip', 'passkey_auth');
+    }
+    if (normalizedEmail) {
+      await this.rateLimitService.checkRateLimit(normalizedEmail, 'email', 'passkey_auth');
     }
 
     let allowCredentials: { id: string; transports?: AuthenticatorTransportFuture[] }[] = [];
@@ -424,12 +424,20 @@ export class PasskeyService {
   }
 
   async cleanupExpiredChallenges(): Promise<number> {
-    const result = await this.prisma.webAuthnChallenge.deleteMany({
-      where: {
-        expiresAt: { lt: new Date() }
-      }
-    });
-
-    return result.count;
+    let total = 0;
+    for (let i = 0; i < CLEANUP_MAX_BATCHES; i++) {
+      const stale = await this.prisma.webAuthnChallenge.findMany({
+        where: { expiresAt: { lt: new Date() } },
+        select: { id: true },
+        take: CLEANUP_BATCH
+      });
+      if (stale.length === 0) break;
+      const result = await this.prisma.webAuthnChallenge.deleteMany({
+        where: { id: { in: stale.map((row) => row.id) } }
+      });
+      total += result.count;
+      if (stale.length < CLEANUP_BATCH) break;
+    }
+    return total;
   }
 }

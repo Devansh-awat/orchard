@@ -7,6 +7,8 @@ import { resolve } from 'path';
 import { NestFactory, HttpAdapterHost } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import cookieParser from 'cookie-parser';
+import { registerBodyParsers } from './http/body-limits';
+import { trustProxySetting } from './auth/client-ip';
 import { initDatadog } from './analytics/datadog';
 
 import { startTelemetry } from './analytics/telemetry';
@@ -86,23 +88,7 @@ async function bootstrap() {
     next();
   });
 
-  // Raise the body-parser limit above Express's 100kb default. GitHub App
-  // webhooks (POST /apiv1/github/app/webhook) deliver push/installation
-  // payloads that routinely exceed 100kb, and GitHub caps deliveries at 25MB.
-  // Below 25MB the JSON parser threw PayloadTooLargeError (HTTP 413) before
-  // the handler ran, so signature verification never happened and GitHub
-  // marked the delivery failed. With bodyParser disabled at create() these
-  // are the only json/urlencoded parsers; Nest still applies rawBody capture
-  // (verify hook) so webhook HMAC verification keeps working.
-  // The type list matters for SCIM: RFC 7644 puts request bodies on
-  // application/scim+json, which every IdP sends. Express's json parser only
-  // claims application/json by default, so those bodies arrived unparsed and
-  // POST /scim/v2/Users saw an empty object.
-  app.useBodyParser('json', {
-    limit: '25mb',
-    type: ['application/json', 'application/scim+json']
-  });
-  app.useBodyParser('urlencoded', { limit: '25mb', extended: true });
+  registerBodyParsers((type, options) => app.useBodyParser(type, options));
 
   app.setGlobalPrefix('apiv1');
 
@@ -114,16 +100,8 @@ async function bootstrap() {
     new AnalyticsExceptionFilter(analytics, httpAdapter, app.get(TelemetryService))
   );
 
-  // Configure trust proxy so req.ip honors X-Forwarded-For. Defaults to 1
-  // (single trusted hop: Traefik in cluster, harmless in dev where no proxy
-  // sets XFF). TRUST_PROXY accepts a hop count ("1", "2"),
-  // "loopback"/"linklocal"/"uniquelocal", or a CIDR list. Set to "0" or
-  // "false" to disable when running directly exposed.
-  const trustProxy = process.env.TRUST_PROXY ?? '1';
-  if (trustProxy && trustProxy !== '0' && trustProxy.toLowerCase() !== 'false') {
-    const n = Number(trustProxy);
-    app.set('trust proxy', Number.isFinite(n) && n > 0 ? n : trustProxy);
-  }
+  const trustProxy = trustProxySetting();
+  if (trustProxy !== false) app.set('trust proxy', trustProxy);
 
   app.use(cookieParser());
   installApiAliases(app);

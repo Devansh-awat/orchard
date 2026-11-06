@@ -3219,6 +3219,41 @@ spec:
 EOF
   run_step "connecting the tunnel" 30s \
     kubectl -n cloudflared rollout status deploy/cloudflared --timeout=5m
+  isolate_traefik_to_tunnel
+}
+
+cluster_pod_cidrs() {
+  local cidrs
+  cidrs=$(KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl get nodes \
+    -o jsonpath='{range .items[*]}{.spec.podCIDRs[*]}{"\n"}{end}' 2>/dev/null | tr ' \n' ',' | sed 's/,*$//')
+  printf '%s' "${cidrs:-10.42.0.0/16}"
+}
+
+isolate_traefik_to_tunnel() {
+  kubectl apply -f - >/dev/null <<'EOF'
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: tunnel-only-ingress
+  namespace: traefik
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: traefik
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: cloudflared }
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: orchard }
+      ports:
+        - { protocol: TCP, port: 8000 }
+        - { protocol: TCP, port: 8443 }
+    - ports:
+        - { protocol: TCP, port: 8080 }
+        - { protocol: TCP, port: 9100 }
+EOF
 }
 
 live_volume_gb() {
@@ -3466,6 +3501,15 @@ render_values() {
         - port: 8443"
   fi
 
+  local client_ip_block='
+clientIp:
+  trustProxy: "1"'
+  if [ "$INGRESS_MODE" = tunnel ]; then
+    client_ip_block="$client_ip_block
+  header: cf-connecting-ip
+  headerFrom: \"$(cluster_pod_cidrs)\""
+  fi
+
   local db_memory_env=
   if [ ! -f "$VALUES_FILE" ]; then
     db_memory_env="
@@ -3505,6 +3549,7 @@ frontend:
     - { name: PUBLIC_HTTP_PORT, value: "$HTTP_PORT" }
     - { name: PUBLIC_HTTPS_PORT, value: "$HTTPS_PORT" }
     - { name: PUBLIC_OAUTH_PROVIDER, value: none }
+$client_ip_block
 
 server:
   replicas: 1

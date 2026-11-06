@@ -1701,6 +1701,7 @@ export class K8sCnpgService implements OnApplicationBootstrap {
     useBarmanPlugin?: boolean;
     importFrom?: {
       host: string;
+      hostAddr?: string;
       port?: number;
       user: string;
       password: string;
@@ -1823,6 +1824,9 @@ export class K8sCnpgService implements OnApplicationBootstrap {
         dbname: options.importFrom.database,
         sslmode: sslMode
       };
+      if (options.importFrom.hostAddr) {
+        connectionParameters.hostaddr = options.importFrom.hostAddr;
+      }
       if (verifiesServerCert) {
         connectionParameters.sslrootcert = 'system';
       }

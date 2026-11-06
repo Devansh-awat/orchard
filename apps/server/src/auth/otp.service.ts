@@ -1,7 +1,7 @@
 import { Injectable, BadRequestException, ServiceUnavailableException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { EmailService } from '../email/email.service';
-import { RateLimitService } from './rate-limit.service';
+import { RateLimitService, CLEANUP_BATCH, CLEANUP_MAX_BATCHES } from './rate-limit.service';
 import { discardUnverifiedCredentials } from './unverified-adoption';
 // Shared with the host scripts, which mint a code without an email to send it
 // in. Two implementations of the same hash would drift into a login link the
@@ -42,8 +42,8 @@ export class OtpService {
 
     const normalizedEmail = email.toLowerCase().trim();
 
-    await this.rateLimitService.checkRateLimit(normalizedEmail, 'email', 'otp_request');
     await this.rateLimitService.checkRateLimit(ipAddress, 'ip', 'otp_request');
+    await this.rateLimitService.checkRateLimit(normalizedEmail, 'email', 'otp_request');
 
     // Invalidate any existing unused OTP codes for this email
     await this.prisma.otpCode.updateMany({
@@ -110,8 +110,8 @@ export class OtpService {
       throw new BadRequestException('Enter the 6-digit code.');
     }
 
-    await this.rateLimitService.checkRateLimit(normalizedEmail, 'email', 'otp_verify');
     await this.rateLimitService.checkRateLimit(ipAddress, 'ip', 'otp_verify');
+    await this.rateLimitService.checkRateLimit(normalizedEmail, 'email', 'otp_verify');
 
     const hashedCode = hashOtpCode(normalizedCode);
 
@@ -198,15 +198,25 @@ export class OtpService {
    * Should be called periodically (e.g., via cron).
    */
   async cleanupExpiredCodes(): Promise<number> {
-    const result = await this.prisma.otpCode.deleteMany({
-      where: {
-        OR: [
-          { expiresAt: { lt: new Date() } },
-          { used: true, createdAt: { lt: new Date(Date.now() - 24 * 60 * 60 * 1000) } }
-        ]
-      }
-    });
-
-    return result.count;
+    let total = 0;
+    for (let i = 0; i < CLEANUP_MAX_BATCHES; i++) {
+      const stale = await this.prisma.otpCode.findMany({
+        where: {
+          OR: [
+            { expiresAt: { lt: new Date() } },
+            { used: true, createdAt: { lt: new Date(Date.now() - 24 * 60 * 60 * 1000) } }
+          ]
+        },
+        select: { id: true },
+        take: CLEANUP_BATCH
+      });
+      if (stale.length === 0) break;
+      const result = await this.prisma.otpCode.deleteMany({
+        where: { id: { in: stale.map((row) => row.id) } }
+      });
+      total += result.count;
+      if (stale.length < CLEANUP_BATCH) break;
+    }
+    return total;
   }
 }

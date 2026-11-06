@@ -7,6 +7,7 @@ import { PasswordlessController } from './passwordless.controller';
 import { OtpService } from './otp.service';
 import { PasskeyService } from './passkey.service';
 import { RateLimitService } from './rate-limit.service';
+import { AuthCleanupService } from './auth-cleanup.service';
 import { RedisThrottleService } from './redis-throttle.service';
 import { TurnstileService } from './turnstile.service';
 import { ApiTokensService } from './api-tokens.service';
@@ -30,6 +31,7 @@ import { PrismaModule } from '../prisma/prisma.module';
     OtpService,
     PasskeyService,
     RateLimitService,
+    AuthCleanupService,
     RedisThrottleService,
     TurnstileService,
     ApiTokensService,

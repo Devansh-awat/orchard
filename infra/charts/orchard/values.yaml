@@ -52,6 +52,28 @@ frontend:
     targetMemoryUtilizationPercentage: null
   env: []
 
+# How the server finds the real client address behind your ingress. Every
+# per-IP limit keys on it, so this must describe your topology; a private
+# address is never trusted merely for being private.
+#   trustProxy:  number of proxy hops in front of the server (1 = a single
+#                ingress controller such as Traefik or HAProxy; 2 = a load
+#                balancer plus the ingress), or a comma-separated CIDR list of
+#                proxies to trust. "0" trusts nothing and uses the socket peer.
+#   trustedProxyRanges: extra proxy CIDRs trusted at any position (a CDN or
+#                external load balancer).
+#   trustCloudflare: also skip Cloudflare's published edge ranges.
+#   header / headerFrom: Cloudflare Tunnel installs. Read the client address
+#                from this request header (cf-connecting-ip), but only when the
+#                hop that connected falls in headerFrom (the pod CIDR of the
+#                namespace running cloudflared, with Traefik reachable only from
+#                it). Leave both empty otherwise.
+clientIp:
+  trustProxy: "1"
+  trustedProxyRanges: ""
+  trustCloudflare: true
+  header: ""
+  headerFrom: ""
+
 server:
   enabled: true
   replicas: 2

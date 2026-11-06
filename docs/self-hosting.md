@@ -576,36 +576,55 @@ Attempts are counted when they are checked, atomically, in Redis or in
 Postgres. A burst of parallel guesses cannot outrun the counter: once the
 budget is spent every request in flight is refused.
 
-**The address has to be the caller's, not a proxy's.** This needs no
-configuration. A header carries no proof of who wrote it, so the only thing worth
-trusting is position: Orchard walks the hops from the one nearest itself and
-keeps going while each address is infrastructure it recognises. The first address
-that is not is the caller.
+**The address has to be the caller's, not a proxy's.** Orchard never decides
+that an address is a proxy because it looks private. A header carries no proof of
+who wrote it, so the only thing trusted is position, and only as far as you
+declare: Orchard starts at the socket peer and walks `X-Forwarded-For` from the
+right, skipping exactly the hops you configured. The first address past them is
+the caller. `X-Real-IP` is never read. A pod in the cluster, or a client behind
+SNAT, is therefore keyed on its own address and cannot pick another by sending
+its own headers.
 
-Recognised without being told: loopback, private, link-local, unique-local and
-carrier-grade NAT, which covers an in-cluster ingress controller of any flavour,
-plus Cloudflare's published ranges. So a plain install behind ingress-nginx,
-HAProxy or Traefik gets the right address, and so does the same install once you
-put Cloudflare in front of it.
+| Variable                | What it does                                                                                       |
+| ----------------------- | -------------------------------------------------------------------------------------------------- |
+| `TRUST_PROXY`           | Hops to trust (`1` = one ingress, `2` = load balancer plus ingress), or a CIDR list. Unset trusts nothing. The chart and installer set `1`. |
+| `TRUSTED_PROXY_RANGES`  | Extra proxy CIDRs trusted at any position, for a CDN or load balancer Orchard does not ship.       |
+| `TRUST_CLOUDFLARE`      | `false` to stop skipping Cloudflare's published edge ranges.                                       |
+| `CLIENT_IP_HEADER`      | Header carrying the real client address, for example `cf-connecting-ip`.                           |
+| `CLIENT_IP_HEADER_FROM` | CIDRs of the hop allowed to supply that header. Without a match the header is ignored.             |
 
-Counting hops instead would not survive that second step, and it is why
-`TRUST_PROXY` is no longer the mechanism. It still works if you set it, pinning
-an exact hop count the way Express does, and `TRUST_PROXY=0` still refuses to
-read `X-Forwarded-For` at all.
+In chart values these are `clientIp.trustProxy`, `clientIp.trustedProxyRanges`,
+`clientIp.trustCloudflare`, `clientIp.header` and `clientIp.headerFrom`.
 
-| Variable               | When you need it                                        |
-| ---------------------- | ------------------------------------------------------- |
-| `TRUSTED_PROXY_RANGES` | a CDN or load balancer Orchard does not ship, as CIDRs  |
-| `TRUST_CLOUDFLARE`     | `false` to stop treating Cloudflare's ranges as a proxy |
-| `TRUST_PROXY`          | pin an exact hop count instead of detecting             |
+Choose by deployment mode:
 
-`CF-Connecting-IP` is read only after an address Cloudflare itself must have
-written has already been seen in the chain, so a request that reaches the origin
-directly cannot forge it. What that does not defend against is a caller whose own
-address is inside Cloudflare's ranges: reaching the origin directly from there,
-they could name someone else and throttle that person instead. Restrict the
+- **Public (Traefik or HAProxy directly on the internet):** `TRUST_PROXY=1`.
+- **Cloudflare in front of Traefik:** `TRUST_PROXY=1`; Cloudflare's ranges are
+  skipped automatically.
+- **Cloudflare Tunnel:** `cloudflared` reaches Traefik from inside the cluster,
+  so Traefik overwrites `X-Forwarded-For` with the cloudflared pod address. The
+  installer sets `TRUST_PROXY=1`, `CLIENT_IP_HEADER=cf-connecting-ip` and
+  `CLIENT_IP_HEADER_FROM` to the cluster pod CIDRs, and applies a
+  NetworkPolicy so only the `cloudflared` and `orchard` namespaces can reach
+  Traefik's web ports. That policy is what makes the header provable: a tenant
+  pod can no longer connect to Traefik and forge it. If you run your own tunnel,
+  apply an equivalent policy before setting these.
+- **LAN:** `TRUST_PROXY=1`.
+
+If your load balancer SNATs clients (some `LoadBalancer` implementations do),
+every visitor arrives as the balancer's address and shares one bucket. Orchard
+widens per-IP buckets for such non-public addresses and shortens their block,
+and every sign-in action also has a global ceiling that no single source can
+spend, but the real fix is `externalTrafficPolicy: Local` or the proxy protocol.
+
+Attempt counters for sign-in endpoints that fall back to Postgres, one-time
+codes and passkey challenges are cleaned every ten minutes by the replica holding
+the cluster lease, in batches.
+
+`CF-Connecting-IP` from Cloudflare's edge ranges is read only after an address
+Cloudflare itself must have written has been seen in the chain. Restrict the
 origin to your CDN's address ranges, at the load balancer or with a network
-policy, and that goes away along with every other direct-to-origin concern.
+policy, so a request cannot reach it directly.
 
 ### Cross-site requests
 

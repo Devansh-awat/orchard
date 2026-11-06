@@ -53,7 +53,7 @@ TRUST_PROXY=1
 ```
 
 - `SESSION_COOKIE_SECURE=true` stops browsers from sending session cookies over plain HTTP.
-- `TRUST_PROXY` is the number of proxy hops to trust when Orchard finds the client IP address. The default is `1`, for a single ingress in front of the API. A value that is too high lets a client spoof its IP address with a header, which weakens per-IP rate limits. For more information, refer to [Request headers](/deploy/networking/#request-headers).
+- `TRUST_PROXY` is the number of proxy hops to trust when Orchard finds the client IP address, or a comma-separated list of proxy CIDRs. The chart sets it to `1`, for a single ingress in front of the API. Unset, the server trusts no forwarded header. A value that is too high lets a client spoof its IP address with a header, which weakens per-IP rate limits. A private address is never trusted just for being private. Behind a Cloudflare Tunnel, also set `CLIENT_IP_HEADER=cf-connecting-ip` and `CLIENT_IP_HEADER_FROM` to the pod CIDR; the installer does this. For more information, refer to [Request headers](/deploy/networking/#request-headers).
 
 ## 5. Back up the control-plane database
 
