@@ -69,6 +69,8 @@ import {
   registryAuth,
   type RegistryAuths
 } from './registry-pull-auth';
+import { daemonTenantLabel, TENANT_KEY_LABEL } from './buildkit-daemon-policy';
+import { depotOutputFlags, depotScriptTail, depotSessionAuths } from './depot-session';
 import { BuildJobInformerService } from './build-job-informer.service';
 import { isUnseenTerminalSignal, remainingIntervalMs } from './build-poll-pacing';
 import { objectStorage } from '../instance-config/object-storage';
@@ -165,8 +167,23 @@ fi
 
 type BuildctlArg = string | { shell: string };
 
+const S3_CACHE_KEY_ENV = 'ORCHARD_S3_CACHE_KEY_ID';
+const S3_CACHE_SECRET_ENV = 'ORCHARD_S3_CACHE_SECRET';
+
 const shellQuote = (arg: string) =>
   /^[A-Za-z0-9_\-./:=@,+%]+$/.test(arg) ? arg : `'${arg.replace(/'/g, `'\\''`)}'`;
+
+const isSafeS3Credential = (value: string | undefined): boolean =>
+  !value || /^[A-Za-z0-9+/=_.-]+$/.test(value);
+
+const withS3CacheCreds = (attrs: string): BuildctlArg => ({
+  shell:
+    shellQuote(attrs) +
+    ',access_key_id=$' +
+    S3_CACHE_KEY_ENV +
+    ',secret_access_key=$' +
+    S3_CACHE_SECRET_ENV
+});
 
 const renderBuildctlArg = (arg: BuildctlArg) =>
   typeof arg === 'string' ? shellQuote(arg) : arg.shell;
@@ -970,7 +987,7 @@ ${registryConfigs}
     }
   }
 
-  private buildCacheArgs(imageName?: string): string[] {
+  private buildCacheArgs(imageName?: string): BuildctlArg[] {
     if (this.localCacheEnabled) {
       const sub = imageName ? imageName.replace(/[^a-z0-9-]/gi, '-') : 'default';
       const cacheDir = `${this.localCachePath}/${sub}`;
@@ -1006,7 +1023,17 @@ ${registryConfigs}
     const importCache = `type=s3,endpoint_url=${this.s3Endpoint},bucket=${this.s3Bucket},region=${this.s3Region},prefix=${cachePrefix},use_path_style=true`;
     const exportCache = `type=s3,endpoint_url=${this.s3Endpoint},bucket=${this.s3Bucket},region=${this.s3Region},prefix=${cachePrefix},mode=min,use_path_style=true`;
 
-    return ['--import-cache', importCache, '--export-cache', exportCache];
+    if (!isSafeS3Credential(this.s3AccessKeyId) || !isSafeS3Credential(this.s3SecretAccessKey)) {
+      console.warn('[ImageBuilder] S3 cache credentials contain unsupported characters, cache off');
+      return [];
+    }
+
+    return [
+      '--import-cache',
+      withS3CacheCreds(importCache),
+      '--export-cache',
+      withS3CacheCreds(exportCache)
+    ];
   }
 
   private createDepotContainer(opts: {
@@ -1018,6 +1045,7 @@ ${registryConfigs}
     envVars: Record<string, string>;
     secretEnvKeys?: string[];
     envSecretName: string;
+    sidecarPush: boolean;
   }): k8s.V1Container {
     const {
       dockerfilePath,
@@ -1027,8 +1055,10 @@ ${registryConfigs}
       buildType,
       envVars,
       secretEnvKeys,
-      envSecretName
+      envSecretName,
+      sidecarPush
     } = opts;
+    const depotTail = depotScriptTail(sidecarPush);
 
     // Keys are interpolated into the depot build shell string below. Reject
     // anything that isn't a POSIX identifier: same rule applied elsewhere
@@ -1105,7 +1135,7 @@ curl -fsSL https://depot.dev/install-cli.sh | sh
 export PATH="/root/.depot/bin:$PATH"
 command -v depot >/dev/null 2>&1 || { echo "ERROR: Super Build CLI install failed"; exit 1; }
 
-mkdir -p /tmp/.docker
+${depotTail.pre}mkdir -p /tmp/.docker
 printf '%s\n' "$DOCKER_AUTH_JSON" > /tmp/.docker/config.json
 export DOCKER_CONFIG=/tmp/.docker
 
@@ -1115,15 +1145,14 @@ echo 0 > /tmp/build_rc
   --progress plain \\
   --platform ${BUILD_PLATFORM} \\
   -f "${dockerfileFlag}" \\
-  -t "${depotImageName}" \\
-  --push \\
+  ${depotOutputFlags({ sidecarPush, imageName: depotImageName })} \\
   ${targetFlag} \\
   ${checkArgLine} \\
   ${gitShaArgLine} \\
   ${buildArgLines} \\
   "${contextDir}" 2>&1 || echo "$?" > /tmp/build_rc; } | sed -u -e 's/\\[depot\\]/[super-build]/gi' -e 's|https://depot\\.dev/[^ ]*||g' -e 's/depot build/super build/gi'
 BUILD_RC=$(cat /tmp/build_rc)
-if [ "$BUILD_RC" -ne 0 ]; then
+${depotTail.post}if [ "$BUILD_RC" -ne 0 ]; then
   echo "=== Super Build failed (exit code $BUILD_RC) ==="
   exit "$BUILD_RC"
 fi
@@ -1147,7 +1176,8 @@ echo "=== Super Build completed ==="
         {
           name: 'workspace',
           mountPath: '/workspace'
-        }
+        },
+        ...(sidecarPush ? [{ name: 'output', mountPath: '/output' }] : [])
       ],
       resources: {
         requests: {
@@ -1706,7 +1736,8 @@ ls -la /workspace
       secretEnvKeys,
       secretsHash,
       cacheKey,
-      skipCache: !!daemonIp
+      skipCache: !!daemonIp,
+      daemonClient: !!daemonIp
     });
 
     // Runs first, and only when the cache volume is the real shared PVC: the
@@ -1757,18 +1788,28 @@ ls -la /workspace
               // railpack-prepare generated the plan for.
               buildDirPreamble +
               this.generateBuildScript(clientCmd);
+            const wrappedClientScript = this.sidecarPushEnabled
+              ? `mkdir -p /output
+( ${clientScript} ); rc=$?
+if [ "$rc" -eq 0 ]; then touch /output/.done; else touch /output/.failed; fi
+exit $rc`
+              : clientScript;
 
             return {
               name: 'buildkit',
               image: this.buildkitImage,
               imagePullPolicy: 'IfNotPresent',
-              // Not privileged, just a gRPC client. The daemon pod has registry
-              // creds and pushes directly, so the client doesn't need docker-config.
+              // Not privileged, just a gRPC client. With sidecar push the pusher
+              // container pushes; otherwise the daemon pod has the registry creds.
               command: ['/bin/sh', '-c'],
-              args: [clientScript],
+              args: [wrappedClientScript],
               workingDir: '/workspace',
               env: [...builderContainerEnv(envVars, buildEnvSecret), ...dockerfileBuildArgEnv],
-              volumeMounts: [{ name: 'workspace', mountPath: '/workspace' }, ...buildMetaMount],
+              volumeMounts: [
+                { name: 'workspace', mountPath: '/workspace' },
+                ...buildMetaMount,
+                ...(this.sidecarPushEnabled ? [{ name: 'output', mountPath: '/output' }] : [])
+              ],
               resources: {
                 requests: { cpu: '200m', memory: '512Mi' },
                 limits: { cpu: '2', memory: '4Gi' }
@@ -1815,7 +1856,7 @@ ls -la /workspace
               ...(this.s3CacheEnabled && !this.localCacheEnabled
                 ? [
                     {
-                      name: 'AWS_ACCESS_KEY_ID',
+                      name: S3_CACHE_KEY_ENV,
                       valueFrom: {
                         secretKeyRef: {
                           name: 'buildkit-s3-cache-creds',
@@ -1825,7 +1866,7 @@ ls -la /workspace
                       }
                     },
                     {
-                      name: 'AWS_SECRET_ACCESS_KEY',
+                      name: S3_CACHE_SECRET_ENV,
                       valueFrom: {
                         secretKeyRef: {
                           name: 'buildkit-s3-cache-creds',
@@ -1908,10 +1949,10 @@ ls -la /workspace
     // namespaces inside the Kata VM, so a malicious Dockerfile RUN in
     // BuildKit cannot read the pusher container's
     // /root/.docker/config.json.
-    // No pusher in daemon mode: the daemon pushes directly (it has creds).
+    // Daemon mode pushes from this pod too: the shared daemon holds no registry creds.
     const pusherImageRef = fullImageName.replace(/^[^/]+/, this.pusherRegistryHost);
     const pusherContainer: k8s.V1Container | null =
-      buildkitContainer && this.sidecarPushEnabled && !daemonIp
+      (buildkitContainer || buildWithDepot) && this.sidecarPushEnabled
         ? {
             name: 'pusher',
             image: this.pusherImage,
@@ -1969,9 +2010,15 @@ exec skopeo copy --authfile /root/.docker/config.json --dest-tls-verify=false oc
           buildType,
           envVars,
           secretEnvKeys,
-          envSecretName: buildEnvSecret
+          envSecretName: buildEnvSecret,
+          sidecarPush: this.sidecarPushEnabled
         })
       ];
+      if (pusherContainer) {
+        containers.push(pusherContainer);
+      }
+    } else if (daemonIp && pusherContainer && buildkitContainer) {
+      containers = [buildkitContainer, pusherContainer];
     } else if (this.sidecarPushEnabled && pusherContainer && buildkitContainer) {
       const innerScript = (buildkitContainer.args && buildkitContainer.args[0]) || '';
 
@@ -2061,7 +2108,10 @@ exit $rc`
           metadata: {
             labels: {
               'app.kubernetes.io/name': 'image-builder',
-              'orchard.my/deployment-id': deploymentId || 'unknown'
+              'orchard.my/deployment-id': deploymentId || 'unknown',
+              ...(daemonIp
+                ? { [TENANT_KEY_LABEL]: daemonTenantLabel(cacheTenantKey || imageName) }
+                : {})
             }
           },
           spec: {
@@ -2146,7 +2196,7 @@ exit $rc`
                     }
                   ]
                 : []),
-              ...(this.sidecarPushEnabled && !buildWithDepot
+              ...(this.sidecarPushEnabled
                 ? [
                     {
                       name: 'output',
@@ -2220,7 +2270,13 @@ exit $rc`
         ? {
             [BUILD_ENV_SECRET_KEYS.depotToken]: this.depotToken || '',
             [BUILD_ENV_SECRET_KEYS.dockerAuthJson]: JSON.stringify(
-              dockerConfigJson(mergeRegistryAuths(this.harborAuths(), appPullAuths))
+              dockerConfigJson(
+                depotSessionAuths({
+                  sidecarPush: this.sidecarPushEnabled,
+                  harborAuths: this.harborAuths(),
+                  appPullAuths
+                })
+              )
             )
           }
         : {})
@@ -2459,6 +2515,7 @@ fi
     envVars: Record<string, string>;
     secretEnvKeys?: string[];
     skipCache?: boolean;
+    daemonClient?: boolean;
   }): BuildctlArg[] {
     const { dockerfilePath, fullImageName, target, buildFromRoot, envVars, secretEnvKeys } =
       options;
@@ -2526,12 +2583,13 @@ fi
     }
 
     // Output mode:
-    //   - Persistent daemon: always push directly, the daemon has registry
-    //     creds and sidecar push doesn't work across pods.
+    //   - Persistent daemon: with sidecar push the client receives the OCI
+    //     tarball and its pusher container pushes; without it the daemon
+    //     pushes directly.
     //   - sidecarPushEnabled: write OCI tarball to /output for the pusher
     //     sidecar container.
     //   - Default: push directly from BuildKit.
-    if (this.sidecarPushEnabled && !options.skipCache) {
+    if (this.sidecarPushEnabled && (!options.skipCache || options.daemonClient)) {
       args.push(
         '--output',
         `type=oci,"name=${fullImageName}",dest=/output/image.tar,compression=zstd,oci-mediatypes=true`
@@ -2552,10 +2610,11 @@ fi
     secretsHash: string;
     cacheKey?: string;
     skipCache?: boolean;
-  }): string[] {
+    daemonClient?: boolean;
+  }): BuildctlArg[] {
     const { fullImageName, envVars, secretsHash, cacheKey } = options;
 
-    const args: string[] = [
+    const args: BuildctlArg[] = [
       'build',
       '--progress',
       this.buildkitProgress,
@@ -2590,7 +2649,7 @@ fi
       }
     }
 
-    if (this.sidecarPushEnabled && !options.skipCache) {
+    if (this.sidecarPushEnabled && (!options.skipCache || options.daemonClient)) {
       args.push(
         '--output',
         `type=oci,"name=${fullImageName}",dest=/output/image.tar,compression=zstd,oci-mediatypes=true`
@@ -2616,6 +2675,7 @@ fi
     secretsHash?: string;
     cacheKey?: string;
     skipCache?: boolean;
+    daemonClient?: boolean;
   }): BuildctlArg[] {
     const {
       buildType,
@@ -2625,6 +2685,7 @@ fi
       secretsHash,
       cacheKey,
       skipCache,
+      daemonClient,
       ...dockerfileOptions
     } = options;
 
@@ -2634,7 +2695,8 @@ fi
         envVars,
         secretsHash: secretsHash || '',
         cacheKey,
-        skipCache
+        skipCache,
+        daemonClient
       });
     }
 
@@ -2643,7 +2705,8 @@ fi
       fullImageName,
       envVars,
       secretEnvKeys,
-      skipCache
+      skipCache,
+      daemonClient
     });
   }
 

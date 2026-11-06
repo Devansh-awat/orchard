@@ -1,3 +1,65 @@
+{{- define "orchard.builderEgressRules" -}}
+    # DNS (kube-dns)
+    - ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    # HTTPS to the public internet (git, package registries): exclude
+    # RFC1918, link-local, and the carrier-grade NAT range so builds can't
+    # reach the apiserver, IMDS, or other internal services by IP.
+    - ports:
+        - port: 443
+          protocol: TCP
+      to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+              - 169.254.0.0/16
+              - 100.64.0.0/10
+    # HTTP for the handful of package mirrors that still need it.
+    - ports:
+        - port: 80
+          protocol: TCP
+      to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+              - 169.254.0.0/16
+              - 100.64.0.0/10
+    # Where the image push is allowed to go. Pod-level policy ⇒ these rules
+    # cover both buildkit and the push sidecar in the same pod.
+    #
+    # Driven by builders.registryEgress rather than hardcoded, because the
+    # registry is not in the same place on every cluster: this project runs
+    # Harbor in a `harbor` namespace behind an HAProxy LB, a self-hosted
+    # instance may run zot next to the server. A registry missing from this
+    # list fails the build at push with "connection refused".
+{{- range .Values.builders.registryEgress }}
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .namespace }}
+          {{- with .podLabels }}
+          podSelector:
+            matchLabels:
+              {{- toYaml . | nindent 14 }}
+          {{- end }}
+      {{- with .ports }}
+      ports:
+        {{- range . }}
+        - port: {{ .port }}
+          protocol: {{ .protocol | default "TCP" }}
+        {{- end }}
+      {{- end }}
+{{- end }}
+{{- end }}
 {{- if .Values.builders.enabled }}
 {{- $bns := .Values.builders.namespace -}}
 {{- $appNs := .Values.namespace -}}
@@ -192,66 +254,51 @@ spec:
   # the cloud metadata IMDS. Kata isolates the process but doesn't restrict
   # network, this NetworkPolicy does.
   egress:
-    # DNS (kube-dns)
-    - ports:
-        - port: 53
-          protocol: UDP
-        - port: 53
-          protocol: TCP
-    # HTTPS to the public internet (git, package registries): exclude
-    # RFC1918, link-local, and the carrier-grade NAT range so builds can't
-    # reach the apiserver, IMDS, or other internal services by IP.
-    - ports:
-        - port: 443
-          protocol: TCP
-      to:
-        - ipBlock:
-            cidr: 0.0.0.0/0
-            except:
-              - 10.0.0.0/8
-              - 172.16.0.0/12
-              - 192.168.0.0/16
-              - 169.254.0.0/16
-              - 100.64.0.0/10
-    # HTTP for the handful of package mirrors that still need it.
-    - ports:
-        - port: 80
-          protocol: TCP
-      to:
-        - ipBlock:
-            cidr: 0.0.0.0/0
-            except:
-              - 10.0.0.0/8
-              - 172.16.0.0/12
-              - 192.168.0.0/16
-              - 169.254.0.0/16
-              - 100.64.0.0/10
-    # Where the image push is allowed to go. Pod-level policy ⇒ these rules
-    # cover both buildkit and the push sidecar in the same pod.
-    #
-    # Driven by builders.registryEgress rather than hardcoded, because the
-    # registry is not in the same place on every cluster: this project runs
-    # Harbor in a `harbor` namespace behind an HAProxy LB, a self-hosted
-    # instance may run zot next to the server. A registry missing from this
-    # list fails the build at push with "connection refused".
-{{- range .Values.builders.registryEgress }}
+{{ include "orchard.builderEgressRules" . }}
+    # build pods talk to their own tenant's buildkitd; the daemon's ingress
+    # policy (created by the server per tenant) is what enforces the tenant.
     - to:
-        - namespaceSelector:
+        - podSelector:
             matchLabels:
-              kubernetes.io/metadata.name: {{ .namespace }}
-          {{- with .podLabels }}
-          podSelector:
-            matchLabels:
-              {{- toYaml . | nindent 14 }}
-          {{- end }}
-      {{- with .ports }}
+              app.kubernetes.io/name: buildkit-daemon
       ports:
-        {{- range . }}
-        - port: {{ .port }}
-          protocol: {{ .protocol | default "TCP" }}
-        {{- end }}
-      {{- end }}
-{{- end }}
+        - port: 1234
+          protocol: TCP
+---
+# Persistent buildkitd pods: nothing may connect in except through the
+# per-tenant ingress policies the server creates, and egress is limited to the
+# same allow-list as build pods (no cluster-internal ranges, no IMDS, no apiserver).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: buildkit-daemon-network-policy
+  namespace: {{ $bns }}
+spec:
+  podSelector:
+    matchLabels:
+      orchard.my/buildkit-daemon: "true"
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress: []
+  egress:
+{{ include "orchard.builderEgressRules" . }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: buildkit-daemon-legacy-deny
+  namespace: {{ $bns }}
+spec:
+  podSelector:
+    matchLabels:
+      orchard.dev/buildkit-daemon: "true"
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress: []
+  egress:
+{{ include "orchard.builderEgressRules" . }}
 ---
 # Builder-namespace Role: full secrets/configmaps management for the builders
 # namespace only. Replaces the cluster-wide secrets grant for this use case.

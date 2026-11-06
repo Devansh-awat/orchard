@@ -1,11 +1,16 @@
 import { Injectable } from '@nestjs/common';
 import * as k8s from '@kubernetes/client-node';
 import { createHash } from 'crypto';
-import { truncateK8sName, truncateKeepingSuffix } from '../projects/projects.utils';
+import { truncateKeepingSuffix } from '../projects/projects.utils';
 import { loadKubeConfigFromPathOrBase64 } from '../kubernetes/kubeconfig';
 import { BUILDER_NAMESPACE } from './builder-namespace';
 import { buildArchNodeSelector } from './build-platform';
 import { BUILDKIT_IMAGE } from './buildkit-image';
+import {
+  daemonTenantIngressPolicy,
+  daemonTenantLabel,
+  LEGACY_DAEMON_INGRESS_POLICY
+} from './buildkit-daemon-policy';
 
 interface DaemonInfo {
   podName: string;
@@ -34,6 +39,8 @@ export class BuildKitPoolService {
   private readonly dedicatedNodeEnabled: boolean;
 
   private readonly builderRuntimeClass: string | undefined;
+
+  private readonly sidecarPushEnabled = process.env.BUILDER_SIDECAR_PUSH !== 'false';
 
   constructor() {
     this.namespace = BUILDER_NAMESPACE;
@@ -81,13 +88,7 @@ export class BuildKitPoolService {
   }
 
   private sanitizeLabel(v: string): string {
-    return truncateK8sName(
-      v
-        .toLowerCase()
-        .replace(/[^a-z0-9-]/g, '-')
-        .replace(/^-+/, ''),
-      63
-    );
+    return daemonTenantLabel(v);
   }
 
   private podName(tenantKey: string): string {
@@ -103,7 +104,7 @@ export class BuildKitPoolService {
   async getOrCreateDaemon(tenantKey: string): Promise<DaemonInfo> {
     if (!this.kc) throw new Error('Kubernetes API not available');
 
-    await this.ensureDaemonNetworkPolicy();
+    await this.ensureDaemonNetworkPolicy(tenantKey);
 
     const coreApi = this.kc.makeApiClient(k8s.CoreV1Api);
 
@@ -145,34 +146,25 @@ export class BuildKitPoolService {
   }
 
   // buildkitd's tcp addr has no auth of its own: anything that can route to
-  // the pod can run builds and read the tenant's layer cache. Restrict
-  // ingress to build-job pods in this namespace.
-  private async ensureDaemonNetworkPolicy(): Promise<void> {
+  // the pod can run builds and read the tenant's layer cache. Each daemon gets
+  // its own policy admitting only build pods carrying the same tenant key.
+  private async ensureDaemonNetworkPolicy(tenantKey: string): Promise<void> {
     const networkingApi = this.kc!.makeApiClient(k8s.NetworkingV1Api);
-    const name = 'buildkit-daemon-ingress';
+    const body = daemonTenantIngressPolicy({
+      namespace: this.namespace,
+      name: `${this.podName(tenantKey)}-ingress`,
+      tenantLabel: this.sanitizeLabel(tenantKey)
+    });
+    const name = body.metadata!.name!;
 
-    const body: k8s.V1NetworkPolicy = {
-      metadata: {
-        name,
-        namespace: this.namespace,
-        labels: {
-          'app.kubernetes.io/name': 'buildkit-daemon',
-          'app.kubernetes.io/managed-by': 'orchard'
-        }
-      },
-      spec: {
-        podSelector: {
-          matchLabels: { 'orchard.my/buildkit-daemon': 'true' }
-        },
-        policyTypes: ['Ingress'],
-        ingress: [
-          {
-            from: [{ podSelector: { matchLabels: { 'app.kubernetes.io/name': 'image-builder' } } }],
-            ports: [{ protocol: 'TCP', port: 1234 }]
-          }
-        ]
-      }
-    };
+    try {
+      await networkingApi.deleteNamespacedNetworkPolicy(
+        LEGACY_DAEMON_INGRESS_POLICY,
+        this.namespace
+      );
+    } catch (err) {
+      if ((err.statusCode ?? err.response?.statusCode) !== 404) throw err;
+    }
 
     try {
       await networkingApi.readNamespacedNetworkPolicy(name, this.namespace);
@@ -238,7 +230,9 @@ export class BuildKitPoolService {
               initialDelaySeconds: 3,
               periodSeconds: 10
             },
-            env: [{ name: 'DOCKER_CONFIG', value: '/root/.docker' }],
+            ...(this.sidecarPushEnabled
+              ? {}
+              : { env: [{ name: 'DOCKER_CONFIG', value: '/root/.docker' }] }),
             volumeMounts: [
               {
                 name: 'buildkit-state',
@@ -250,11 +244,9 @@ export class BuildKitPoolService {
                 mountPath: '/etc/buildkit',
                 readOnly: true
               },
-              {
-                name: 'docker-config',
-                mountPath: '/root/.docker',
-                readOnly: true
-              }
+              ...(this.sidecarPushEnabled
+                ? []
+                : [{ name: 'docker-config', mountPath: '/root/.docker', readOnly: true }])
             ],
             resources: {
               requests: { cpu: '250m', memory: '1Gi' },
@@ -273,13 +265,17 @@ export class BuildKitPoolService {
             name: 'buildkit-config',
             configMap: { name: 'buildkit-config' }
           },
-          {
-            name: 'docker-config',
-            secret: {
-              secretName: process.env.REGISTRY_PULL_SECRET_NAME || 'harbor-registry-creds',
-              items: [{ key: '.dockerconfigjson', path: 'config.json' }]
-            }
-          }
+          ...(this.sidecarPushEnabled
+            ? []
+            : [
+                {
+                  name: 'docker-config',
+                  secret: {
+                    secretName: process.env.REGISTRY_PULL_SECRET_NAME || 'harbor-registry-creds',
+                    items: [{ key: '.dockerconfigjson', path: 'config.json' }]
+                  }
+                }
+              ])
         ]
       }
     };

@@ -259,13 +259,25 @@ for (const daemon of ['ready', 'unavailable', 'absent'] as const) {
     const call = execution.calls[0];
     if (daemon === 'ready') {
       assert.deepEqual(values(call, '--addr'), ['tcp://192.0.2.42:1234']);
-      assert.match(values(call, '--output')[0], /^type=image,.*push=true/);
+      assert.match(values(call, '--output')[0], /^type=oci,/);
+      assert.ok(existsSync(join(execution.output, '.done')));
       assert.deepEqual(values(call, '--export-cache'), []);
       assert.deepEqual(
         pod.containers.map((container) => container.name),
-        ['buildkit']
+        ['buildkit', 'pusher']
       );
       assert.equal(mount(pod.containers[0], 'buildkit-cache'), undefined);
+      assert.ok(mount(pod.containers[0], 'output'));
+      assert.equal(mount(pod.containers[0], 'docker-config'), undefined);
+      assert.equal(
+        pod.containers[0].env?.some((e) => e.name === 'DOCKER_CONFIG'),
+        false
+      );
+      assert.equal(pod.containers[0].args![0].includes('tcp://192.0.2.42:1234'), true);
+      assert.equal(
+        generated.job.spec!.template.metadata!.labels!['orchard.my/tenant-key'],
+        'test-tenant'
+      );
     } else {
       assert.deepEqual(values(call, '--addr'), []);
       assert.match(values(call, '--output')[0], /^type=oci,/);
@@ -450,3 +462,63 @@ process.exit(process.env.FAIL_INSTALL === 'true' ? 1 : 0);
       assert.match(result.stdout, /unavailable, continuing without it/);
   });
 }
+
+test('S3 cache credentials travel as cache attributes, never as ambient AWS_ env', async (t) => {
+  const generated = await createJob(t, { backend: 's3' });
+  const builder = generated.job.spec!.template.spec!.containers.find((c) => c.name === 'buildkit')!;
+  const names = (builder.env ?? []).map((e) => e.name);
+  assert.equal(
+    names.some((n) => n.startsWith('AWS_')),
+    false
+  );
+  assert.ok(names.includes('ORCHARD_S3_CACHE_KEY_ID'));
+  assert.ok(names.includes('ORCHARD_S3_CACHE_SECRET'));
+  const script = builder.args![0];
+  assert.match(script, /access_key_id=\$ORCHARD_S3_CACHE_KEY_ID/);
+  assert.match(script, /secret_access_key=\$ORCHARD_S3_CACHE_SECRET/);
+});
+
+test('Super Builds with sidecar push hand the Dockerfile session no Harbor login', async (t) => {
+  const previous = process.env.HARBOR_PASSWORD;
+  process.env.HARBOR_PASSWORD = 'harbor-admin-secret';
+  t.after(() => {
+    if (previous === undefined) delete process.env.HARBOR_PASSWORD;
+    else process.env.HARBOR_PASSWORD = previous;
+  });
+  const generated = await createJob(t, {
+    daemon: 'absent',
+    build: { buildWithDepot: true }
+  });
+  const pod = generated.job.spec!.template.spec!;
+  const depot = pod.containers.find((c) => c.name === 'depot-build')!;
+  const pusher = pod.containers.find((c) => c.name === 'pusher')!;
+  assert.ok(pusher);
+  assert.ok(mount(pusher, 'docker-config'));
+  assert.equal(mount(depot, 'docker-config'), undefined);
+  assert.ok(mount(depot, 'output'));
+  const script = depot.args![0];
+  assert.match(script, /--output "type=oci,dest=\/output\/image\.tar"/);
+  assert.doesNotMatch(script, /--push/);
+  assert.match(script, /touch \/output\/\.done/);
+  const adminAuth = Buffer.from('admin:harbor-admin-secret').toString('base64');
+  for (const secret of generated.secrets.values()) {
+    const blob = JSON.stringify(secret.stringData ?? secret.data ?? {});
+    assert.equal(blob.includes('harbor-admin-secret'), false);
+    assert.equal(blob.includes(adminAuth), false);
+  }
+});
+
+test('Super Builds without sidecar push keep pushing from the session as before', async (t) => {
+  const generated = await createJob(t, {
+    daemon: 'absent',
+    sidecar: false,
+    build: { buildWithDepot: true }
+  });
+  const pod = generated.job.spec!.template.spec!;
+  assert.equal(
+    pod.containers.some((c) => c.name === 'pusher'),
+    false
+  );
+  const depot = pod.containers.find((c) => c.name === 'depot-build')!;
+  assert.match(depot.args![0], /--push/);
+});
