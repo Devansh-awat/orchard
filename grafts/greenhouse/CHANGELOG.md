@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.5](https://github.com/hackclub/orchard/compare/greenhouse/v1.5.4...greenhouse/v1.5.5) (2026-11-06)
+
+
+### Bug Fixes
+
+* **greenhouse:** keep opencode polling off acp chats ([6e47026](https://github.com/hackclub/orchard/commit/6e47026150aa71e4bfe12d7ad8706161ac41cd27))
+
 ## [1.5.4](https://github.com/hackclub/orchard/compare/greenhouse/v1.5.3...greenhouse/v1.5.4) (2026-11-05)
 
 
