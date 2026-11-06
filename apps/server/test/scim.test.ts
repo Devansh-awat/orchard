@@ -160,6 +160,8 @@ function makeDb() {
 
 function makeService() {
   const { db, members, tombstones, users } = makeDb();
+  const revoked: Array<[string, string]> = [];
+  const membershipCache = { revoked: (o: string, u: string) => void revoked.push([o, u]) };
   const audit = { log: async () => {} };
   const sent: string[] = [];
   const email = {
@@ -169,9 +171,15 @@ function makeService() {
     }
   };
   const rateLimit = { checkRateLimit: async () => {} };
-  const service = new ScimService(db as any, audit as any, email as any, rateLimit as any);
+  const service = new ScimService(
+    db as any,
+    audit as any,
+    email as any,
+    rateLimit as any,
+    membershipCache as any
+  );
   service.onModuleInit();
-  return { service, members, tombstones, users, sent };
+  return { service, members, tombstones, users, sent, revoked };
 }
 
 const patchOp = (value: any) => ({
@@ -683,4 +691,18 @@ test('reactivating an owner tombstone with no live membership restores at most a
   await service.patchUser(past.id, patchOp({ active: false }), ctx);
   await service.patchUser(past.id, patchOp({ active: true }), ctx);
   assert.equal(members.find((m) => m.id === past.id).role, 'admin');
+});
+
+test('SCIM deactivate and delete emit a membership revocation for the removed user', async () => {
+  const { service, revoked, members } = makeService();
+  const created: any = await service.createUser({ userName: 'rev@example.com' }, ctx);
+  const userId = members[0].userId;
+  await service.patchUser(created.id, patchOp({ active: false }), ctx);
+  assert.deepEqual(revoked, [[ORG, userId]]);
+
+  await service.deleteUser(created.id, ctx);
+  assert.deepEqual(revoked, [
+    [ORG, userId],
+    [ORG, userId]
+  ]);
 });

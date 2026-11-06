@@ -7,7 +7,18 @@ import {
   Sse,
   MessageEvent
 } from '@nestjs/common';
-import { Observable, merge, interval, map, finalize, defer, concat, from, mergeMap } from 'rxjs';
+import {
+  Observable,
+  merge,
+  interval,
+  map,
+  finalize,
+  defer,
+  concat,
+  from,
+  mergeMap,
+  takeUntil
+} from 'rxjs';
 import { Auth } from '../auth/decorators';
 import { MembershipCacheService } from '../auth/membership-cache.service';
 import { AuthorizationService } from '../auth/authorization.service';
@@ -45,9 +56,12 @@ export class EventsController {
 
     // H3: scope the SSE stream to projects the user can actually see.
     // null => org admin/owner/superadmin (see all); array => plain member's allowed project IDs.
-    // Captured at subscribe time; role changes mid-stream are handled by the client
-    // tearing down on membership.changed for this user (server still drops cross-project events).
-    const visibleProjectIds = await this.authz.listVisibleProjectIds(orgId, userId);
+    // Refreshed on every access recheck; the stream ends when org membership is lost.
+    let visibleProjectIds = await this.authz.listVisibleProjectIds(orgId, userId);
+    const visible = () => visibleProjectIds;
+    const reauthorize = async () => {
+      visibleProjectIds = await this.authz.listVisibleProjectIds(orgId, userId);
+    };
 
     // 25s heartbeat so proxies don't kill idle SSE connections.
     const heartbeat$ = interval(25_000).pipe(
@@ -55,21 +69,22 @@ export class EventsController {
     );
 
     const release = this.streams.acquire(userId, `org:${orgId}`);
+    const accessLost$ = this.streams.untilAccessLost(req.auth, reauthorize);
 
     // Track subscriber count per org so server-side pushers (metrics emitter)
     // can skip orgs nobody is currently watching.
     return defer(() => {
       this.orgEvents.addSubscriber(orgId);
-      const live$ = this.orgEvents.forOrgAsSseScoped(orgId, userId, visibleProjectIds);
+      const live$ = this.orgEvents.forOrgAsSseScoped(orgId, userId, visible);
       const events$ = lastEventId
         ? concat(
-            from(this.orgEvents.replayScoped(lastEventId, orgId, userId, visibleProjectIds)).pipe(
+            from(this.orgEvents.replayScoped(lastEventId, orgId, userId, visible)).pipe(
               mergeMap((msgs) => from(msgs))
             ),
             live$
           )
         : live$;
-      return merge(events$, heartbeat$);
+      return merge(events$, heartbeat$).pipe(takeUntil(accessLost$));
     }).pipe(
       finalize(() => {
         this.orgEvents.removeSubscriber(orgId);

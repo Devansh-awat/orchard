@@ -12,6 +12,7 @@ const SHA = 'a1b2c3d4e5f60718293a4b5c6d7e8f9012345678';
 const connections = {
   A: {
     id: 'conn-a',
+    userId: 'user-a',
     provider: 'gitea',
     baseUrl: 'https://codeberg.org',
     username: null,
@@ -20,6 +21,7 @@ const connections = {
   },
   B: {
     id: 'conn-b',
+    userId: 'user-b',
     provider: 'gitea',
     baseUrl: 'https://codeberg.org',
     username: null,
@@ -38,7 +40,8 @@ const deployments = [
     autoDeployEnabled: true,
     autoDeployBranch: 'main',
     githubBranch: 'main',
-    autoDeployPaths: []
+    autoDeployPaths: [],
+    projectId: 'proj-a'
   },
   {
     id: 'dep-b',
@@ -49,12 +52,14 @@ const deployments = [
     autoDeployEnabled: true,
     autoDeployBranch: 'main',
     githubBranch: 'main',
-    autoDeployPaths: []
+    autoDeployPaths: [],
+    projectId: 'proj-b'
   }
 ];
 
-function harness() {
+function harness(access: { canEdit: boolean } | null = { canEdit: true }) {
   const triggered: string[] = [];
+  const accessChecks: string[][] = [];
   const adopted: { ids: string[]; externalRepoId: string }[] = [];
   const prisma = {
     gitConnection: {
@@ -84,12 +89,22 @@ function harness() {
         webhookSecret: row.webhookSecret
       })
   });
-  const ctl = new GitWebhookController(prisma as any, svc, {
-    triggerAutoDeploy: async (id: string) => {
-      triggered.push(id);
-    }
-  } as any);
-  return { ctl, triggered, adopted };
+  const ctl = new GitWebhookController(
+    prisma as any,
+    svc,
+    {
+      triggerAutoDeploy: async (id: string) => {
+        triggered.push(id);
+      }
+    } as any,
+    {
+      getProjectAccess: async (projectId: string, userId: string) => {
+        accessChecks.push([projectId, userId]);
+        return access;
+      }
+    } as any
+  );
+  return { ctl, triggered, adopted, accessChecks };
 }
 
 const push = {
@@ -156,4 +171,21 @@ test('a connection credential is pinned to its own host', () => {
     withCloneCredentials(parseRepoUrl('https://gitlab.com/o/r')!, 'ghs_abc'),
     'https://gitlab.com/o/r'
   );
+});
+
+test('a push is not deployed once the connection owner has lost project edit access', async () => {
+  for (const access of [null, { canEdit: false }]) {
+    const { ctl, triggered, accessChecks } = harness(access);
+    const res = await deliver(ctl, 'conn-a', 'secret-a');
+    assert.equal(res.action, 'ignored');
+    assert.deepEqual(triggered, []);
+    assert.deepEqual(accessChecks, [['proj-a', 'user-a']]);
+  }
+});
+
+test('a connection owner with edit access still deploys', async () => {
+  const { ctl, triggered, accessChecks } = harness({ canEdit: true });
+  await deliver(ctl, 'conn-a', 'secret-a');
+  assert.deepEqual(triggered, ['dep-a']);
+  assert.deepEqual(accessChecks, [['proj-a', 'user-a']]);
 });

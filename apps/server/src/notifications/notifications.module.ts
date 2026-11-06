@@ -5,6 +5,7 @@ import { NotificationRulesService } from './notification-rules.service';
 import { UserNotificationsService } from './user-notifications.service';
 import { NotificationFanoutService } from './notification-fanout.service';
 import { NotificationDeliveryService } from './notification-delivery.service';
+import { NotificationAccessService } from './notification-access.service';
 import { NotificationTransport } from './notification-transport';
 import { NotificationRateLimiter } from './rate-limiter';
 import { NotificationChannelsController } from './notification-channels.controller';
@@ -25,6 +26,7 @@ import { OrganizationsModule } from '../organizations/organizations.module';
     UserNotificationsService,
     NotificationFanoutService,
     NotificationDeliveryService,
+    NotificationAccessService,
     NotificationTransport,
     NotificationRateLimiter
   ],

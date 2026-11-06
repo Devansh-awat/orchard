@@ -1,10 +1,11 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit, Optional } from '@nestjs/common';
 import { randomBytes } from 'crypto';
 import SCIMMY from 'scimmy';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { EmailService } from '../email/email.service';
 import { RateLimitService } from '../auth/rate-limit.service';
+import { MembershipCacheService } from '../auth/membership-cache.service';
 import { ScimError } from './scim-error';
 import { ScimQuery, SCIM_MAX_RESULTS } from './scim-query';
 
@@ -135,7 +136,8 @@ export class ScimService implements OnModuleInit {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly email: EmailService,
-    private readonly rateLimit: RateLimitService
+    private readonly rateLimit: RateLimitService,
+    @Optional() private readonly membershipCache?: MembershipCacheService
   ) {}
 
   onModuleInit() {
@@ -428,6 +430,7 @@ export class ScimService implements OnModuleInit {
         update: fields
       });
     });
+    this.membershipCache?.revoked(ctx.organizationId, view.userId);
 
     void this.audit.log({
       action: 'scim.user.deactivated',
@@ -680,6 +683,7 @@ export class ScimService implements OnModuleInit {
         where: { organizationId: ctx.organizationId, userId: view.userId }
       });
     });
+    this.membershipCache?.revoked(ctx.organizationId, view.userId);
 
     void this.audit.log({
       action: 'scim.user.deprovisioned',

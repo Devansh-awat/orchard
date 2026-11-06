@@ -37,6 +37,13 @@ export interface ScopedMessage {
   id?: string;
 }
 
+export type VisibleProjects = string[] | null | (() => string[] | null);
+
+function resolveVisible(visible: VisibleProjects): Set<string> | null {
+  const ids = typeof visible === 'function' ? visible() : visible;
+  return ids === null ? null : new Set(ids);
+}
+
 @Injectable()
 export class OrgEventsService implements OnModuleInit {
   private readonly logger = new Logger(OrgEventsService.name);
@@ -95,21 +102,20 @@ export class OrgEventsService implements OnModuleInit {
   forOrgAsSseScoped(
     organizationId: string,
     userId: string,
-    visibleProjectIds: string[] | null
+    visibleProjectIds: VisibleProjects
   ): Observable<ScopedMessage> {
-    const allowed = visibleProjectIds === null ? null : new Set(visibleProjectIds);
     let alive = true;
     return this.subject.asObservable().pipe(
       filter((d) => d.event.organizationId === organizationId),
-      takeWhile(() => alive, true),
       filter((d) => {
         if (d.event.type === 'membership.changed' && d.event.id === userId) {
           alive = false;
           return true;
         }
-        return this.visibleTo(d.event, userId, allowed);
+        return this.visibleTo(d.event, userId, resolveVisible(visibleProjectIds));
       }),
-      map((d) => ({ data: d.event, id: d.streamId }))
+      map((d) => ({ data: d.event, id: d.streamId })),
+      takeWhile(() => alive, true)
     );
   }
 
@@ -117,11 +123,11 @@ export class OrgEventsService implements OnModuleInit {
     fromId: string,
     organizationId: string,
     userId: string,
-    visibleProjectIds: string[] | null
+    visibleProjectIds: VisibleProjects
   ): Promise<ScopedMessage[]> {
     const entries = await this.bus.replay(fromId);
     if (entries.length === 0) return [];
-    const allowed = visibleProjectIds === null ? null : new Set(visibleProjectIds);
+    const allowed = resolveVisible(visibleProjectIds);
     const out: ScopedMessage[] = [];
     for (const entry of entries) {
       if (entry.event.organizationId !== organizationId) continue;

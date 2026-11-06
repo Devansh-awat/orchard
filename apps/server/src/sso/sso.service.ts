@@ -16,6 +16,7 @@ import { SsoCryptoService } from './sso-crypto.service';
 import { findPreset, resolveIssuerUrl } from './presets';
 import { OrgDomainsService } from './org-domains.service';
 import { StorageService } from '../organizations/storage.service';
+import { assertUploadUrlOwned } from '../organizations/upload-namespace';
 import {
   BlockedDestinationError,
   assertPublicUrl,
@@ -429,10 +430,15 @@ export class SsoService {
     });
   }
 
-  private iconUrl(raw: string | null | undefined, current: string | null): string | null {
+  private iconUrl(
+    raw: string | null | undefined,
+    current: string | null,
+    providerId: string | null
+  ): string | null {
     const value = typeof raw === 'string' ? raw.trim() : null;
     if (!value) return null;
     if (value === current) return value;
+    assertUploadUrlOwned(value, providerId ? `sso-icons/${providerId}` : null, current, 'Icon URL');
     if (value.length > 500) throw new BadRequestException('Icon URL is too long');
     let url: URL;
     try {
@@ -502,7 +508,7 @@ export class SsoService {
       buttonLabel: input.buttonLabel ?? existing?.buttonLabel ?? null,
       iconUrl:
         'iconUrl' in input
-          ? this.iconUrl(input.iconUrl, existing?.iconUrl ?? null)
+          ? this.iconUrl(input.iconUrl, existing?.iconUrl ?? null, existing?.id ?? null)
           : (existing?.iconUrl ?? null),
       sortOrder: input.sortOrder ?? existing?.sortOrder ?? 0,
       jitProvisioning: input.jitProvisioning ?? existing?.jitProvisioning ?? true,
@@ -676,7 +682,7 @@ export class SsoService {
   ) {
     const existing = await this.requireProvider(id, organizationId);
     await this.prisma.identityProvider.delete({ where: { id } });
-    await this.discardIcon(existing.iconUrl);
+    await this.discardIcon(existing.iconUrl, id);
 
     void this.audit.log({
       action: 'org.sso.provider.deleted',
@@ -698,12 +704,12 @@ export class SsoService {
     actor: { userId: string; email?: string }
   ) {
     const existing = await this.requireProvider(id, organizationId);
-    const iconUrl = await this.storage.uploadImage(file, 'sso-icons');
+    const iconUrl = await this.storage.uploadImage(file, `sso-icons/${id}`);
     const updated = await this.prisma.identityProvider.update({
       where: { id },
       data: { iconUrl }
     });
-    await this.discardIcon(existing.iconUrl);
+    await this.discardIcon(existing.iconUrl, id);
 
     void this.audit.log({
       action: 'org.sso.provider.icon_updated',
@@ -729,7 +735,7 @@ export class SsoService {
       where: { id },
       data: { iconUrl: null }
     });
-    await this.discardIcon(existing.iconUrl);
+    await this.discardIcon(existing.iconUrl, id);
 
     void this.audit.log({
       action: 'org.sso.provider.icon_removed',
@@ -745,10 +751,10 @@ export class SsoService {
     return this.adminProvider(updated);
   }
 
-  private async discardIcon(url: string | null) {
+  private async discardIcon(url: string | null, providerId: string) {
     if (!url) return;
     try {
-      await this.storage.deleteFile(url);
+      await this.storage.deleteFile(url, `sso-icons/${providerId}`);
     } catch (err) {
       this.logger.warn(
         `Could not delete provider icon: ${err instanceof Error ? err.message : 'storage error'}`

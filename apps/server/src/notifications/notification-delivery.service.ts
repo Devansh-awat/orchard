@@ -5,6 +5,7 @@ import { EmailService } from '../email/email.service';
 import { NotificationTransport, SendOutcome, TransportTarget } from './notification-transport';
 import { NotificationRateLimiter } from './rate-limiter';
 import { NotificationMessage } from './notification-events';
+import { NotificationAccessService, redactForViewer } from './notification-access.service';
 
 const CLAIM_BATCH = 50;
 const TICK_MS = 2_000;
@@ -38,6 +39,7 @@ interface ClaimedDelivery {
   channelId: string | null;
   userDestId: string | null;
   userId: string | null;
+  projectId: string | null;
   event: string;
   targetId: string | null;
   attempts: number;
@@ -77,7 +79,8 @@ export class NotificationDeliveryService implements OnModuleInit, OnModuleDestro
     private readonly prisma: PrismaService,
     private readonly transport: NotificationTransport,
     private readonly limiter: NotificationRateLimiter,
-    private readonly email: EmailService
+    private readonly email: EmailService,
+    private readonly access: NotificationAccessService
   ) {}
 
   private readonly workerDisabled = process.env.NOTIFICATIONS_WORKER_DISABLED === 'true';
@@ -162,7 +165,7 @@ export class NotificationDeliveryService implements OnModuleInit, OnModuleDestro
       AND e."id" = d."event_id"
       RETURNING d."id", d."event_id" AS "eventId", d."destination_key" AS "destinationKey",
                 d."channel_id" AS "channelId", d."user_destination_id" AS "userDestId",
-                d."user_id" AS "userId", d."event", d."target_id" AS "targetId",
+                d."user_id" AS "userId", e."project_id" AS "projectId", d."event", d."target_id" AS "targetId",
                 d."attempts", e."payload"
     `;
   }
@@ -186,6 +189,9 @@ export class NotificationDeliveryService implements OnModuleInit, OnModuleDestro
       await this.markAll(batch, 'dropped', 'Destination is disabled');
       return;
     }
+
+    batch = await this.enforceRecipientAccess(batch);
+    if (batch.length === 0) return;
 
     // A destination whose breaker is open gets its work parked, not attempted.
     // Otherwise one dead webhook keeps every worker busy failing.
@@ -225,6 +231,25 @@ export class NotificationDeliveryService implements OnModuleInit, OnModuleDestro
       const outcome = await this.transport.send(destination.target, [messageOf(d)]);
       await this.record(d, destination, outcome, undefined, Date.now() - startedAt);
     }
+  }
+
+  private async enforceRecipientAccess(batch: ClaimedDelivery[]): Promise<ClaimedDelivery[]> {
+    const kept: ClaimedDelivery[] = [];
+    for (const d of batch) {
+      if (!d.userId || !d.projectId) {
+        kept.push(d);
+        continue;
+      }
+      const access = await this.access.resolve(d.projectId, d.userId);
+      if (!access?.canView) {
+        await this.markAll([d], 'dropped', 'Recipient no longer has access to this project');
+        continue;
+      }
+      kept.push(
+        access.canEdit ? d : { ...d, payload: redactForViewer(d.payload as NotificationMessage) }
+      );
+    }
+    return kept;
   }
 
   private async sendDigest(destination: ResolvedDestination, batch: ClaimedDelivery[]) {

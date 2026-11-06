@@ -19,6 +19,7 @@ import { databaseStatusFor } from '../kubernetes/cnpg-status';
 import { R2ProxyService } from '../kubernetes/r2-proxy.service';
 import { UsersService } from '../users/users.service';
 import { OrganizationsService } from '../organizations/organizations.service';
+import { assertUploadUrlOwned } from '../organizations/upload-namespace';
 import { DockerService } from '../docker/docker.service';
 import { GitHubService } from '../github/github.service';
 import { FaviconService } from './favicon.service';
@@ -262,6 +263,8 @@ export class ProjectsService {
     // project but explicitly cannot spawn new projects of their own.
     await this.authz.requireOrgCanCreateProjects(organizationId, user.id);
 
+    assertUploadUrlOwned(data.icon?.trim(), null, null, 'Icon');
+    assertUploadUrlOwned(data.backgroundImage?.trim(), null, null, 'Background image');
     const name = String(data.name || '').trim();
 
     if (!name) {
@@ -701,7 +704,7 @@ export class ProjectsService {
     });
 
     for (const userId of droppedGuests) {
-      this.membershipCache.invalidateInternalUserId(userId);
+      this.membershipCache.revoked(project.organizationId, userId);
     }
 
     if (droppedGuests.length > 0) {
@@ -979,10 +982,17 @@ export class ProjectsService {
     }
     if (data.icon !== undefined) {
       const v = data.icon?.toString().trim();
+      assertUploadUrlOwned(v, `project-icons/${projectId}`, project.icon, 'Icon');
       updates.icon = v || null;
     }
     if (data.backgroundImage !== undefined) {
       const v = data.backgroundImage?.toString().trim();
+      assertUploadUrlOwned(
+        v,
+        `project-backgrounds/${projectId}`,
+        project.backgroundImage,
+        'Background image'
+      );
       updates.backgroundImage = v || null;
     }
 
@@ -1019,7 +1029,7 @@ export class ProjectsService {
     file: Express.Multer.File,
     storageService: {
       uploadImage: (f: Express.Multer.File, folder: string) => Promise<string>;
-      deleteFile: (url: string) => Promise<void>;
+      deleteFile: (url: string, namespace: string) => Promise<void>;
     },
     clerkId: string,
     userData?: {
@@ -1037,13 +1047,13 @@ export class ProjectsService {
     if (!existing) throw new NotFoundException('Project not found');
     await this.authz.requireProjectEdit(projectId, user.id, 'update project assets');
 
-    const folder = field === 'icon' ? 'project-icons' : 'project-backgrounds';
-    const url = await storageService.uploadImage(file, folder);
+    const namespace = `${field === 'icon' ? 'project-icons' : 'project-backgrounds'}/${projectId}`;
+    const url = await storageService.uploadImage(file, namespace);
 
     const previous = existing[field];
     if (previous) {
       try {
-        await storageService.deleteFile(previous);
+        await storageService.deleteFile(previous, namespace);
       } catch (e) {
         console.error(`Failed to delete old ${field}:`, e);
       }
@@ -1266,7 +1276,9 @@ export class ProjectsService {
       }
     });
 
-    if (guestDropped) {
+    if (project) {
+      this.membershipCache.revoked(project.organizationId, member.userId);
+    } else if (guestDropped) {
       this.membershipCache.invalidateInternalUserId(member.userId);
     }
 

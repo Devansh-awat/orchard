@@ -67,6 +67,6 @@ export class StorageDoorV1 {
 
   async delete(url: string): Promise<void> {
     if (!this.owns(url)) throw new Error(`graft ${this.graftId} can only delete its own files`);
-    await this._storage.deleteFile(url);
+    await this._storage.deleteFile(url, this.graftId);
   }
 }

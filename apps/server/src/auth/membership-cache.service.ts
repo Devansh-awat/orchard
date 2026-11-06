@@ -120,6 +120,22 @@ export class MembershipCacheService {
     }
   }
 
+  private readonly revocationListeners: Array<(organizationId: string, userId: string) => void> =
+    [];
+
+  onRevoked(listener: (organizationId: string, userId: string) => void) {
+    this.revocationListeners.push(listener);
+  }
+
+  revoked(organizationId: string, internalUserId: string) {
+    this.invalidateInternalUserId(internalUserId);
+    for (const listener of this.revocationListeners) {
+      try {
+        listener(organizationId, internalUserId);
+      } catch {}
+    }
+  }
+
   invalidateOrg(organizationId: string) {
     for (const [userId, entry] of this.cache) {
       if (entry.memberships.some((m) => m.organizationId === organizationId)) {

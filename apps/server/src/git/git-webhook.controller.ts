@@ -3,6 +3,7 @@ import {
   Controller,
   Headers,
   HttpCode,
+  Logger,
   Param,
   Post,
   Req,
@@ -12,6 +13,7 @@ import {
 import { Throttle } from '@nestjs/throttler';
 import type { Request } from 'express';
 import { Public } from '../auth/decorators';
+import { AuthorizationService } from '../auth/authorization.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { DeploymentsService } from '../projects/deployments.service';
 import { autoDeployMatchesBranch } from '../github/auto-deploy-match';
@@ -27,10 +29,13 @@ import { repoUrlVariantsFor, type PushEvent, type WebhookHeaders } from './git-p
  */
 @Controller('git/webhooks')
 export class GitWebhookController {
+  private readonly logger = new Logger(GitWebhookController.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly connections: GitConnectionsService,
-    private readonly deployments: DeploymentsService
+    private readonly deployments: DeploymentsService,
+    private readonly authz: AuthorizationService
   ) {}
 
   @Public()
@@ -86,10 +91,38 @@ export class GitWebhookController {
         });
       }
     }
-    const { watched } = partitionByWatchPaths(onBranch, push.changedFiles);
-    const skipped = onBranch.length - watched.length;
-    if (watched.length === 0) {
+    const { watched: pathMatched } = partitionByWatchPaths(onBranch, push.changedFiles);
+    const skipped = onBranch.length - pathMatched.length;
+    if (pathMatched.length === 0) {
       return { received: true, action: 'ignored', reason: 'no watched paths changed', skipped };
+    }
+    const connection = await this.prisma.gitConnection.findUnique({
+      where: { id: connectionId },
+      select: { userId: true }
+    });
+    const editable = new Map<string, boolean>();
+    const watched: typeof pathMatched = [];
+    for (const d of pathMatched) {
+      if (!editable.has(d.projectId)) {
+        const access = connection
+          ? await this.authz.getProjectAccess(d.projectId, connection.userId)
+          : null;
+        editable.set(d.projectId, Boolean(access?.canEdit));
+      }
+      if (editable.get(d.projectId)) watched.push(d);
+      else {
+        this.logger.warn(
+          `skipping auto-deploy of ${d.id}: git connection ${connectionId} owner no longer has edit access to project ${d.projectId}`
+        );
+      }
+    }
+    if (watched.length === 0) {
+      return {
+        received: true,
+        action: 'ignored',
+        reason: 'connection owner no longer has access',
+        skipped: onBranch.length
+      };
     }
     const results = await Promise.allSettled(
       watched.map((d) =>

@@ -23,6 +23,7 @@ import {
   s3ClientConfig,
   uploadStorage
 } from '../instance-config/object-storage';
+import { uploadKeyOf, keyInNamespace } from './upload-namespace';
 
 export class StorageNotConfiguredError extends BadRequestException {
   constructor() {
@@ -95,18 +96,21 @@ export class StorageService {
     return `${target.publicUrl}/${fileName}`;
   }
 
-  async deleteFile(url: string): Promise<void> {
+  async deleteFile(url: string, namespace: string): Promise<void> {
     if (!uploadStorage()) return;
     const { client, target } = this.uploads();
 
-    if (!url.startsWith(`${target.publicUrl}/`)) {
+    const key = uploadKeyOf(url);
+    if (key === null) return;
+    if (!keyInNamespace(key, namespace)) {
+      this.logger.warn(`refused to delete upload outside namespace ${namespace}`);
       return;
     }
 
     await client.send(
       new DeleteObjectCommand({
         Bucket: target.bucket,
-        Key: `${target.keyPrefix}${url.slice(target.publicUrl.length + 1)}`
+        Key: `${target.keyPrefix}${key}`
       })
     );
   }

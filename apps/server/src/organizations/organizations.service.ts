@@ -682,11 +682,11 @@ export class OrganizationsService {
       throw new NotFoundException('Organization not found');
     }
 
-    const avatarUrl = await storageService.uploadImage(file, 'organizations');
+    const avatarUrl = await storageService.uploadImage(file, `organizations/${organizationId}`);
 
     if (organization.avatarUrl) {
       try {
-        await storageService.deleteFile(organization.avatarUrl);
+        await storageService.deleteFile(organization.avatarUrl, `organizations/${organizationId}`);
       } catch (error) {
         console.error('Failed to delete old avatar:', error);
       }
@@ -750,7 +750,7 @@ export class OrganizationsService {
 
     if (organization.avatarUrl) {
       try {
-        await storageService.deleteFile(organization.avatarUrl);
+        await storageService.deleteFile(organization.avatarUrl, `organizations/${organizationId}`);
       } catch (error) {
         console.error('Failed to delete avatar:', error);
       }
@@ -1907,7 +1907,7 @@ export class OrganizationsService {
       });
     }
 
-    this.membershipCache.invalidateInternalUserId(member.userId);
+    this.membershipCache.revoked(organizationId, member.userId);
     // H4: revoke Tailscale exposure for deployments this user exposed in THIS org.
     // We do NOT delete their global TailscaleConnection (they may still belong to other orgs).
     // Best-effort: failures to remove the k8s sidecar must not block membership removal.

@@ -337,6 +337,7 @@ export class ProjectOrgTransferService {
     // Membership caches key on org; drop both so evicted/gained access resolves.
     this.membershipCache.invalidateOrg(sourceOrgId);
     this.membershipCache.invalidateOrg(destOrg.id);
+    for (const id of losingIds) this.membershipCache.revoked(sourceOrgId, id);
 
     // Re-push every environment namespace's quotas under the destination's caps.
     await this.quotas

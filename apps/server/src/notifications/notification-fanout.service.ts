@@ -2,6 +2,7 @@ import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/commo
 import { hostname } from 'os';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationDeliveryService } from './notification-delivery.service';
+import { NotificationAccessService } from './notification-access.service';
 import {
   CATEGORY_DEFAULT_VALUE,
   EVENT_CATEGORY,
@@ -71,7 +72,8 @@ export class NotificationFanoutService implements OnModuleInit, OnModuleDestroy 
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly delivery: NotificationDeliveryService
+    private readonly delivery: NotificationDeliveryService,
+    private readonly access: NotificationAccessService
   ) {}
 
   private readonly workerDisabled = process.env.NOTIFICATIONS_WORKER_DISABLED === 'true';
@@ -340,7 +342,11 @@ export class NotificationFanoutService implements OnModuleInit, OnModuleDestroy 
     chain: ScopeChain
   ): Promise<{ id: string; userId: string }[]> {
     const category = EVENT_CATEGORY[event.event as NotificationEventName];
-    const candidates = await this.candidateUserIds(chain);
+    const rawCandidates = await this.candidateUserIds(chain);
+    if (rawCandidates.length === 0) return [];
+    const candidates = chain.projectId
+      ? [...(await this.access.viewers(chain.projectId, rawCandidates)).keys()]
+      : rawCandidates;
     if (candidates.length === 0) return [];
 
     const settings = await this.prisma.userNotificationSetting.findMany({

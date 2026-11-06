@@ -18,7 +18,8 @@ const WATCHED_MODELS = [
   'buildRun',
   'project',
   'ingress',
-  'organizationMember'
+  'organizationMember',
+  'projectMember'
 ] as const;
 
 const WRITE_OPS = new Set([
@@ -45,6 +46,9 @@ export class PrismaEventsBridge implements OnModuleInit {
   ) {}
 
   onModuleInit() {
+    this.membershipCache.onRevoked((organizationId, userId) =>
+      this.orgEvents.emit({ organizationId, type: 'membership.changed', id: userId })
+    );
     const extended = this.prisma.$extends({
       query: {
         $allModels: {
@@ -97,6 +101,8 @@ export class PrismaEventsBridge implements OnModuleInit {
         return this.emitForIngress(params, result);
       case 'OrganizationMember':
         return this.emitForMembership(params, result);
+      case 'ProjectMember':
+        return this.emitForProjectMembership(params, result);
       default:
         return undefined;
     }
@@ -241,6 +247,16 @@ export class PrismaEventsBridge implements OnModuleInit {
       id: deploymentId,
       projectId: ctx.projectId
     });
+  }
+
+  private async emitForProjectMembership(params: any, result: any) {
+    const userId = result?.userId ?? params?.args?.where?.userId ?? params?.args?.data?.userId;
+    const projectId =
+      result?.projectId ?? params?.args?.where?.projectId ?? params?.args?.data?.projectId;
+    if (!userId || !projectId) return;
+    const orgId = await this.resolveOrgIdFromProject(projectId);
+    if (!orgId) return;
+    this.orgEvents.emit({ organizationId: orgId, type: 'membership.changed', id: userId });
   }
 
   private async emitForMembership(params: any, result: any) {

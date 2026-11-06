@@ -377,10 +377,10 @@ export class OAuthController {
 
     const user = await this.resolveUser(req);
 
-    const imageUrl = await this.storageService.uploadImage(file, 'users');
+    const imageUrl = await this.storageService.uploadImage(file, `users/${user.id}`);
 
     if (user.imageUrl) {
-      await this.storageService.deleteFile(user.imageUrl).catch(() => {});
+      await this.storageService.deleteFile(user.imageUrl, `users/${user.id}`).catch(() => {});
     }
 
     const updatedUser = await this.usersService.updateProfile(user.id, {
@@ -396,7 +396,7 @@ export class OAuthController {
     const user = await this.resolveUser(req);
 
     if (user.imageUrl) {
-      await this.storageService.deleteFile(user.imageUrl).catch(() => {});
+      await this.storageService.deleteFile(user.imageUrl, `users/${user.id}`).catch(() => {});
     }
 
     // 'none' is a standing opt-out: without it the next sign-in would just
