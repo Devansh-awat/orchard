@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.6](https://github.com/hackclub/orchard/compare/greenhouse/v1.5.5...greenhouse/v1.5.6) (2026-11-06)
+
+
+### Bug Fixes
+
+* **greenhouse:** 404 opencode listings of missing folders ([7bd78e6](https://github.com/hackclub/orchard/commit/7bd78e601e8bc2cec8a0809d644681b7ac17023b))
+
 ## [1.5.5](https://github.com/hackclub/orchard/compare/greenhouse/v1.5.4...greenhouse/v1.5.5) (2026-11-06)
 
 
