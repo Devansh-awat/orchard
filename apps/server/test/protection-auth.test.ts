@@ -42,6 +42,7 @@ function buildService(row: Record<string, unknown> | null) {
   svc.ingressCache = new Map();
   svc.negativeCache = new Map();
   svc.basicAuthFailures = new Map();
+  svc.userAccessCache = new Map();
   svc.throttle = offlineThrottle();
   svc.crypto = new SecretCryptoService();
   svc.prisma = {
@@ -69,9 +70,15 @@ function protectedRow(over: Record<string, unknown> = {}) {
 async function sign(
   type: string,
   ingressId: string,
-  opts: { exp?: string; secret?: Uint8Array } = {}
+  opts: { exp?: string; secret?: Uint8Array; state?: Record<string, unknown> } = {}
 ) {
-  return new SignJWT({ type, ingressId })
+  const gen = buildService(null).protectionGeneration({
+    id: ingressId,
+    protectionMode: 'orchard',
+    protectionPasswordHash: null,
+    ...opts.state
+  } as any);
+  return new SignJWT({ type, ingressId, gen })
     .setProtectedHeader({ alg: 'HS256' })
     .setSubject('user-1')
     .setIssuedAt()
@@ -766,7 +773,7 @@ test('a request answers to the longest protected path it falls under', () => {
   assert.equal(pickIngressForPath(rows, '/admin/x?y=1')?.path, '/admin');
   assert.equal(pickIngressForPath(rows, '/admin/keys/1')?.path, '/admin/keys/');
   assert.equal(pickIngressForPath(rows, '/%61dmin/x')?.path, '/admin');
-  assert.equal(pickIngressForPath(rows, '/x/../admin')?.path, '/admin');
+  assert.equal(pickIngressForPath(rows, '/x/../admin'), null);
 });
 
 test('a path that fits no protected row still meets a challenge', () => {
@@ -798,8 +805,8 @@ test('signing in to one path does not sign anyone out of another', async () => {
   assert.equal(protectionCookieName(root as any), '_orchard_protection');
   assert.equal(protectionCookieName(admin as any), '_orchard_protection_aaaabbbb');
 
-  const rootCookie = await svc.generateProtectionCookie('cccc-dddd', 'password');
-  const adminCookie = await svc.generateProtectionCookie('aaaa-bbbb', 'password');
+  const rootCookie = await svc.generateProtectionCookie(root as any, 'password');
+  const adminCookie = await svc.generateProtectionCookie(admin as any, 'password');
   const both = `_orchard_protection=${rootCookie}; _orchard_protection_aaaabbbb=${adminCookie}`;
 
   assert.equal((await svc.checkProtection(HOST, '/admin/x', both, undefined)).allow, true);
@@ -818,7 +825,7 @@ test('a cookie for one path does not open another under a different name', async
   const root = protectedRow({ id: 'cccc-dddd', path: '/', protectionMode: 'password' });
   const svc = buildService(null);
   (svc as any).prisma.ingress.findMany = async () => [root, admin];
-  const rootCookie = await svc.generateProtectionCookie('cccc-dddd', 'password');
+  const rootCookie = await svc.generateProtectionCookie(root as any, 'password');
   const forged = `_orchard_protection_aaaabbbb=${rootCookie}`;
   assert.equal((await svc.checkProtection(HOST, '/admin', forged, undefined)).allow, false);
 });
@@ -842,7 +849,7 @@ test('the proxy forwards to the app behind the path that was asked for', async (
     seen.push([host, port]);
   };
   const res: any = { setHeader() {}, status: () => ({ send() {} }) };
-  const cookie = await svc.generateProtectionCookie('api-row', 'u1');
+  const cookie = await svc.generateProtectionCookie(api as any, 'u1');
   const request = {
     hostname: HOST,
     headers: { cookie: `_orchard_protection_apirow=${cookie}` },

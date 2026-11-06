@@ -102,6 +102,7 @@ export interface ExecSession {
   detachedAt: number | null;
   graceTimer: NodeJS.Timeout | null;
   recheckTimer: NodeJS.Timeout | null;
+  expiryTimer: NodeJS.Timeout | null;
   heartbeat: NodeJS.Timeout | null;
   activityTimer: NodeJS.Timeout | null;
   recheckAuth: () => Promise<boolean>;

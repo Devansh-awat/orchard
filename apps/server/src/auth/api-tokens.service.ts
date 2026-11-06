@@ -22,6 +22,40 @@ export function hashApiToken(plaintext: string): string {
   return createHash('sha256').update(plaintext).digest('hex');
 }
 
+const MAX_TOKEN_DEPTH = 8;
+const LINEAGE_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function parseTokenLineage(token: string): string[] | null {
+  const ids = token.split('.').slice(1);
+  if (ids.length > MAX_TOKEN_DEPTH) return null;
+  return ids.every((id) => LINEAGE_ID_RE.test(id)) ? ids : null;
+}
+
+export async function resolveTokenLineage(
+  prisma: {
+    apiToken: {
+      findMany(args: {
+        where: { id: { in: string[] } };
+        select: { id: true; expiresAt: true };
+      }): Promise<{ id: string; expiresAt: Date | null }[]>;
+    };
+  },
+  token: string
+): Promise<string[] | null> {
+  const ids = parseTokenLineage(token);
+  if (!ids) return null;
+  if (ids.length === 0) return ids;
+  const rows = await prisma.apiToken.findMany({
+    where: { id: { in: ids } },
+    select: { id: true, expiresAt: true }
+  });
+  const now = Date.now();
+  const alive = new Set(
+    rows.filter((row) => !row.expiresAt || row.expiresAt.getTime() > now).map((row) => row.id)
+  );
+  return ids.every((id) => alive.has(id)) ? ids : null;
+}
+
 @Injectable()
 export class ApiTokensService {
   constructor(
@@ -85,7 +119,7 @@ export class ApiTokensService {
     expiresAt?: Date,
     scopes?: unknown,
     restrictedProjectIds?: unknown,
-    ceiling?: { scopes: string[]; projectIds: string[] },
+    ceiling?: { scopes: string[]; projectIds: string[]; tokenId: string; lineage: string[] },
     scopeOrganizationId?: string
   ) {
     const now = Date.now();
@@ -101,6 +135,24 @@ export class ApiTokensService {
         throw new BadRequestException('expiresAt must be in the future');
       }
       resolvedExpiresAt = expiresAt.getTime() > cap.getTime() ? cap : expiresAt;
+    }
+
+    let lineage: string[] = [];
+    if (ceiling) {
+      if (ceiling.lineage.length + 1 > MAX_TOKEN_DEPTH) {
+        throw new ForbiddenException('This token is too many mints deep to mint another');
+      }
+      const parent = await this.prisma.apiToken.findUnique({
+        where: { id: ceiling.tokenId },
+        select: { expiresAt: true }
+      });
+      if (!parent || (parent.expiresAt && parent.expiresAt.getTime() <= now)) {
+        throw new ForbiddenException('This token is no longer valid');
+      }
+      if (parent.expiresAt && parent.expiresAt.getTime() < resolvedExpiresAt.getTime()) {
+        resolvedExpiresAt = parent.expiresAt;
+      }
+      lineage = [...ceiling.lineage, ceiling.tokenId];
     }
 
     const resolvedScopes = this.normalizeScopes(scopes);
@@ -126,7 +178,7 @@ export class ApiTokensService {
         }
       }
     }
-    const token = `orch_${randomBytes(32).toString('hex')}`;
+    const token = `orch_${randomBytes(32).toString('hex')}${lineage.map((id) => `.${id}`).join('')}`;
     const tokenHash = hashApiToken(token);
 
     const apiToken = await this.prisma.apiToken.create({

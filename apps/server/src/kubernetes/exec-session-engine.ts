@@ -7,7 +7,7 @@ import { PassThrough, type Writable } from 'stream';
 import { INestApplication } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { SessionsService } from '../auth/sessions.service';
-import { hashApiToken } from '../auth/api-tokens.service';
+import { hashApiToken, resolveTokenLineage } from '../auth/api-tokens.service';
 import { assertBrowserSession } from '../auth/session-jwt';
 import { originAllowed, platformOrigins } from '../auth/upgrade-auth';
 import type { RequestAuthContext } from '../auth/request-context';
@@ -49,6 +49,8 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-
 
 const RECHECK_INTERVAL_MS = 15_000;
 
+const MAX_TIMER_MS = 2 ** 31 - 1;
+
 const HEARTBEAT_MS = 25_000;
 
 const ACTIVITY_INTERVAL_MS = 60_000;
@@ -79,6 +81,8 @@ export interface EngineAuth {
   browserSessionId: string | undefined;
   sessionOrgScope: string | undefined;
   tokenAuthCtx: TokenAuthContext | null;
+  tokenExpiresAt?: number | null;
+  tokenLineage?: string[];
   isProxyHop: boolean;
 }
 
@@ -129,6 +133,8 @@ interface ConnectionContext {
   browserSessionId: string | undefined;
   sessionOrgScope: string | undefined;
   tokenAuthCtx: TokenAuthContext | null;
+  tokenExpiresAt: number | null;
+  tokenLineage: string[];
   requested: string;
   isProxyHop: boolean;
   proto: Proto;
@@ -264,6 +270,8 @@ export async function authenticateUpgrade(
     });
     if (!apiToken) return unauthorized;
     if (apiToken.expiresAt && apiToken.expiresAt < new Date()) return unauthorized;
+    const tokenLineage = await resolveTokenLineage(deps.prisma, token);
+    if (!tokenLineage) return unauthorized;
     const scopes = Array.isArray(apiToken.scopes) ? (apiToken.scopes as string[]) : [];
     if (!scopes.includes('exec')) return { reject: 403, message: 'Forbidden' };
     const restrictedProjectIds = Array.isArray(apiToken.restrictedProjectIds)
@@ -282,6 +290,8 @@ export async function authenticateUpgrade(
         tokenScopes: scopes,
         tokenProjectIds: restrictedProjectIds
       },
+      tokenExpiresAt: apiToken.expiresAt ? apiToken.expiresAt.getTime() : null,
+      tokenLineage,
       isProxyHop: false
     };
   }
@@ -306,6 +316,8 @@ export async function signProxyHopToken(
     browserSessionId: string | undefined;
     sessionOrgScope: string | undefined;
     tokenAuthCtx: TokenAuthContext | null;
+    tokenExpiresAt?: number | null;
+    tokenLineage?: string[];
   }
 ): Promise<string> {
   return new SignJWT({
@@ -313,7 +325,9 @@ export async function signProxyHopToken(
     sid: hop.sid,
     ...(hop.browserSessionId ? { sessionId: hop.browserSessionId } : {}),
     ...(hop.sessionOrgScope ? { orgScope: hop.sessionOrgScope } : {}),
-    ...(hop.tokenAuthCtx ? { tac: hop.tokenAuthCtx } : {})
+    ...(hop.tokenAuthCtx ? { tac: hop.tokenAuthCtx } : {}),
+    ...(hop.tokenExpiresAt ? { tex: hop.tokenExpiresAt } : {}),
+    ...(hop.tokenLineage?.length ? { tln: hop.tokenLineage } : {})
   })
     .setProtectedHeader({ alg: 'HS256' })
     .setSubject(hop.userId)
@@ -360,6 +374,10 @@ export async function verifyProxyHopToken(
       typeof payload.sessionId === 'string' && payload.sessionId ? payload.sessionId : undefined,
     sessionOrgScope: typeof payload.orgScope === 'string' ? payload.orgScope : undefined,
     tokenAuthCtx: hopTokenAuthCtx(payload.tac),
+    tokenExpiresAt: typeof payload.tex === 'number' ? payload.tex : null,
+    tokenLineage: Array.isArray(payload.tln)
+      ? payload.tln.filter((i): i is string => typeof i === 'string')
+      : [],
     isProxyHop: true
   };
 }
@@ -443,10 +461,12 @@ export class ExecSessionEngine {
       target: resolved.target,
       targetKey: targetKey(resolved.target),
       userId: auth.userId,
-      recheckAuth: resolved.recheckAuth,
+      recheckAuth: this.withTokenRecheck(auth, resolved.recheckAuth),
       browserSessionId: auth.browserSessionId,
       sessionOrgScope: auth.sessionOrgScope,
       tokenAuthCtx: auth.tokenAuthCtx,
+      tokenExpiresAt: auth.tokenExpiresAt ?? null,
+      tokenLineage: auth.tokenLineage ?? [],
       requested,
       isProxyHop: auth.isProxyHop,
       proto: handshake.proto,
@@ -459,6 +479,52 @@ export class ExecSessionEngine {
       this.wss.emit('connection', ws, req);
       void this.resolveAndAttach(ws, ctx);
     });
+  }
+
+  private withTokenRecheck(
+    auth: EngineAuth,
+    inner: () => Promise<boolean>
+  ): () => Promise<boolean> {
+    const tokenId = auth.tokenAuthCtx?.apiTokenId;
+    if (!auth.tokenAuthCtx) return inner;
+    return async () => {
+      try {
+        if (!tokenId) return false;
+        const row = await this.deps.prisma.apiToken.findUnique({
+          where: { id: tokenId },
+          select: { expiresAt: true }
+        });
+        if (!row) return false;
+        if (row.expiresAt && row.expiresAt.getTime() <= Date.now()) return false;
+        const lineage = auth.tokenLineage ?? [];
+        if (lineage.length > 0) {
+          const parents = await this.deps.prisma.apiToken.findMany({
+            where: { id: { in: lineage } },
+            select: { id: true, expiresAt: true }
+          });
+          const now = Date.now();
+          const alive = new Set(
+            parents.filter((p) => !p.expiresAt || p.expiresAt.getTime() > now).map((p) => p.id)
+          );
+          if (!lineage.every((id) => alive.has(id))) return false;
+        }
+        return await inner();
+      } catch {
+        return false;
+      }
+    };
+  }
+
+  private armTokenExpiry(session: ExecSession, expiresAt: number | null): void {
+    if (session.expiryTimer) clearTimeout(session.expiryTimer);
+    session.expiryTimer = null;
+    if (expiresAt === null) return;
+    const delay = Math.min(Math.max(expiresAt - Date.now(), 0), MAX_TIMER_MS);
+    session.expiryTimer = setTimeout(() => {
+      if (Date.now() >= expiresAt) this.destroySession(session, 'revoked');
+      else this.armTokenExpiry(session, expiresAt);
+    }, delay);
+    session.expiryTimer.unref?.();
   }
 
   private async verifyProxyHop(header: string, requested: string): Promise<EngineAuth | Rejection> {
@@ -550,6 +616,7 @@ export class ExecSessionEngine {
       detachedAt: null,
       graceTimer: null,
       recheckTimer: null,
+      expiryTimer: null,
       heartbeat: null,
       activityTimer: null,
       recheckAuth: ctx.recheckAuth,
@@ -565,6 +632,7 @@ export class ExecSessionEngine {
         if (!ok) this.destroySession(session, 'revoked');
       });
     }, RECHECK_INTERVAL_MS);
+    this.armTokenExpiry(session, ctx.tokenExpiresAt);
 
     void this.attachSession(session, ws, ctx, reason);
 
@@ -655,6 +723,7 @@ export class ExecSessionEngine {
     }
     session.browser = null;
     session.recheckAuth = ctx.recheckAuth;
+    this.armTokenExpiry(session, ctx.tokenExpiresAt);
     session.proto = ctx.proto;
 
     const resumed = reason === 'resumed';
@@ -786,10 +855,12 @@ export class ExecSessionEngine {
     session.exited = true;
     if (session.graceTimer) clearTimeout(session.graceTimer);
     if (session.recheckTimer) clearInterval(session.recheckTimer);
+    if (session.expiryTimer) clearTimeout(session.expiryTimer);
     if (session.heartbeat) clearInterval(session.heartbeat);
     if (session.activityTimer) clearInterval(session.activityTimer);
     session.graceTimer = null;
     session.recheckTimer = null;
+    session.expiryTimer = null;
     session.heartbeat = null;
     session.activityTimer = null;
 
@@ -877,7 +948,9 @@ export class ExecSessionEngine {
         userId: ctx.userId,
         browserSessionId: ctx.browserSessionId,
         sessionOrgScope: ctx.sessionOrgScope,
-        tokenAuthCtx: ctx.tokenAuthCtx
+        tokenAuthCtx: ctx.tokenAuthCtx,
+        tokenExpiresAt: ctx.tokenExpiresAt,
+        tokenLineage: ctx.tokenLineage
       });
     } catch {
       return false;

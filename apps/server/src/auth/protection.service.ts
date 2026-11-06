@@ -43,17 +43,29 @@ interface CachedHost {
   expiresAt: number;
 }
 
+function hasControlChar(value: string): boolean {
+  for (let i = 0; i < value.length; i += 1) {
+    const code = value.charCodeAt(i);
+    if (code < 0x20 || code === 0x7f) return true;
+  }
+  return false;
+}
+
 // A path two parsers could resolve differently never gets the bypass: the
 // proxy forwards the raw URL, so what matches here has to be what the app sees.
 export function pathIsAmbiguous(originalUrl: string): boolean {
   const raw = (originalUrl || '/').split('?')[0];
-  if (/[\\#]|%2e|%2f|%5c/i.test(raw)) return true;
+  if (/[;\\#]/.test(raw) || hasControlChar(raw)) return true;
+  if (/%(2e|2f|5c|3b|25|00)/i.test(raw)) return true;
+  if (raw.includes('//')) return true;
+  let decoded: string;
   try {
-    decodeURIComponent(raw);
-    return false;
+    decoded = decodeURIComponent(raw);
   } catch {
     return true;
   }
+  if (/[;\\]/.test(decoded) || hasControlChar(decoded)) return true;
+  return decoded.split('/').some((segment) => /^\.+$/.test(segment.trim()));
 }
 
 export function normalizeRequestPath(originalUrl: string): string {
@@ -146,6 +158,12 @@ export function pathMatchesBypass(requestPath: string, patterns: string[]): bool
 
 const BASIC_AUTH_REALM = 'Restricted';
 
+const PASSWORD_SUBJECT = 'password';
+const USER_ACCESS_TTL_MS = 15_000;
+const USER_ACCESS_MAX_TRACKED = 10_000;
+
+type ProtectionState = Pick<CachedIngress, 'id' | 'protectionMode' | 'protectionPasswordHash'>;
+
 const BASIC_AUTH_MAX_FAILURES = 10;
 const BASIC_AUTH_WINDOW_MS = 15 * 60 * 1000;
 const BASIC_AUTH_BLOCK_MS = 15 * 60 * 1000;
@@ -202,6 +220,8 @@ export class ProtectionService {
   private readonly negativeCache = new Map<string, number>();
 
   private readonly basicAuthFailures = new Map<string, BasicAuthFailures>();
+
+  private readonly userAccessCache = new Map<string, { allowed: boolean; expiresAt: number }>();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -352,13 +372,9 @@ export class ProtectionService {
     const tokenMatch = originalPath.match(/[?&]__orchard_token=([^&]+)/);
     if (tokenMatch) {
       const exchangeToken = decodeURIComponent(tokenMatch[1]);
-      const payload = await this.verifyProtectionJwt(
-        exchangeToken,
-        'protection_exchange',
-        ingress.id
-      );
+      const payload = await this.verifyProtectionJwt(exchangeToken, 'protection_exchange', ingress);
       if (payload) {
-        const cookieJwt = await this.generateProtectionCookie(ingress.id, payload.sub as string);
+        const cookieJwt = await this.generateProtectionCookie(ingress, payload.sub as string);
         const cleanPath =
           originalPath.replace(/[?&]__orchard_token=[^&]+/, '').replace(/\?$/, '') || '/';
 
@@ -375,8 +391,7 @@ export class ProtectionService {
 
     const protectionCookie = this.extractCookie(cookieHeader, protectionCookieName(ingress));
     if (protectionCookie) {
-      const payload = await this.verifyProtectionJwt(protectionCookie, 'protection', ingress.id);
-      if (payload) return { allow: true };
+      if (await this.protectionCookieGrants(protectionCookie, ingress)) return { allow: true };
     }
 
     const returnTo = `${origin}${originalPath}`;
@@ -397,8 +412,26 @@ export class ProtectionService {
     };
   }
 
+  protectionGeneration(state: ProtectionState): string {
+    return crypto
+      .createHmac('sha256', this.jwtSecret)
+      .update(
+        `protection-generation\0${state.id}\0${state.protectionMode}\0${state.protectionPasswordHash ?? ''}`
+      )
+      .digest('base64url');
+  }
+
   async generateExchangeToken(ingressId: string, subject: string): Promise<string> {
-    return new SignJWT({ type: 'protection_exchange', ingressId })
+    const state = await this.prisma.ingress.findUnique({
+      where: { id: ingressId },
+      select: { id: true, protectionMode: true, protectionPasswordHash: true }
+    });
+    if (!state) throw new NotFoundException('Domain not found');
+    return new SignJWT({
+      type: 'protection_exchange',
+      ingressId,
+      gen: this.protectionGeneration(state)
+    })
       .setProtectedHeader({ alg: 'HS256' })
       .setSubject(subject)
       .setIssuedAt()
@@ -406,8 +439,12 @@ export class ProtectionService {
       .sign(this.jwtSecret);
   }
 
-  async generateProtectionCookie(ingressId: string, subject: string): Promise<string> {
-    return new SignJWT({ type: 'protection', ingressId })
+  async generateProtectionCookie(state: ProtectionState, subject: string): Promise<string> {
+    return new SignJWT({
+      type: 'protection',
+      ingressId: state.id,
+      gen: this.protectionGeneration(state)
+    })
       .setProtectedHeader({ alg: 'HS256' })
       .setSubject(subject)
       .setIssuedAt()
@@ -418,16 +455,57 @@ export class ProtectionService {
   async verifyProtectionJwt(
     token: string,
     expectedType: string,
-    expectedIngressId: string
+    state: ProtectionState
   ): Promise<Record<string, unknown> | null> {
     try {
       const { payload } = await jwtVerify(token, this.jwtSecret);
       if (payload.type !== expectedType) return null;
-      if (payload.ingressId !== expectedIngressId) return null;
+      if (payload.ingressId !== state.id) return null;
+      if (typeof payload.gen !== 'string') return null;
+      if (!safeEqual(payload.gen, this.protectionGeneration(state))) return null;
       return payload as Record<string, unknown>;
     } catch {
       return null;
     }
+  }
+
+  private async protectionCookieGrants(
+    token: string,
+    ingress: CachedIngress
+  ): Promise<boolean> {
+    const payload = await this.verifyProtectionJwt(token, 'protection', ingress);
+    if (!payload) return false;
+    const subject = payload.sub;
+    if (typeof subject !== 'string' || !subject) return false;
+    if (ingress.protectionMode === 'password') return subject === PASSWORD_SUBJECT;
+    if (subject === PASSWORD_SUBJECT) return false;
+    return this.subjectCanViewIngress(ingress, subject);
+  }
+
+  private async subjectCanViewIngress(ingress: CachedIngress, userId: string): Promise<boolean> {
+    const key = `${ingress.id}:${userId}`;
+    const now = Date.now();
+    const hit = this.userAccessCache.get(key);
+    if (hit && hit.expiresAt > now) return hit.allowed;
+    let allowed = false;
+    try {
+      const access = await this.authz.resolveProjectAccess(
+        ingress.projectId,
+        ingress.project.organizationId,
+        userId
+      );
+      allowed = !!access?.canView;
+    } catch {
+      return false;
+    }
+    if (this.userAccessCache.size >= USER_ACCESS_MAX_TRACKED) {
+      for (const [k, v] of this.userAccessCache) {
+        if (v.expiresAt <= now) this.userAccessCache.delete(k);
+      }
+      if (this.userAccessCache.size >= USER_ACCESS_MAX_TRACKED) this.userAccessCache.clear();
+    }
+    this.userAccessCache.set(key, { allowed, expiresAt: now + USER_ACCESS_TTL_MS });
+    return allowed;
   }
 
   private async basicAuthRetryAfter(key: string): Promise<number> {
@@ -685,7 +763,7 @@ export class ProtectionService {
     if (!allowed && ingress.protectionMode !== 'basic') {
       const cookie = this.extractCookie(req.headers.cookie, protectionCookieName(ingress));
       if (cookie) {
-        allowed = !!(await this.verifyProtectionJwt(cookie, 'protection', ingress.id));
+        allowed = await this.protectionCookieGrants(cookie, ingress);
       }
     }
     if (!allowed) {

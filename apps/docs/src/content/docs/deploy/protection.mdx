@@ -64,6 +64,19 @@ A path you add to a domain that already has protection starts with the same prot
 A public path skips the sign-in check before the request reaches your app. If a public path and a protected path point to the same app, use **Public paths** instead, which checks each request first.
 :::
 
+Orchard never treats a path as public when it is ambiguous: any path containing `;`, a backslash, `//`, a `.` or `..` segment, or a percent-encoded `.`, `/`, `\`, `;` or `%` falls through to the normal sign-in. This holds whatever your ingress controller does with those paths, but it is worth confirming against your own HAProxy or Traefik. With `/public` as a public path, each of these should return the sign-in redirect (or 401 for basic auth), never your app:
+
+```bash
+for p in '/public/..;/private' '/public/%2e%2e/private' '/public/..%2fprivate' \
+         '/public%2f..%2fprivate' '/public//..//private' '/public\..\private' \
+         '/public/%252e%252e/private' '/public/./../private' '/public/..'; do
+  curl -s -o /dev/null -w "%{http_code} $p\n" --path-as-is "https://app.example.com$p"
+done
+curl -s -o /dev/null -w "%{http_code} /public/ok\n" https://app.example.com/public/ok
+```
+
+Only the last request should reach the app. Run it again after changing ingress controller or its path-handling settings.
+
 ## Skip protection from scripts
 
 Scripts and CI can skip sign-in with a bypass header. After you save protection, reopen the **Protection** dialog to copy the header from **Bypass header**.
