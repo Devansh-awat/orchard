@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"time"
 
@@ -57,7 +56,7 @@ func eventsTailCmd() *cobra.Command {
 							return err
 						}
 					} else {
-						fmt.Println(eventsLine(ev))
+						output.Println(eventsLine(ev))
 					}
 				case rerr, ok := <-errs:
 					if !ok {
@@ -118,12 +117,12 @@ func eventsLine(ev api.OrgEvent) string {
 	if ev.TS > 0 {
 		ts = time.UnixMilli(ev.TS)
 	}
-	parts := []string{output.Dim(ts.Format("15:04:05")), ev.Type}
+	parts := []string{output.Dim(ts.Format("15:04:05")), output.SanitizeLine(ev.Type)}
 	if ev.ProjectID != "" {
 		parts = append(parts, output.Dim(ev.ProjectID))
 	}
 	if ev.ID != "" {
-		parts = append(parts, ev.ID)
+		parts = append(parts, output.SanitizeLine(ev.ID))
 	}
 	return strings.Join(parts, "  ")
 }

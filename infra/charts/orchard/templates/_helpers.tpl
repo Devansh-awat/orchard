@@ -605,6 +605,9 @@ random one that every template in this render sees.
             {{- with .Values.graftSettings.marketplaceUrl }}
             - { name: ORCHARD_GRAFT_MARKETPLACE_URL, value: {{ . | quote }} }
             {{- end }}
+            {{- with .Values.graftSettings.registrySignature }}
+            - { name: ORCHARD_REGISTRY_SIGNATURE, value: {{ . | quote }} }
+            {{- end }}
             {{- if .Values.graftSettings.strict }}
             - { name: ORCHARD_GRAFTS_STRICT, value: "true" }
             {{- end }}

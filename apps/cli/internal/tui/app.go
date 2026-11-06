@@ -4,10 +4,11 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/hackclub/orchard/cli/internal/api"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/hackclub/orchard/cli/internal/api"
+	"github.com/hackclub/orchard/cli/internal/output"
 )
 
 // chromeH is the number of lines the root reserves for the header + footer.
@@ -151,7 +152,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-func (m model) View() string {
+func (m model) View() string { return output.SanitizeView(m.view()) }
+
+func (m model) view() string {
 	if m.w == 0 {
 		return "loading…"
 	}

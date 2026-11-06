@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"os"
 
 	"github.com/hackclub/orchard/cli/internal/api"
@@ -52,7 +51,7 @@ func Execute(ctx context.Context) int {
 			"code":    code,
 			"message": err.Error(),
 		}})
-		fmt.Fprintln(os.Stderr, string(line))
+		output.Fprintln(os.Stderr, string(line))
 	} else {
 		output.Errorf("%s", err.Error())
 	}

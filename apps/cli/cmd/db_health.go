@@ -189,8 +189,8 @@ func dbRenderDiagnosis(raw map[string]any) {
 	}
 	output.KV(dbTrimEmpty(pairs))
 	if ops := asList(raw["operations"]); len(ops) > 0 {
-		fmt.Println()
-		fmt.Println(output.Dim("recent operations"))
+		output.Println()
+		output.Println(output.Dim("recent operations"))
 		dbRenderOperations(raw["operations"])
 	}
 	if tail := strings.TrimRight(pick(raw, "logTail"), "\n"); tail != "" {
@@ -198,10 +198,10 @@ func dbRenderDiagnosis(raw map[string]any) {
 		if len(lines) > dbDiagnoseLogLines {
 			lines = lines[len(lines)-dbDiagnoseLogLines:]
 		}
-		fmt.Println()
-		fmt.Println(output.Dim(fmt.Sprintf("last %d log lines", len(lines))))
+		output.Println()
+		output.Println(output.Dim(fmt.Sprintf("last %d log lines", len(lines))))
 		for _, l := range lines {
-			fmt.Println(l)
+			output.Println(l)
 		}
 	}
 }
@@ -270,10 +270,10 @@ func dbActivityCmd() *cobra.Command {
 			if m := pick(raw, "maxConnections"); m != "" {
 				summary += " of max " + m
 			}
-			fmt.Println(output.Dim(summary))
+			output.Println(output.Dim(summary))
 			if blocked := asList(raw["blocked"]); len(blocked) > 0 {
-				fmt.Println()
-				fmt.Println(output.Dim("blocked"))
+				output.Println()
+				output.Println(output.Dim("blocked"))
 				brows := [][]string{}
 				for _, b := range blocked {
 					by := []string{}

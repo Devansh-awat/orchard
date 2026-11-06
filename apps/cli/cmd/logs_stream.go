@@ -35,7 +35,7 @@ func followRuntimeLogsSSE(ctx context.Context, cl *api.Client, deploymentID stri
 			sawData = true
 			if ev.Gone && ev.Pod != "" {
 				delete(pods, ev.Pod)
-				fmt.Fprintln(os.Stderr, output.Dim("· pod "+ev.Pod+" gone"))
+				output.Fprintln(os.Stderr, output.Dim("· pod "+ev.Pod+" gone"))
 				continue
 			}
 			if ev.Done {
@@ -44,9 +44,9 @@ func followRuntimeLogsSSE(ctx context.Context, cl *api.Client, deploymentID stri
 			for _, l := range ev.Lines {
 				pods[l.Pod] = true
 				if len(pods) > 1 {
-					fmt.Println(output.Dim(l.Pod) + " " + l.Line)
+					output.Println(output.Dim(l.Pod) + " " + output.SanitizeStyled(l.Line))
 				} else {
-					fmt.Println(l.Line)
+					output.Println(output.SanitizeStyled(l.Line))
 				}
 			}
 		case err, ok := <-errs:
@@ -121,7 +121,7 @@ func followBuildLogsSSE(ctx context.Context, cl *api.Client, deploymentID string
 			streamFails = 0
 			if ev.Reset {
 				f.offset = 0
-				fmt.Fprintln(os.Stderr, output.Dim("· new build started, restarting tail"))
+				output.Fprintln(os.Stderr, output.Dim("· new build started, restarting tail"))
 			}
 			if ev.Chunk != "" {
 				f.offset = ev.Offset
@@ -174,7 +174,7 @@ func followBuildLogsSSE(ctx context.Context, cl *api.Client, deploymentID string
 }
 
 func (f *buildFollower) print(chunk string) {
-	fmt.Fprint(f.w, chunk)
+	fmt.Fprint(f.w, output.SanitizeStyled(chunk))
 	f.midLine = !strings.HasSuffix(chunk, "\n")
 }
 

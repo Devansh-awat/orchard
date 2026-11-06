@@ -7,6 +7,8 @@ on:
       - 'apps/server/src/templates/built-in/**'
       - 'apps/registry/**'
       - '.github/workflows/registry.yml'
+  schedule:
+    - cron: '23 4 * * 1'
   workflow_call:
   workflow_dispatch:
 
@@ -43,6 +45,7 @@ jobs:
       R2_ACCESS_KEY: ${{ secrets.REGISTRY_R2_ACCESS_KEY }}
       R2_SECRET_KEY: ${{ secrets.REGISTRY_R2_SECRET_KEY }}
       REGISTRY_PREFIX: registry
+      GRAFT_SIGNING_KEY: ${{ secrets.GRAFT_SIGNING_KEY }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:

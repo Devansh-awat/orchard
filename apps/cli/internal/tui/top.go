@@ -13,6 +13,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/hackclub/orchard/cli/internal/api"
+	"github.com/hackclub/orchard/cli/internal/output"
 )
 
 // orchard top: one screen, no navigation, the canonical k9s/htop shape. It
@@ -422,7 +423,9 @@ func (m *topModel) replicas() int {
 	return int(num(m.detail, "replicas"))
 }
 
-func (m *topModel) View() string {
+func (m *topModel) View() string { return output.SanitizeView(m.view()) }
+
+func (m *topModel) view() string {
 	if m.w == 0 {
 		return ""
 	}

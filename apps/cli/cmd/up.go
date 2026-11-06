@@ -246,7 +246,7 @@ func upCmd() *cobra.Command {
 					if r, gerr := cl.GetRollout(cmd.Context(), deploymentID, pin, 0); gerr == nil {
 						if errors.Is(ferr, api.ErrDeployFailed) && r.Build.Error != "" {
 							output.Errorf("build failed")
-							fmt.Fprintln(os.Stderr, indent(r.Build.Error))
+							output.Fprintln(os.Stderr, indent(r.Build.Error))
 						}
 						if jsonMode {
 							_ = output.JSON(rolloutJSON(deploymentID, r))

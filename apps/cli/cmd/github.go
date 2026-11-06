@@ -145,8 +145,8 @@ func githubLinkCmd() *cobra.Command {
 			if fmtFlag() == output.FormatJSON {
 				return output.JSON(map[string]any{"url": u})
 			}
-			fmt.Fprintln(os.Stderr, output.Dim("open this URL in a browser where you are signed in to Orchard:"))
-			fmt.Println(u)
+			output.Fprintln(os.Stderr, output.Dim("open this URL in a browser where you are signed in to Orchard:"))
+			output.Println(output.Sanitize(u))
 			return nil
 		},
 	}
@@ -198,7 +198,7 @@ func githubInstallCmd() *cobra.Command {
 			if fmtFlag() == output.FormatJSON {
 				return output.JSON(raw)
 			}
-			fmt.Println(u)
+			output.Println(output.Sanitize(u))
 			return nil
 		},
 	}
@@ -276,7 +276,7 @@ func githubReposCmd() *cobra.Command {
 			}
 			output.Table([]string{"name", "visibility", "default branch"}, rows)
 			if src := pick(raw, "source"); src != "" {
-				fmt.Println(output.Dim("source: " + src))
+				output.Println(output.Dim("source: " + src))
 			}
 			return nil
 		},
@@ -348,7 +348,7 @@ func githubDockerfilesCmd() *cobra.Command {
 			}
 			for _, it := range items {
 				if s, ok := it.(string); ok {
-					fmt.Println(s)
+					output.Println(output.Sanitize(s))
 				}
 			}
 			return nil

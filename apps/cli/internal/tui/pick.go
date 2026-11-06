@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/hackclub/orchard/cli/internal/output"
 )
 
 type PickOption struct {
@@ -82,7 +83,9 @@ func (m pickModel) count() int {
 	return n
 }
 
-func (m pickModel) View() string {
+func (m pickModel) View() string { return output.SanitizeView(m.view()) }
+
+func (m pickModel) view() string {
 	if m.done || m.aborted {
 		return ""
 	}

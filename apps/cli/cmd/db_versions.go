@@ -69,7 +69,7 @@ so a new major shows up here without an Orchard release. Pass a major to
 				parts = append(parts, "catalog "+at)
 			}
 			if len(parts) > 0 {
-				fmt.Println(output.Dim(strings.Join(parts, ", ")))
+				output.Println(output.Dim(strings.Join(parts, ", ")))
 			}
 			return nil
 		},
@@ -199,18 +199,18 @@ func dbRenderSecurity(raw map[string]any) {
 				dbOneLine(pick(v, "description"), 60),
 			})
 		}
-		fmt.Println()
+		output.Println()
 		output.Table([]string{"cve", "score", "fixed in", "fix", "component", "description"}, rows)
 	} else {
-		fmt.Println()
-		fmt.Println(output.Dim("no known vulnerabilities for this version"))
+		output.Println()
+		output.Println(output.Dim("no known vulnerabilities for this version"))
 	}
-	fmt.Println()
+	output.Println()
 	if to := pick(auto, "to"); to != "" {
 		if b, _ := auto["automatic"].(bool); b {
-			fmt.Printf("minor update to %s happens automatically\n", to)
+			output.Printf("minor update to %s happens automatically\n", to)
 		} else {
-			fmt.Printf("minor update to %s is available\n", to)
+			output.Printf("minor update to %s is available\n", to)
 		}
 	}
 	ups := []string{}
@@ -222,7 +222,7 @@ func dbRenderSecurity(raw map[string]any) {
 		ups = append(ups, label)
 	}
 	if len(ups) > 0 {
-		fmt.Printf("major upgrades available: %s (`orchard db upgrade <id> --to <major>`)\n", strings.Join(ups, ", "))
+		output.Printf("major upgrades available: %s (`orchard db upgrade <id> --to <major>`)\n", strings.Join(ups, ", "))
 	}
 }
 

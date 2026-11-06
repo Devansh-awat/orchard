@@ -308,7 +308,7 @@ func installOrchardSSH(ctx context.Context, cl *api.Client) (*sshInstallResult, 
 	}
 	example := "ssh orchard-<name>"
 	if raw, ferr := fetchSandboxes(ctx, cl); ferr == nil {
-		if items := asList(raw["sandboxes"]); len(items) > 0 && str(items[0]["name"]) != "" {
+		if items := asList(raw["sandboxes"]); len(items) > 0 && sandboxHostNamePattern.MatchString(str(items[0]["name"])) {
 			example = "ssh orchard-" + str(items[0]["name"])
 		}
 	}
@@ -346,8 +346,8 @@ func printSSHInstallResult(r *sshInstallResult) error {
 	} else {
 		output.Successf("%s already includes the orchard config", r.SSHConfigPath)
 	}
-	fmt.Println()
-	fmt.Println("connect with:  " + r.Example)
-	fmt.Println(output.Dim("the Open in VS Code / Cursor / Zed links in the web UI now work on this machine"))
+	output.Println()
+	output.Println("connect with:  " + output.SanitizeLine(r.Example))
+	output.Println(output.Dim("the Open in VS Code / Cursor / Zed links in the web UI now work on this machine"))
 	return nil
 }

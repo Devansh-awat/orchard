@@ -14,6 +14,15 @@ import {
   type GraftOrigin,
   type GraftTap
 } from './integrity';
+import {
+  loadVerifiedRegistryIndex,
+  MissingRegistryObject,
+  parseRegistryState,
+  registrySignaturePolicyFromEnv,
+  registryStateKey,
+  type RegistryIndexState,
+  type RegistryIndexStateStore
+} from '../registry-index/signed-index';
 import { parseManifest } from './manifest';
 import { extractTarGz } from './untar';
 
@@ -123,32 +132,132 @@ export async function fetchArtifact(
     redirect: 'follow',
     ...(timeoutMs ? { signal: AbortSignal.timeout(timeoutMs) } : {})
   });
+  if (res.status === 404)
+    throw new MissingRegistryObject(`download failed: ${res.status} ${res.statusText} for ${url}`);
   if (!res.ok) throw new Error(`download failed: ${res.status} ${res.statusText} for ${url}`);
   return Buffer.from(await res.arrayBuffer());
 }
 
 const MARKETPLACE_TIMEOUT_MS = 15_000;
 
+const REGISTRY_STATE_FILE = '.registry-state.json';
+
+function fileStateStore(env: NodeJS.ProcessEnv): RegistryIndexStateStore {
+  const path = join(resolve(env.ORCHARD_GRAFTS_DIR ?? '/app/grafts'), REGISTRY_STATE_FILE);
+  const read = (): Record<string, string> => {
+    try {
+      return JSON.parse(readFileSync(path, 'utf8')) as Record<string, string>;
+    } catch {
+      return {};
+    }
+  };
+  return {
+    load: async (name) => parseRegistryState(read()[name]),
+    save: async (name, state) => {
+      try {
+        mkdirSync(resolve(path, '..'), { recursive: true });
+        writeFileSync(path, JSON.stringify({ ...read(), [name]: JSON.stringify(state) }));
+      } catch (err) {
+        console.warn(
+          `[graft-sync] warning: could not record the accepted registry state, rollback protection is off: ${(err as Error).message}`
+        );
+      }
+    }
+  };
+}
+
+export function registryStateStoreFromEnv(env: NodeJS.ProcessEnv = process.env): RegistryIndexStateStore {
+  const file = fileStateStore(env);
+  const databaseUrl = env.DATABASE_URL;
+  if (!databaseUrl) return file;
+  const withClient = async <T>(run: (client: Client) => Promise<T>): Promise<T> => {
+    const client = new Client({ connectionString: databaseUrl });
+    await client.connect();
+    try {
+      return await run(client);
+    } finally {
+      await client.end().catch(() => undefined);
+    }
+  };
+  return {
+    load: async (name) => {
+      try {
+        const { rows } = await withClient((c) =>
+          c.query<{ value: string }>('SELECT value FROM instance_settings WHERE key = $1', [
+            registryStateKey(name)
+          ])
+        );
+        return parseRegistryState(rows[0]?.value);
+      } catch {
+        return file.load(name);
+      }
+    },
+    save: async (name, state) => {
+      try {
+        await withClient((c) =>
+          c.query(
+            'INSERT INTO instance_settings (key, value, updated_at) VALUES ($1, $2, now()) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()',
+            [registryStateKey(name), JSON.stringify(state)]
+          )
+        );
+      } catch {
+        await file.save(name, state);
+      }
+    }
+  };
+}
+
 export async function fetchRevoked(
   marketplace: string,
-  allowHttp: boolean
+  allowHttp: boolean,
+  options: { env?: NodeJS.ProcessEnv; store?: RegistryIndexStateStore; now?: Date } = {}
 ): Promise<{ revoked: Set<string> | null; warning?: string }> {
-  try {
-    const body = await fetchArtifact(
-      `${trimBase(marketplace)}/grafts/index.json`,
-      allowHttp,
-      undefined,
-      MARKETPLACE_TIMEOUT_MS
+  const env = options.env ?? process.env;
+  const store = options.store ?? registryStateStoreFromEnv(env);
+  const name = 'grafts/index.json';
+  const toSet = (list: unknown) =>
+    new Set(
+      (Array.isArray(list) ? list : [])
+        .filter((d): d is string => typeof d === 'string')
+        .map((d) => `sha256:${normaliseDigest(d)}`)
     );
-    const revoked = (JSON.parse(body.toString('utf8')) as { revoked?: unknown }).revoked;
-    return {
-      revoked: new Set(
-        (Array.isArray(revoked) ? revoked : [])
-          .filter((d): d is string => typeof d === 'string')
-          .map((d) => `sha256:${normaliseDigest(d)}`)
-      )
-    };
+  try {
+    const verified = await loadVerifiedRegistryIndex({
+      name,
+      read: async (suffix) => {
+        try {
+          return await fetchArtifact(
+            `${trimBase(marketplace)}/${name}${suffix}`,
+            allowHttp,
+            undefined,
+            MARKETPLACE_TIMEOUT_MS
+          );
+        } catch (err) {
+          if ((err as NodeJS.ErrnoException).code === 'ENOENT')
+            throw new MissingRegistryObject(String(err));
+          throw err;
+        }
+      },
+      store,
+      policy: registrySignaturePolicyFromEnv(env),
+      now: options.now,
+      remember: (v) => ({ revoked: [...toSet((v.body as { revoked?: unknown }).revoked)] })
+    });
+    for (const warning of verified.warnings) console.warn(`[graft-sync] warning: ${warning}`);
+    return { revoked: toSet((verified.body as { revoked?: unknown }).revoked) };
   } catch (err) {
+    let last: RegistryIndexState | null = null;
+    try {
+      last = await store.load(name);
+    } catch {
+      last = null;
+    }
+    if (last?.revoked) {
+      return {
+        revoked: new Set(last.revoked),
+        warning: `could not accept the Extension Marketplace catalog, so the last accepted revocation list was used: ${(err as Error).message}`
+      };
+    }
     return {
       revoked: null,
       warning: `could not read the Extension Marketplace catalog, so revoked versions were not checked: ${(err as Error).message}`
@@ -201,7 +310,7 @@ export async function syncGrafts(env: NodeJS.ProcessEnv = process.env): Promise<
 
   const result: SyncResult = { synced: [], failed: [], warnings: [] };
   const { revoked, warning } = specs.length
-    ? await fetchRevoked(marketplace, allowHttp)
+    ? await fetchRevoked(marketplace, allowHttp, { env })
     : { revoked: null };
   if (warning) result.warnings.push(warning);
   for (const spec of specs) {

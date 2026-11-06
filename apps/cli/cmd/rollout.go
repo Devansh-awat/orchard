@@ -78,12 +78,12 @@ func printRolloutFailure(r *api.Rollout) {
 	if r.Phase == "build_failed" {
 		output.Errorf("build failed")
 		if r.Build.Error != "" {
-			fmt.Fprintln(w, indent(r.Build.Error))
+			output.Fprintln(w, indent(r.Build.Error))
 		}
 		if len(r.Build.LogTail) > 0 {
-			fmt.Fprintln(w, output.Dim("── last build log lines"))
+			output.Fprintln(w, output.Dim("── last build log lines"))
 			for _, l := range r.Build.LogTail {
-				fmt.Fprintln(w, l)
+				output.Fprintln(w, output.SanitizeStyled(l))
 			}
 		}
 	} else {
@@ -96,14 +96,14 @@ func printRolloutFailure(r *api.Rollout) {
 			if f.Restarts > 0 {
 				line += fmt.Sprintf(", %d restarts", f.Restarts)
 			}
-			fmt.Fprintln(w, "  "+line)
+			output.Fprintln(w, "  "+output.SanitizeStyled(line))
 			if f.Message != "" {
-				fmt.Fprintln(w, indent(f.Message))
+				output.Fprintln(w, indent(f.Message))
 			}
 			if len(f.LogTail) > 0 {
-				fmt.Fprintln(w, output.Dim("── last log lines of "+f.Pod))
+				output.Fprintln(w, output.Dim("── last log lines of "+f.Pod))
 				for _, l := range f.LogTail {
-					fmt.Fprintln(w, l)
+					output.Fprintln(w, output.SanitizeStyled(l))
 				}
 			}
 		}
@@ -114,7 +114,7 @@ func printRolloutFailure(r *api.Rollout) {
 }
 
 func indent(s string) string {
-	lines := strings.Split(strings.TrimRight(s, "\n"), "\n")
+	lines := strings.Split(strings.TrimRight(output.SanitizeStyled(s), "\n"), "\n")
 	for i, l := range lines {
 		lines[i] = "    " + l
 	}

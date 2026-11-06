@@ -25,6 +25,8 @@ import (
 
 var sandboxIDPattern = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
 
+var sandboxHostNamePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,62}$`)
+
 func sandboxCmd() *cobra.Command {
 	c := &cobra.Command{
 		Use:               "sandbox",
@@ -306,7 +308,7 @@ func sandboxListCmd() *cobra.Command {
 			}
 			output.Table(append(headers, "repo", "identity", "created", "last active"), rows)
 			if max := pick(raw, "maxSandboxes"); max != "" {
-				fmt.Println(output.Dim(fmt.Sprintf("%d of %s sandboxes used", len(items), max)))
+				output.Println(output.Dim(fmt.Sprintf("%d of %s sandboxes used", len(items), max)))
 			}
 			return nil
 		},
@@ -459,7 +461,7 @@ func sandboxDiffCmd() *cobra.Command {
 					})
 				}
 				if len(rows) == 0 {
-					fmt.Println(output.Dim("working tree clean"))
+					output.Println(output.Dim("working tree clean"))
 					return nil
 				}
 				output.Table([]string{"st", "file", "+", "-"}, rows)
@@ -476,9 +478,9 @@ func sandboxDiffCmd() *cobra.Command {
 			if fmtFlag() == output.FormatJSON {
 				return output.JSON(raw)
 			}
-			fmt.Print(str(raw["diff"]))
+			output.Print(output.Sanitize(str(raw["diff"])))
 			if b, ok := raw["truncated"].(bool); ok && b {
-				fmt.Fprintln(os.Stderr, output.Dim("diff truncated"))
+				output.Fprintln(os.Stderr, output.Dim("diff truncated"))
 			}
 			return nil
 		},
@@ -528,7 +530,7 @@ func sandboxRepoListCmd() *cobra.Command {
 				rows = append(rows, []string{pick(r, "name"), pick(r, "branch"), pick(r, "dirtyFiles"), github, pick(r, "icon")})
 			}
 			if len(rows) == 0 {
-				fmt.Println(output.Dim("no repositories cloned yet"))
+				output.Println(output.Dim("no repositories cloned yet"))
 				return nil
 			}
 			output.Table([]string{"name", "branch", "dirty", "github", "icon"}, rows)
@@ -675,7 +677,7 @@ func sandboxConversationsCmd() *cobra.Command {
 				rows = append(rows, []string{str(cv["id"]), pick(cv, "title"), pick(cv, "repo"), pick(cv, "updatedAt")})
 			}
 			if len(rows) == 0 {
-				fmt.Println(output.Dim("no conversations yet"))
+				output.Println(output.Dim("no conversations yet"))
 				return nil
 			}
 			output.Table([]string{"id", "title", "repo", "updated"}, rows)
@@ -826,7 +828,7 @@ func ensureSandboxRunning(ctx context.Context, cl *api.Client, sb map[string]any
 			if !term.IsTerminal(int(os.Stdin.Fd())) {
 				return fmt.Errorf("sandbox is stopped; run 'orchard sandbox start %s' or pass --start", name)
 			}
-			fmt.Fprintf(os.Stderr, "sandbox %s is stopped; start it now? [y/N] ", name)
+			output.Fprintf(os.Stderr, "sandbox %s is stopped; start it now? [y/N] ", name)
 			var line string
 			_, _ = fmt.Fscanln(os.Stdin, &line)
 			switch strings.ToLower(strings.TrimSpace(line)) {
@@ -884,10 +886,13 @@ func sandboxSSHCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("no ssh binary on PATH; run `orchard sandbox ssh-config %s` and point your client at ProxyCommand %q", args[0], exe+" sandbox proxy "+id)
 			}
+			if !sandboxHostNamePattern.MatchString(str(sb["name"])) {
+				return fmt.Errorf("refusing to ssh to sandbox %q: its name can't be used as an ssh host", output.SanitizeLine(str(sb["name"])))
+			}
 			alias := sshHostKeyAlias("orchard-" + str(sb["name"]))
 			knownHosts, kerr := refreshSandboxKnownHosts(cmd.Context(), cl, id, alias)
 			if kerr != nil && !hostKeysUnsupported(kerr) {
-				fmt.Fprintf(os.Stderr, "orchard: couldn't refresh host keys in %s: %v\n", knownHosts, kerr)
+				output.Fprintf(os.Stderr, "orchard: couldn't refresh host keys in %s: %v\n", knownHosts, kerr)
 			}
 			sshArgs := append([]string{
 				"-o", "ProxyCommand=" + exe + " sandbox proxy " + id,
@@ -961,31 +966,31 @@ func sandboxChatCmd() *cobra.Command {
 					for _, block := range ev.Message.Content {
 						switch block.Type {
 						case "text":
-							fmt.Print(block.Text)
+							output.Print(output.Sanitize(block.Text))
 							needNewline = !strings.HasSuffix(block.Text, "\n")
 						case "tool_use":
-							fmt.Fprintf(os.Stderr, "[tool] %s\n", block.Name)
+							output.Fprintf(os.Stderr, "[tool] %s\n", output.SanitizeLine(block.Name))
 						}
 					}
 				case "result":
 					if fmtFlag() == output.FormatJSON {
 						if needNewline {
-							fmt.Println()
+							output.Println()
 							needNewline = false
 						}
-						fmt.Println(string(raw))
+						output.Println(string(raw))
 					}
 				case "error":
 					if needNewline {
-						fmt.Println()
+						output.Println()
 					}
 					return errors.New(ev.Detail)
 				case "raw":
-					fmt.Fprint(os.Stderr, ev.Text)
+					output.Fprint(os.Stderr, output.SanitizeStyled(ev.Text))
 				}
 			}
 			if needNewline {
-				fmt.Println()
+				output.Println()
 			}
 			if err := <-errs; err != nil {
 				return sandboxDialError(err)
@@ -1043,7 +1048,7 @@ func sandboxProxyCmd() *cobra.Command {
 			}
 			if host != "" {
 				if path, kerr := refreshSandboxKnownHosts(cmd.Context(), cl, str(sb["id"]), sshHostKeyAlias(host)); kerr != nil && !hostKeysUnsupported(kerr) {
-					fmt.Fprintf(os.Stderr, "orchard: couldn't refresh host keys in %s: %v\n", path, kerr)
+					output.Fprintf(os.Stderr, "orchard: couldn't refresh host keys in %s: %v\n", path, kerr)
 				}
 			}
 			conn, err := cl.DialSandboxSSH(cmd.Context(), str(sb["id"]))
@@ -1069,16 +1074,16 @@ func sandboxBridgeCmd() *cobra.Command {
 				return &exitcode.UsageError{Err: errors.New("--token-file is required")}
 			}
 			if _, err := os.Stat(tokenFile); err != nil {
-				fmt.Fprintf(os.Stderr, "bridge: token file not readable yet (%v); rejecting tunnels until it is\n", err)
+				output.Fprintf(os.Stderr, "bridge: token file not readable yet (%v); rejecting tunnels until it is\n", err)
 			}
 			b := &sshproxy.Bridge{
 				Target:    target,
 				TokenFile: tokenFile,
 				Logf: func(format string, a ...any) {
-					fmt.Fprintf(os.Stderr, format+"\n", a...)
+					output.Fprintf(os.Stderr, format+"\n", a...)
 				},
 			}
-			fmt.Fprintf(os.Stderr, "bridge: listening on %s, tunnelling to %s\n", listen, target)
+			output.Fprintf(os.Stderr, "bridge: listening on %s, tunnelling to %s\n", listen, target)
 			return b.ListenAndServe(cmd.Context(), listen)
 		},
 	}
@@ -1105,13 +1110,13 @@ func sandboxAgentdCmd() *cobra.Command {
 				StateDir:  stateDir,
 				PhaseFile: phaseFile,
 				Logf: func(format string, a ...any) {
-					fmt.Fprintf(os.Stderr, format+"\n", a...)
+					output.Fprintf(os.Stderr, format+"\n", a...)
 				},
 			})
 			if err != nil {
 				return err
 			}
-			fmt.Fprintf(os.Stderr, "agentd: listening on %s\n", listen)
+			output.Fprintf(os.Stderr, "agentd: listening on %s\n", listen)
 			return d.ListenAndServe(cmd.Context(), listen)
 		},
 	}
@@ -1148,6 +1153,10 @@ func sandboxSSHConfigCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			quotedExe, err := proxyCommandExecutable(exe)
+			if err != nil {
+				return err
+			}
 			var items []map[string]any
 			if len(args) == 1 {
 				sb, rerr := resolveSandbox(cmd.Context(), cl, args[0])
@@ -1164,17 +1173,22 @@ func sandboxSSHConfigCmd() *cobra.Command {
 			}
 			for i, sb := range items {
 				if i > 0 {
-					fmt.Println()
+					output.Println()
 				}
 				id := str(sb["id"])
 				if !sandboxIDPattern.MatchString(id) {
 					return fmt.Errorf("refusing to write sandbox id %q into an ssh config", id)
 				}
-				fmt.Println("Host orchard-" + str(sb["name"]))
-				fmt.Println("  HostName orchard-sandbox-" + id)
-				fmt.Println("  User dev")
-				fmt.Println("  ProxyCommand " + exe + " sandbox proxy " + id)
-				fmt.Println("  StrictHostKeyChecking accept-new")
+				name := str(sb["name"])
+				if !sandboxHostNamePattern.MatchString(name) {
+					output.Warnf("skipping sandbox %q: its name can't be used as an ssh host alias", output.SanitizeLine(name))
+					continue
+				}
+				output.Println("Host orchard-" + name)
+				output.Println("  HostName orchard-sandbox-" + id)
+				output.Println("  User dev")
+				output.Println("  ProxyCommand \"" + quotedExe + "\" sandbox proxy " + id)
+				output.Println("  StrictHostKeyChecking accept-new")
 			}
 			return nil
 		},

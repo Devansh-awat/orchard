@@ -134,7 +134,7 @@ func composeGetCmd() *cobra.Command {
 			if len(children) == 0 {
 				return nil
 			}
-			fmt.Println()
+			output.Println()
 			rows := [][]string{}
 			for _, d := range children {
 				rows = append(rows, []string{

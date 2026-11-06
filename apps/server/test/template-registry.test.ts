@@ -46,9 +46,20 @@ function fakeRegistry(files: Record<string, string>) {
   });
 }
 
-function fakePrisma(rows: Record<string, { source: string; yaml: string }>) {
+function fakePrisma(
+  rows: Record<string, { source: string; yaml: string }>,
+  settings: Record<string, string> = {}
+) {
   const writes: Array<{ name: string; source: string; version: string }> = [];
   const prisma = {
+    instanceSetting: {
+      findUnique: async ({ where }: { where: { key: string } }) =>
+        where.key in settings ? { value: settings[where.key] } : null,
+      upsert: async ({ where, create }: { where: { key: string }; create: { value: string } }) => {
+        settings[where.key] = create.value;
+        return { value: create.value };
+      }
+    },
     template: {
       findUnique: async ({ where }: { where: { name: string } }) => rows[where.name] ?? null,
       upsert: async ({ where, update }: { where: { name: string }; update: any }) => {
@@ -174,4 +185,73 @@ test('an unreachable registry is a warning, not a crash', async () => {
   const { prisma, writes } = fakePrisma({});
   assert.deepEqual(await service(prisma).syncRegistry(), { synced: 0, skipped: 0 });
   assert.equal(writes.length, 0);
+});
+
+const goodIndex = JSON.stringify({
+  templates: [
+    {
+      name: 'ghost',
+      version: '1.2.0',
+      yaml: 'templates/ghost/1.2.0/template.yaml',
+      sha256: sha(ghost)
+    }
+  ]
+});
+
+test('an unsigned catalogue is accepted while the registry publishes no signature, then never again once one was seen', async () => {
+  const registry = await fakeRegistry({
+    '/templates/index.json': goodIndex,
+    '/templates/ghost/1.2.0/template.yaml': ghost
+  });
+  process.env.TEMPLATE_REGISTRY_URL = registry.url;
+  delete process.env.ORCHARD_REGISTRY_SIGNATURE;
+  const settings: Record<string, string> = {};
+  try {
+    const first = fakePrisma({}, settings);
+    assert.deepEqual(await service(first.prisma).syncRegistry(), { synced: 1, skipped: 0 });
+
+    settings['registry_index_state:templates/index.json'] = JSON.stringify({
+      sequence: 5,
+      signed: true
+    });
+    const downgraded = fakePrisma({}, settings);
+    assert.deepEqual(await service(downgraded.prisma).syncRegistry(), { synced: 0, skipped: 0 });
+    assert.equal(downgraded.writes.length, 0);
+  } finally {
+    registry.close();
+  }
+});
+
+test('ORCHARD_REGISTRY_SIGNATURE=required refuses an unsigned catalogue', async () => {
+  const registry = await fakeRegistry({
+    '/templates/index.json': goodIndex,
+    '/templates/ghost/1.2.0/template.yaml': ghost
+  });
+  process.env.TEMPLATE_REGISTRY_URL = registry.url;
+  process.env.ORCHARD_REGISTRY_SIGNATURE = 'required';
+  try {
+    const { prisma, writes } = fakePrisma({});
+    assert.deepEqual(await service(prisma).syncRegistry(), { synced: 0, skipped: 0 });
+    assert.equal(writes.length, 0);
+  } finally {
+    delete process.env.ORCHARD_REGISTRY_SIGNATURE;
+    registry.close();
+  }
+});
+
+test('a catalogue with a signature that does not verify is refused', async () => {
+  const registry = await fakeRegistry({
+    '/templates/index.json': goodIndex,
+    '/templates/index.json.sig': Buffer.alloc(64, 1).toString('base64'),
+    '/templates/ghost/1.2.0/template.yaml': ghost
+  });
+  process.env.TEMPLATE_REGISTRY_URL = registry.url;
+  delete process.env.ORCHARD_REGISTRY_SIGNATURE;
+  try {
+    const { prisma, writes } = fakePrisma({});
+    assert.deepEqual(await service(prisma).syncRegistry(), { synced: 0, skipped: 0 });
+    assert.equal(writes.length, 0);
+  } finally {
+    registry.close();
+  }
 });

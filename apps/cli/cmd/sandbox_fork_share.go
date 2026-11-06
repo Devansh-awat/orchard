@@ -102,8 +102,8 @@ func sandboxShareCreateCmd() *cobra.Command {
 				return output.JSON(raw)
 			}
 			output.Successf("share link %s (expires %s)", pick(raw, "id"), pick(raw, "expiresAt"))
-			fmt.Println(str(raw["url"]))
-			fmt.Fprintln(os.Stderr, output.Dim("only members of the machine's organization can open it; the link isn't shown again"))
+			output.Println(output.SanitizeLine(str(raw["url"])))
+			output.Fprintln(os.Stderr, output.Dim("only members of the machine's organization can open it; the link isn't shown again"))
 			return nil
 		},
 	}
@@ -159,7 +159,7 @@ func sandboxShareListCmd() *cobra.Command {
 			}
 			rows := shareLinkRows(asList(raw["links"]))
 			if len(rows) == 0 {
-				fmt.Println(output.Dim("no share links"))
+				output.Println(output.Dim("no share links"))
 				return nil
 			}
 			output.Table([]string{"id", "state", "scope", "expires", "last used", "created by"}, rows)
@@ -275,7 +275,7 @@ func sandboxSessionTranscriptCmd() *cobra.Command {
 			}
 			messages := asList(raw["messages"])
 			if len(messages) == 0 {
-				fmt.Println(output.Dim("no messages yet"))
+				output.Println(output.Dim("no messages yet"))
 				return nil
 			}
 			for _, m := range messages {
@@ -286,25 +286,13 @@ func sandboxSessionTranscriptCmd() *cobra.Command {
 						who = pick(u, "name")
 					}
 				}
-				fmt.Println(output.Dim(fmt.Sprintf("── %s · %s", terminalSafe(who), pick(m, "createdAt"))))
-				fmt.Println(terminalSafe(str(m["text"])))
-				fmt.Println()
+				output.Println(output.Dim(fmt.Sprintf("── %s · %s", output.SanitizeLine(who), output.SanitizeLine(pick(m, "createdAt")))))
+				output.Println(output.Sanitize(str(m["text"])))
+				output.Println()
 			}
 			return nil
 		},
 	}
 	c.Flags().IntVar(&limit, "limit", 0, "How many of the latest messages to show (1-200, default 30)")
 	return c
-}
-
-func terminalSafe(s string) string {
-	return strings.Map(func(r rune) rune {
-		if r == '\n' || r == '\t' {
-			return r
-		}
-		if r < 0x20 || r == 0x7f || (r >= 0x80 && r < 0xa0) {
-			return -1
-		}
-		return r
-	}, s)
 }

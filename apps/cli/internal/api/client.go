@@ -18,6 +18,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/hackclub/orchard/cli/internal/output"
 )
 
 // Client mirrors server/src/mcp/client.ts: a thin Bearer-authenticated wrapper
@@ -147,7 +149,7 @@ func bodyReader(body []byte) io.Reader {
 }
 
 func errorFrom(res *http.Response, data []byte) *APIError {
-	e := &APIError{Status: res.StatusCode, Message: extractMessage(data)}
+	e := &APIError{Status: res.StatusCode, Message: output.Sanitize(extractMessage(data))}
 	if s := res.Header.Get("Retry-After"); s != "" {
 		if secs, err := strconv.Atoi(s); err == nil && secs > 0 {
 			e.retryAfter = time.Duration(secs) * time.Second

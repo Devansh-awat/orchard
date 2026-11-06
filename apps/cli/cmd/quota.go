@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"fmt"
 	"net/url"
 	"strconv"
 	"strings"
@@ -173,7 +172,7 @@ func quotaMeCmd() *cobra.Command {
 		if len(breakdown) == 0 {
 			return
 		}
-		fmt.Println()
+		output.Println()
 		rows := [][]string{}
 		for _, e := range breakdown {
 			rows = append(rows, []string{
@@ -199,7 +198,7 @@ func quotaMembersCmd() *cobra.Command {
 			{"default allowance", quotaCPU(org["defaultMemberCpuMilli"]) + " cpu, " + quotaMem(org["defaultMemberMemoryBytes"]) + " memory"},
 			{"committed", quotaCPU(commitment["cpuMilli"]) + " cpu, " + quotaMem(commitment["memoryBytes"]) + " memory"},
 		})
-		fmt.Println()
+		output.Println()
 		rows := [][]string{}
 		for _, m := range asList(raw["members"]) {
 			user := quotaSub(m, "user")
@@ -226,7 +225,7 @@ func quotaProjectsCmd() *cobra.Command {
 			{"organization memory used", quotaMem(total["memoryBytes"])},
 			{"org pods", quotaCount(total["pods"])},
 		})
-		fmt.Println()
+		output.Println()
 		rows := [][]string{}
 		for _, p := range asList(raw["projects"]) {
 			usage := quotaSub(p, "usage")

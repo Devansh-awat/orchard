@@ -1043,7 +1043,7 @@ func dbRecoveryCmd() *cobra.Command {
 			}
 			output.KV(dbTrimEmpty(pairs))
 			if active := asList(raw["activeOperations"]); len(active) > 0 {
-				fmt.Println()
+				output.Println()
 				dbRenderOperations(raw["activeOperations"])
 			}
 			return nil

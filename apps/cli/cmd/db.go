@@ -451,9 +451,9 @@ func dbLogsCmd() *cobra.Command {
 				return output.JSON(raw)
 			}
 			logs := str(raw["logs"])
-			fmt.Print(logs)
+			output.Print(output.SanitizeStyled(logs))
 			if logs != "" && !strings.HasSuffix(logs, "\n") {
-				fmt.Println()
+				output.Println()
 			}
 			return nil
 		},
@@ -983,9 +983,9 @@ func dbKilledLogsCmd() *cobra.Command {
 				return output.JSON(raw)
 			}
 			logs := str(raw["logs"])
-			fmt.Print(logs)
+			output.Print(output.SanitizeStyled(logs))
 			if logs != "" && !strings.HasSuffix(logs, "\n") {
-				fmt.Println()
+				output.Println()
 			}
 			return nil
 		},

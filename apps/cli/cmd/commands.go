@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"fmt"
 	"sort"
 	"strings"
 
@@ -127,7 +126,7 @@ func renderCommandTree(c *cobra.Command, depth int) {
 		if sub.Short != "" {
 			line += "  " + output.Dim(sub.Short)
 		}
-		fmt.Println(line)
+		output.Println(line)
 		renderCommandTree(sub, depth+1)
 	}
 }

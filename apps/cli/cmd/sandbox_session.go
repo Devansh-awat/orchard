@@ -101,7 +101,7 @@ func sandboxSessionListCmd() *cobra.Command {
 				})
 			}
 			if len(rows) == 0 {
-				fmt.Println(output.Dim("no sessions yet"))
+				output.Println(output.Dim("no sessions yet"))
 				return nil
 			}
 			output.Table([]string{"slug", "title", "repo", "branch", "diff", "activity", "status", "pr"}, rows)

@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"fmt"
 	"net/http"
 
 	"github.com/spf13/cobra"
@@ -52,7 +51,7 @@ func sandboxLinkListCmd() *cobra.Command {
 				rows = append(rows, []string{pick(project, "slug"), pick(env, "name"), pick(l, "envFile")})
 			}
 			if len(rows) == 0 {
-				fmt.Println(output.Dim("no projects attached"))
+				output.Println(output.Dim("no projects attached"))
 				return nil
 			}
 			output.Table([]string{"project", "environment", "env file"}, rows)
@@ -167,7 +166,7 @@ func sandboxSessionPreviewCmd() *cobra.Command {
 				if raw["removed"] == true {
 					output.Successf("removed the preview of %s", pick(s, "slug"))
 				} else {
-					fmt.Println(output.Dim("this session has no preview"))
+					output.Println(output.Dim("this session has no preview"))
 				}
 				return nil
 			}

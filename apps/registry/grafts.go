@@ -97,6 +97,8 @@ func (g graftIndex) tier() string {
 
 type graftCatalog struct {
 	GeneratedAt string       `json:"generatedAt"`
+	Sequence    int64        `json:"sequence,omitempty"`
+	ExpiresAt   string       `json:"expiresAt,omitempty"`
 	Grafts      []graftIndex `json:"grafts"`
 	Revoked     []string     `json:"revoked"`
 }
@@ -351,8 +353,9 @@ func (p *publisher) runGrafts(ctx context.Context, dirs []string, publicBase, re
 		cat.Grafts = append(cat.Grafts, g)
 	}
 	sort.Slice(cat.Grafts, func(i, j int) bool { return cat.Grafts[i].ID < cat.Grafts[j].ID })
+	cat.Sequence, cat.ExpiresAt = p.stamp()
 	body, _ := json.MarshalIndent(cat, "", "  ")
-	if _, err := p.putIfChanged(ctx, graftCatalogKey, body, "application/json; charset=utf-8", cacheIndex, false); err != nil {
+	if _, err := p.putIndex(ctx, graftCatalogKey, body); err != nil {
 		return nil, err
 	}
 	return cat, nil

@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"errors"
-	"fmt"
 
 	"github.com/hackclub/orchard/cli/internal/output"
 	"github.com/hackclub/orchard/cli/internal/tui"
@@ -29,7 +28,7 @@ func topCmd() *cobra.Command {
 				if err != nil {
 					return err
 				}
-				fmt.Println(text)
+				output.Println(output.SanitizeStyled(text))
 				return nil
 			}
 			orgID, _ := requireOrg(cmd.Context(), cl, cfg)

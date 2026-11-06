@@ -1,6 +1,7 @@
 package output
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -56,10 +57,15 @@ func StdinIsTTY() bool {
 
 // JSON prints v as indented JSON to stdout.
 func JSON(v any) error {
-	enc := json.NewEncoder(os.Stdout)
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
 	enc.SetIndent("", "  ")
 	enc.SetEscapeHTML(false)
-	return enc.Encode(v)
+	if err := enc.Encode(v); err != nil {
+		return err
+	}
+	_, err := os.Stdout.WriteString(escapeJSONControls(buf.String()))
+	return err
 }
 
 // Raw prints already-encoded bytes (re-indenting JSON when possible).
@@ -69,7 +75,7 @@ func Raw(data []byte) {
 		_ = JSON(v)
 		return
 	}
-	os.Stdout.Write(data)
+	os.Stdout.WriteString(Sanitize(string(data)))
 	if len(data) > 0 && data[len(data)-1] != '\n' {
 		fmt.Println()
 	}
@@ -81,6 +87,14 @@ func Table(headers []string, rows [][]string) {
 		fmt.Println(dimStyle.Render("(no results)"))
 		return
 	}
+	clean := make([][]string, len(rows))
+	for i, r := range rows {
+		clean[i] = make([]string, len(r))
+		for j, c := range r {
+			clean[i][j] = SanitizeStyledLine(c)
+		}
+	}
+	rows = clean
 	widths := make([]int, len(headers))
 	for i, h := range headers {
 		widths[i] = lipgloss.Width(h)
@@ -127,30 +141,32 @@ func pad(s string, w int) string {
 
 // Status lines go to stderr so piped stdout stays pure data (agents parse it).
 func Successf(format string, a ...any) {
-	fmt.Fprintln(os.Stderr, okStyle.Render("✓ ")+fmt.Sprintf(format, a...))
+	fmt.Fprintln(os.Stderr, okStyle.Render("✓ ")+SanitizeStyled(fmt.Sprintf(format, a...)))
 }
 func Warnf(format string, a ...any) {
-	fmt.Fprintln(os.Stderr, warnStyle.Render("! ")+fmt.Sprintf(format, a...))
+	fmt.Fprintln(os.Stderr, warnStyle.Render("! ")+SanitizeStyled(fmt.Sprintf(format, a...)))
 }
 func Errorf(format string, a ...any) {
-	fmt.Fprintln(os.Stderr, errStyle.Render("✗ ")+fmt.Sprintf(format, a...))
+	fmt.Fprintln(os.Stderr, errStyle.Render("✗ ")+SanitizeStyled(fmt.Sprintf(format, a...)))
 }
-func Dim(s string) string { return dimStyle.Render(s) }
+func Dim(s string) string { return dimStyle.Render(Sanitize(s)) }
 
 // KV renders an aligned key/value detail view (the table-mode counterpart of
 // a JSON `get` dump).
 func KV(pairs [][2]string) {
 	w := 0
-	for _, p := range pairs {
-		if lipgloss.Width(p[0]) > w {
-			w = lipgloss.Width(p[0])
+	keys := make([]string, len(pairs))
+	for i, p := range pairs {
+		keys[i] = SanitizeStyledLine(p[0])
+		if lipgloss.Width(keys[i]) > w {
+			w = lipgloss.Width(keys[i])
 		}
 	}
 	var b strings.Builder
-	for _, p := range pairs {
-		b.WriteString(dimStyle.Render(pad(p[0], w)))
+	for i, p := range pairs {
+		b.WriteString(dimStyle.Render(pad(keys[i], w)))
 		b.WriteString("  ")
-		b.WriteString(p[1])
+		b.WriteString(strings.ReplaceAll(SanitizeStyled(p[1]), "\n", "\n"+strings.Repeat(" ", w+2)))
 		b.WriteString("\n")
 	}
 	fmt.Print(b.String())
@@ -176,7 +192,7 @@ func Confirm(prompt string, yes bool) error {
 	if !term.IsTerminal(int(os.Stdin.Fd())) || !IsTTY() {
 		return ErrPromptRefused
 	}
-	fmt.Fprintf(os.Stderr, "%s [y/N] ", prompt)
+	fmt.Fprintf(os.Stderr, "%s [y/N] ", SanitizeStyled(prompt))
 	var line string
 	_, _ = fmt.Fscanln(os.Stdin, &line)
 	switch strings.ToLower(strings.TrimSpace(line)) {
@@ -193,7 +209,7 @@ func ConfirmTyped(prompt, expected string, yes bool) error {
 	if !term.IsTerminal(int(os.Stdin.Fd())) || !IsTTY() {
 		return ErrPromptRefused
 	}
-	fmt.Fprintf(os.Stderr, "%s\nYou can't undo this. Type %q to confirm: ", prompt, expected)
+	fmt.Fprintf(os.Stderr, "%s\nYou can't undo this. Type %q to confirm: ", SanitizeStyled(prompt), expected)
 	var line string
 	_, _ = fmt.Fscanln(os.Stdin, &line)
 	if strings.TrimSpace(line) == expected {
@@ -204,6 +220,7 @@ func ConfirmTyped(prompt, expected string, yes bool) error {
 
 // Status colorizes common lifecycle states for table cells.
 func Status(s string) string {
+	s = SanitizeLine(s)
 	switch strings.ToLower(s) {
 	case "running", "ready", "active", "succeeded", "healthy", "available", "durable":
 		return okStyle.Render(s)

@@ -270,11 +270,11 @@ func printOperation(op agentspec.Operation) {
 	}
 	output.KV(pairs)
 	if len(op.RequestBody) > 0 {
-		fmt.Println("\nrequest body:")
+		output.Println("\nrequest body:")
 		output.Raw(op.RequestBody)
 	}
 	if len(op.Response) > 0 {
-		fmt.Println("\nresponse:")
+		output.Println("\nresponse:")
 		output.Raw(op.Response)
 	}
 }

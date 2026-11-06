@@ -31,7 +31,7 @@ type Spinner struct {
 }
 
 func NewSpinner(msg string) *Spinner {
-	s := &Spinner{msg: msg, started: time.Now()}
+	s := &Spinner{msg: SanitizeStyledLine(msg), started: time.Now()}
 	if !StderrIsTTY() {
 		return s
 	}
@@ -71,7 +71,7 @@ func (s *Spinner) loop() {
 
 func (s *Spinner) Update(msg string) {
 	s.mu.Lock()
-	s.msg = msg
+	s.msg = SanitizeStyledLine(msg)
 	active := s.active
 	s.mu.Unlock()
 	if !active {

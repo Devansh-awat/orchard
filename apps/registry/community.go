@@ -518,16 +518,19 @@ func (s *communitySync) run(ctx context.Context, dir, revokedFile string) (*graf
 			delete(byID, id)
 		}
 	}
-	cat := &graftCatalog{GeneratedAt: prior.GeneratedAt, Grafts: []graftIndex{}, Revoked: dedupe(append(revoked, prior.Revoked...))}
+	cat := &graftCatalog{GeneratedAt: prior.GeneratedAt, Sequence: prior.Sequence, ExpiresAt: prior.ExpiresAt, Grafts: []graftIndex{}, Revoked: dedupe(append(revoked, prior.Revoked...))}
 	for _, g := range byID {
 		cat.Grafts = append(cat.Grafts, g)
 	}
 	sort.Slice(cat.Grafts, func(i, j int) bool { return cat.Grafts[i].ID < cat.Grafts[j].ID })
 	body, _ := json.MarshalIndent(cat, "", "  ")
-	if !bytes.Equal(body, priorRaw) {
-		cat.GeneratedAt = s.p.now().UTC().Format(time.RFC3339)
+	if changed := !bytes.Equal(body, priorRaw); changed || s.p.signKey != nil {
+		if changed {
+			cat.GeneratedAt = s.p.now().UTC().Format(time.RFC3339)
+		}
+		cat.Sequence, cat.ExpiresAt = s.p.stamp()
 		body, _ = json.MarshalIndent(cat, "", "  ")
-		if _, err := s.p.putIfChanged(ctx, graftCatalogKey, body, "application/json; charset=utf-8", cacheIndex, false); err != nil {
+		if _, err := s.p.putIndex(ctx, graftCatalogKey, body); err != nil {
 			return nil, err
 		}
 	}

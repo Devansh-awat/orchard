@@ -46,7 +46,7 @@ func linkNotice(kind, label string) {
 		if fmtFlag() == output.FormatJSON || !output.StderrIsTTY() {
 			return
 		}
-		fmt.Fprintln(os.Stderr, output.Dim("· "+kind+" "+label+" from .orchard/project.json"))
+		output.Fprintln(os.Stderr, output.Dim("· "+kind+" "+label+" from .orchard/project.json"))
 	})
 }
 

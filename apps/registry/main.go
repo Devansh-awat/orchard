@@ -97,6 +97,8 @@ environment:
   GRAFT_SIGNING_KEY  base64 of the Orchard PEM private key that signs listings (sync-community)
   GITHUB_TOKEN       read-only token for the GitHub API rate limit (sync-community)
   REGISTRY_LISTEN  address for serve (default :8080)
+  REGISTRY_PUBLIC_BASE_PATH  path the registry is mounted at behind a proxy, e.g. /registry (default none); used for latest redirects
+  GRAFT_SIGNING_KEY also signs templates/index.json and grafts/index.json on publish, publish-grafts and sync-community
   REGISTRY_PREFIX  key prefix inside the bucket (default none)
   R2_ENDPOINT      https://<account>.r2.cloudflarestorage.com (or set R2_ACCOUNT_ID)
   R2_BUCKET        bucket name
@@ -148,7 +150,7 @@ func main() {
 		if *iconSource == "default" {
 			*iconSource = defaultIconSource
 		}
-		p := &publisher{bucket: bucket, prefix: keyPrefix(), sourceBase: *source, version: *version, icons: iconFetcherFromFlag(*iconSource), git: *useGit, authors: authors, now: time.Now, log: log.Default()}
+		p := &publisher{bucket: bucket, prefix: keyPrefix(), sourceBase: *source, version: *version, icons: iconFetcherFromFlag(*iconSource), git: *useGit, authors: authors, now: time.Now, log: log.Default(), signKey: signingKeyFromEnv(log.Printf)}
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 		defer cancel()
 		cat, err := p.run(ctx, dirs, *files)
@@ -190,7 +192,7 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
-		p := &publisher{bucket: bucket, prefix: keyPrefix(), now: time.Now, log: log.Default()}
+		p := &publisher{bucket: bucket, prefix: keyPrefix(), now: time.Now, log: log.Default(), signKey: signingKeyFromEnv(log.Printf)}
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 		defer cancel()
 		cat, err := p.runGrafts(ctx, dirs, *publicBase, *revoked)
@@ -224,7 +226,7 @@ func main() {
 			log.Fatal(err)
 		}
 		s := &communitySync{
-			p:          &publisher{bucket: bucket, prefix: keyPrefix(), now: time.Now, log: log.Default()},
+			p:          &publisher{bucket: bucket, prefix: keyPrefix(), now: time.Now, log: log.Default(), signKey: key},
 			github:     &githubClient{base: *githubAPI, token: os.Getenv("GITHUB_TOKEN")},
 			key:        key,
 			publicBase: *publicBase,
@@ -253,9 +255,15 @@ func serve() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	basePath, err := normalizeBasePath(os.Getenv("REGISTRY_PUBLIC_BASE_PATH"))
+	if err != nil {
+		log.Fatal(err)
+	}
+	handler := newServer(bucket, keyPrefix())
+	handler.basePath = basePath
 	srv := &http.Server{
 		Addr:              env("REGISTRY_LISTEN", ":8080"),
-		Handler:           newServer(bucket, keyPrefix()),
+		Handler:           handler,
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 	go func() {

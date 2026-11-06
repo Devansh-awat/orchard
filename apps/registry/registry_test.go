@@ -471,8 +471,17 @@ func TestServe(t *testing.T) {
 		t.Fatalf("latest: %d %s", latest.StatusCode, latest.Header.Get("Location"))
 	}
 	prefixed := get("/templates/ghost/latest/template.yaml", map[string]string{"X-Forwarded-Prefix": "/registry"})
-	if prefixed.Header.Get("Location") != "/registry/templates/ghost/1.0.0/template.yaml" {
-		t.Fatalf("prefixed latest: %s", prefixed.Header.Get("Location"))
+	if prefixed.Header.Get("Location") != "/templates/ghost/1.0.0/template.yaml" {
+		t.Fatalf("forwarded prefix must be ignored: %s", prefixed.Header.Get("Location"))
+	}
+	for _, h := range []string{"X-Forwarded-Prefix", "X-Forwarded-Host", "Host", "X-Forwarded-Proto"} {
+		poisoned := get("/templates/ghost/latest/template.yaml", map[string]string{h: "//evil.example"})
+		if poisoned.Header.Get("Location") != "/templates/ghost/1.0.0/template.yaml" {
+			t.Fatalf("%s leaked into the redirect: %s", h, poisoned.Header.Get("Location"))
+		}
+	}
+	if cc := latest.Header.Get("Cache-Control"); cc != cacheIndex {
+		t.Fatalf("latest cache-control: %q", cc)
 	}
 
 	if resp := get("/templates/ghost/1.0.0/template.yaml", map[string]string{"Range": "bytes=0-3"}); resp.StatusCode != 206 || resp.Header.Get("Content-Range") == "" {

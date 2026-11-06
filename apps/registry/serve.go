@@ -8,6 +8,7 @@ import (
 	"log"
 	"mime"
 	"net/http"
+	"net/url"
 	"path"
 	"regexp"
 	"strconv"
@@ -28,6 +29,7 @@ var (
 	templateNameRe = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,62}$`)
 	versionedRe    = regexp.MustCompile(`^(?:templates|grafts)/[a-z0-9-]+/\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?/`)
 	nameIndexRe    = regexp.MustCompile(`^templates/([a-z0-9-]+)/?$`)
+	versionRe      = regexp.MustCompile(`^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$`)
 	latestRe       = regexp.MustCompile(`^templates/([a-z0-9-]+)/latest/(.+)$`)
 )
 
@@ -40,7 +42,7 @@ func cachePolicy(key string) policy {
 	switch {
 	case versionedRe.MatchString(key):
 		return policy{cacheImmutable, time.Hour}
-	case strings.HasSuffix(key, "/index.json"):
+	case strings.HasSuffix(key, "/index.json"), strings.HasSuffix(key, "/index.json.sig"):
 		return policy{cacheIndex, 30 * time.Second}
 	default:
 		return policy{cacheDefault, time.Minute}
@@ -81,14 +83,33 @@ type entry struct {
 }
 
 type server struct {
-	bucket *Bucket
-	prefix string
-	mu     sync.Mutex
-	cache  map[string]*entry
+	bucket   *Bucket
+	prefix   string
+	basePath string
+	mu       sync.Mutex
+	cache    map[string]*entry
 }
 
 func newServer(bucket *Bucket, prefix string) *server {
 	return &server{bucket: bucket, prefix: prefix, cache: map[string]*entry{}}
+}
+
+var basePathRe = regexp.MustCompile(`^(?:/[A-Za-z0-9._~-]+)*$`)
+
+func normalizeBasePath(raw string) (string, error) {
+	p := strings.TrimRight(strings.TrimSpace(raw), "/")
+	if p == "" {
+		return "", nil
+	}
+	if !basePathRe.MatchString(p) {
+		return "", errors.New("REGISTRY_PUBLIC_BASE_PATH must be an absolute path such as /registry made of letters, digits and . _ ~ -")
+	}
+	for _, seg := range strings.Split(p, "/") {
+		if seg == "." || seg == ".." {
+			return "", errors.New("REGISTRY_PUBLIC_BASE_PATH must not contain . or .. segments")
+		}
+	}
+	return p, nil
 }
 
 func cleanKey(p string) (string, bool) {
@@ -344,14 +365,12 @@ func (s *server) redirectLatest(w http.ResponseWriter, r *http.Request, spec str
 		http.Error(w, "index unreadable", http.StatusBadGateway)
 		return
 	}
-	target := path.Join("/", strings.TrimSuffix(basePath(r), "/"), "templates", name, idx.Latest, file)
-	w.Header().Set("Cache-Control", cacheIndex)
-	http.Redirect(w, r, target, http.StatusFound)
-}
-
-func basePath(r *http.Request) string {
-	if p := r.Header.Get("X-Forwarded-Prefix"); p != "" {
-		return p
+	if !versionRe.MatchString(idx.Latest) {
+		http.Error(w, "index unreadable", http.StatusBadGateway)
+		return
 	}
-	return ""
+	target := (&url.URL{Path: path.Join("/", s.basePath, "templates", name, idx.Latest, file)}).String()
+	w.Header().Set("Cache-Control", cacheIndex)
+	w.Header().Set("Location", target)
+	w.WriteHeader(http.StatusFound)
 }

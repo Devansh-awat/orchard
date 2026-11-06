@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/ed25519"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -241,6 +242,8 @@ type catalogEntry struct {
 type catalog struct {
 	GeneratedAt string         `json:"generatedAt"`
 	Version     string         `json:"version,omitempty"`
+	Sequence    int64          `json:"sequence,omitempty"`
+	ExpiresAt   string         `json:"expiresAt,omitempty"`
 	Templates   []catalogEntry `json:"templates"`
 }
 
@@ -400,6 +403,8 @@ type publisher struct {
 	authors    map[string]string
 	now        func() time.Time
 	log        *log.Logger
+	signKey    ed25519.PrivateKey
+	indexTTL   time.Duration
 }
 
 func (p *publisher) sourceURL(file string) string {
@@ -577,6 +582,7 @@ func (p *publisher) run(ctx context.Context, templateDirs []string, filesDir str
 		return nil, err
 	}
 	cat := &catalog{GeneratedAt: p.now().UTC().Format(time.RFC3339), Version: p.version, Templates: []catalogEntry{}}
+	cat.Sequence, cat.ExpiresAt = p.stamp()
 	for _, t := range templates {
 		idx, err := p.publishTemplate(ctx, t)
 		if err != nil {
@@ -614,7 +620,7 @@ func (p *publisher) run(ctx context.Context, templateDirs []string, filesDir str
 		return nil, err
 	}
 	body, _ := json.MarshalIndent(cat, "", "  ")
-	changed, err := p.putIfChanged(ctx, rootIndexKey, body, "application/json; charset=utf-8", cacheIndex, false)
+	changed, err := p.putIndex(ctx, rootIndexKey, body)
 	if err != nil {
 		return nil, err
 	}

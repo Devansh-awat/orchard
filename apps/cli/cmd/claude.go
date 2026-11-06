@@ -396,15 +396,15 @@ func renderClaudeSummary(w io.Writer, found []claudeFound) {
 	total := 0
 	for i, f := range found {
 		if i == 0 || f.Item.Kind != found[i-1].Item.Kind {
-			fmt.Fprintln(w, output.Dim(f.Item.Kind))
+			output.Fprintln(w, output.Dim(f.Item.Kind))
 		}
-		fmt.Fprintf(w, "  %-*s  %s\n", width, f.Item.Name, output.Dim(quotaHumanBytes(float64(f.Size))))
+		output.Fprintf(w, "  %-*s  %s\n", width, f.Item.Name, output.Dim(quotaHumanBytes(float64(f.Size))))
 		if len(f.Secrets) > 0 {
-			fmt.Fprintf(w, "  %-*s  contains secrets: %s\n", width, "", strings.Join(f.Secrets, ", "))
+			output.Fprintf(w, "  %-*s  contains secrets: %s\n", width, "", strings.Join(f.Secrets, ", "))
 		}
 		total += f.Size
 	}
-	fmt.Fprintf(w, "\n%d item(s), %s. Everything is encrypted at rest on Orchard.\n", len(found), quotaHumanBytes(float64(total)))
+	output.Fprintf(w, "\n%d item(s), %s. Everything is encrypted at rest on Orchard.\n", len(found), quotaHumanBytes(float64(total)))
 }
 
 func pickClaudeItems(found []claudeFound) ([]claudeFound, error) {
@@ -485,7 +485,7 @@ func claudeImportCmd() *cobra.Command {
 					return output.JSON(map[string]any{"items": claudeDryRun(scan.Found), "skipped": scan.Skipped})
 				}
 				renderClaudeSummary(os.Stdout, scan.Found)
-				fmt.Println(output.Dim("dry run: nothing was uploaded"))
+				output.Println(output.Dim("dry run: nothing was uploaded"))
 				return nil
 			}
 			cl, _, err := client()
@@ -521,7 +521,7 @@ func claudeImportCmd() *cobra.Command {
 				return output.JSON(out)
 			}
 			output.Successf("imported %s item(s) into your Orchard account", pick(out, "imported"))
-			fmt.Println(output.Dim("see them with: orchard claude list"))
+			output.Println(output.Dim("see them with: orchard claude list"))
 			return nil
 		},
 	}
@@ -560,7 +560,7 @@ func claudeListCmd() *cobra.Command {
 				rows = append(rows, []string{pick(e, "kind"), pick(e, "name"), enabled, quotaHumanBytes(size), pick(e, "updatedAt")})
 			}
 			if len(rows) == 0 {
-				fmt.Println(output.Dim("Nothing imported yet. Run: orchard claude import"))
+				output.Println(output.Dim("Nothing imported yet. Run: orchard claude import"))
 				return nil
 			}
 			output.Table([]string{"kind", "name", "enabled", "size", "updated"}, rows)

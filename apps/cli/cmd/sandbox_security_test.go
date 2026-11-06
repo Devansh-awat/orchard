@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/hackclub/orchard/cli/internal/api"
+	"github.com/hackclub/orchard/cli/internal/output"
 )
 
 func TestResolveSandboxPrefersYourOwnMachineByName(t *testing.T) {
@@ -45,7 +46,7 @@ func TestResolveSandboxRefusesTwoSharedMachinesWithTheSameName(t *testing.T) {
 
 func TestTerminalTextDropsControlSequences(t *testing.T) {
 	in := "ok\x1b]52;c;ZXZpbA==\x07 done\x1b[2J\tline\nnext\r\u009bX"
-	got := terminalSafe(in)
+	got := output.Sanitize(in)
 	if strings.ContainsAny(got, "\x1b\x07\r\u009b") {
 		t.Fatalf("control bytes survived: %q", got)
 	}

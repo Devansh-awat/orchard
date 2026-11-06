@@ -172,9 +172,9 @@ func deployHistoryCmd() *cobra.Command {
 					return output.JSON(raw)
 				}
 				logs := str(raw["logs"])
-				fmt.Print(logs)
+				output.Print(output.SanitizeStyled(logs))
 				if logs != "" && !strings.HasSuffix(logs, "\n") {
-					fmt.Println()
+					output.Println()
 				}
 				return nil
 			}
@@ -266,9 +266,9 @@ func deployKilledLogsCmd() *cobra.Command {
 				return output.JSON(raw)
 			}
 			logs := str(raw["logs"])
-			fmt.Print(logs)
+			output.Print(output.SanitizeStyled(logs))
 			if logs != "" && !strings.HasSuffix(logs, "\n") {
-				fmt.Println()
+				output.Println()
 			}
 			return nil
 		},

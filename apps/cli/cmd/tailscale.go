@@ -3,7 +3,6 @@ package cmd
 import (
 	"bufio"
 	"errors"
-	"fmt"
 	"net/http"
 	"net/url"
 	"os"
@@ -102,7 +101,7 @@ func tailscaleAuthKey(cmd *cobra.Command, flag string) (string, error) {
 	}
 	if key == "" {
 		if term.IsTerminal(int(os.Stdin.Fd())) {
-			fmt.Fprint(os.Stderr, "Paste your Tailscale auth key (tskey-auth-…): ")
+			output.Fprint(os.Stderr, "Paste your Tailscale auth key (tskey-auth-…): ")
 		}
 		r := bufio.NewReader(cmd.InOrStdin())
 		line, _ := r.ReadString('\n')

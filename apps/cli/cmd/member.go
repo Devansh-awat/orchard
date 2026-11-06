@@ -170,7 +170,7 @@ func printInviteLink(raw map[string]any) {
 		return
 	}
 	output.Warnf("this instance can't send email, so send this link yourself. It works once, and you won't see it again.")
-	fmt.Println(link)
+	output.Println(output.Sanitize(link))
 }
 
 func memberRemoveCmd() *cobra.Command {

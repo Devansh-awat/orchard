@@ -983,6 +983,11 @@ publicTls:
 grafts: []
 
 graftSettings:
+  # auto (default) or required. Whether the registry's signed template catalogue
+  # and graft revocation list must verify. auto accepts an unsigned index only
+  # until the first signed one has been seen. Set required after the first signed
+  # registry publish.
+  registrySignature: ""
   # Which grafts may load: official (Orchard's own), listed (official,
   # community grafts from the Extension Marketplace, and grafts signed by a key
   # in `keys`), taps (listed plus grafts from the taps below) or any (unsigned

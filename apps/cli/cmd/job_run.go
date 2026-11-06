@@ -155,9 +155,9 @@ func jobRunCancelCmd() *cobra.Command {
 }
 
 func jobRunPrintLogs(logs string) {
-	fmt.Print(logs)
+	output.Print(output.SanitizeStyled(logs))
 	if logs != "" && !strings.HasSuffix(logs, "\n") {
-		fmt.Println()
+		output.Println()
 	}
 }
 
@@ -226,7 +226,7 @@ func jobRunLogsCmd() *cobra.Command {
 			}
 			for _, e := range entries {
 				if len(entries) > 1 {
-					fmt.Println(output.Dim(fmt.Sprintf("── step %s: %s (%s)", pick(e, "step"), pick(e, "name"), pick(e, "status"))))
+					output.Println(output.Dim(fmt.Sprintf("── step %s: %s (%s)", output.SanitizeLine(pick(e, "step")), output.SanitizeLine(pick(e, "name")), output.SanitizeLine(pick(e, "status")))))
 				}
 				if b, _ := e["truncated"].(bool); b {
 					output.Warnf("step %s logs were truncated", pick(e, "step"))

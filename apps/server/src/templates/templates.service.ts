@@ -20,6 +20,14 @@ import { scrubIngress } from '../projects/projects.utils';
 import { AuthorizationService } from '../auth/authorization.service';
 import { UsersService } from '../users/users.service';
 import { TemplateEngineService, ResolutionContext, ParameterDef } from './template-engine.service';
+import {
+  loadVerifiedRegistryIndex,
+  MissingRegistryObject,
+  parseRegistryState,
+  registrySignaturePolicyFromEnv,
+  registryStateKey,
+  type RegistryIndexStateStore
+} from '../registry-index/signed-index';
 import { chosenPodSize, isolateTemplateVolumes, type PodSizeOverride } from './template-defaults';
 
 const REGISTRY_SYNC_MS = 6 * 60 * 60 * 1000;
@@ -175,17 +183,54 @@ export class TemplatesService implements OnModuleInit, OnModuleDestroy {
     return response;
   }
 
+  private registryStateStore(): RegistryIndexStateStore {
+    return {
+      load: async (name) =>
+        parseRegistryState(
+          (await this.prisma.instanceSetting.findUnique({ where: { key: registryStateKey(name) } }))
+            ?.value
+        ),
+      save: async (name, state) => {
+        const value = JSON.stringify(state);
+        await this.prisma.instanceSetting.upsert({
+          where: { key: registryStateKey(name) },
+          update: { value },
+          create: { key: registryStateKey(name), value }
+        });
+      }
+    };
+  }
+
   async syncRegistry(): Promise<{ synced: number; skipped: number }> {
     const base = registryUrl();
     if (!base) return { synced: 0, skipped: 0 };
     let entries: RegistryEntry[];
     try {
-      const index = (await (await this.fetchRegistry(`${base}/templates/index.json`)).json()) as {
-        templates?: RegistryEntry[];
-      };
+      const verified = await loadVerifiedRegistryIndex({
+        name: 'templates/index.json',
+        read: async (suffix) => {
+          const url = `${base}/templates/index.json${suffix}`;
+          if (suffix) {
+            const probe = await fetch(url, {
+              headers: { 'user-agent': 'orchard-server' },
+              signal: AbortSignal.timeout(REGISTRY_FETCH_TIMEOUT_MS)
+            });
+            if (probe.status === 404) throw new MissingRegistryObject(url);
+            if (!probe.ok) throw new Error(`${url} answered ${probe.status}`);
+            return Buffer.from(await probe.arrayBuffer());
+          }
+          return Buffer.from(await (await this.fetchRegistry(url)).arrayBuffer());
+        },
+        store: this.registryStateStore(),
+        policy: registrySignaturePolicyFromEnv()
+      });
+      for (const warning of verified.warnings) this.logger.warn(warning);
+      const index = verified.body as { templates?: RegistryEntry[] };
       entries = Array.isArray(index.templates) ? index.templates : [];
     } catch (e) {
-      this.logger.warn(`Registry sync skipped: ${e.message}`);
+      this.logger.warn(
+        `Registry sync skipped, keeping the last accepted catalogue: ${(e as Error).message}`
+      );
       return { synced: 0, skipped: 0 };
     }
 

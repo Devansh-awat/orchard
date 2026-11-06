@@ -48,7 +48,7 @@ func authLoginCmd() *cobra.Command {
 			if token != "" || withToken || (!output.IsTTY() && !noBrowser) {
 				if token == "" {
 					if output.StdinIsTTY() {
-						fmt.Fprint(os.Stderr, "Paste your Orchard API token (orch_…): ")
+						output.Fprint(os.Stderr, "Paste your Orchard API token (orch_…): ")
 					}
 					r := bufio.NewReader(os.Stdin)
 					line, _ := r.ReadString('\n')
@@ -162,7 +162,7 @@ func authStatusCmd() *cobra.Command {
 				return output.JSON(me)
 			}
 			output.Successf("authenticated to %s", cfg.APIURL)
-			fmt.Println(output.Dim("user: ") + displayUser(me))
+			output.Println(output.Dim("user: ") + displayUser(me))
 			return nil
 		},
 	}
@@ -483,7 +483,7 @@ func displayUser(me map[string]any) string {
 	for _, k := range []string{"email", "name", "username", "id", "sub"} {
 		if v, ok := me[k]; ok {
 			if s, ok := v.(string); ok && s != "" {
-				return s
+				return output.SanitizeLine(s)
 			}
 		}
 	}

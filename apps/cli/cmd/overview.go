@@ -82,7 +82,7 @@ func overviewRenderAll(ov map[string]any) {
 	deployments := asList(ov["deployments"])
 	databases := asList(ov["databases"])
 	if len(orgs) == 0 {
-		fmt.Println(output.Dim("no organizations"))
+		output.Println(output.Dim("no organizations"))
 		return
 	}
 	for _, org := range orgs {
@@ -103,7 +103,7 @@ func overviewRenderAll(ov map[string]any) {
 				ndb++
 			}
 		}
-		fmt.Printf("%s %s  %d projects, %d apps, %d databases\n", pick(org, "name"), output.Dim(str(org["slug"])), np, nd, ndb)
+		output.Printf("%s %s  %d projects, %d apps, %d databases\n", output.SanitizeLine(pick(org, "name")), output.Dim(output.SanitizeLine(str(org["slug"]))), np, nd, ndb)
 	}
 }
 
@@ -135,8 +135,8 @@ func overviewRender(ov map[string]any, slug string) {
 	if len(deployments) == 0 {
 		return
 	}
-	fmt.Println()
-	fmt.Println(output.Dim("── deployments"))
+	output.Println()
+	output.Println(output.Dim("── deployments"))
 	rows := [][]string{}
 	for _, d := range deployments {
 		rows = append(rows, []string{
@@ -151,8 +151,8 @@ func overviewRender(ov map[string]any, slug string) {
 }
 
 func overviewRenderBuilds(feed map[string]any) {
-	fmt.Println()
-	fmt.Println(output.Dim("── active builds"))
+	output.Println()
+	output.Println(output.Dim("── active builds"))
 	rows := [][]string{}
 	for _, d := range asList(feed["active"]) {
 		rows = append(rows, []string{
@@ -165,8 +165,8 @@ func overviewRenderBuilds(feed map[string]any) {
 	}
 	output.Table([]string{"deployment", "project", "status", "step", "updated"}, rows)
 
-	fmt.Println()
-	fmt.Println(output.Dim("── recent builds"))
+	output.Println()
+	output.Println(output.Dim("── recent builds"))
 	rows = [][]string{}
 	for _, b := range asList(feed["recent"]) {
 		dep := quotaSub(b, "deployment")

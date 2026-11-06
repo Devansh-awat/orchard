@@ -53,8 +53,8 @@ func templateSection(title string, headers []string, rows [][]string) {
 	if len(rows) == 0 {
 		return
 	}
-	fmt.Println()
-	fmt.Println(output.Dim(title))
+	output.Println()
+	output.Println(output.Dim(title))
 	output.Table(headers, rows)
 }
 

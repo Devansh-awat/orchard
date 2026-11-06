@@ -72,7 +72,7 @@ func gitListCmd() *cobra.Command {
 				rows = append(rows, []string{pick(c, "name"), pick(c, "provider"), pick(c, "host"), pick(c, "id")})
 			}
 			if len(rows) == 0 {
-				fmt.Println(output.Dim("No git providers. Add one with: orchard git add --provider gitlab --name work --token <token>"))
+				output.Println(output.Dim("No git providers. Add one with: orchard git add --provider gitlab --name work --token <token>"))
 				return nil
 			}
 			output.Table([]string{"name", "provider", "host", "id"}, rows)
@@ -105,9 +105,9 @@ func gitAddCmd() *cobra.Command {
 			if fmtFlag() == output.FormatJSON {
 				return output.JSON(out)
 			}
-			fmt.Printf("Connected %s (%s at %s)\n", pick(out, "name"), pick(out, "provider"), pick(out, "host"))
-			fmt.Printf("Webhook URL: %s\n", pick(out, "webhookPath"))
-			fmt.Println(output.Dim("Get the secret with: orchard git webhook " + pick(out, "name")))
+			output.Printf("Connected %s (%s at %s)\n", output.SanitizeLine(pick(out, "name")), output.SanitizeLine(pick(out, "provider")), output.SanitizeLine(pick(out, "host")))
+			output.Printf("Webhook URL: %s\n", output.SanitizeLine(pick(out, "webhookPath")))
+			output.Println(output.Dim("Get the secret with: orchard git webhook " + output.SanitizeLine(pick(out, "name"))))
 			return nil
 		},
 	}
@@ -139,7 +139,7 @@ func gitRemoveCmd() *cobra.Command {
 			if err := cl.Send(cmd.Context(), http.MethodDelete, gitPath(url.PathEscape(pick(conn, "id"))), nil, nil); err != nil {
 				return err
 			}
-			fmt.Printf("Removed %s\n", pick(conn, "name"))
+			output.Printf("Removed %s\n", output.SanitizeLine(pick(conn, "name")))
 			return nil
 		},
 	}
@@ -166,8 +166,8 @@ func gitWebhookCmd() *cobra.Command {
 			if fmtFlag() == output.FormatJSON {
 				return output.JSON(map[string]any{"url": cfg.APIURL + pick(conn, "webhookPath"), "secret": pick(out, "secret")})
 			}
-			fmt.Printf("URL:    %s%s\n", cfg.APIURL, pick(conn, "webhookPath"))
-			fmt.Printf("Secret: %s\n", pick(out, "secret"))
+			output.Printf("URL:    %s%s\n", cfg.APIURL, output.SanitizeLine(pick(conn, "webhookPath")))
+			output.Printf("Secret: %s\n", output.SanitizeLine(pick(out, "secret")))
 			return nil
 		},
 	}
@@ -259,12 +259,12 @@ func gitDetectCmd() *cobra.Command {
 			if fmtFlag() == output.FormatJSON {
 				return output.JSON(raw)
 			}
-			fmt.Printf("Build:      %s\n", pick(raw, "buildType"))
+			output.Printf("Build:      %s\n", output.SanitizeLine(pick(raw, "buildType")))
 			if d := pick(raw, "dockerfilePath"); d != "" {
-				fmt.Printf("Dockerfile: %s\n", d)
+				output.Printf("Dockerfile: %s\n", d)
 			}
 			if f := pick(raw, "framework"); f != "" {
-				fmt.Printf("Framework:  %s\n", f)
+				output.Printf("Framework:  %s\n", f)
 			}
 			return nil
 		},

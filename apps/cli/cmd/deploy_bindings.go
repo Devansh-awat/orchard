@@ -62,7 +62,7 @@ func deployBindingsListCmd() *cobra.Command {
 				})
 			}
 			if len(rows) == 0 {
-				fmt.Println(output.Dim("Nothing connected. Add one with: orchard deploy bindings add <id> --database <name> | --app <name>"))
+				output.Println(output.Dim("Nothing connected. Add one with: orchard deploy bindings add <id> --database <name> | --app <name>"))
 				return nil
 			}
 			output.Table([]string{"name", "type", "resource", "status", "endpoint", "used by"}, rows)
@@ -161,15 +161,15 @@ func deployBindCmd() *cobra.Command {
 			if fmtFlag() == output.FormatJSON {
 				return output.JSON(out)
 			}
-			fmt.Printf("Connected to %s as %s\n", pick(match, "name"), pick(out, "name"))
+			output.Printf("Connected to %s as %s\n", output.SanitizeLine(pick(match, "name")), output.SanitizeLine(pick(out, "name")))
 			if k := pick(out, "addedEnvKey"); k != "" {
 				field := "connection_string"
 				if kind == "deployment" {
 					field = "url"
 				}
-				fmt.Printf("Added %s=${{resource.%s.%s}}\n", k, pick(out, "name"), field)
+				output.Printf("Added %s=${{resource.%s.%s}}\n", k, output.SanitizeLine(pick(out, "name")), field)
 			} else if !noEnv {
-				fmt.Println(output.Dim("Env untouched: the key already exists."))
+				output.Println(output.Dim("Env untouched: the key already exists."))
 			}
 			return nil
 		},
@@ -210,7 +210,7 @@ func deployUnbindCmd() *cobra.Command {
 			if err := cl.Send(cmd.Context(), http.MethodDelete, path, nil, nil); err != nil {
 				return err
 			}
-			fmt.Printf("Disconnected %s\n", args[1])
+			output.Printf("Disconnected %s\n", args[1])
 			return nil
 		},
 	}
@@ -228,8 +228,8 @@ func dbRotatePasswordCmd() *cobra.Command {
 				return err
 			}
 			if !yes {
-				fmt.Println("Anything that copied the old connection string by hand stops working. Bound apps follow automatically.")
-				fmt.Print("Rotate? [y/N] ")
+				output.Println("Anything that copied the old connection string by hand stops working. Bound apps follow automatically.")
+				output.Print("Rotate? [y/N] ")
 				var answer string
 				fmt.Scanln(&answer)
 				if !strings.EqualFold(strings.TrimSpace(answer), "y") {
@@ -249,9 +249,9 @@ func dbRotatePasswordCmd() *cobra.Command {
 				names = append(names, n)
 			}
 			if len(names) == 0 {
-				fmt.Println("Password rotated. No apps were bound.")
+				output.Println("Password rotated. No apps were bound.")
 			} else {
-				fmt.Printf("Password rotated. Re-applied env to %s.\n", strings.Join(names, ", "))
+				output.Printf("Password rotated. Re-applied env to %s.\n", strings.Join(names, ", "))
 			}
 			return nil
 		},

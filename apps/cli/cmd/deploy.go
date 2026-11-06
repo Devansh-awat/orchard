@@ -718,12 +718,12 @@ func deployLogsCmd() *cobra.Command {
 			}
 			for _, e := range entries {
 				if len(entries) > 1 {
-					fmt.Println(output.Dim("── pod " + str(e["pod"])))
+					output.Println(output.Dim("── pod " + output.SanitizeLine(str(e["pod"]))))
 				}
 				logs := str(e["logs"])
-				fmt.Print(logs)
+				output.Print(output.SanitizeStyled(logs))
 				if logs != "" && !strings.HasSuffix(logs, "\n") {
-					fmt.Println()
+					output.Println()
 				}
 			}
 			return nil
@@ -769,9 +769,9 @@ func deployFollowPodLogs(ctx context.Context, cl *api.Client, id, ns string, tai
 				continue
 			}
 			if len(pods) > 1 {
-				fmt.Println(output.Dim("── pod " + podName))
+				output.Println(output.Dim("── pod " + podName))
 			}
-			fmt.Print(strings.TrimSuffix(delta, "\n") + "\n")
+			output.Print(output.SanitizeStyled(strings.TrimSuffix(delta, "\n") + "\n"))
 		}
 		select {
 		case <-time.After(3 * time.Second):

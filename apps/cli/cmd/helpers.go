@@ -121,9 +121,9 @@ func printDeployDetails(ctx context.Context, cl *api.Client, apiURL, id string, 
 		output.Successf("live at %s", target)
 	}
 	if slug := orgSlugOf(raw); slug != "" {
-		fmt.Fprintln(os.Stderr, "  "+output.Dim("dashboard")+"  "+strings.TrimRight(apiURL, "/")+"/"+slug+"/deployments/"+str(raw["id"]))
+		output.Fprintln(os.Stderr, "  "+output.Dim("dashboard")+"  "+strings.TrimRight(apiURL, "/")+"/"+slug+"/deployments/"+output.SanitizeLine(str(raw["id"])))
 	}
-	fmt.Fprintln(os.Stderr, "  "+output.Dim("logs")+"       orchard deploy logs "+str(raw["id"])+" -f")
+	output.Fprintln(os.Stderr, "  "+output.Dim("logs")+"       orchard deploy logs "+output.SanitizeLine(str(raw["id"]))+" -f")
 }
 
 // addPageFlags wires cursor pagination onto list commands that support it.

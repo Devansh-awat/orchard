@@ -204,7 +204,7 @@ func observeLogsCmd() *cobra.Command {
 			if rerr != nil {
 				return rerr
 			}
-			fmt.Print(text)
+			output.Print(output.SanitizeStyled(text))
 			return nil
 		},
 	}

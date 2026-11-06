@@ -270,9 +270,9 @@ func podLogsCmd() *cobra.Command {
 				}
 				return nil
 			}
-			fmt.Print(logs)
+			output.Print(output.SanitizeStyled(logs))
 			if !strings.HasSuffix(logs, "\n") {
-				fmt.Println()
+				output.Println()
 			}
 			return nil
 		},
@@ -355,15 +355,15 @@ func podExecCmd() *cobra.Command {
 				}
 			} else {
 				if out := str(res["stdout"]); out != "" {
-					fmt.Print(out)
+					output.Print(output.SanitizeStyled(out))
 					if !strings.HasSuffix(out, "\n") {
-						fmt.Println()
+						output.Println()
 					}
 				}
 				if errOut := str(res["stderr"]); errOut != "" {
-					fmt.Fprint(os.Stderr, errOut)
+					output.Fprint(os.Stderr, output.SanitizeStyled(errOut))
 					if !strings.HasSuffix(errOut, "\n") {
-						fmt.Fprintln(os.Stderr)
+						output.Fprintln(os.Stderr)
 					}
 				}
 			}

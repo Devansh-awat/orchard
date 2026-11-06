@@ -181,6 +181,7 @@ Go to **Instance admin** > **Grafts**. The page lists each graft with its status
 | ------------------------------ | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
 | `grafts`                       | `ORCHARD_GRAFTS`                | None                                                                                                                                 |
 | `graftSettings.trust`          | `ORCHARD_GRAFT_TRUST`           | `listed`. One of `official`, `listed`, `taps`, or `any`.                                                                             |
+| `graftSettings.registrySignature` | `ORCHARD_REGISTRY_SIGNATURE` | `auto`. Set `required` to refuse an unsigned marketplace revocation list. |
 | `graftSettings.taps`           | `ORCHARD_GRAFT_TAPS`            | None. Each tap has a `name`, `url`, and `key`.                                                                                       |
 | `graftSettings.keys`           | `ORCHARD_GRAFT_KEYS`            | None                                                                                                                                 |
 | `graftSettings.marketplaceUrl` | `ORCHARD_GRAFT_MARKETPLACE_URL` | `https://assets.orchard.my/registry`                                                                                                 |
