@@ -34,7 +34,7 @@ jobs:
 
   publish:
     needs: validate
-    if: github.event_name != 'pull_request' && github.repository == 'hackclub/orchard'
+    if: github.event_name != 'pull_request' && github.repository == 'hackclub/orchard' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: registry
     env:
