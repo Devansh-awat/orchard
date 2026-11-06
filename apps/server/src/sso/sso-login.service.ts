@@ -582,10 +582,13 @@ export class SsoLoginService {
       // Membership doesn't let an org act as an account it doesn't own: that
       // takes its verified domain, or the person starting this sign-in from
       // their own session.
+      // An account whose address Orchard hasn't verified has no owner to
+      // consent, so a session of it can't vouch either: only the org's
+      // verified domain can claim it.
+      const consented = user.emailVerified && linkedUserId === user.id;
       if (
         membership.role !== OrganizationRole.owner &&
-        user.emailVerified &&
-        linkedUserId !== user.id &&
+        !consented &&
         !(await this.domains.isVerifiedFor(organizationId, email.split('@')[1] || ''))
       ) {
         const organization = await this.prisma.organization.findUnique({

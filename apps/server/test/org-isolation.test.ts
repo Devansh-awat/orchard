@@ -181,8 +181,15 @@ test('a verified domain lets the org sign in its own people', async () => {
   assert.equal((await resolve()).id, 'pepito');
 });
 
-test('an account nobody has claimed yet can sign in through the org that provisioned it', async () => {
+test('an account Orchard has not verified is never handed to an org IdP outside its domain', async () => {
   const resolve = buildLogin({ ...pepito, emailVerified: false }, 'member', false);
+  await assert.rejects(() => resolve(), UnauthorizedException);
+  await assert.rejects(() => resolve('pepito'), UnauthorizedException);
+  await assert.rejects(() => resolve('someone-else'), UnauthorizedException);
+});
+
+test('an unverified account in the org verified domain can still sign in', async () => {
+  const resolve = buildLogin({ ...pepito, emailVerified: false }, 'member', true);
   assert.equal((await resolve()).id, 'pepito');
 });
 

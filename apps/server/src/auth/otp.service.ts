@@ -2,6 +2,7 @@ import { Injectable, BadRequestException, ServiceUnavailableException } from '@n
 import { PrismaService } from '../prisma/prisma.service';
 import { EmailService } from '../email/email.service';
 import { RateLimitService } from './rate-limit.service';
+import { discardUnverifiedCredentials } from './unverified-adoption';
 // Shared with the host scripts, which mint a code without an email to send it
 // in. Two implementations of the same hash would drift into a login link the
 // server cannot verify.
@@ -158,16 +159,18 @@ export class OtpService {
     // this address. updateMany is a no-op when the user has not yet been
     // created (first-time signups are created post-verify by the controller
     // with emailVerified=true), so this is safe for both flows.
-    const verified = await this.prisma.user.updateMany({
-      where: { email: normalizedEmail, emailVerified: false },
-      data: { emailVerified: true, emailVerifiedAt: new Date() }
-    });
-    if (verified.count > 0) {
-      await this.prisma.session.updateMany({
-        where: { authMethod: 'sso', revokedAt: null, user: { email: normalizedEmail } },
-        data: { revokedAt: new Date() }
+    await this.prisma.$transaction(async (tx) => {
+      const unverified = await tx.user.findUnique({
+        where: { email: normalizedEmail },
+        select: { id: true, emailVerified: true }
       });
-    }
+      if (!unverified || unverified.emailVerified) return;
+      await discardUnverifiedCredentials(tx as any, unverified.id);
+      await tx.user.update({
+        where: { id: unverified.id },
+        data: { emailVerified: true, emailVerifiedAt: new Date() }
+      });
+    });
 
     await this.rateLimitService.resetRateLimit(normalizedEmail, 'email', 'otp_verify');
     await this.rateLimitService.resetRateLimit(ipAddress, 'ip', 'otp_verify');

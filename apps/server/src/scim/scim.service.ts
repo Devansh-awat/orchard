@@ -459,7 +459,7 @@ export class ScimService implements OnModuleInit {
           id: view.id,
           organizationId: ctx.organizationId,
           userId: view.userId,
-          role: role as any,
+          role: (role === 'owner' ? 'admin' : role) as any,
           scimManaged: true,
           scimExternalId: write.externalId,
           scimEnterprise: write.enterprise,
@@ -528,7 +528,10 @@ export class ScimService implements OnModuleInit {
       // An omitted role means "unchanged", not "reset to member". Clearing it
       // the way replace semantics imply would silently demote every user on any
       // PUT from an IdP that doesn't map roles, which is most of them.
-      const role = requestedRole ?? target.role;
+      const role =
+        requestedRole === 'owner' && target.role !== 'owner'
+          ? target.role
+          : (requestedRole ?? target.role);
       if (role !== target.role) {
         await this.assertNotLastOwner(target, ctx, 'demote');
       }

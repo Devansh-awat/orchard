@@ -74,7 +74,9 @@ To regain access, members sign in through your provider, then create a new [API 
 
 [Deployment webhooks](/run/webhooks/) and [SCIM](/teams/scim/) tokens are not tied to anyone's sign-in, and keep working.
 
-Your provider can only sign in as an existing account if its email is on a verified domain, or the person started the sign-in from their own Orchard session. Otherwise Orchard asks them to sign in to Orchard first.
+Your provider can only sign in as an existing account that is already a member of the organization, and only if its email is on a verified domain, or the person started the sign-in from their own Orchard session and Orchard has verified that email. An account with an unverified email is never linked from a session, so it needs a verified domain. Otherwise Orchard asks them to sign in to Orchard first. A provider can create a brand-new account only inside a verified domain.
+
+A session opened through an organization's provider is confined to that organization. It can't browse the person's personal GitHub repositories or installations, link accounts, or manage their account.
 
 :::caution
 Test a connection before you turn this on. A provider that fails blocks members on your verified domains from Orchard, and every other member except owners from this organization. Superadmins are never blocked. Replace the API tokens your scripts and CI jobs use before you turn this on.

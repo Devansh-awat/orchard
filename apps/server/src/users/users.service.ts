@@ -7,6 +7,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { EmailAvatarService } from './email-avatar.service';
+import { discardUnverifiedCredentials } from '../auth/unverified-adoption';
 
 const MAX_SEEN_UPDATES = 100;
 
@@ -99,20 +100,18 @@ export class UsersService {
           );
         }
         const previous = user;
-        if (!user.emailVerified) {
-          await this.prisma.session.updateMany({
-            where: { userId: user.id, authMethod: 'sso', revokedAt: null },
-            data: { revokedAt: new Date() }
+        const adopting = user;
+        user = await this.prisma.$transaction(async (tx) => {
+          if (!adopting.emailVerified) await discardUnverifiedCredentials(tx as any, adopting.id);
+          return tx.user.update({
+            where: { id: adopting.id },
+            data: {
+              externalAuthId: hackClubUser.id,
+              ...(adopting.emailVerified
+                ? {}
+                : { emailVerified: true, emailVerifiedAt: new Date() })
+            }
           });
-        }
-        user = await this.prisma.user.update({
-          where: { id: user.id },
-          data: {
-            externalAuthId: hackClubUser.id,
-            // Hack Club is the identity provider asserting this address, so
-            // treat it as verified. Don't clobber an existing verification.
-            ...(user.emailVerified ? {} : { emailVerified: true, emailVerifiedAt: new Date() })
-          }
         });
         this.invalidateUserCache(previous);
         this.invalidateUserCache(user);

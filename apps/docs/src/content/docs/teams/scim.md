@@ -43,7 +43,7 @@ Orchard refuses to deactivate, delete, or demote the last owner of an organizati
 
 ## Assign roles from your provider
 
-Orchard reads a member's role from the SCIM `roles` attribute or the `userType` attribute. The accepted values are `admin`, `member`, and `guest`. A provider cannot grant `owner`.
+Orchard reads a member's role from the SCIM `roles` attribute or the `userType` attribute. The accepted values are `admin`, `member`, and `guest`. A provider cannot grant `owner`, including by reactivating a user who used to be one: a reactivated member keeps the role they hold now, and a deactivated owner with no current membership comes back as `admin`.
 
 A role sent by the provider overrides a change made in the dashboard at the next sync.
 

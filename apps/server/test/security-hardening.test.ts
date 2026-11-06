@@ -65,7 +65,11 @@ test('org-scoped sessions cannot reach account credentials', () => {
     ['POST', '/apiv1/auth/password/set'],
     ['POST', '/apiv1/auth/passkey/register/options'],
     ['POST', '/apiv1/auth/sessions/revoke-all'],
-    ['POST', '/apiv1/ssh-identities']
+    ['POST', '/apiv1/ssh-identities'],
+    ['GET', '/apiv1/github/repositories'],
+    ['GET', '/apiv1/github/repositories/o/r/contents'],
+    ['GET', '/apiv1/github/status'],
+    ['GET', '/apiv1/github/app/installations']
   ]) {
     assert.equal(deniedToOrgScopedSession(method, path), true, path);
   }

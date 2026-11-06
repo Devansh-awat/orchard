@@ -646,3 +646,41 @@ test('SCIM can add an outside address and never touches the account', async () =
   assert.equal(members.length, 0);
   assert.equal(JSON.stringify(users), before);
 });
+
+test('reactivating a stale owner tombstone never promotes a re-added member to owner', async () => {
+  const { service, members, tombstones } = makeService();
+  await service.createUser({ userName: 'first@example.com' }, ctx);
+  const past: any = await service.createUser({ userName: 'past@example.com' }, ctx);
+  members[0].role = 'owner';
+  members[1].role = 'owner';
+
+  await service.patchUser(past.id, patchOp({ active: false }), ctx);
+  assert.equal(tombstones[0].role, 'owner');
+
+  const pastUserId = tombstones[0].userId;
+  members.push({
+    id: randomUUID(),
+    organizationId: ORG,
+    userId: pastUserId,
+    role: 'member',
+    addedAt: new Date(),
+    scimManaged: false
+  });
+
+  await service.patchUser(past.id, patchOp({ active: true }), ctx);
+  const live = members.find((m) => m.userId === pastUserId);
+  assert.equal(live.role, 'member');
+  assert.equal(members.filter((m) => m.role === 'owner').length, 1);
+});
+
+test('reactivating an owner tombstone with no live membership restores at most admin', async () => {
+  const { service, members } = makeService();
+  await service.createUser({ userName: 'first@example.com' }, ctx);
+  const past: any = await service.createUser({ userName: 'past@example.com' }, ctx);
+  members[0].role = 'owner';
+  members[1].role = 'owner';
+
+  await service.patchUser(past.id, patchOp({ active: false }), ctx);
+  await service.patchUser(past.id, patchOp({ active: true }), ctx);
+  assert.equal(members.find((m) => m.id === past.id).role, 'admin');
+});
