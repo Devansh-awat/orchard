@@ -2,7 +2,7 @@ import type * as http from 'http';
 import { jwtVerify } from 'jose';
 import type { PrismaService } from '../prisma/prisma.service';
 import type { SessionsService } from './sessions.service';
-import { hashApiToken, resolveTokenLineage } from './api-tokens.service';
+import { hashApiToken } from './api-tokens.service';
 import { assertBrowserSession } from './session-jwt';
 
 export interface UpgradeIdentity {
@@ -104,7 +104,6 @@ export async function authenticateUpgrade(
   });
   if (!apiToken) return null;
   if (apiToken.expiresAt && apiToken.expiresAt < new Date()) return null;
-  if (!(await resolveTokenLineage(deps.prisma, token))) return null;
   const scopes = Array.isArray(apiToken.scopes) ? (apiToken.scopes as string[]) : [];
   if (!scopes.includes(deps.requiredScope)) return null;
   const restricted = Array.isArray(apiToken.restrictedProjectIds)

@@ -33,7 +33,6 @@ export class ApiTokensController {
       apiTokenId?: string;
       tokenScopes?: string[];
       tokenProjectIds?: string[];
-      tokenLineage?: string[];
       sessionOrgId?: string;
     };
     const expiresAt = body.expiresAt ? new Date(body.expiresAt) : undefined;
@@ -47,8 +46,7 @@ export class ApiTokensController {
         ? {
             scopes: auth.tokenScopes ?? [],
             projectIds: auth.tokenProjectIds ?? [],
-            tokenId: auth.apiTokenId,
-            lineage: auth.tokenLineage ?? []
+            tokenId: auth.apiTokenId
           }
         : undefined,
       auth.sessionOrgId

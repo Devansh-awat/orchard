@@ -7,7 +7,7 @@ import { PassThrough, type Writable } from 'stream';
 import { INestApplication } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { SessionsService } from '../auth/sessions.service';
-import { hashApiToken, resolveTokenLineage } from '../auth/api-tokens.service';
+import { hashApiToken } from '../auth/api-tokens.service';
 import { assertBrowserSession } from '../auth/session-jwt';
 import { originAllowed, platformOrigins } from '../auth/upgrade-auth';
 import type { RequestAuthContext } from '../auth/request-context';
@@ -82,7 +82,6 @@ export interface EngineAuth {
   sessionOrgScope: string | undefined;
   tokenAuthCtx: TokenAuthContext | null;
   tokenExpiresAt?: number | null;
-  tokenLineage?: string[];
   isProxyHop: boolean;
 }
 
@@ -134,7 +133,6 @@ interface ConnectionContext {
   sessionOrgScope: string | undefined;
   tokenAuthCtx: TokenAuthContext | null;
   tokenExpiresAt: number | null;
-  tokenLineage: string[];
   requested: string;
   isProxyHop: boolean;
   proto: Proto;
@@ -270,8 +268,6 @@ export async function authenticateUpgrade(
     });
     if (!apiToken) return unauthorized;
     if (apiToken.expiresAt && apiToken.expiresAt < new Date()) return unauthorized;
-    const tokenLineage = await resolveTokenLineage(deps.prisma, token);
-    if (!tokenLineage) return unauthorized;
     const scopes = Array.isArray(apiToken.scopes) ? (apiToken.scopes as string[]) : [];
     if (!scopes.includes('exec')) return { reject: 403, message: 'Forbidden' };
     const restrictedProjectIds = Array.isArray(apiToken.restrictedProjectIds)
@@ -291,7 +287,6 @@ export async function authenticateUpgrade(
         tokenProjectIds: restrictedProjectIds
       },
       tokenExpiresAt: apiToken.expiresAt ? apiToken.expiresAt.getTime() : null,
-      tokenLineage,
       isProxyHop: false
     };
   }
@@ -317,7 +312,6 @@ export async function signProxyHopToken(
     sessionOrgScope: string | undefined;
     tokenAuthCtx: TokenAuthContext | null;
     tokenExpiresAt?: number | null;
-    tokenLineage?: string[];
   }
 ): Promise<string> {
   return new SignJWT({
@@ -326,8 +320,7 @@ export async function signProxyHopToken(
     ...(hop.browserSessionId ? { sessionId: hop.browserSessionId } : {}),
     ...(hop.sessionOrgScope ? { orgScope: hop.sessionOrgScope } : {}),
     ...(hop.tokenAuthCtx ? { tac: hop.tokenAuthCtx } : {}),
-    ...(hop.tokenExpiresAt ? { tex: hop.tokenExpiresAt } : {}),
-    ...(hop.tokenLineage?.length ? { tln: hop.tokenLineage } : {})
+    ...(hop.tokenExpiresAt ? { tex: hop.tokenExpiresAt } : {})
   })
     .setProtectedHeader({ alg: 'HS256' })
     .setSubject(hop.userId)
@@ -375,9 +368,6 @@ export async function verifyProxyHopToken(
     sessionOrgScope: typeof payload.orgScope === 'string' ? payload.orgScope : undefined,
     tokenAuthCtx: hopTokenAuthCtx(payload.tac),
     tokenExpiresAt: typeof payload.tex === 'number' ? payload.tex : null,
-    tokenLineage: Array.isArray(payload.tln)
-      ? payload.tln.filter((i): i is string => typeof i === 'string')
-      : [],
     isProxyHop: true
   };
 }
@@ -466,7 +456,6 @@ export class ExecSessionEngine {
       sessionOrgScope: auth.sessionOrgScope,
       tokenAuthCtx: auth.tokenAuthCtx,
       tokenExpiresAt: auth.tokenExpiresAt ?? null,
-      tokenLineage: auth.tokenLineage ?? [],
       requested,
       isProxyHop: auth.isProxyHop,
       proto: handshake.proto,
@@ -496,18 +485,6 @@ export class ExecSessionEngine {
         });
         if (!row) return false;
         if (row.expiresAt && row.expiresAt.getTime() <= Date.now()) return false;
-        const lineage = auth.tokenLineage ?? [];
-        if (lineage.length > 0) {
-          const parents = await this.deps.prisma.apiToken.findMany({
-            where: { id: { in: lineage } },
-            select: { id: true, expiresAt: true }
-          });
-          const now = Date.now();
-          const alive = new Set(
-            parents.filter((p) => !p.expiresAt || p.expiresAt.getTime() > now).map((p) => p.id)
-          );
-          if (!lineage.every((id) => alive.has(id))) return false;
-        }
         return await inner();
       } catch {
         return false;
@@ -949,8 +926,7 @@ export class ExecSessionEngine {
         browserSessionId: ctx.browserSessionId,
         sessionOrgScope: ctx.sessionOrgScope,
         tokenAuthCtx: ctx.tokenAuthCtx,
-        tokenExpiresAt: ctx.tokenExpiresAt,
-        tokenLineage: ctx.tokenLineage
+        tokenExpiresAt: ctx.tokenExpiresAt
       });
     } catch {
       return false;

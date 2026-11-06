@@ -7,7 +7,7 @@ import {
   MCP_SESSION_TTL_MS
 } from '../auth/sessions.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { hashApiToken, resolveTokenLineage } from '../auth/api-tokens.service';
+import { hashApiToken } from '../auth/api-tokens.service';
 import { MCP_ORG_DEVICE, orgScopedDevice, plainDeviceName } from '../auth/org-scoped-devices';
 import {
   checkRefreshGeneration,
@@ -741,10 +741,6 @@ export class McpOAuthService {
     }
     if (apiToken.expiresAt && apiToken.expiresAt < new Date()) {
       console.error('[MCP OAuth] API token rejected: expired');
-      return null;
-    }
-    if (!(await resolveTokenLineage(this.prisma, token))) {
-      console.error('[MCP OAuth] API token rejected: minting token is gone or expired');
       return null;
     }
     return { token, sub: apiToken.userId, scope: scopeFromApiTokenScopes(apiToken.scopes) };

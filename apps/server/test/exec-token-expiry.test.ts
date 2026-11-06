@@ -69,24 +69,18 @@ test('the recheck follows the token row: present, expired and deleted', async ()
   assert.equal(await recheck(), false);
 });
 
-test('a live session ends when a token that minted it is revoked', async () => {
+test('a live session ends when its token row is gone', async () => {
   const rows = new Map<string, { id: string; expiresAt: Date | null }>([
-    ['t1', { id: 't1', expiresAt: null }],
-    ['p1', { id: 'p1', expiresAt: null }]
+    ['t1', { id: 't1', expiresAt: null }]
   ]);
   const { engine } = engineWith({
     apiToken: {
-      findUnique: async ({ where }: any) => rows.get(where.id) ?? null,
-      findMany: async ({ where }: any) =>
-        where.id.in.flatMap((id: string) => (rows.has(id) ? [rows.get(id)] : []))
+      findUnique: async ({ where }: any) => rows.get(where.id) ?? null
     }
   });
-  const recheck = (engine as any).withTokenRecheck(
-    { ...tokenAuth('t1'), tokenLineage: ['p1'] },
-    async () => true
-  );
+  const recheck = (engine as any).withTokenRecheck(tokenAuth('t1'), async () => true);
   assert.equal(await recheck(), true);
-  rows.delete('p1');
+  rows.delete('t1');
   assert.equal(await recheck(), false);
 });
 

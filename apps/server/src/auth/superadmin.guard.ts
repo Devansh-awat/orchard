@@ -18,7 +18,7 @@ import {
   REQUIRED_SCOPE_KEY,
   ApiTokenScopeName
 } from './decorators';
-import { hashApiToken, resolveTokenLineage } from './api-tokens.service';
+import { hashApiToken } from './api-tokens.service';
 import { ORG_SCOPED_DENY, deviceOrgScope } from './org-scoped-devices';
 import { requestAuthStorage, RequestAuthContext } from './request-context';
 import { setTraceUser } from '../analytics/datadog';
@@ -462,11 +462,6 @@ export class SuperAdminGuard implements CanActivate {
         throw new UnauthorizedException('API token has expired');
       }
 
-      const tokenLineage = await resolveTokenLineage(this.prisma, token);
-      if (!tokenLineage) {
-        throw new UnauthorizedException('The token that minted this API token is no longer valid');
-      }
-
       if (deniedToApiToken(request.path)) {
         throw new ForbiddenException("An API token can't use this. Sign in instead.");
       }
@@ -488,7 +483,6 @@ export class SuperAdminGuard implements CanActivate {
       request['auth'] = {
         userId: user.id,
         apiTokenId: apiToken.id,
-        tokenLineage,
         tokenScopes: scopes,
         tokenProjectIds: restrictedProjectIds,
         ...(tokenOrgScope ? { sessionOrgId: tokenOrgScope } : {})
