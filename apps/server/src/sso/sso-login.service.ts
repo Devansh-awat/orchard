@@ -5,12 +5,12 @@ import {
   NotFoundException,
   Logger
 } from '@nestjs/common';
-import { randomBytes } from 'crypto';
+import { createHash, randomBytes } from 'crypto';
 import { IdentityProvider, OrganizationRole, SsoProtocol } from '@prisma/client';
 // openid-client is ESM only. Loading it lazily keeps this file a CommonJS
 // module rather than forcing a require() of an ES module at import time.
 import type * as OpenIdClient from 'openid-client' with { 'resolution-mode': 'import' };
-import { SAML, ValidateInResponseTo } from '@node-saml/node-saml';
+import { SAML, ValidateInResponseTo, type CacheProvider } from '@node-saml/node-saml';
 import { PrismaService } from '../prisma/prisma.service';
 import { OAuthService } from '../auth/oauth.service';
 import { SessionsService } from '../auth/sessions.service';
@@ -18,12 +18,33 @@ import { sanitizeUsername } from '../users/users.service';
 import { AuthorizationService } from '../auth/authorization.service';
 import { AuditService } from '../audit/audit.service';
 import { signupMode } from '../auth/signup-mode';
+import { isSessionCookieSecure } from '../auth/cookies';
 import { OidcStateStore } from './oidc-state.store';
 import { SamlRequestStore } from './saml-request.store';
 import { SsoCryptoService } from './sso-crypto.service';
 import { SsoService } from './sso.service';
 import { OrgDomainsService } from './org-domains.service';
 import { SignJWT, jwtVerify } from 'jose';
+import {
+  SamlRejected,
+  extractIdentity,
+  precheckSamlResponse,
+  sameSecret,
+  verifyAssertion
+} from './saml-response';
+
+const SAML_CLOCK_SKEW_MS = 60_000;
+const SAML_MAX_ASSERTION_AGE_MS = 10 * 60_000;
+const SAML_START_TTL = '5m';
+const SAML_START_TTL_MS = 5 * 60_000;
+const SAML_REPLAY_TTL_MS = 30 * 60_000;
+
+interface SamlRelayRecord {
+  providerId: string;
+  requestId: string;
+  linkedUserId?: string;
+  returnTo?: string;
+}
 
 interface IdpProfile {
   email: string;
@@ -100,27 +121,38 @@ export class SsoLoginService {
     return this.loadLoginProvider(provider.id);
   }
 
-  async startLogin(providerId: string, returnTo?: string): Promise<string> {
+  async startLogin(
+    providerId: string,
+    returnTo?: string,
+    sessionToken?: string
+  ): Promise<{ url: string; startToken: string }> {
     const provider = await this.loadLoginProvider(providerId);
-    if (provider.protocol === SsoProtocol.saml) return this.startSaml(provider, returnTo);
-    if (provider.protocol === SsoProtocol.oauth2) return this.startOAuth2(provider, returnTo);
-    return this.startOidc(provider, returnTo);
+    if (provider.protocol === SsoProtocol.saml) {
+      return this.startSaml(provider, returnTo, sessionToken);
+    }
+    const url =
+      provider.protocol === SsoProtocol.oauth2
+        ? await this.startOAuth2(provider, returnTo)
+        : await this.startOidc(provider, returnTo);
+    return { url, startToken: await this.issueStartToken(providerId, url, sessionToken) };
   }
 
   async issueStartToken(
     providerId: string,
     authorizeUrl: string,
-    sessionToken?: string
+    sessionToken?: string,
+    samlRelay?: string
   ): Promise<string> {
     return new SignJWT({
       type: 'sso_start',
       providerId,
       state: new URL(authorizeUrl).searchParams.get('state') ?? undefined,
+      samlRelay,
       linkedUserId: await this.signedInUser(sessionToken)
     })
       .setProtectedHeader({ alg: 'HS256' })
       .setIssuedAt()
-      .setExpirationTime('10m')
+      .setExpirationTime(samlRelay ? SAML_START_TTL : '10m')
       .sign(this.oauthService.getJwtSecret());
   }
 
@@ -150,7 +182,7 @@ export class SsoLoginService {
     providerId: string,
     token: string | undefined,
     state?: string
-  ): Promise<{ linkedUserId?: string }> {
+  ): Promise<{ linkedUserId?: string; samlRelay?: string }> {
     if (!token) throw new UnauthorizedException('SSO sign-in was not started in this browser');
     let payload: Record<string, unknown>;
     try {
@@ -165,7 +197,10 @@ export class SsoLoginService {
     ) {
       throw new UnauthorizedException('SSO sign-in was not started in this browser');
     }
-    return { linkedUserId: payload.linkedUserId as string | undefined };
+    return {
+      linkedUserId: payload.linkedUserId as string | undefined,
+      ...(typeof payload.samlRelay === 'string' ? { samlRelay: payload.samlRelay } : {})
+    };
   }
 
   private newState() {
@@ -218,9 +253,34 @@ export class SsoLoginService {
     return url.href;
   }
 
-  private async startSaml(provider: IdentityProvider, returnTo?: string): Promise<string> {
-    const saml = this.buildSamlClient(provider);
-    return saml.getAuthorizeUrlAsync(returnTo ?? '', undefined, {});
+  private async startSaml(
+    provider: IdentityProvider,
+    returnTo: string | undefined,
+    sessionToken?: string
+  ): Promise<{ url: string; startToken: string }> {
+    const requestId = `_${randomBytes(20).toString('hex')}`;
+    const relay = randomBytes(24).toString('hex');
+    const saml = this.buildSamlClient(provider, requestId);
+    const url = await saml.getAuthorizeUrlAsync(relay, undefined, {});
+    const startToken = await this.issueStartToken(provider.id, url, sessionToken, relay);
+    const record: SamlRelayRecord = {
+      providerId: provider.id,
+      requestId,
+      linkedUserId: await this.signedInUser(sessionToken),
+      returnTo: this.plainReturnTo(returnTo)
+    };
+    if (
+      !(await this.samlRequests.put(`relay:${relay}`, JSON.stringify(record), SAML_START_TTL_MS))
+    ) {
+      throw new Error('SAML relay collision');
+    }
+    return { url, startToken };
+  }
+
+  private plainReturnTo(returnTo: string | undefined): string | undefined {
+    return returnTo && returnTo.length <= 512 && /^\/(?![/\\])[^\u0000-\u0020\u007f\\]*$/.test(returnTo)
+      ? returnTo
+      : undefined;
   }
 
   private async discoverOidc(provider: IdentityProvider, openid: typeof OpenIdClient) {
@@ -234,21 +294,37 @@ export class SsoLoginService {
     );
   }
 
-  private buildSamlClient(provider: IdentityProvider): SAML {
+  private scopedSamlCache(providerId: string): CacheProvider {
+    const scope = (key: string) => `req:${providerId}:${key}`;
+    const store = this.samlRequests;
+    return {
+      saveAsync: (key, value) => store.saveAsync(scope(key), value),
+      getAsync: (key) => store.getAsync(scope(key)),
+      removeAsync: (key) => store.removeAsync(key ? scope(key) : null)
+    };
+  }
+
+  private buildSamlClient(provider: IdentityProvider, requestId?: string): SAML {
     const audience = this.sso.entityId(provider);
-    const cert = this.crypto.decryptOrNull(provider.samlCertificate) ?? '';
+    const certs = (this.crypto.decryptOrNull(provider.samlCertificate) ?? '')
+      .split(',')
+      .filter(Boolean);
     return new SAML({
       callbackUrl: this.sso.callbackUrl(provider),
       entryPoint: provider.samlEntryPoint,
       issuer: audience,
       audience,
-      // Binds the assertion to the configured IdP when we know its entityID.
       ...(provider.samlIdpEntityId ? { idpIssuer: provider.samlIdpEntityId } : {}),
-      idpCert: cert,
+      idpCert: certs,
       wantAuthnResponseSigned: true,
       wantAssertionsSigned: true,
       validateInResponseTo: ValidateInResponseTo.always,
-      cacheProvider: this.samlRequests
+      acceptedClockSkewMs: SAML_CLOCK_SKEW_MS,
+      maxAssertionAgeMs: SAML_MAX_ASSERTION_AGE_MS,
+      requestIdExpirationPeriodMs: SAML_START_TTL_MS,
+      signatureAlgorithm: 'sha256',
+      cacheProvider: this.scopedSamlCache(provider.id),
+      ...(requestId ? { generateUniqueId: () => requestId } : {})
     });
   }
 
@@ -329,35 +405,75 @@ export class SsoLoginService {
   async handleSamlCallback(
     providerId: string,
     samlResponse: string,
-    relayState?: string,
-    linkedUserId?: string
+    relayState: string | undefined,
+    startToken: string | undefined
   ): Promise<SsoLoginResult> {
+    const denied = () => new UnauthorizedException('SSO sign-in was not started in this browser');
+    if (typeof relayState !== 'string' || !/^[0-9a-f]{48}$/.test(relayState)) throw denied();
+
+    if (startToken || isSessionCookieSecure()) {
+      const start = await this.readStartToken(providerId, startToken);
+      if (!start.samlRelay || !sameSecret(start.samlRelay, relayState)) throw denied();
+    }
+    const raw = await this.samlRequests.take(`relay:${relayState}`);
+    if (!raw) throw denied();
+    const record = JSON.parse(raw) as SamlRelayRecord;
+    if (record.providerId !== providerId) throw denied();
+
     const provider = await this.loadLoginProvider(providerId);
-    const saml = this.buildSamlClient(provider);
-    const { profile } = await saml.validatePostResponseAsync({ SAMLResponse: samlResponse });
-    if (!profile) throw new BadRequestException('SAML response validation failed');
+    if (provider.protocol !== SsoProtocol.saml || !provider.samlIdpEntityId) {
+      throw new UnauthorizedException('SSO authentication failed');
+    }
 
-    const attrs = profile as unknown as Record<string, string | undefined>;
-    const email = profile.nameID || attrs.email || attrs.mail || '';
-    if (!email) throw new BadRequestException("SAML provider didn't return an email address");
+    let identity: { email: string; name: string; subject: string };
+    try {
+      precheckSamlResponse(samlResponse, this.sso.callbackUrl(provider));
+      const saml = this.buildSamlClient(provider);
+      const { profile } = await saml.validatePostResponseAsync({ SAMLResponse: samlResponse });
+      if (!profile || profile.inResponseTo !== record.requestId) {
+        throw new SamlRejected('InResponseTo does not match this browser session');
+      }
+      const verified = verifyAssertion(profile.getAssertion() as Record<string, any>, {
+        acsUrl: this.sso.callbackUrl(provider),
+        idpEntityId: provider.samlIdpEntityId,
+        audience: this.sso.entityId(provider),
+        requestId: record.requestId,
+        now: Date.now(),
+        skewMs: SAML_CLOCK_SKEW_MS,
+        maxAgeMs: SAML_MAX_ASSERTION_AGE_MS
+      });
+      const claimed = extractIdentity(
+        verified,
+        (profile.attributes ?? {}) as Record<string, unknown>
+      );
+      if (!claimed) throw new SamlRejected("SAML provider didn't return a usable email address");
+      if (
+        !(await this.samlRequests.put(
+          `assertion:${providerId}:${createHash('sha256').update(verified.assertionId).digest('hex')}`,
+          '1',
+          SAML_REPLAY_TTL_MS
+        ))
+      ) {
+        throw new SamlRejected('assertion replayed');
+      }
+      identity = { ...claimed, subject: verified.nameId };
+    } catch (err) {
+      this.logger.warn(
+        `SAML response rejected for provider ${providerId}: ${err instanceof Error ? err.message : 'error'}`
+      );
+      throw new UnauthorizedException('SSO authentication failed');
+    }
 
-    const first = attrs.firstName ?? attrs.givenName ?? '';
-    const last = attrs.lastName ?? attrs.surname ?? '';
-    const displayName = `${first} ${last}`.trim() || attrs.displayName || email.split('@')[0];
-
-    // SAML has no email_verified claim. A validated, signed assertion from the
-    // IdP an admin explicitly bound is the trust anchor, so both protocols
-    // arrive at completeLogin with the same guarantee.
     return this.completeLogin(
       provider,
       {
-        email,
-        name: displayName,
+        email: identity.email,
+        name: identity.name,
         emailVerified: true,
-        subject: profile.nameID ?? null
+        subject: identity.subject
       },
-      relayState || undefined,
-      linkedUserId
+      record.returnTo,
+      record.linkedUserId
     );
   }
 
@@ -482,12 +598,14 @@ export class SsoLoginService {
     return { token, userId: user.id, redirectTo: this.safeReturnTo(returnTo) };
   }
 
-  /**
-   * Only same-origin paths survive. An IdP-supplied RelayState is attacker
-   * influenceable, so anything absolute or protocol-relative is dropped.
-   */
   private safeReturnTo(returnTo: string | undefined): string {
-    if (returnTo && /^\/[^/\\]/.test(returnTo)) return `${this.frontendUrl}${returnTo}`;
+    if (
+      returnTo &&
+      returnTo.length <= 512 &&
+      /^\/(?![/\\])[^\u0000-\u0020\u007f\\]*$/.test(returnTo)
+    ) {
+      return `${this.frontendUrl}${returnTo}`;
+    }
     return `${this.frontendUrl}/oauth/callback`;
   }
 

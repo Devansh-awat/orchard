@@ -19,7 +19,6 @@ import { SsoLoginService, SsoLoginResult } from './sso-login.service';
 import { Public } from '../auth/decorators';
 import {
   clearSsoStartCookie,
-  isSessionCookieSecure,
   setSessionCookie,
   setSsoStartCookie,
   ssoStartCookie
@@ -83,11 +82,12 @@ export class SsoController {
     @Res() res: Response
   ) {
     try {
-      const url = await this.login.startLogin(providerId, returnTo);
-      setSsoStartCookie(
-        res,
-        await this.login.issueStartToken(providerId, url, req.cookies?.session_token)
+      const { url, startToken } = await this.login.startLogin(
+        providerId,
+        returnTo,
+        req.cookies?.session_token
       );
+      setSsoStartCookie(res, startToken);
       return res.redirect(url);
     } catch (err) {
       this.logger.warn(`SSO start failed for ${providerId}: ${(err as Error).message}`);
@@ -143,7 +143,7 @@ export class SsoController {
         providerId,
         samlResponse,
         relayState,
-        await this.samlLinkedUser(providerId, req)
+        ssoStartCookie(req)
       );
       return this.finish(res, result);
     } catch (err) {
@@ -211,18 +211,12 @@ export class SsoController {
         provider.id,
         samlResponse,
         relayState,
-        await this.samlLinkedUser(provider.id, req)
+        ssoStartCookie(req)
       );
       return this.finish(res, result);
     } catch (err) {
       return this.fail(res, err);
     }
-  }
-
-  private async samlLinkedUser(providerId: string, req: Request): Promise<string | undefined> {
-    const cookie = ssoStartCookie(req);
-    if (!cookie && !isSessionCookieSecure()) return undefined;
-    return (await this.login.readStartToken(providerId, cookie)).linkedUserId;
   }
 
   private requestUrl(req: Request): URL {

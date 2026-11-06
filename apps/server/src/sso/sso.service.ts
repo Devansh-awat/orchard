@@ -5,6 +5,7 @@ import {
   ConflictException,
   Logger
 } from '@nestjs/common';
+import { X509Certificate } from 'crypto';
 import { IdentityProvider, OrganizationRole, SsoProtocol } from '@prisma/client';
 import { generateServiceProviderMetadata } from '@node-saml/node-saml';
 import { PrismaService } from '../prisma/prisma.service';
@@ -67,6 +68,8 @@ export interface SettingsInput {
 // its own GET can't overwrite a real secret with the mask.
 const SECRET_MASK = '••••••••';
 const SAML_CERT_MASK = '(configured)';
+const METADATA_MAX_BYTES = 512 * 1024;
+const MAX_IDP_CERTIFICATES = 4;
 
 function isMask(value: string | null | undefined): boolean {
   return value === SECRET_MASK || value === SAML_CERT_MASK;
@@ -526,6 +529,17 @@ export class SsoService {
       if (!entryPoint) {
         throw new BadRequestException('SAML needs a sign-in URL or a metadata URL');
       }
+      this.assertSamlEntryPoint(entryPoint);
+      if (!idpEntityId?.trim()) {
+        throw new BadRequestException(
+          'SAML needs the IdP entity ID (Issuer). Provide it or a metadata URL that includes it'
+        );
+      }
+      idpEntityId = idpEntityId.trim();
+      const issuer = (input.samlIssuer ?? existing?.samlIssuer ?? null)?.trim() || null;
+      if (issuer && issuer !== existing?.samlIssuer) {
+        await this.assertSamlIssuerFree(issuer, existing?.id);
+      }
       if (!certificate && !existing?.samlCertificate) {
         throw new BadRequestException('SAML needs the IdP signing certificate');
       }
@@ -533,7 +547,7 @@ export class SsoService {
       data.samlEntryPoint = entryPoint;
       data.samlMetadataUrl = metadataUrl;
       data.samlIdpEntityId = idpEntityId;
-      data.samlIssuer = input.samlIssuer ?? existing?.samlIssuer ?? null;
+      data.samlIssuer = issuer;
       if (certificate)
         data.samlCertificate = this.crypto.encrypt(this.normalizeCertificate(certificate));
     } else {
@@ -952,11 +966,71 @@ export class SsoService {
     }));
   }
 
-  private normalizeCertificate(pem: string): string {
-    return pem
-      .replace(/-----BEGIN CERTIFICATE-----/g, '')
-      .replace(/-----END CERTIFICATE-----/g, '')
-      .replace(/\s+/g, '');
+  private assertSamlEntryPoint(raw: string) {
+    let url: URL;
+    try {
+      url = new URL(raw);
+    } catch {
+      throw new BadRequestException('SAML sign-in URL must be a valid URL');
+    }
+    const local = url.hostname === 'localhost' || url.hostname === '127.0.0.1';
+    const plainOk = local || this.allowInternalIdp();
+    if (
+      raw.length > 500 ||
+      url.username ||
+      url.password ||
+      !(url.protocol === 'https:' || (url.protocol === 'http:' && plainOk))
+    ) {
+      throw new BadRequestException('SAML sign-in URL must be an https URL');
+    }
+  }
+
+  private async assertSamlIssuerFree(issuer: string, ignoreId?: string) {
+    if (issuer.length > 500 || /[\s<>"']/.test(issuer)) {
+      throw new BadRequestException('SP entity ID is not valid');
+    }
+    const taken = await this.prisma.identityProvider.findFirst({
+      where: { samlIssuer: issuer, ...(ignoreId ? { NOT: { id: ignoreId } } : {}) },
+      select: { id: true }
+    });
+    if (taken || issuer.startsWith('orchard-sso-')) {
+      throw new BadRequestException('That SP entity ID is already in use');
+    }
+  }
+
+  normalizeCertificate(input: string): string {
+    const blocks = [
+      ...input.matchAll(/-----BEGIN CERTIFICATE-----([\s\S]*?)-----END CERTIFICATE-----/g)
+    ];
+    const candidates = (blocks.length ? blocks.map((m) => m[1]) : input.split(/[,;]/))
+      .map((c) => c.replace(/\s+/g, ''))
+      .filter(Boolean);
+    const unique = [...new Set(candidates)];
+    if (unique.length === 0 || unique.length > MAX_IDP_CERTIFICATES) {
+      throw new BadRequestException(
+        `Provide between 1 and ${MAX_IDP_CERTIFICATES} IdP signing certificates`
+      );
+    }
+    for (const base64 of unique) {
+      let key;
+      try {
+        if (!/^[A-Za-z0-9+/]+=*$/.test(base64)) throw new Error('not base64');
+        key = new X509Certificate(Buffer.from(base64, 'base64')).publicKey;
+      } catch {
+        throw new BadRequestException(
+          'The IdP signing certificate is not a valid X.509 certificate'
+        );
+      }
+      if (key.asymmetricKeyType === 'rsa' && (key.asymmetricKeyDetails?.modulusLength ?? 0) < 2048) {
+        throw new BadRequestException(
+          'The IdP signing certificate needs an RSA key of 2048 bits or more'
+        );
+      }
+      if (key.asymmetricKeyType !== 'rsa' && key.asymmetricKeyType !== 'ec') {
+        throw new BadRequestException('The IdP signing certificate must use an RSA or EC key');
+      }
+    }
+    return unique.join(',');
   }
 
   /**
@@ -974,7 +1048,10 @@ export class SsoService {
     try {
       const res = await this.fetchIdp(url, { signal: AbortSignal.timeout(10_000) });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const length = Number(res.headers.get('content-length') ?? 0);
+      if (length > METADATA_MAX_BYTES) throw new Error('metadata too large');
       xml = await res.text();
+      if (xml.length > METADATA_MAX_BYTES) throw new Error('metadata too large');
     } catch (err) {
       this.logger.warn(
         `IdP metadata fetch failed: ${err instanceof Error ? err.message : 'request failed'}`
@@ -984,8 +1061,18 @@ export class SsoService {
     return this.parseIdpMetadata(xml);
   }
 
-  parseIdpMetadata(xml: string) {
-    const entityId = /entityID="([^"]+)"/i.exec(xml)?.[1] ?? null;
+  parseIdpMetadata(raw: string) {
+    if (/<!DOCTYPE|<!ENTITY/i.test(raw)) {
+      throw new BadRequestException("That URL isn't SAML IdP metadata");
+    }
+    const xml = raw.replace(/<!--[\s\S]*?-->/g, '');
+    const descriptors = [...xml.matchAll(/<(?:[\w.-]+:)?EntityDescriptor\b([^>]*)>/g)];
+    if (descriptors.length > 1) {
+      throw new BadRequestException('IdP metadata must describe exactly one entity');
+    }
+    const entityId = descriptors[0]
+      ? (/\bentityID="([^"]+)"/.exec(descriptors[0][1])?.[1] ?? null)
+      : null;
 
     const ssoServices = [...xml.matchAll(/<[^>]*SingleSignOnService[^>]*>/gi)].map((m) => m[0]);
     const pick = (binding: string) =>
@@ -996,13 +1083,21 @@ export class SsoService {
       ssoServices[0]?.match(/Location="([^"]+)"/i)?.[1] ??
       null;
 
-    const signingBlock =
-      /<[^>]*KeyDescriptor[^>]*use="signing"[^>]*>([\s\S]*?)<\/[^>]*KeyDescriptor>/i.exec(xml);
-    const certSource = signingBlock?.[1] ?? xml;
-    const certificate =
-      /<[^>]*X509Certificate[^>]*>([\s\S]*?)<\/[^>]*X509Certificate>/i
-        .exec(certSource)?.[1]
-        ?.replace(/\s+/g, '') ?? null;
+    const certificates: string[] = [];
+    for (const block of xml.matchAll(
+      /<[^>]*KeyDescriptor\b([^>]*)>([\s\S]*?)<\/[^>]*KeyDescriptor>/gi
+    )) {
+      if (!(/use="signing"/i.test(block[1]) || !/\buse=/i.test(block[1]))) continue;
+      for (const cert of block[2].matchAll(
+        /<[^>]*X509Certificate[^>]*>([\s\S]*?)<\/[^>]*X509Certificate>/gi
+      )) {
+        const value = cert[1].replace(/\s+/g, '');
+        if (value && !certificates.includes(value)) certificates.push(value);
+      }
+    }
+    const certificate = certificates.length
+      ? certificates.slice(0, MAX_IDP_CERTIFICATES).join(',')
+      : null;
 
     if (!entryPoint && !certificate) {
       throw new BadRequestException("That URL isn't SAML IdP metadata");
