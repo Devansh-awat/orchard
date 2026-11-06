@@ -654,6 +654,12 @@ outside Orchard.
 | `metrics.enabled` | `true` | Install the orchard-metrics stack. |
 | `metrics.namespace` | `orchard-metrics` | Namespace for the metrics stack. Referenced inside the vmagent scrape config and remote-write URL. |
 | `metrics.clusterLabel` | `leafycluster` | `cluster` label vmagent stamps on every series. |
+| `metrics.ingress.traefik.namespaces` | `[traefik]` | Namespaces vmagent scrapes the Traefik pods from. Matches the installer. Set to where your own Traefik runs (k3s's bundled one is in `kube-system`). Also sent to the server as `INGRESS_METRICS_TRAEFIK_NAMESPACE`. |
+| `metrics.ingress.traefik.labels` | `{app.kubernetes.io/name: traefik}` | Pod labels that identify the Traefik pods. Combined with the namespace, so a tenant pod with the same label elsewhere is ignored. |
+| `metrics.ingress.traefik.portName` | `metrics` | Container port name of Traefik's Prometheus entrypoint. |
+| `metrics.ingress.haproxy.namespaces` | `[network]` | Namespaces vmagent scrapes the HAProxy ingress pods from. Also sent as `INGRESS_METRICS_HAPROXY_NAMESPACE`. |
+| `metrics.ingress.haproxy.labels` | `{app.kubernetes.io/name: kubernetes-ingress}` | Pod labels that identify the HAProxy ingress pods. |
+| `metrics.ingress.haproxy.portName` | `stat` | Container port name of the HAProxy stats exporter. |
 | `metrics.victoriametrics.image` | `victoriametrics/victoria-metrics:v1.155.0` | VM image. Keep it on the same version as `metrics.vmagent.image`. |
 | `metrics.victoriametrics.retention` | `30d` | `-retentionPeriod` flag. |
 | `metrics.victoriametrics.storage.size` | `5Gi` | StatefulSet PVC size. |
@@ -780,6 +786,9 @@ Exposes the secret-name knobs that the server reads at runtime (`PUBLIC_DB_TLS_*
 | `publicTls.db.sourceNamespace` | `""` (→ `certificates.namespace`) | Where the server reads the wildcard DB cert FROM. Maps to `PUBLIC_DB_TLS_SOURCE_NAMESPACE`. |
 | `publicTls.db.sourceSecret` | `""` (→ `certificates.wildcards.db.secretName`) | Source Secret name. Maps to `PUBLIC_DB_TLS_SOURCE_SECRET`. |
 | `publicTls.db.localSecret` | `wildcard-db-tls` | Secret name written into each project namespace for CNPG to mount. Maps to `PUBLIC_DB_TLS_LOCAL_SECRET`. |
+| `publicTls.db.mode` | `wildcard` | `wildcard` copies the shared wildcard private key into tenant namespaces. `perDatabase` has cert-manager issue one certificate per public database for its own hostname, and the wildcard key stays in `sourceNamespace`. Maps to `PUBLIC_DB_TLS_MODE=per-database`. Grants the server create/update/delete on `certificates.cert-manager.io`. |
+| `publicTls.db.issuer` | `{}` (→ `certificates.issuer`) | `name` and `kind` of the issuer used in `perDatabase` mode. Must be able to solve DNS-01 for the database domain. Maps to `PUBLIC_DB_TLS_ISSUER_NAME` / `_KIND`. |
+| `publicTls.db.legacyHostnames` | `false` | Also put the pre-namespace-qualified hostname `<cluster>.<db domain>` in each per-database certificate. Off by default because two tenants with the same cluster name could otherwise both obtain a certificate for it. Maps to `PUBLIC_DB_TLS_LEGACY_HOSTNAMES`. |
 
 ---
 

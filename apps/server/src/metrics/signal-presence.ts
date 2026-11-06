@@ -26,7 +26,7 @@ export function presenceQueries(
       adapters.map((a) => [
         a.id,
         {
-          query: `count by (${a.presenceLabel}) (last_over_time(${a.presenceMetric}[${window}]))`,
+          query: `count by (${a.presenceLabel}) (last_over_time(${a.presenceMetric}${a.presenceScope()}[${window}]))`,
           label: a.presenceLabel
         }
       ])

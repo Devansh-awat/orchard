@@ -98,7 +98,11 @@ rules:
   # where the reads simply 404.
   - apiGroups: ["cert-manager.io"]
     resources: ["certificates"]
+{{- if eq (.Values.publicTls.db.mode | default "wildcard") "perDatabase" }}
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+{{- else }}
     verbs: ["get", "list", "watch"]
+{{- end }}
 {{- if .Values.cilium.enabled }}
   # Per-tenant L3/L7 policy and the basic-auth proxy in front of protected
   # deployments are Cilium CRDs. Only needed when Cilium is the CNI.

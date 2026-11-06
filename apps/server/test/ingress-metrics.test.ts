@@ -4,10 +4,31 @@ import {
   INGRESS_ADAPTERS,
   configuredAdapter,
   guessedAdapter,
-  ingressQueries
+  ingressQueries,
+  ingressScopeMatchers
 } from '../src/metrics/ingress';
 
 const target = { namespace: 'ysws-flavortown', services: ['web', 'orchard-protection-proxy'] };
+
+test('ingress queries only read series from the platform scrape job', () => {
+  for (const id of ['traefik', 'haproxy']) {
+    const q = ingressQueries(id, target)!;
+    assert.match(q.requestRate('2m'), id === 'traefik' ? /job="traefik"/ : /job="haproxy-ingress"/);
+    assert.match(q.presence, /job="/);
+  }
+});
+
+test('ingress scope honours job and namespace overrides', () => {
+  const env = {
+    INGRESS_METRICS_TRAEFIK_JOB: 'my-traefik',
+    INGRESS_METRICS_TRAEFIK_NAMESPACE: 'kube-system, edge'
+  };
+  assert.equal(
+    ingressScopeMatchers('traefik', env),
+    'job="my-traefik",namespace=~"kube-system|edge"'
+  );
+  assert.equal(ingressScopeMatchers('haproxy', {}), 'job="haproxy-ingress"');
+});
 
 test('every registered adapter answers every question or says it cannot', () => {
   for (const adapter of INGRESS_ADAPTERS) {

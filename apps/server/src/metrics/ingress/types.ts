@@ -31,6 +31,7 @@ export interface IngressAdapter {
   presenceMetric: string;
   presenceLabel: string;
   presencePattern(target: IngressTarget): string | null;
+  presenceScope(): string;
   queries(target: IngressTarget): IngressQueries | null;
 }
 
@@ -44,4 +45,22 @@ export function alternation(services: string[]): string {
 
 export function ratio(numerator: string, denominator: string): string {
   return `100 * (${numerator} or vector(0)) / clamp_min(${denominator}, 1e-9)`;
+}
+
+const SCOPE_DEFAULTS: Record<string, { job: string; envKey: string }> = {
+  traefik: { job: 'traefik', envKey: 'TRAEFIK' },
+  haproxy: { job: 'haproxy-ingress', envKey: 'HAPROXY' }
+};
+
+export function ingressScopeMatchers(id: string, env: NodeJS.ProcessEnv = process.env): string {
+  const def = SCOPE_DEFAULTS[id];
+  if (!def) return '';
+  const job = (env[`INGRESS_METRICS_${def.envKey}_JOB`] ?? '').trim() || def.job;
+  const namespaces = (env[`INGRESS_METRICS_${def.envKey}_NAMESPACE`] ?? '')
+    .split(',')
+    .map((n) => n.trim())
+    .filter(Boolean);
+  const parts = [`job="${job.replace(/["\\]/g, '')}"`];
+  if (namespaces.length) parts.push(`namespace=~"${alternation(namespaces)}"`);
+  return parts.join(',');
 }

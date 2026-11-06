@@ -420,8 +420,8 @@ data:
           - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
             regex: 'true'
             action: keep
-          - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name]
-            regex: traefik
+          - source_labels: [__meta_kubernetes_namespace]
+            regex: {{ join "|" (concat .Values.metrics.ingress.traefik.namespaces .Values.metrics.ingress.haproxy.namespaces) | quote }}
             action: drop
           - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
             target_label: __metrics_path__
@@ -434,6 +434,10 @@ data:
             target_label: namespace
           - source_labels: [__meta_kubernetes_pod_name]
             target_label: pod
+        metric_relabel_configs:
+          - source_labels: [__name__]
+            regex: '(traefik|haproxy|cnpg|kube|container|kubelet|node|vm|go_gc)_.*'
+            action: drop
 
       # HAProxy ingress controller — per-backend HTTP metrics (request rate,
       # response codes, response time). These replace the retired Cilium/Hubble
@@ -449,14 +453,19 @@ data:
           scope: [backend]
         kubernetes_sd_configs:
           - role: pod
-            namespaces: { names: [network] }
+            namespaces: { names: {{ .Values.metrics.ingress.haproxy.namespaces | toJson }} }
+            selectors:
+              - role: pod
+                label: {{ include "orchard.metricsIngressSelector" .Values.metrics.ingress.haproxy.labels | quote }}
         relabel_configs:
-          - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name]
-            regex: kubernetes-ingress
+          - source_labels: [__meta_kubernetes_namespace]
+            regex: {{ join "|" .Values.metrics.ingress.haproxy.namespaces | quote }}
             action: keep
           - source_labels: [__meta_kubernetes_pod_container_port_name]
-            regex: stat
+            regex: {{ .Values.metrics.ingress.haproxy.portName | quote }}
             action: keep
+          - source_labels: [__meta_kubernetes_namespace]
+            target_label: namespace
           - source_labels: [__meta_kubernetes_pod_name]
             target_label: pod
         metric_relabel_configs:
@@ -471,13 +480,19 @@ data:
       - job_name: traefik
         kubernetes_sd_configs:
           - role: pod
+            namespaces: { names: {{ .Values.metrics.ingress.traefik.namespaces | toJson }} }
+            selectors:
+              - role: pod
+                label: {{ include "orchard.metricsIngressSelector" .Values.metrics.ingress.traefik.labels | quote }}
         relabel_configs:
-          - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name]
-            regex: traefik
+          - source_labels: [__meta_kubernetes_namespace]
+            regex: {{ join "|" .Values.metrics.ingress.traefik.namespaces | quote }}
             action: keep
           - source_labels: [__meta_kubernetes_pod_container_port_name]
-            regex: metrics
+            regex: {{ .Values.metrics.ingress.traefik.portName | quote }}
             action: keep
+          - source_labels: [__meta_kubernetes_namespace]
+            target_label: namespace
           - source_labels: [__meta_kubernetes_pod_name]
             target_label: pod
         metric_relabel_configs:

@@ -713,3 +713,34 @@ test('database dumps prune old copies only when asked', { skip: !helmAvailable()
   assert.match(kept!, /tail -n \+8/);
   assert.match(kept!, /aws s3 rm/);
 });
+
+test(
+  'ingress metrics jobs are pinned to the ingress controller namespace and labels',
+  { skip: !helmAvailable() },
+  () => {
+    const out = render([]);
+    const traefik = out.slice(out.indexOf('job_name: traefik'));
+    assert.match(traefik, /namespaces: \{ names: \["traefik"\] \}/);
+    assert.match(traefik, /label: "app\.kubernetes\.io\/name=traefik"/);
+    assert.match(out, /INGRESS_METRICS_TRAEFIK_NAMESPACE, value: "traefik"/);
+    assert.match(out, /INGRESS_METRICS_HAPROXY_NAMESPACE, value: "network"/);
+
+    const custom = render([
+      'metrics.ingress.traefik.namespaces={kube-system}',
+      'metrics.ingress.traefik.labels.app\\.kubernetes\\.io/name=traefik-ingress'
+    ]);
+    assert.match(custom, /namespaces: \{ names: \["kube-system"\] \}/);
+    assert.match(custom, /INGRESS_METRICS_TRAEFIK_NAMESPACE, value: "kube-system"/);
+    const pods = custom.slice(custom.indexOf('job_name: kubernetes-pods'));
+    assert.match(pods, /regex: "kube-system\|network"\s+action: drop/);
+    assert.match(pods, /\(traefik\|haproxy\|cnpg\|kube\|container\|kubelet\|node\|vm\|go_gc\)_/);
+  }
+);
+
+test('per-database public db certificates are opt-in', { skip: !helmAvailable() }, () => {
+  assert.doesNotMatch(render([]), /PUBLIC_DB_TLS_MODE/);
+  const out = render(['publicTls.db.mode=perDatabase']);
+  assert.match(out, /PUBLIC_DB_TLS_MODE, value: "per-database"/);
+  assert.match(out, /PUBLIC_DB_TLS_ISSUER_NAME/);
+  assert.match(out, /resources: \["certificates"\]\s+verbs: \["get", "list", "watch", "create"/);
+});

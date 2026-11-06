@@ -256,6 +256,24 @@ kubectl -n orchard-builders logs job/<BUILD_JOB_NAME> -c buildkit --tail=30
 
 If the registry's logs show no request from the builder, the policy dropped the traffic.
 
+## Point app metrics at your ingress controller
+
+Request, error and latency charts come from the ingress controller's own metrics. vmagent scrapes only the pods you name, and the server reads only series from the `traefik` and `haproxy-ingress` scrape jobs. A tenant pod that copies the controller's labels is not scraped, and a series it exposes through its own `prometheus.io/scrape` annotation is never used for these charts.
+
+The defaults match the installer (Traefik in the `traefik` namespace) and the HAProxy variant (`network`). If your controller runs elsewhere, for example the Traefik bundled with k3s in `kube-system`, set its namespace and pod labels in the chart values:
+
+```yaml
+metrics:
+  ingress:
+    traefik:
+      namespaces: [kube-system]
+      labels:
+        app.kubernetes.io/name: traefik
+      portName: metrics
+```
+
+Without the chart, set `INGRESS_METRICS_TRAEFIK_NAMESPACE` / `INGRESS_METRICS_HAPROXY_NAMESPACE` (comma-separated) and `INGRESS_METRICS_TRAEFIK_JOB` / `INGRESS_METRICS_HAPROXY_JOB` on the server to match your own scrape configuration. Use `INGRESS_METRICS` to pick the controller. Scrape namespaces that you add are also excluded from the generic `kubernetes-pods` job.
+
 ## Let the ingress controller reach apps
 
 Every tenant namespace is default-deny, so the ingress controller's namespace must be listed. The default is `network,orchard`. A cluster that runs Traefik in the `traefik` namespace needs `traefik,orchard`. On k3s with its bundled Traefik, the namespace is `kube-system`.

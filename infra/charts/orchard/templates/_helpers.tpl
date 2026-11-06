@@ -409,6 +409,10 @@ true
             - name: BACKUP_PROXY_ENDPOINT
               value: {{ default (printf "http://r2-proxy.%s.svc.cluster.local:9000" .Values.r2Proxy.namespace) .Values.r2Proxy.serviceUrl | quote }}
             {{- end }}
+            {{- if .Values.metrics.enabled }}
+            - { name: INGRESS_METRICS_TRAEFIK_NAMESPACE, value: {{ join "," .Values.metrics.ingress.traefik.namespaces | quote }} }
+            - { name: INGRESS_METRICS_HAPROXY_NAMESPACE, value: {{ join "," .Values.metrics.ingress.haproxy.namespaces | quote }} }
+            {{- end }}
             {{- with .Values.publicTls }}
             {{- if .db }}
             - name: PUBLIC_DB_TLS_SOURCE_NAMESPACE
@@ -417,6 +421,16 @@ true
               value: {{ .db.sourceSecret | default $.Values.certificates.wildcards.db.secretName | quote }}
             - name: PUBLIC_DB_TLS_LOCAL_SECRET
               value: {{ .db.localSecret | quote }}
+            {{- if eq (.db.mode | default "wildcard") "perDatabase" }}
+            - { name: PUBLIC_DB_TLS_MODE, value: "per-database" }
+            - name: PUBLIC_DB_TLS_ISSUER_NAME
+              value: {{ (.db.issuer | default dict).name | default $.Values.certificates.issuer.name | quote }}
+            - name: PUBLIC_DB_TLS_ISSUER_KIND
+              value: {{ (.db.issuer | default dict).kind | default $.Values.certificates.issuer.kind | quote }}
+            {{- if .db.legacyHostnames }}
+            - { name: PUBLIC_DB_TLS_LEGACY_HOSTNAMES, value: "true" }
+            {{- end }}
+            {{- end }}
             {{- end }}
             {{- end }}
             {{- if .Values.signupMode }}
@@ -707,4 +721,12 @@ true
 {{- end -}}
 {{- end -}}
 {{- end -}}
+{{- end -}}
+
+{{- define "orchard.metricsIngressSelector" -}}
+{{- $parts := list -}}
+{{- range $k, $v := . -}}
+{{- $parts = append $parts (printf "%s=%s" $k $v) -}}
+{{- end -}}
+{{- join "," $parts -}}
 {{- end -}}

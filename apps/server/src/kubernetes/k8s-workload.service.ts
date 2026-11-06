@@ -1,4 +1,10 @@
-import { Injectable, Logger, BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  BadRequestException,
+  ConflictException,
+  NotFoundException
+} from '@nestjs/common';
 import { parseKubeletSummary, type VolumeUsage } from './volume-stats';
 import * as k8s from '@kubernetes/client-node';
 import * as https from 'https';
@@ -117,6 +123,7 @@ function resolvePvcClaimName(vol: { name?: string; pvcName?: string | null }): s
 }
 
 import { tailscaleRoleRules } from './tailscale-rbac';
+import { isTailscaleOwned, legacyTailscaleNames, tailscaleNames } from './tailscale-names';
 @Injectable()
 export class K8sWorkloadService {
   private readonly logger = new Logger(K8sWorkloadService.name);
@@ -1279,10 +1286,7 @@ export class K8sWorkloadService {
     const name = `${deploymentName}-env`;
     const coreApi = this.kc!.makeApiClient(k8s.CoreV1Api);
     if (!secretData) {
-      return coreApi
-        .deleteNamespacedSecret(name, namespace)
-        .then(() => true)
-        .catch(() => false);
+      return this.deleteEnvSecret(coreApi, namespace, name);
     }
     const body: k8s.V1Secret = {
       metadata: {
@@ -1308,6 +1312,21 @@ export class K8sWorkloadService {
     }
   }
 
+  private async deleteEnvSecret(
+    coreApi: k8s.CoreV1Api,
+    namespace: string,
+    name: string
+  ): Promise<boolean> {
+    try {
+      const existing = await coreApi.readNamespacedSecret(name, namespace);
+      if (isTailscaleOwned(existing.body.metadata)) return false;
+      await coreApi.deleteNamespacedSecret(name, namespace);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   private async writeEnvSecret(
     coreApi: k8s.CoreV1Api,
     namespace: string,
@@ -1317,6 +1336,11 @@ export class K8sWorkloadService {
   ): Promise<boolean> {
     try {
       const existing = await coreApi.readNamespacedSecret(name, namespace);
+      if (isTailscaleOwned(existing.body.metadata)) {
+        throw new ConflictException(
+          `Secret ${name} is reserved by the Tailscale integration; choose a different app name`
+        );
+      }
       body.metadata!.resourceVersion = existing.body.metadata?.resourceVersion;
       await coreApi.replaceNamespacedSecret(name, namespace, body);
       return !secretDataEquals(existing.body.data, secretData);
@@ -1845,7 +1869,7 @@ export class K8sWorkloadService {
       }
 
       // Clean up the per-deployment env Secret so it doesn't orphan.
-      await coreApi.deleteNamespacedSecret(`${cleanName}-env`, cleanNamespace).catch(() => {});
+      await this.deleteEnvSecret(coreApi, cleanNamespace, `${cleanName}-env`);
 
       // An orphaned PodDisruptionBudget matches nothing, but it still shows up
       // as a permanently unsatisfied budget on every drain report.
@@ -3530,8 +3554,10 @@ export class K8sWorkloadService {
     const coreApi = this.kc.makeApiClient(k8s.CoreV1Api);
     const networkingApi = this.kc.makeApiClient(k8s.NetworkingV1Api);
 
-    const tsDeployName = `ts-${deploymentName}`;
-    const secretName = `ts-auth-${deploymentName}`;
+    const names = tailscaleNames(deploymentName);
+    const tsDeployName = names.proxy;
+    const secretName = names.stateSecret;
+    const keySecretName = names.keySecret;
 
     const orchardLabels = {
       'app.kubernetes.io/managed-by': 'orchard',
@@ -3544,21 +3570,16 @@ export class K8sWorkloadService {
       'app.kubernetes.io/name': tsDeployName
     };
 
-    // 1. Create Secret with the auth key
-    const secretBody: k8s.V1Secret = {
-      metadata: { name: secretName, namespace, labels: orchardLabels },
-      type: 'Opaque',
+    // 1. The auth key lives in its own Secret that only the kubelet reads (env
+    //    injection); the proxy's ServiceAccount can reach only the state Secret.
+    await this.upsertTailscaleSecret(coreApi, namespace, deploymentName, keySecretName, {
+      labels: orchardLabels,
       stringData: { TS_AUTHKEY: authKey }
-    };
-    try {
-      await coreApi.createNamespacedSecret(namespace, secretBody);
-    } catch (error: any) {
-      if (error.response?.statusCode === 409) {
-        await coreApi.replaceNamespacedSecret(secretName, namespace, secretBody);
-      } else {
-        throw error;
-      }
-    }
+    });
+    await this.upsertTailscaleSecret(coreApi, namespace, deploymentName, secretName, {
+      labels: orchardLabels,
+      stringData: {}
+    });
 
     // 2. Create ServiceAccount
     const saName = tsDeployName;
@@ -3605,7 +3626,7 @@ export class K8sWorkloadService {
         ])
       )
     });
-    const serveConfigName = `ts-serve-${deploymentName}`;
+    const serveConfigName = names.serveConfig;
 
     // Store the serve config in a ConfigMap
     const configMapBody: k8s.V1ConfigMap = {
@@ -3640,7 +3661,7 @@ export class K8sWorkloadService {
                 env: [
                   {
                     name: 'TS_AUTHKEY',
-                    valueFrom: { secretKeyRef: { name: secretName, key: 'TS_AUTHKEY' } }
+                    valueFrom: { secretKeyRef: { name: keySecretName, key: 'TS_AUTHKEY' } }
                   },
                   { name: 'TS_HOSTNAME', value: hostname },
                   { name: 'TS_STATE_DIR', value: '/var/lib/tailscale' },
@@ -3689,7 +3710,7 @@ export class K8sWorkloadService {
     // 6. Create a strict NetworkPolicy: the TS proxy pod can ONLY talk to the
     //    target deployment's pods. No internet, no other namespaces, no DNS even.
     //
-    // The TS container stores its state in the ts-auth Secret (see RBAC above),
+    // The TS container stores its state in the ts--state Secret (see RBAC above),
     // so it must also reach the kube apiserver. NetworkPolicy is enforced after
     // kube-proxy DNAT, so allow the real endpoint IPs behind kubernetes.default,
     // not the service ClusterIP.
@@ -3711,12 +3732,12 @@ export class K8sWorkloadService {
       // Fall back to allowing 6443 to any peer.
     }
 
-    const netpolName = `ts-isolate-${deploymentName}`;
+    const netpolName = names.netpol;
     const netpolBody: k8s.V1NetworkPolicy = {
       metadata: { name: netpolName, namespace, labels: orchardLabels },
       spec: {
         podSelector: {
-          matchLabels: { 'app.kubernetes.io/name': tsDeployName }
+          matchLabels: { 'app.kubernetes.io/name': tsDeployName, 'orchard.my/tailscale': 'true' }
         },
         policyTypes: ['Ingress', 'Egress'],
         // Ingress: allow nothing from inside the cluster (Tailscale uses DERP/WireGuard UDP from outside)
@@ -3727,7 +3748,11 @@ export class K8sWorkloadService {
             to: [
               {
                 podSelector: {
-                  matchLabels: { 'app.kubernetes.io/name': deploymentName }
+                  matchLabels: {
+                    'app.kubernetes.io/name': deploymentName,
+                    'app.kubernetes.io/managed-by': 'orchard'
+                  },
+                  matchExpressions: [{ key: 'orchard.my/tailscale', operator: 'DoesNotExist' }]
                 }
               }
             ],
@@ -3787,13 +3812,13 @@ export class K8sWorkloadService {
       apiVersion: 'cilium.io/v2',
       kind: 'CiliumNetworkPolicy',
       metadata: {
-        name: `ts-apiserver-${deploymentName}`,
+        name: names.ciliumPolicy,
         namespace,
         labels: orchardLabels
       },
       spec: {
         endpointSelector: {
-          matchLabels: { 'app.kubernetes.io/name': tsDeployName }
+          matchLabels: { 'app.kubernetes.io/name': tsDeployName, 'orchard.my/tailscale': 'true' }
         },
         egress: [{ toEntities: ['kube-apiserver'] }]
       }
@@ -3817,9 +3842,32 @@ export class K8sWorkloadService {
     }
   }
 
-  /**
-   * Remove the isolated Tailscale proxy pod and all associated resources.
-   */
+  private async upsertTailscaleSecret(
+    coreApi: k8s.CoreV1Api,
+    namespace: string,
+    deploymentName: string,
+    name: string,
+    spec: { labels: Record<string, string>; stringData: Record<string, string> }
+  ): Promise<void> {
+    const body: k8s.V1Secret = {
+      metadata: { name, namespace, labels: spec.labels },
+      type: 'Opaque',
+      stringData: spec.stringData
+    };
+    try {
+      await coreApi.createNamespacedSecret(namespace, body);
+    } catch (error: any) {
+      if (error.response?.statusCode !== 409) throw error;
+      const existing = await coreApi.readNamespacedSecret(name, namespace);
+      if (!isTailscaleOwned(existing.body.metadata, deploymentName)) {
+        throw new ConflictException(
+          `Secret ${name} already exists and is not managed by the Tailscale integration`
+        );
+      }
+      await coreApi.replaceNamespacedSecret(name, namespace, body);
+    }
+  }
+
   async removeTailscaleSidecar(namespace: string, deploymentName: string): Promise<void> {
     this.ensureKubeConfig();
     if (!this.kc) return;
@@ -3828,73 +3876,123 @@ export class K8sWorkloadService {
     const coreApi = this.kc.makeApiClient(k8s.CoreV1Api);
     const rbacApi = this.kc.makeApiClient(k8s.RbacAuthorizationV1Api);
     const networkingApi = this.kc.makeApiClient(k8s.NetworkingV1Api);
+    const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
 
-    const tsDeployName = `ts-${deploymentName}`;
-    const secretName = `ts-auth-${deploymentName}`;
-    const netpolName = `ts-isolate-${deploymentName}`;
-    const serveConfigName = `ts-serve-${deploymentName}`;
+    const current = tailscaleNames(deploymentName);
+    const legacy = legacyTailscaleNames(deploymentName);
 
-    try {
-      await appsApi.deleteNamespacedDeployment(tsDeployName, namespace);
-    } catch (e: any) {
-      if (e.response?.statusCode !== 404)
-        console.error(`[K8s] Failed to delete TS deployment ${tsDeployName}:`, e);
-    }
+    const attempt = async (label: string, fn: () => Promise<unknown>) => {
+      try {
+        await fn();
+      } catch (e: any) {
+        if ((e?.response?.statusCode ?? e?.statusCode) !== 404)
+          console.error(`[K8s] Failed to delete ${label}:`, e);
+      }
+    };
+    const ownedLegacy = async (
+      label: string,
+      read: () => Promise<{ body: { metadata?: { labels?: Record<string, string> } } }>,
+      del: () => Promise<unknown>
+    ) => {
+      try {
+        const existing = await read();
+        if (!isTailscaleOwned(existing.body.metadata, deploymentName)) return;
+      } catch (e: any) {
+        if ((e?.response?.statusCode ?? e?.statusCode) !== 404)
+          console.error(`[K8s] Failed to read ${label}:`, e);
+        return;
+      }
+      await attempt(label, del);
+    };
 
-    try {
-      await networkingApi.deleteNamespacedNetworkPolicy(netpolName, namespace);
-    } catch (e: any) {
-      if (e.response?.statusCode !== 404)
-        console.error(`[K8s] Failed to delete NetworkPolicy ${netpolName}:`, e);
-    }
-
-    try {
-      const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
-      await customApi.deleteNamespacedCustomObject(
+    await attempt(`Deployment ${current.proxy}`, () =>
+      appsApi.deleteNamespacedDeployment(current.proxy, namespace)
+    );
+    await attempt(`NetworkPolicy ${current.netpol}`, () =>
+      networkingApi.deleteNamespacedNetworkPolicy(current.netpol, namespace)
+    );
+    await attempt(`CNP ${current.ciliumPolicy}`, () =>
+      customApi.deleteNamespacedCustomObject(
         'cilium.io',
         'v2',
         namespace,
         'ciliumnetworkpolicies',
-        `ts-apiserver-${deploymentName}`
-      );
-    } catch (e: any) {
-      if (e.response?.statusCode !== 404)
-        console.error(`[K8s] Failed to delete CNP ts-apiserver-${deploymentName}:`, e);
-    }
+        current.ciliumPolicy
+      )
+    );
+    await attempt(`ConfigMap ${current.serveConfig}`, () =>
+      coreApi.deleteNamespacedConfigMap(current.serveConfig, namespace)
+    );
+    await attempt(`RoleBinding ${current.proxy}`, () =>
+      rbacApi.deleteNamespacedRoleBinding(current.proxy, namespace)
+    );
+    await attempt(`Role ${current.proxy}`, () =>
+      rbacApi.deleteNamespacedRole(current.proxy, namespace)
+    );
+    await attempt(`ServiceAccount ${current.proxy}`, () =>
+      coreApi.deleteNamespacedServiceAccount(current.proxy, namespace)
+    );
+    await attempt(`Secret ${current.keySecret}`, () =>
+      coreApi.deleteNamespacedSecret(current.keySecret, namespace)
+    );
+    await attempt(`Secret ${current.stateSecret}`, () =>
+      coreApi.deleteNamespacedSecret(current.stateSecret, namespace)
+    );
 
-    try {
-      await coreApi.deleteNamespacedConfigMap(serveConfigName, namespace);
-    } catch (e: any) {
-      if (e.response?.statusCode !== 404)
-        console.error(`[K8s] Failed to delete ConfigMap ${serveConfigName}:`, e);
-    }
-
-    try {
-      await rbacApi.deleteNamespacedRoleBinding(tsDeployName, namespace);
-    } catch (e: any) {
-      if (e.response?.statusCode !== 404)
-        console.error(`[K8s] Failed to delete RoleBinding ${tsDeployName}:`, e);
-    }
-    try {
-      await rbacApi.deleteNamespacedRole(tsDeployName, namespace);
-    } catch (e: any) {
-      if (e.response?.statusCode !== 404)
-        console.error(`[K8s] Failed to delete Role ${tsDeployName}:`, e);
-    }
-
-    try {
-      await coreApi.deleteNamespacedServiceAccount(tsDeployName, namespace);
-    } catch (e: any) {
-      if (e.response?.statusCode !== 404)
-        console.error(`[K8s] Failed to delete ServiceAccount ${tsDeployName}:`, e);
-    }
-
-    try {
-      await coreApi.deleteNamespacedSecret(secretName, namespace);
-    } catch (e: any) {
-      if (e.response?.statusCode !== 404)
-        console.error(`[K8s] Failed to delete Secret ${secretName}:`, e);
-    }
+    await ownedLegacy(
+      `Deployment ${legacy.proxy}`,
+      () => appsApi.readNamespacedDeployment(legacy.proxy, namespace),
+      () => appsApi.deleteNamespacedDeployment(legacy.proxy, namespace)
+    );
+    await ownedLegacy(
+      `NetworkPolicy ${legacy.netpol}`,
+      () => networkingApi.readNamespacedNetworkPolicy(legacy.netpol, namespace),
+      () => networkingApi.deleteNamespacedNetworkPolicy(legacy.netpol, namespace)
+    );
+    await ownedLegacy(
+      `CNP ${legacy.ciliumPolicy}`,
+      () =>
+        customApi.getNamespacedCustomObject(
+          'cilium.io',
+          'v2',
+          namespace,
+          'ciliumnetworkpolicies',
+          legacy.ciliumPolicy
+        ) as Promise<{ body: { metadata?: { labels?: Record<string, string> } } }>,
+      () =>
+        customApi.deleteNamespacedCustomObject(
+          'cilium.io',
+          'v2',
+          namespace,
+          'ciliumnetworkpolicies',
+          legacy.ciliumPolicy
+        )
+    );
+    await ownedLegacy(
+      `ConfigMap ${legacy.serveConfig}`,
+      () => coreApi.readNamespacedConfigMap(legacy.serveConfig, namespace),
+      () => coreApi.deleteNamespacedConfigMap(legacy.serveConfig, namespace)
+    );
+    await ownedLegacy(
+      `RoleBinding ${legacy.proxy}`,
+      () => rbacApi.readNamespacedRoleBinding(legacy.proxy, namespace),
+      () => rbacApi.deleteNamespacedRoleBinding(legacy.proxy, namespace)
+    );
+    await ownedLegacy(
+      `Role ${legacy.proxy}`,
+      () => rbacApi.readNamespacedRole(legacy.proxy, namespace),
+      () => rbacApi.deleteNamespacedRole(legacy.proxy, namespace)
+    );
+    await ownedLegacy(
+      `ServiceAccount ${legacy.proxy}`,
+      () => coreApi.readNamespacedServiceAccount(legacy.proxy, namespace),
+      () => coreApi.deleteNamespacedServiceAccount(legacy.proxy, namespace)
+    );
+    await ownedLegacy(
+      `Secret ${legacy.keySecret}`,
+      () => coreApi.readNamespacedSecret(legacy.keySecret, namespace),
+      () => coreApi.deleteNamespacedSecret(legacy.keySecret, namespace)
+    );
   }
 
   /**
@@ -3908,15 +4006,13 @@ export class K8sWorkloadService {
     if (!this.kc) return { ip: null, dns: null };
 
     const coreApi = this.kc.makeApiClient(k8s.CoreV1Api);
-    const tsDeployName = `ts-${deploymentName}`;
-
     const { body: podList } = await coreApi.listNamespacedPod(
       namespace,
       undefined,
       undefined,
       undefined,
       undefined,
-      `app.kubernetes.io/name=${tsDeployName}`
+      `app.kubernetes.io/managed-by=orchard,orchard.my/tailscale=true,orchard.my/target-deployment=${deploymentName}`
     );
 
     const runningPod = podList.items.find((p) => p.status?.phase === 'Running');

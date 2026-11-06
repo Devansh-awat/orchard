@@ -685,7 +685,7 @@ test('an app name that collides with another project is refused', async () => {
 
 test('traefik metrics for one service do not match a longer service name', () => {
   const sel = traefikSelector({ namespace: 'acme-a', services: ['b'] } as any)!;
-  const pattern = new RegExp(`^${sel.match(/"(.*)"/)![1].replace(/\\\\/g, '\\')}$`);
+  const pattern = new RegExp(`^${sel.match(/service=~"([^"]*)"/)![1].replace(/\\\\/g, '\\')}$`);
   assert.equal(pattern.test('acme-a-b-80@kubernetes'), true);
   assert.equal(pattern.test('acme-a-b-web-80@kubernetes'), false);
   assert.ok(

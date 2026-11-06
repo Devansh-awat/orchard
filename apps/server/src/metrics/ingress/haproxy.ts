@@ -1,4 +1,11 @@
-import { alternation, escapeRegex, ratio, type IngressAdapter, type IngressTarget } from './types';
+import {
+  alternation,
+  escapeRegex,
+  ingressScopeMatchers,
+  ratio,
+  type IngressAdapter,
+  type IngressTarget
+} from './types';
 
 function haproxyPattern(target: IngressTarget): string | null {
   if (!target.namespace || target.services.length === 0) return null;
@@ -7,7 +14,7 @@ function haproxyPattern(target: IngressTarget): string | null {
 
 export function haproxySelector(target: IngressTarget): string | null {
   const pattern = haproxyPattern(target);
-  return pattern ? `proxy=~"${pattern}"` : null;
+  return pattern ? `proxy=~"${pattern}",${ingressScopeMatchers('haproxy')}` : null;
 }
 
 export const haproxy: IngressAdapter = {
@@ -17,6 +24,7 @@ export const haproxy: IngressAdapter = {
   presenceMetric: 'haproxy_backend_http_responses_total',
   presenceLabel: 'proxy',
   presencePattern: haproxyPattern,
+  presenceScope: () => `{${ingressScopeMatchers('haproxy')}}`,
   queries(target) {
     const sel = haproxySelector(target);
     if (!sel) return null;

@@ -1,5 +1,6 @@
 import {
   alternation,
+  ingressScopeMatchers,
   escapeRegex,
   ratio,
   type IngressAdapter,
@@ -14,7 +15,7 @@ function traefikPattern(target: IngressTarget): string | null {
 
 export function traefikSelector(target: IngressTarget): string | null {
   const pattern = traefikPattern(target);
-  return pattern ? `service=~"${pattern}"` : null;
+  return pattern ? `service=~"${pattern}",${ingressScopeMatchers('traefik')}` : null;
 }
 
 export const traefik: IngressAdapter = {
@@ -24,6 +25,7 @@ export const traefik: IngressAdapter = {
   presenceMetric: 'traefik_service_requests_total',
   presenceLabel: 'service',
   presencePattern: traefikPattern,
+  presenceScope: () => `{${ingressScopeMatchers('traefik')}}`,
   queries(target) {
     const sel = traefikSelector(target);
     if (!sel) return null;

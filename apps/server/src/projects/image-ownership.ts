@@ -103,13 +103,18 @@ export async function assertRepoNameFree(
   }
 }
 
+export function isPlatformGeneratedName(name: string): boolean {
+  return name.includes('--') || /-pub-[tu]\d+$/.test(name) || /-allow-public$/.test(name);
+}
+
 export async function assertIngressNameFree(
   prisma: Pick<PrismaService, 'deployment'>,
   namespace: string,
   name: string,
   projectId: string
 ): Promise<void> {
-  const reserved = `${namespace}-${name}`.endsWith('-orchard-protection-proxy');
+  const reserved =
+    `${namespace}-${name}`.endsWith('-orchard-protection-proxy') || isPlatformGeneratedName(name);
   const taken =
     reserved ||
     (await prisma.deployment.findFirst({

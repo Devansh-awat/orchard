@@ -26,7 +26,14 @@ import { containerResources, databaseSizing, type PodSizing } from './resource-s
 import { deriveDbTuning, walSlotKeepSize } from './db-tuning';
 import { appliedSharedBuffers, clusterRestartPatch, sharedBuffersStamp } from './cnpg-spec-sync';
 import { optionalDomain } from '../env/platform-domains';
-import { syncTlsSecret } from './tls-secret-sync';
+import { syncTlsSecret, TLS_SOURCE_RV_LABEL } from './tls-secret-sync';
+import {
+  caBundleForIssuedSecret,
+  clusterUsesPublicDbTls,
+  publicDbCertificate,
+  publicDbClusterCertificates,
+  publicDbTlsNames
+} from './public-db-tls';
 import {
   laggingDataVolumes,
   repairedCaBundle,
@@ -229,7 +236,13 @@ export class K8sCnpgService implements OnApplicationBootstrap {
     const coreApi = this.kc.makeApiClient(k8s.CoreV1Api);
     const rows = await this.prisma.database.findMany({
       where: { mode: 'cnpg', namespace: { not: null }, clusterName: { not: null } },
-      select: { namespace: true, clusterName: true, pgParameters: true, backupCompression: true }
+      select: {
+        namespace: true,
+        clusterName: true,
+        pgParameters: true,
+        backupCompression: true,
+        publicEnabled: true
+      }
     });
     let walCapped = 0;
     let archiveParallel = 0;
@@ -240,6 +253,8 @@ export class K8sCnpgService implements OnApplicationBootstrap {
     let disruptionBudgets = 0;
     let failed = 0;
     const namespaces = new Set<string>();
+    const clusterNamespaces = new Set<string>();
+    const unreadNamespaces = new Set<string>();
     for (const row of rows) {
       const ns = row.namespace!;
       const name = row.clusterName!;
@@ -252,9 +267,23 @@ export class K8sCnpgService implements OnApplicationBootstrap {
           name
         );
         const cluster = body as any;
-        if (cluster.spec?.certificates?.serverCASecret === this.PUBLIC_TLS_LOCAL_SECRET) {
-          namespaces.add(ns);
+        clusterNamespaces.add(ns);
+        let onWildcard =
+          cluster.spec?.certificates?.serverCASecret === this.PUBLIC_TLS_LOCAL_SECRET;
+        if (this.publicTlsPerDatabase() && row.publicEnabled) {
+          try {
+            if (await this.ensureDatabaseTls(ns, name, cluster)) {
+              onWildcard = false;
+              tlsSynced += 1;
+            }
+          } catch (e: any) {
+            failed += 1;
+            this.logger.warn(
+              `per-database certificate for ${ns}/${name} not applied: ${e?.message || e}`
+            );
+          }
         }
+        if (onWildcard) namespaces.add(ns);
         const synced = await this.syncDataVolumes(ns, name, cluster);
         volumesResized += synced.resized.length;
         failed += synced.failed.length;
@@ -306,8 +335,20 @@ export class K8sCnpgService implements OnApplicationBootstrap {
         }
       } catch (e: any) {
         if (e?.response?.statusCode === 404) continue;
+        unreadNamespaces.add(ns);
         failed += 1;
         this.logger.warn(`cluster defaults for ${ns}/${name} not applied: ${e?.message || e}`);
+      }
+    }
+    if (this.publicTlsPerDatabase()) {
+      for (const ns of clusterNamespaces) {
+        if (namespaces.has(ns) || unreadNamespaces.has(ns)) continue;
+        try {
+          await this.removeWildcardCopy(ns);
+        } catch (e: any) {
+          failed += 1;
+          this.logger.warn(`shared db certificate in ${ns} not removed: ${e?.message || e}`);
+        }
       }
     }
     for (const ns of namespaces) {
@@ -3607,6 +3648,17 @@ export class K8sCnpgService implements OnApplicationBootstrap {
   private readonly PUBLIC_TLS_LOCAL_SECRET =
     process.env.PUBLIC_DB_TLS_LOCAL_SECRET || 'wildcard-db-tls';
 
+  private readonly PUBLIC_TLS_MODE =
+    process.env.PUBLIC_DB_TLS_MODE === 'per-database' ? 'per-database' : 'wildcard';
+
+  private readonly PUBLIC_TLS_ISSUER_NAME = (process.env.PUBLIC_DB_TLS_ISSUER_NAME || '').trim();
+
+  private readonly PUBLIC_TLS_ISSUER_KIND =
+    (process.env.PUBLIC_DB_TLS_ISSUER_KIND || '').trim() || 'ClusterIssuer';
+
+  private readonly PUBLIC_TLS_LEGACY_HOSTNAMES =
+    process.env.PUBLIC_DB_TLS_LEGACY_HOSTNAMES === 'true';
+
   publicTlsBaseDomain(): string {
     return this.PUBLIC_TLS_BASE_DOMAIN;
   }
@@ -3641,11 +3693,160 @@ export class K8sCnpgService implements OnApplicationBootstrap {
    */
   async syncPublicTlsSecret(targetNamespace: string): Promise<boolean> {
     this.ensureKubeConfig();
+    if (this.publicTlsPerDatabase() && !(await this.namespaceHasWildcardCluster(targetNamespace))) {
+      return false;
+    }
     return syncTlsSecret(
       this.kc.makeApiClient(k8s.CoreV1Api),
       { namespace: this.PUBLIC_TLS_SOURCE_NAMESPACE, name: this.PUBLIC_TLS_SOURCE_SECRET },
       { namespace: targetNamespace, name: this.PUBLIC_TLS_LOCAL_SECRET }
     );
+  }
+
+  publicTlsPerDatabase(): boolean {
+    return this.PUBLIC_TLS_MODE === 'per-database' && !!this.PUBLIC_TLS_ISSUER_NAME;
+  }
+
+  private async namespaceHasWildcardCluster(namespace: string): Promise<boolean> {
+    const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
+    const { body } = await customApi.listNamespacedCustomObject(
+      this.CNPG_GROUP,
+      this.CNPG_VERSION,
+      namespace,
+      this.CNPG_PLURAL
+    );
+    const items = ((body as any)?.items ?? []) as any[];
+    return items.some(
+      (c) => c?.spec?.certificates?.serverCASecret === this.PUBLIC_TLS_LOCAL_SECRET
+    );
+  }
+
+  private async removeWildcardCopy(namespace: string): Promise<void> {
+    const coreApi = this.kc!.makeApiClient(k8s.CoreV1Api);
+    try {
+      const { body } = await coreApi.readNamespacedSecret(this.PUBLIC_TLS_LOCAL_SECRET, namespace);
+      if (!body.metadata?.labels?.[TLS_SOURCE_RV_LABEL]) return;
+      await coreApi.deleteNamespacedSecret(this.PUBLIC_TLS_LOCAL_SECRET, namespace);
+    } catch (e: any) {
+      if (e?.response?.statusCode !== 404) throw e;
+    }
+  }
+
+  async ensureDatabaseTls(namespace: string, clusterName: string, cluster?: any): Promise<boolean> {
+    this.ensureKubeConfig();
+    const hostname = this.publicTlsHostname(namespace, clusterName);
+    if (!hostname) return false;
+    const hostnames = [hostname];
+    const legacy = this.legacyPublicTlsHostname(clusterName);
+    if (this.PUBLIC_TLS_LEGACY_HOSTNAMES && legacy) hostnames.push(legacy);
+
+    const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
+    const coreApi = this.kc.makeApiClient(k8s.CoreV1Api);
+    const names = publicDbTlsNames(clusterName);
+    const desired = publicDbCertificate({
+      namespace,
+      clusterName,
+      hostnames,
+      issuer: { name: this.PUBLIC_TLS_ISSUER_NAME, kind: this.PUBLIC_TLS_ISSUER_KIND }
+    });
+    try {
+      const { body: current } = await customApi.getNamespacedCustomObject(
+        'cert-manager.io',
+        'v1',
+        namespace,
+        'certificates',
+        names.certificate
+      );
+      const same =
+        JSON.stringify((current as any).spec?.dnsNames) === JSON.stringify(hostnames) &&
+        (current as any).spec?.issuerRef?.name === this.PUBLIC_TLS_ISSUER_NAME &&
+        (current as any).spec?.issuerRef?.kind === this.PUBLIC_TLS_ISSUER_KIND;
+      if (!same) {
+        await customApi.patchNamespacedCustomObject(
+          'cert-manager.io',
+          'v1',
+          namespace,
+          'certificates',
+          names.certificate,
+          { spec: desired.spec },
+          undefined,
+          undefined,
+          undefined,
+          { headers: { 'Content-Type': 'application/merge-patch+json' } }
+        );
+      }
+    } catch (e: any) {
+      if (e?.response?.statusCode !== 404) throw e;
+      await customApi.createNamespacedCustomObject(
+        'cert-manager.io',
+        'v1',
+        namespace,
+        'certificates',
+        desired
+      );
+    }
+
+    let issued: k8s.V1Secret;
+    try {
+      issued = (await coreApi.readNamespacedSecret(names.secret, namespace)).body;
+    } catch (e: any) {
+      if (e?.response?.statusCode === 404) return false;
+      throw e;
+    }
+    if (!issued.data?.['tls.crt'] || !issued.data?.['tls.key']) return false;
+    const ca = caBundleForIssuedSecret(issued.data as { 'ca.crt'?: string; 'tls.crt'?: string });
+    if (!ca) return false;
+
+    const caBody: k8s.V1Secret = {
+      metadata: {
+        name: names.ca,
+        namespace,
+        labels: { 'app.kubernetes.io/managed-by': 'orchard', 'cnpg.io/cluster': clusterName }
+      },
+      type: 'Opaque',
+      data: { 'ca.crt': ca }
+    };
+    try {
+      const { body: existing } = await coreApi.readNamespacedSecret(names.ca, namespace);
+      if (existing.data?.['ca.crt'] !== ca) {
+        await coreApi.replaceNamespacedSecret(names.ca, namespace, caBody);
+      }
+    } catch (e: any) {
+      if (e?.response?.statusCode !== 404) throw e;
+      await coreApi.createNamespacedSecret(namespace, caBody);
+    }
+
+    if (cluster && clusterUsesPublicDbTls(cluster, clusterName)) return false;
+    await customApi.patchNamespacedCustomObject(
+      this.CNPG_GROUP,
+      this.CNPG_VERSION,
+      namespace,
+      this.CNPG_PLURAL,
+      clusterName,
+      { spec: { certificates: publicDbClusterCertificates(clusterName) } },
+      undefined,
+      undefined,
+      undefined,
+      { headers: { 'Content-Type': 'application/merge-patch+json' } }
+    );
+    return true;
+  }
+
+  private async removeDatabaseTls(namespace: string, clusterName: string): Promise<void> {
+    const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
+    const coreApi = this.kc.makeApiClient(k8s.CoreV1Api);
+    const names = publicDbTlsNames(clusterName);
+    await customApi
+      .deleteNamespacedCustomObject(
+        'cert-manager.io',
+        'v1',
+        namespace,
+        'certificates',
+        names.certificate
+      )
+      .catch(() => {});
+    await coreApi.deleteNamespacedSecret(names.secret, namespace).catch(() => {});
+    await coreApi.deleteNamespacedSecret(names.ca, namespace).catch(() => {});
   }
 
   async patchCnpgClusterTls(
@@ -3654,6 +3855,10 @@ export class K8sCnpgService implements OnApplicationBootstrap {
     _altDnsNames: string[] = []
   ): Promise<void> {
     this.ensureKubeConfig();
+    if (this.publicTlsPerDatabase()) {
+      await this.ensureDatabaseTls(namespace, clusterName);
+      return;
+    }
     const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
     // serverTLSSecret must be signed by serverCASecret. Our sync populates ca.crt with the
     // issuing intermediate (extracted from tls.crt), which satisfies CNPG's verification.
@@ -3706,6 +3911,7 @@ export class K8sCnpgService implements OnApplicationBootstrap {
       undefined,
       { headers: { 'Content-Type': 'application/merge-patch+json' } }
     );
+    await this.removeDatabaseTls(namespace, clusterName);
   }
 
   async uninstallCnpgExtension(

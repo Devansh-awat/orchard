@@ -2,7 +2,6 @@ import * as k8s from '@kubernetes/client-node';
 
 export function tailscaleRoleRules(secretName: string): k8s.V1PolicyRule[] {
   return [
-    { apiGroups: [''], resources: ['secrets'], verbs: ['create'] },
     {
       apiGroups: [''],
       resources: ['secrets'],

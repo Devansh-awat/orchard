@@ -171,6 +171,27 @@ publicTls:
     sourceSecret: wildcard-db-example-com-tls
 ```
 
+#### Keep the wildcard key out of tenant namespaces
+
+By default the server copies the database wildcard Secret, including its private key, into every namespace that has a public database. Anyone who can exec into a database pod can read the key and impersonate every other database under that wildcard. On an instance with untrusted tenants, switch to one certificate per database:
+
+```yaml
+publicTls:
+  db:
+    mode: perDatabase
+    issuer:
+      name: letsencrypt-dns01-wildcard
+      kind: ClusterIssuer
+```
+
+Each public database then gets its own cert-manager `Certificate` for its own hostname, and the wildcard key stays in `certificates.namespace`. Consider the following before you switch:
+
+- The issuer must solve DNS-01 for the database domain, and each database counts against the ACME rate limits (50 certificates per registered domain per week for Let's Encrypt).
+- Existing public databases migrate on their own. The server issues the new certificate, points the cluster at it, and removes the copied wildcard Secret from a namespace once no cluster there uses it. Until the certificate is ready, the database keeps serving the wildcard.
+- Newly enabled databases serve CNPG's self-signed certificate until issuance completes, usually a few minutes.
+- The per-database certificate covers only the namespace-qualified hostname. Set `publicTls.db.legacyHostnames: true` to keep clients that still use the older `<cluster>.<db domain>` hostname verifying, with the collision risk described in the chart README.
+- The server needs permission to create `Certificate` objects. The chart grants this only in `perDatabase` mode.
+
 ## 4. Verify the certificate
 
 1. Check that the certificate was issued. `READY` should be `True`.

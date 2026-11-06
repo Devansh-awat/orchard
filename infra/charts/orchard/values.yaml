@@ -409,6 +409,24 @@ metrics:
   # The `cluster` label vmagent stamps on every series. Changing it starts new
   # series, so history before the change stops matching queries that select on it.
   clusterLabel: leafycluster
+  # Which pods are the real ingress controller. vmagent scrapes only these
+  # namespaces and labels, so a tenant pod that copies a label cannot feed
+  # forged request or error series. Defaults match the installer (Traefik in
+  # `traefik`) and the HAProxy variant (`network`). On your own cluster set
+  # the namespace and labels of your controller's pods; the server reads the
+  # namespaces (INGRESS_METRICS_*_NAMESPACE) and only trusts series from the
+  # `traefik` / `haproxy-ingress` scrape jobs.
+  ingress:
+    traefik:
+      namespaces: [traefik]
+      labels:
+        app.kubernetes.io/name: traefik
+      portName: metrics
+    haproxy:
+      namespaces: [network]
+      labels:
+        app.kubernetes.io/name: kubernetes-ingress
+      portName: stat
   victoriametrics:
     image: victoriametrics/victoria-metrics:v1.155.0
     retention: 30d
@@ -930,6 +948,15 @@ publicTls:
     sourceNamespace: ""   # empty → certificates.namespace
     sourceSecret: ""      # empty → certificates.wildcards.db.secretName
     localSecret: wildcard-db-tls
+    # wildcard: copy the shared *.db wildcard key into every tenant namespace
+    #   (anyone who can exec into a database pod can read it and impersonate
+    #   every other database under the wildcard).
+    # perDatabase: cert-manager issues one certificate per public database for
+    #   its own hostname only; the wildcard key stays in `sourceNamespace`.
+    #   Needs a DNS-01 issuer and counts against ACME rate limits.
+    mode: wildcard
+    issuer: {}
+    legacyHostnames: false
 
 grafts: []
 
