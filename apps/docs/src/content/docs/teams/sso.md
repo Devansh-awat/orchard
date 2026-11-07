@@ -34,7 +34,7 @@ Sessions created through an organization's SSO connection can only reach that or
 
 ### SAML requirements
 
-SAML sign-in is always started from Orchard. Orchard rejects responses that your provider starts on its own (IdP-initiated sign-in), responses that are not signed on both the response and the assertion, SHA-1 signatures, and responses whose issuer is not the **IdP entity ID** you saved. The entity ID is required. Orchard verifies signatures only against the signing certificate saved on the connection, so after your provider rotates its certificate, paste the new one into the connection. Your provider must sign with RSA or ECDSA and SHA-256 or stronger, and set the assertion's `Recipient` and the response's `Destination` to the **Redirect URL** shown on the connection.
+SAML sign-in is always started from Orchard. Orchard rejects responses that your provider starts on its own (IdP-initiated sign-in), responses that are not signed on both the response and the assertion, SHA-1 signatures, and responses whose issuer is not the **IdP entity ID** you saved. The entity ID is required. A connection saved before it was required gets it filled in automatically from its stored metadata URL, as long as that metadata lists the saved signing certificate. Without a metadata URL, sign-in is refused until an admin enters the entity ID. Orchard verifies signatures only against the signing certificate saved on the connection, so after your provider rotates its certificate, paste the new one into the connection. Your provider must sign with RSA or ECDSA and SHA-256 or stronger, and set the assertion's `Recipient` and the response's `Destination` to the **Redirect URL** shown on the connection.
 
 ## Test the connection
 
