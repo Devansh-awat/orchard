@@ -90,6 +90,89 @@ Test a connection before you turn this on. A provider that fails blocks members 
 
 Superadmins can still sign in without SSO, so that a broken provider does not lock the instance.
 
+## Start sign-in from your provider's app tile
+
+Orchard does not accept sign-ins that your provider starts on its own, so a SAML app tile cannot post a response straight to Orchard. Point the tile at Orchard instead, and Orchard sends the person to your provider and back with a request it can match to the response.
+
+1. Find the connection ID in the `id` field of `GET /apiv1/organizations/<organization id>/sso/providers`.
+2. Build the start address: `https://<your Orchard host>/apiv1/sso/start/<connection id>`.
+3. In your provider, set the app's start URL, bookmark URL, or sign-on URL to that address. In Okta this is the **Initiate login URI** or a bookmark app. In Microsoft Entra ID it is the application's **Home page URL**. In Google Workspace use the **Start URL**.
+4. Keep Orchard's **Redirect URL** as the assertion consumer service (ACS) URL.
+
+The person lands on your provider, signs in if they have no session, and is returned to Orchard. Add `?returnTo=/path` to the start URL to land on a specific page.
+
+## Map provider groups to roles
+
+By default every person your connection creates gets the **Role for new members**, and nothing changes it afterward. Group rules replace that with a mapping from your provider's groups to organization roles that Orchard re-checks at every sign-in.
+
+Group rules work with OIDC and SAML connections. OAuth 2.0 connections cannot carry groups.
+
+Group rules are managed through the API in this release. The dashboard does not show them yet.
+
+1. Make your provider send group names. Refer to [Provider notes](#provider-notes).
+2. Preview a set of group names against the saved rules. The response lists the role each group set gives and whether the person would be let in:
+
+   ```sh
+   curl -X POST "$ORCHARD/apiv1/organizations/$ORG/sso/providers/$CONNECTION/rules/preview" \
+     -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+     -d '{"groups":["eng","leads"]}'
+   ```
+
+3. Replace the connection's rules and set the claim that holds the groups. `groupClaim` defaults to `groups`, and for OIDC it can be a dotted path such as `realm_access.roles`. Each rule is one exact group name and a role of `admin`, `member`, or `guest`. Only owners can do this.
+
+   ```sh
+   curl -X PUT "$ORCHARD/apiv1/organizations/$ORG/sso/providers/$CONNECTION/rules" \
+     -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+     -d '{"groupClaim":"groups","rules":[{"value":"eng","role":"member"},{"value":"leads","role":"admin"}]}'
+   ```
+
+   The call replaces the whole rule set, up to 1,000 rules. `GET` on the same path returns the current rules.
+
+These rules apply:
+
+- A rule can never give **Owner**. Owners are managed in Orchard, and a rule never changes or removes one.
+- Group names match exactly after Unicode normalization (NFC) and trimming. Case matters: `Admins` does not match `admins`. Rule names that mix Latin, Cyrillic, or Greek letters, or that contain invisible characters, are rejected so that lookalike names cannot be confused.
+- A person in several mapped groups gets the highest role.
+- Once a connection has any rule, a person who matches none is denied at sign-in and no account is created. To stop using rules, remove all of them.
+- Roles are re-evaluated at every sign-in. When a person's role drops, or a person who rules added no longer matches, Orchard signs out their SSO sessions and deletes their API tokens for this organization.
+- Orchard removes a membership only when a rule added or last changed it. People you invited or added by hand keep their access after a denied sign-in, but they cannot use this connection.
+- If your provider sends too many groups (over 500, or more than 16 KB of names) or tells Orchard the list was cut short (Microsoft Entra ID group overage), Orchard treats the groups as unknown, denies the sign-in, and changes nothing.
+- Editing or removing rules, or changing the group claim, signs out everyone the rules added.
+- An organization can have group rules on one connection at a time.
+- Groups are read only from the signed SAML assertion, or the validated OIDC ID token, of this organization's connection.
+
+Orchard records `sso.rules.updated`, `sso.member.provisioned`, `sso.member.role_synced`, `sso.member.removed`, and `sso.login.denied` entries in the [audit log](/teams/audit-logs/), with the connection and rule IDs.
+
+:::caution
+A wrong `groupClaim` denies everyone except owners. Preview your rules, and sign in with a test account before you save a change to a connection that people rely on.
+:::
+
+If you also use [SCIM](/teams/scim/) roles, group rules win at the next sign-in.
+
+### Sign-in identity
+
+Orchard stores your provider's stable subject for each person on first sign-in. Later sign-ins match on that subject, not on the email address, so a changed or reassigned email in your provider does not move an identity to another account. If a different subject later arrives for an account that already has one, Orchard refuses the sign-in. For SAML, set the NameID format to persistent or an opaque ID. With an email NameID, the subject changes whenever the email does.
+
+### Provider notes
+
+| Provider                 | What to configure                                                                                                                                                                                   |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Okta                     | OIDC: add a **Groups claim** with a filter such as `Matches regex .*` limited to the groups you map, on the ID token. SAML: add a **Group Attribute Statement** named `groups`.                     |
+| Microsoft Entra ID       | Set the token's **groups** claim to **Groups assigned to the application**. Entra sends object IDs, so use the IDs as rule names. Over 150 groups in SAML, or 200 in a token, Entra omits the list. |
+| Google Workspace         | Use SAML and map the **Group membership** attribute to the app attribute `groups`. Google does not send a groups claim with OIDC.                                                                   |
+| Keycloak                 | Add a **Group Membership** mapper to the client with **Full group path** off. For SAML add a **Group list** attribute mapper named `groups`.                                                        |
+| LDAP or Active Directory | Put [Dex or Keycloak in front](/operate/identity-bridge/) and treat it as an OIDC or SAML provider.                                                                                                 |
+
+## Troubleshoot sign-in
+
+| Message or symptom                                  | Cause and fix                                                                                                                                                                          |
+| --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `sso_link_required`                                 | The account exists but is not linked. Verify the email domain, or have the person sign in to Orchard first and start from there.                                                       |
+| Email not verified, or domain not allowed           | The provider did not assert `email_verified`, or the address is outside **Email domains**.                                                                                             |
+| "None of your groups give access"                   | Group rules exist and none matched. Check the `groupClaim` name and the exact group names. The `sso.login.denied` audit entry says whether no rule matched or the groups were unknown. |
+| SAML fails after a certificate rotation, or by time | Paste the new signing certificate into the connection. Keep provider and server clocks within one minute.                                                                              |
+| Group rules lock people out                         | Owners are exempt from group rules. An owner who signs in through the connection they created can replace the rules.                                                                   |
+
 ## Customize the sign-in page
 
 1. In **Sign-in page**, enter a **Logo** URL, **Heading**, and **Subheading**.

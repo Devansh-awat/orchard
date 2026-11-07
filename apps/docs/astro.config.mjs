@@ -333,7 +333,8 @@ export default defineConfig({
               collapsed: true,
               items: [
                 { label: 'Manage users', slug: 'operate/manage-users' },
-                { label: 'Manage organizations', slug: 'operate/manage-organizations' }
+                { label: 'Manage organizations', slug: 'operate/manage-organizations' },
+                { label: 'Map groups and bridge LDAP', slug: 'operate/identity-bridge' }
               ]
             },
             {

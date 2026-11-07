@@ -47,6 +47,8 @@ Orchard reads a member's role from the SCIM `roles` attribute or the `userType` 
 
 A role sent by the provider overrides a change made in the dashboard at the next sync.
 
+If the organization's SSO connection has [group rules](/teams/sso/#map-provider-groups-to-roles), the rules decide a person's role at each sign-in and override the SCIM role.
+
 SCIM Groups in Orchard are a read-only view of organization roles. Requests that create or change a group return a `501` status. Map roles with `roles` or `userType` instead.
 
 ## Related resources
