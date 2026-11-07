@@ -10,9 +10,18 @@ import {
 } from '../instance-config/object-storage';
 import { reencodeImage } from '../organizations/image-reencode';
 import { assertPublicUrl, guardedFetch } from '../notifications/webhook-guard';
+import { createHmac } from 'node:crypto';
 
 const FETCH_HEADERS = { 'User-Agent': 'Mozilla/5.0 (compatible; OrchardBot/1.0)' };
 const HOP_TIMEOUT_MS = 5000;
+
+export function assetKey(kind: 'favicons' | 'banners', domain: string): string {
+  const digest = createHmac('sha256', process.env.JWT_SECRET || 'orchard-asset-key')
+    .update(`${kind}\0${domain.toLowerCase()}`)
+    .digest('hex')
+    .slice(0, 32);
+  return `${kind}/${digest}.png`;
+}
 
 const STORABLE_IMAGE_TYPES = new Set([
   'image/png',
@@ -109,7 +118,7 @@ export class FaviconService {
 
     this.initS3();
 
-    const r2Key = `favicons/${domain}.png`;
+    const r2Key = assetKey('favicons', domain);
 
     if (this.s3Client && this.bucketName) {
       try {
@@ -156,7 +165,7 @@ export class FaviconService {
     this.initS3();
     if (!this.s3Client || !this.bucketName) return null;
 
-    const r2Key = `favicons/${domain}.png`;
+    const r2Key = assetKey('favicons', domain);
     try {
       if (await this.objectExists(r2Key)) {
         const url = `${this.publicUrl}/${r2Key}`;
@@ -189,7 +198,7 @@ export class FaviconService {
     if (existing) return existing;
 
     this.initS3();
-    const r2Key = `favicons/${domain}.png`;
+    const r2Key = assetKey('favicons', domain);
     const p = this.fetchAndStore(domain, r2Key);
     this.pendingFetches.set(domain, p);
     try {
@@ -343,7 +352,7 @@ export class FaviconService {
     return { buffer: image.buffer, contentType: image.contentType };
   }
 
-  /** Download + store the page's og:image banner. Keyed banners/<domain>.png */
+  /** Download + store the page's og:image banner. Keyed banners/<hmac of domain>.png */
   private async storeBanner(domain: string, html: string): Promise<void> {
     const setNull = () => {
       this.bannerCache.set(domain, { url: null, ts: Date.now() });
@@ -355,7 +364,7 @@ export class FaviconService {
       if (!img) return setNull();
       if (!this.s3Client || !this.bucketName) return setNull();
       const { buffer, contentType } = await this.resizeBanner(img.buffer);
-      const key = `banners/${domain}.png`;
+      const key = assetKey('banners', domain);
       await this.s3Client.send(
         new PutObjectCommand({
           Bucket: this.bucketName,
@@ -389,7 +398,7 @@ export class FaviconService {
     this.initS3();
     if (!this.s3Client || !this.bucketName) return null;
 
-    const key = `banners/${domain}.png`;
+    const key = assetKey('banners', domain);
     let missing = false;
     try {
       if (await this.objectExists(key)) {
@@ -407,7 +416,7 @@ export class FaviconService {
     // alongside the favicon.
     let pending = this.pendingFetches.get(domain);
     if (!pending) {
-      pending = this.fetchAndStore(domain, `favicons/${domain}.png`);
+      pending = this.fetchAndStore(domain, assetKey('favicons', domain));
       const p = pending;
       this.pendingFetches.set(domain, p);
       p.catch(() => null).finally(() => this.pendingFetches.delete(domain));
