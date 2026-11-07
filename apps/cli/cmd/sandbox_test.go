@@ -398,11 +398,15 @@ func TestSandboxSSHConfigOutput(t *testing.T) {
 	if err != nil {
 		t.Fatalf("os.Executable: %v", err)
 	}
+	exe, err = proxyCommandExecutable(exe)
+	if err != nil {
+		t.Fatalf("proxyCommandExecutable: %v", err)
+	}
 	for _, want := range []string{
 		"Host orchard-box\n",
 		"  HostName orchard-sandbox-11111111-1111-1111-1111-111111111111\n",
 		"  User dev\n",
-		"  ProxyCommand " + exe + " sandbox proxy 11111111-1111-1111-1111-111111111111\n",
+		"  ProxyCommand \"" + exe + "\" sandbox proxy 11111111-1111-1111-1111-111111111111\n",
 		"  StrictHostKeyChecking accept-new\n",
 	} {
 		if !strings.Contains(out, want) {
