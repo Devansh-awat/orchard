@@ -1,4 +1,10 @@
-import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+  OnModuleInit
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { LeaderElectionService } from '../events/leader-election.service';
 import { ObservabilityService } from './observability.service';
@@ -157,7 +163,25 @@ export class ErrorIngestService implements OnModuleInit, OnModuleDestroy {
       data.resolvedAt = body.status === 'resolved' ? new Date() : null;
       data.resolvedById = body.status === 'resolved' ? actingUserId : null;
     }
-    if (body.assigneeId !== undefined) data.assigneeId = body.assigneeId;
+    if (body.assigneeId !== undefined) {
+      if (body.assigneeId === null) {
+        data.assigneeId = null;
+      } else {
+        const deployment = await this.prisma.deployment.findUnique({
+          where: { id: deploymentId },
+          select: { projectId: true }
+        });
+        const member =
+          typeof body.assigneeId === 'string' && deployment?.projectId
+            ? await this.prisma.projectMember.findFirst({
+                where: { projectId: deployment.projectId, userId: body.assigneeId },
+                select: { id: true }
+              })
+            : null;
+        if (!member) throw new BadRequestException('Choose someone who can open this deployment');
+        data.assigneeId = body.assigneeId;
+      }
+    }
 
     await this.prisma.errorGroup.update({
       where: { deploymentId_fingerprint: { deploymentId, fingerprint } },
