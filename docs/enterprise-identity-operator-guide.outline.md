@@ -1,12 +1,14 @@
 # Enterprise identity operator guide (outline)
 
 ## Concepts
+
 - Instance providers vs org providers
 - Platform switch vs owner switch
 - Rules, default role, deny-unmapped, sync on login
 - Identity is issuer+subject, not email
 
 ## Instance admin: single-company instance
+
 - Add an instance provider (admin/sso)
   - OIDC (openid-client): issuer, client id/secret, scopes incl. groups
   - SAML (node-saml): entry point, IdP entity ID, certificate or metadata URL
@@ -20,12 +22,14 @@
 - Upgrading: pinned library versions (node-saml, xml-crypto, xmldom), `pnpm audit` gate, how to read advisories
 
 ## Instance admin: multi-org host
+
 - Enable SSO per org (platformEnabled); revoke it
 - Review audit entries
 - What an org IdP can never do (invariants)
 - Egress rules: internal IdP opt-out (`SSO_ALLOW_INTERNAL_IDP`)
 
 ## Org owner
+
 - Verify domains (DNS TXT `_orchard-challenge.<domain>`)
 - Add provider (OIDC/SAML); IdP-initiated is off
 - JIT on/off, default role
@@ -36,6 +40,7 @@
 - Audit log
 
 ## IdP notes
+
 - Okta
   - groups claim filter on the ID token; thin tokens, use userinfo
   - SAML group attribute statement; SCIM app, push groups
@@ -51,6 +56,7 @@
   - native ldapts bind (optional, Phase 6): LDAPS/StartTLS, service account, search base
 
 ## Troubleshooting
+
 - sso_link_required
 - Email not verified; domain not allowed
 - No mapping -> denied
