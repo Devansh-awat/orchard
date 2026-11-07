@@ -127,7 +127,7 @@ export class BuildKitPoolService {
       )
     ]);
 
-    for (const pod of [...existing.body.items, ...legacy.body.items]) {
+    for (const pod of existing.body.items) {
       const phase = pod.status?.phase;
       const ip = pod.status?.podIP;
       const name = pod.metadata?.name;
@@ -142,7 +142,35 @@ export class BuildKitPoolService {
       }
     }
 
+    for (const pod of legacy.body.items) {
+      if (pod.metadata?.name) await this.retireLegacyDaemon(pod.metadata.name);
+    }
+
     return this.createDaemon(tenantKey);
+  }
+
+  private async retireLegacyDaemon(podName: string): Promise<void> {
+    const coreApi = this.kc!.makeApiClient(k8s.CoreV1Api);
+    console.log(`[BuildKitPool] Replacing legacy-labelled daemon ${podName}`);
+    try {
+      await coreApi.deleteNamespacedPod(podName, this.namespace);
+    } catch (err) {
+      if ((err.statusCode ?? err.response?.statusCode) !== 404) throw err;
+      return;
+    }
+    const deadline = Date.now() + 90_000;
+    while (Date.now() < deadline) {
+      try {
+        await coreApi.readNamespacedPod(podName, this.namespace);
+      } catch (err) {
+        if ((err.statusCode ?? err.response?.statusCode) === 404) return;
+        throw err;
+      }
+      await new Promise((r) => {
+        setTimeout(r, 2000);
+      });
+    }
+    throw new Error(`Legacy daemon pod ${podName} did not terminate in time`);
   }
 
   // buildkitd's tcp addr has no auth of its own: anything that can route to

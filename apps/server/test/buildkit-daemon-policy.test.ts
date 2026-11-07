@@ -100,3 +100,50 @@ test('pool writes a per-tenant policy, drops the broad one, and omits registry c
     false
   );
 });
+
+test('a legacy-labelled daemon is replaced, not reused, because the policies no longer admit it', async (t) => {
+  t.mock.method(BuildKitPoolService.prototype as any, 'initKubeConfig', () => {});
+  const calls: string[] = [];
+  const networking = {
+    deleteNamespacedNetworkPolicy: async () => {
+      throw { statusCode: 404 };
+    },
+    readNamespacedNetworkPolicy: async () => ({}),
+    replaceNamespacedNetworkPolicy: async () => ({}),
+    createNamespacedNetworkPolicy: async () => ({})
+  };
+  const legacyPod = {
+    metadata: { name: 'buildkit-daemon-x' },
+    status: { phase: 'Running', podIP: '10.0.0.5' }
+  };
+  const core = {
+    listNamespacedPod: async (_ns: string, ...rest: any[]) => ({
+      body: { items: String(rest[4]).includes('orchard.dev/') ? [legacyPod] : [] }
+    }),
+    deleteNamespacedPod: async (name: string) => {
+      calls.push(`delete:${name}`);
+    },
+    createNamespacedPod: async (_ns: string, body: any) => {
+      calls.push(`create:${body.metadata.name}`);
+    },
+    readNamespacedPod: async () => {
+      if (!calls.some((c) => c.startsWith('delete:'))) return { body: legacyPod };
+      if (!calls.some((c) => c.startsWith('create:'))) throw { statusCode: 404 };
+      return {
+        body: {
+          status: { phase: 'Running', podIP: '10.0.0.9', containerStatuses: [{ ready: true }] }
+        }
+      };
+    }
+  };
+  const pool = new BuildKitPoolService();
+  Object.assign(pool, {
+    kc: {
+      makeApiClient: (api: { name: string }) => (api.name === 'CoreV1Api' ? core : networking)
+    }
+  });
+  const daemon = await pool.getOrCreateDaemon('Tenant-A');
+  assert.equal(calls[0].startsWith('delete:'), true);
+  assert.equal(calls[1].startsWith('create:'), true);
+  assert.equal(daemon.podIp, '10.0.0.9');
+});
