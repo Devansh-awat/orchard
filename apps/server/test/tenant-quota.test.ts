@@ -88,7 +88,7 @@ test('a capped namespace sends real default limits, and sends them before the qu
   });
   assert.deepEqual(
     calls.map((c) => c.op),
-    ['limitRange', 'quota']
+    ['limitRange', 'quota', 'limitRange', 'quota']
   );
   const item = calls[0].body.spec.limits[0];
   assert.deepEqual(item.default, { cpu: '200m', memory: String(200 * MiB) });

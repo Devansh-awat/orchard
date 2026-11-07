@@ -318,6 +318,8 @@ The trade-off is that the URLs are harder to read and to recognise in logs and D
 
 `TENANT_QUOTA_FLOOR_PODS`, `TENANT_QUOTA_FLOOR_SERVICES`, `TENANT_QUOTA_FLOOR_PVCS`, and `TENANT_QUOTA_FLOOR_STORAGE_BYTES` set the most that a project without a cap can create when limits are on. The installer sets high values on a new install, so that the floor does not stop a small instance.
 
+Every tenant namespace also gets an `orchard-abuse-quota` that applies whatever the limits mode. `TENANT_QUOTA_FLOOR_LOADBALANCERS` (default 20) and `TENANT_QUOTA_FLOOR_NODEPORTS` (default 10) cap the Services that publish ports and databases. `TENANT_EPHEMERAL_STORAGE_LIMIT_GIB` (default 20) is the ephemeral-storage limit each container gets when it sets none, so a pod cannot fill a node's disk. Set it to 0 to turn the ephemeral-storage part off.
+
 ## The What's new sheet
 
 The dashboard shows each person the latest release notes once. The server reads the notes from a folder that holds `latest.json` and one Markdown file for each release.

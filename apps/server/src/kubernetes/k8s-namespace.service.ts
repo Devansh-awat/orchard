@@ -20,6 +20,13 @@ import {
 } from './tenant-quota';
 import { defaultPodResourcesForImage } from './presets';
 import {
+  ABUSE_LIMIT_RANGE_NAME,
+  ABUSE_QUOTA_NAME,
+  abuseCaps,
+  abuseLimitRange,
+  abuseQuota
+} from './tenant-abuse-quota';
+import {
   PROJECT_DATABASES_POLICY,
   TENANT_DENY_POLICY,
   TENANT_NAMESPACE_LABEL_SELECTORS,
@@ -128,6 +135,10 @@ export class K8sNamespaceService implements OnModuleInit {
         throw error;
       }
     }
+
+    await this.applyAbuseGuards(ns).catch((error: any) =>
+      this.logger.warn(`abuse quota for ${ns} not applied: ${error?.message ?? error}`)
+    );
   }
 
   private async applyNamespaceLimitRange(
@@ -196,6 +207,35 @@ export class K8sNamespaceService implements OnModuleInit {
       } else {
         throw error;
       }
+    }
+  }
+
+  async applyAbuseGuards(namespace: string): Promise<void> {
+    this.ensureKubeConfig();
+    if (!this.kc) return;
+    const api = this.kc.makeApiClient(k8s.CoreV1Api);
+    const caps = abuseCaps(process.env);
+    const range = abuseLimitRange(caps);
+    if (range) {
+      try {
+        await api.replaceNamespacedLimitRange(ABUSE_LIMIT_RANGE_NAME, namespace, range);
+      } catch (error: any) {
+        if (error?.response?.statusCode !== 404) throw error;
+        await api.createNamespacedLimitRange(namespace, range);
+      }
+    } else {
+      await api
+        .deleteNamespacedLimitRange(ABUSE_LIMIT_RANGE_NAME, namespace)
+        .catch((error: any) => {
+          if (error?.response?.statusCode !== 404) throw error;
+        });
+    }
+    const quota = abuseQuota(caps);
+    try {
+      await api.replaceNamespacedResourceQuota(ABUSE_QUOTA_NAME, namespace, quota);
+    } catch (error: any) {
+      if (error?.response?.statusCode !== 404) throw error;
+      await api.createNamespacedResourceQuota(namespace, quota);
     }
   }
 
@@ -315,6 +355,12 @@ export class K8sNamespaceService implements OnModuleInit {
       await api.createNamespace(body);
 
       await this.applyDefaultDenyOrAbandon(api, cleanNamespace);
+
+      await this.applyAbuseGuards(cleanNamespace).catch((error: any) =>
+        this.logger.warn(
+          `abuse quota for ${cleanNamespace} not applied: ${error?.message ?? error}`
+        )
+      );
 
       // Bootstrap the per-tenant Role+RoleBinding that lets the orchard-server
       // ServiceAccount manage secrets and configmaps inside this namespace. There is
@@ -532,6 +578,9 @@ export class K8sNamespaceService implements OnModuleInit {
     for (const name of names) {
       try {
         await this.createNetworkPolicy(name);
+        await this.applyAbuseGuards(name).catch((e: any) =>
+          this.logger.warn(`couldn't apply the abuse quota for ${name}: ${e?.message}`)
+        );
         updated.push(name);
       } catch (e: any) {
         this.logger.warn(`couldn't re-apply the network policy for ${name}: ${e?.message}`);
