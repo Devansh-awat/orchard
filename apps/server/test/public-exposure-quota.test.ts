@@ -63,7 +63,7 @@ test('createDeployment ignores a tenant-chosen nodePort and non-TCP/UDP protocol
               if (method === 'readNamespacedService') {
                 return { body: { spec: { ports: [] }, status: {} } };
               }
-              if (/^read/.test(method)) {
+              if (method.startsWith('read')) {
                 const e: any = new Error('nf');
                 e.response = { statusCode: 404 };
                 throw e;

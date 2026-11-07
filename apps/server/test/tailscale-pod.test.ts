@@ -15,7 +15,7 @@ function fakeKc(calls: Call[]) {
           get(_t, method: string) {
             return async (...args: any[]) => {
               calls.push({ method, args });
-              if (/^read/.test(method)) {
+              if (method.startsWith('read')) {
                 const e: any = new Error('nf');
                 e.response = { statusCode: 404 };
                 throw e;

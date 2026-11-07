@@ -26,7 +26,7 @@ function fakeKc(calls: Call[], responders: Record<string, (args: any[]) => any> 
               calls.push({ method, args });
               const r = responders[method];
               if (r) return r(args);
-              if (/^read/.test(method)) {
+              if (method.startsWith('read')) {
                 const e: any = new Error('nf');
                 e.response = { statusCode: 404 };
                 throw e;
@@ -234,7 +234,7 @@ async function main() {
       protocol: 'TCP'
     });
     const lb = calls
-      .find((c) => /Service$/.test(c.method) && /create|replace/.test(c.method))!
+      .find((c) => c.method.endsWith('Service') && /create|replace/.test(c.method))!
       .args.slice(-1)[0];
     emit('service-public-port-lb', { apiVersion: 'v1', kind: 'Service', ...lb }, { user: SERVER });
 
@@ -246,7 +246,7 @@ async function main() {
       port: 31235
     });
     const dblb = calls
-      .find((c) => /Service$/.test(c.method) && /create|replace/.test(c.method))!
+      .find((c) => c.method.endsWith('Service') && /create|replace/.test(c.method))!
       .args.slice(-1)[0];
     emit('service-public-db-lb', { apiVersion: 'v1', kind: 'Service', ...dblb }, { user: SERVER });
 
