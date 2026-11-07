@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import { loadAll } from 'js-yaml';
-import { BUILDER_ROLE_RULES } from '../src/docker/builder-rbac';
 import { tailscaleRoleRules } from '../src/kubernetes/tailscale-rbac';
 import { tenantSecretsRole } from '../src/kubernetes/tenant-rbac';
 
@@ -69,9 +68,6 @@ test(
       !cluster.some((r) => (r.verbs ?? []).includes('escalate')),
       'no escalate on the server'
     );
-
-    const inBuilders = [...cluster, ...rulesOf(docs, 'Role', 'orchard-image-builder-secrets')];
-    assertCovered(BUILDER_ROLE_RULES, inBuilders, 'image-builder-role');
 
     const tenantSecrets = rulesOf(docs, 'ClusterRole', 'orchard-tenant-secrets');
     const inTenant = [...cluster, ...tenantSecrets];

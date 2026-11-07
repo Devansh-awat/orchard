@@ -57,7 +57,7 @@ import {
   ROOTLESS_DOCKER_CONFIG,
   ROOTLESS_UID
 } from './build-posture';
-import { BUILDER_ROLE_RULES } from './builder-rbac';
+import { BUILDER_ROLE, BUILDER_ROLE_BINDING } from './builder-rbac';
 import { k8sErrorMessage } from '../kubernetes/k8s-error';
 import { isSandboxStartFault } from './build-faults';
 import { summarizeBuildFailure } from './build-summary';
@@ -4447,52 +4447,28 @@ fi
       }
     }
 
-    const roleName = 'image-builder-role';
-    const roleRules = BUILDER_ROLE_RULES;
-
-    try {
+    for (const [kind, name, remove] of [
+      [
+        'rolebinding',
+        BUILDER_ROLE_BINDING,
+        () => rbacApi.deleteNamespacedRoleBinding(BUILDER_ROLE_BINDING, this.builderNamespace)
+      ],
+      [
+        'role',
+        BUILDER_ROLE,
+        () => rbacApi.deleteNamespacedRole(BUILDER_ROLE, this.builderNamespace)
+      ]
+    ] as const) {
       try {
-        await rbacApi.readNamespacedRole(roleName, this.builderNamespace);
-        await rbacApi.replaceNamespacedRole(roleName, this.builderNamespace, {
-          metadata: { name: roleName, namespace: this.builderNamespace },
-          rules: roleRules
-        });
+        await remove();
+        console.log(`[ImageBuilder] removed legacy ${kind} ${name} from ${this.builderNamespace}`);
       } catch (error) {
-        if (error.statusCode !== 404 && error.response?.statusCode !== 404) throw error;
-        await rbacApi.createNamespacedRole(this.builderNamespace, {
-          metadata: { name: roleName, namespace: this.builderNamespace },
-          rules: roleRules
-        });
-      }
-    } catch (error) {
-      console.warn(
-        `[ImageBuilder] could not reconcile ${roleName} in ${this.builderNamespace}, builds continue without it: ${k8sErrorMessage(error)}`
-      );
-    }
-
-    const roleBindingName = 'image-builder-rolebinding';
-    try {
-      await rbacApi.readNamespacedRoleBinding(roleBindingName, this.builderNamespace);
-    } catch (error) {
-      if (error.statusCode === 404) {
-        await rbacApi.createNamespacedRoleBinding(this.builderNamespace, {
-          metadata: {
-            name: roleBindingName,
-            namespace: this.builderNamespace
-          },
-          subjects: [
-            {
-              kind: 'ServiceAccount',
-              name: saName,
-              namespace: this.builderNamespace
-            }
-          ],
-          roleRef: {
-            kind: 'Role',
-            name: roleName,
-            apiGroup: 'rbac.authorization.k8s.io'
-          }
-        });
+        const status = error.statusCode ?? error.response?.statusCode;
+        if (status !== 404) {
+          console.warn(
+            `[ImageBuilder] could not remove ${kind} ${name} in ${this.builderNamespace}: ${k8sErrorMessage(error)}`
+          );
+        }
       }
     }
   }
