@@ -20,6 +20,12 @@ import {
   parentDomains
 } from './domain-proof';
 
+export interface HostClaimReader {
+  ingress: Pick<PrismaService['ingress'], 'findFirst'>;
+  organization: Pick<PrismaService['organization'], 'findUnique'>;
+  statusPage: Pick<PrismaService['statusPage'], 'findUnique'>;
+}
+
 /**
  * Centralized RBAC/access guards for projects, deployments, databases,
  * ingresses and service-ports. Extracted from ProjectsService so the guard
@@ -53,6 +59,23 @@ export class ProjectAccessService {
    * host first is a low-grade enumeration oracle.
    */
   async assertHostnameAvailable(rawHost: string, projectId: string): Promise<void> {
+    await this.assertHostnameUnclaimed(rawHost, projectId);
+    const host = normalizeHost(rawHost);
+    const proof = await this.domainProofStatus(host, projectId);
+    if (proof && !proof.found) {
+      throw new BadRequestException({
+        error: 'domain_proof_required',
+        message: `Prove you own ${host}: add a TXT record named ${proof.fullName} with the value ${proof.record.value}, then try again.`,
+        records: [proof.record]
+      });
+    }
+  }
+
+  async assertHostnameUnclaimed(
+    rawHost: string,
+    projectId: string,
+    db: HostClaimReader = this.prisma
+  ): Promise<void> {
     const host = normalizeHost(rawHost);
     if (!host) {
       throw new BadRequestException('Hostname is required');
@@ -68,28 +91,15 @@ export class ProjectAccessService {
         ? host.slice(0, -(baseDomain.length + 1))
         : null;
     const [conflict, vanity, statusPage] = await Promise.all([
-      this.prisma.ingress.findFirst({
+      db.ingress.findFirst({
         where: { host: { equals: host, mode: 'insensitive' }, NOT: { projectId } },
         select: { id: true }
       }),
-      subdomain
-        ? this.prisma.organization.findUnique({ where: { subdomain }, select: { id: true } })
-        : null,
-      subdomain
-        ? this.prisma.statusPage.findUnique({ where: { subdomain }, select: { id: true } })
-        : null
+      subdomain ? db.organization.findUnique({ where: { subdomain }, select: { id: true } }) : null,
+      subdomain ? db.statusPage.findUnique({ where: { subdomain }, select: { id: true } }) : null
     ]);
     if (conflict || vanity || statusPage) {
       throw new ConflictException(`Hostname ${rawHost} is unavailable. Choose a different domain.`);
-    }
-
-    const proof = await this.domainProofStatus(host, projectId);
-    if (proof && !proof.found) {
-      throw new BadRequestException({
-        error: 'domain_proof_required',
-        message: `Prove you own ${host}: add a TXT record named ${proof.fullName} with the value ${proof.record.value}, then try again.`,
-        records: [proof.record]
-      });
     }
   }
 

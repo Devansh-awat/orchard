@@ -4,6 +4,7 @@ import { IngressService } from '../src/projects/ingress.service';
 
 function harness(opts: { createFails?: boolean } = {}) {
   const k8s: string[] = [];
+  const events: string[] = [];
   const updates: any[] = [];
   const svc = Object.create(IngressService.prototype) as any;
   Object.assign(svc, {
@@ -15,12 +16,36 @@ function harness(opts: { createFails?: boolean } = {}) {
           updates.push(args.data);
           return {};
         }
+      },
+      $transaction: async (fn: (tx: any) => Promise<unknown>) => {
+        events.push('tx-begin');
+        const tx = {
+          $executeRaw: async () => {
+            events.push('lock');
+          },
+          ingress: {
+            update: async (args: any) => {
+              events.push('tx-update');
+              updates.push(args.data);
+              return {};
+            }
+          }
+        };
+        const out = await fn(tx);
+        events.push('tx-commit');
+        return out;
       }
     },
-    access: { assertHostnameAvailable: async () => {} },
+    access: {
+      assertHostnameAvailable: async () => {},
+      assertHostnameUnclaimed: async () => {
+        events.push('recheck');
+      }
+    },
     audit: { log: async () => {} },
     k8sNetwork: {
       createIngress: async (args: any) => {
+        events.push('k8s-create');
         k8s.push(`create ${args.name} ${args.host}`);
         if (opts.createFails) throw new Error('apiserver said no');
         return { status: {} };
@@ -51,7 +76,7 @@ function harness(opts: { createFails?: boolean } = {}) {
     deployments: []
   };
   const user = { id: 'u', email: 'u@x' };
-  return { svc, k8s, updates, ingress, project, user };
+  return { svc, k8s, updates, events, ingress, project, user };
 }
 
 test('changing the target and status is a single row write with no cluster calls', async () => {
@@ -107,4 +132,30 @@ test('a taken host is refused before anything is touched', async () => {
   );
   assert.deepEqual(k8s, []);
   assert.equal(updates.length, 0);
+});
+
+test('renaming the host takes the hostname lock before the cluster write and commits after the row', async () => {
+  const { svc, events, ingress, project, user } = harness();
+  await svc.updateProjectRedirectIngress(ingress, project, { host: 'fresh.example.com' }, user);
+  assert.deepEqual(events.slice(0, 6), [
+    'tx-begin',
+    'lock',
+    'recheck',
+    'k8s-create',
+    'tx-update',
+    'tx-commit'
+  ]);
+});
+
+test('a lost hostname claim rolls back without touching the cluster', async () => {
+  const { svc, k8s, events, ingress, project, user } = harness();
+  svc.access.assertHostnameUnclaimed = async () => {
+    throw new Error('taken');
+  };
+  await assert.rejects(
+    svc.updateProjectRedirectIngress(ingress, project, { host: 'fresh.example.com' }, user),
+    /taken/
+  );
+  assert.deepEqual(k8s, []);
+  assert.ok(!events.includes('tx-update'));
 });
