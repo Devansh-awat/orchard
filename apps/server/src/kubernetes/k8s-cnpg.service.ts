@@ -84,6 +84,7 @@ import {
   recoveryFailureMessage
 } from './cnpg-recovery';
 import { assertValidPodName } from './pod-name';
+import { hostnameStyle, opaqueDatabaseLabel } from '../projects/generated-host';
 
 export function cnpgScheduleName(clusterName: string): string {
   return `${clusterName}-schedule`.substring(0, 63);
@@ -3675,6 +3676,13 @@ export class K8sCnpgService implements OnApplicationBootstrap {
   // DNS label limit without reintroducing collisions.
   publicTlsHostname(namespace: string, clusterName: string): string {
     if (!this.PUBLIC_TLS_BASE_DOMAIN) return '';
+    if (this.publicTlsPerDatabase() && hostnameStyle() === 'opaque') {
+      return `${opaqueDatabaseLabel(namespace, clusterName)}.${this.PUBLIC_TLS_BASE_DOMAIN}`;
+    }
+    return this.readablePublicTlsHostname(namespace, clusterName);
+  }
+
+  private readablePublicTlsHostname(namespace: string, clusterName: string): string {
     const label = `${namespace}-${clusterName}`;
     const safe =
       label.length <= 63
@@ -3747,6 +3755,23 @@ export class K8sCnpgService implements OnApplicationBootstrap {
     const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
     const coreApi = this.kc.makeApiClient(k8s.CoreV1Api);
     const names = publicDbTlsNames(clusterName);
+    const previous = this.readablePublicTlsHostname(namespace, clusterName);
+    if (previous && previous !== hostname) {
+      try {
+        const { body: existingCert } = await customApi.getNamespacedCustomObject(
+          'cert-manager.io',
+          'v1',
+          namespace,
+          'certificates',
+          names.certificate
+        );
+        if (((existingCert as any).spec?.dnsNames ?? []).includes(previous)) {
+          hostnames.push(previous);
+        }
+      } catch (e: any) {
+        if (e?.response?.statusCode !== 404) throw e;
+      }
+    }
     const desired = publicDbCertificate({
       namespace,
       clusterName,

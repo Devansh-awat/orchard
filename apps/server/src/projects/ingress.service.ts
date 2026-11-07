@@ -9,7 +9,7 @@ import {
 } from '@nestjs/common';
 import * as dns from 'dns';
 import { promisify } from 'util';
-import { randomUUID, randomBytes, createHash } from 'crypto';
+import { randomUUID, randomBytes } from 'crypto';
 import * as bcrypt from 'bcrypt';
 import { Prisma, IngressProtectionMode } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -24,6 +24,7 @@ import { beginHostClaim } from './host-claim';
 import { DeploymentsService } from './deployments.service';
 import { FaviconService } from './favicon.service';
 import { ProjectsService } from './projects.service';
+import { generatedHostLabel } from './generated-host';
 import { autoUrlProtection, type AutoUrlChoice } from './auto-url';
 import {
   formatSlug,
@@ -907,19 +908,14 @@ export class IngressService implements OnModuleInit {
 
     await this.authz.requireProjectEdit(deployment.project.id, user.id, 'manage ingress resources');
 
-    const nameLabel = truncateK8sName(formatSlug(deployment.name), 40);
-    const projectLabel = truncateK8sName(
-      formatSlug(deployment.project.slug || deployment.project.name),
-      10
-    );
-
     let lastError: unknown = null;
     for (let attempt = 0; attempt < 3; attempt++) {
-      const hash = createHash('sha256')
-        .update(`${deployment.id}:${attempt}`)
-        .digest('hex')
-        .slice(0, 6);
-      const label = [nameLabel, projectLabel, hash].filter(Boolean).join('-');
+      const label = generatedHostLabel({
+        deploymentId: deployment.id,
+        deploymentName: deployment.name,
+        projectSlug: deployment.project.slug || deployment.project.name,
+        attempt
+      });
       const host = `${label}${wildcard.suffix}`;
 
       try {

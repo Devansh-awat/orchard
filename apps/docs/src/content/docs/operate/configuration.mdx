@@ -292,9 +292,15 @@ Vanity addresses, status page hosts and custom domains cannot take hostnames tha
 | `RESERVED_HOSTS`         | A comma-separated list of extra hostnames that nobody can claim.                                                                                                                                  |
 | `RESERVED_HOST_SUFFIXES` | A comma-separated list of domains. Custom domains cannot use the domain or anything under it. A vanity address or status page inside `BASE_DOMAIN` is still allowed when it is under that domain. |
 
-When `BASE_DOMAIN` is the same domain as `APP_DOMAIN`, a platform wildcard domain, `PUBLIC_DB_DOMAIN` or `SANDBOX_PREVIEW_DOMAIN`, Orchard also refuses vanity and status labels that could collide with generated hosts. In the app domain, this means labels that end in a dash and six hex characters, such as `shop-web-a1b2c3`. In the database and preview domains, every label is refused. Use a separate `BASE_DOMAIN` to avoid these limits.
+When `BASE_DOMAIN` is the same domain as `APP_DOMAIN`, a platform wildcard domain, `PUBLIC_DB_DOMAIN` or `SANDBOX_PREVIEW_DOMAIN`, Orchard also refuses vanity and status labels that could collide with generated hosts. In the app domain, this means labels that end in a dash and six hex characters, such as `shop-web-a1b2c3` or an opaque `3f9a1c07d2-a1b2c3`. In the database and preview domains, every label is refused. Use a separate `BASE_DOMAIN` to avoid these limits.
 
 With the chart, set `RESERVED_HOSTS` and `RESERVED_HOST_SUFFIXES` in `server.env`.
+
+### Generated hostname style
+
+Every certificate that a public CA issues is published in Certificate Transparency logs, and anyone can read those logs. If hosts are named after the app and project, the logs list every app on your instance, including apps that are protected. Orchard therefore generates opaque hostnames by default, such as `3f9a1c07d2-a1b2c3.apps.example.com`. The label is derived from a server secret and the deployment ID, stays the same for that app, and cannot be turned back into an organization, project or namespace. The same applies to the hostname of a public database in `perDatabase` TLS mode.
+
+The trade-off is that the URLs are harder to read and to recognise in logs and DNS tooling. On an instance that one company runs and where names are not sensitive, set `HOSTNAME_STYLE=readable` to get `<app>-<project>-<hash>` again. With the chart, set it in `server.env`. The setting applies to new hosts only. Existing hosts, custom domains and vanity addresses are never renamed. A wildcard certificate keeps individual hostnames out of the logs altogether, see [Wildcard certificates](/operate/wildcard-certificates/).
 
 ## Resource limits
 
