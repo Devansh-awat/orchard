@@ -896,16 +896,12 @@ admissionPolicies:
   extraIssuers: []
   # StorageClasses a tenant PVC may name. Empty skips the rule.
   storageClasses: []
-  # Largest PVC the guard admits. Empty (default) skips the rule: restores, clones
-  # and admin quotas legitimately exceed the 200Gi cap the server applies to
-  # user-initiated creates (MAX_VOLUME_SIZE), and existing fleets hold bigger
-  # volumes. Set it to your org storage quota ceiling to turn the backstop on.
-  maxPvcSize: ""
-
   # Defaults to the ClusterIP of the server Service (looked up at install time).
   protectionProxyIPs: ""
   # Image prefixes CNPG clusters may use, e.g. ["ghcr.io/cloudnative-pg/postgresql:"]. Empty skips.
   pgImagePrefixes: []
+  # Libraries a CNPG cluster may preload (postgresql.shared_preload_libraries). Empty skips.
+  pgPreloadLibraries: []
 
 # Pods Orchard does not build itself (CloudNativePG instance and pooler pods,
 # the Tailscale proxy) cannot take a runtimeClassName from the CNPG CRD. When

@@ -376,6 +376,42 @@ async function main() {
       )!
       .args.find((a: any) => a && a.kind === 'Cluster');
     emit('cnpg-cluster', cluster, { user: SERVER });
+    const defaulted = JSON.parse(JSON.stringify(cluster));
+    defaulted.spec.postgresql = {
+      ...defaulted.spec.postgresql,
+      syncReplicaElectionConstraint: { enabled: false },
+      parameters: {
+        ...defaulted.spec.postgresql.parameters,
+        archive_mode: 'on',
+        archive_timeout: '5min',
+        dynamic_shared_memory_type: 'posix',
+        full_page_writes: 'on',
+        log_destination: 'csvlog',
+        log_directory: '/controller/log',
+        log_filename: 'postgres',
+        log_rotation_age: '0',
+        log_rotation_size: '0',
+        log_truncate_on_rotation: 'false',
+        logging_collector: 'on',
+        max_parallel_workers: '32',
+        max_replication_slots: '32',
+        max_worker_processes: '32',
+        shared_memory_type: 'mmap',
+        shared_preload_libraries: 'pg_stat_statements',
+        ssl_max_protocol_version: 'TLSv1.3',
+        ssl_min_protocol_version: 'TLSv1.3',
+        wal_keep_size: '512MB',
+        wal_level: 'logical',
+        wal_log_hints: 'on',
+        wal_receiver_timeout: '5s',
+        wal_sender_timeout: '5s'
+      }
+    };
+    emit('cnpg-cluster-webhook-defaults', defaulted, { user: SERVER });
+    emit('cnpg-cluster-webhook-defaults-update', defaulted, {
+      user: 'system:serviceaccount:postgresql:cloudnative-pg',
+      operation: 'UPDATE'
+    });
     emit(
       'cnpg-cluster-recovery',
       {
@@ -616,7 +652,7 @@ async function main() {
         resources: { requests: { storage: '400Gi' } }
       }
     },
-    { user: SERVER, set: 'maxPvcSize=' }
+    { user: SERVER }
   );
   emit(
     'service-cnpg-rw',

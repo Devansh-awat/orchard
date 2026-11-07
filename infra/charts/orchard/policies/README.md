@@ -9,7 +9,7 @@
 | `orchard-tenant-services` | create, update | `externalIPs`, `ExternalName`, NodePort when off, LoadBalancer or LB-IPAM pinning by anyone but the server, selector-less Services other than protection proxies |
 | `orchard-tenant-endpointslices` | create, update | the server writing anything but protection-proxy slices (pinned to `protectionProxyIPs` when set) |
 | `orchard-tenant-ingresses` | create, update | annotations outside the allow-list, foreign ingress class, foreign cert-manager issuer, resource backends |
-| `orchard-tenant-pvcs` | create | `volumeName`, `dataSource(Ref)`, non-RWO access modes, foreign StorageClass, oversize claims |
+| `orchard-tenant-pvcs` | create | `volumeName`, `dataSource(Ref)`, non-RWO access modes, foreign StorageClass (claim size is capped by the server, not here: the PVC schema does not type-check in CEL) |
 | `orchard-tenant-networkpolicies` | create, update | egress to 0.0.0.0/0 without the private/link-local/CGNAT excepts, peer-less egress other than DNS, ingress from 0.0.0.0/0 without ports |
 | `orchard-managed-namespaces` | update | removing the managed label or loosening a Pod Security enforce label |
 | `orchard-tenant-rolebindings` | create, update | the server binding anything but the tenant-secrets role and Tailscale roles, or non-ServiceAccount subjects |
@@ -31,7 +31,6 @@
 | `ingressClass` | `admissionPolicies.ingressClass`, else `tenant.ingressClass` | class rule skipped |
 | `allowedIssuers` | `tenant.certClusterIssuer` plus `admissionPolicies.extraIssuers` | issuer rule skipped. Add your DNS-01 wildcard issuer to `extraIssuers`. |
 | `storageClasses` | `admissionPolicies.storageClasses` | rule skipped |
-| `maxPvcSize` | `admissionPolicies.maxPvcSize` | rule skipped (default) |
 | `allowNodePort` | `tenant.nodePortExposure` | NodePort allowed |
 | `allowLoadBalancer` | always `true` | |
 | `runtimeClass` | `tenantSandbox.runtimeClassName` when the sandbox is on | advisory rule skipped |
@@ -39,6 +38,7 @@
 | `protectionProxyIPs` | `admissionPolicies.protectionProxyIPs`, else the `server` Service ClusterIP | address pin skipped |
 | `tenantSecretsRole` | `orchard-tenant-secrets` | |
 | `pgImagePrefixes` | `admissionPolicies.pgImagePrefixes` | image rule skipped |
+| `pgPreloadLibraries` | `admissionPolicies.pgPreloadLibraries` | preload rule skipped |
 
 ## Tests
 
@@ -61,3 +61,8 @@ WRITE_BUNDLE=$PWD/../fixtures/all.json go test -run TestBundleJSON ./...
 2. Install the policies with bindings that select only a sandbox namespace: `kubectl apply -f orchard-tenant-policies.yaml -f sandbox-bindings.yaml`, then `kubectl create ns orchard-policy-test` and label it `orchard.my/policy-sandbox=true`.
 3. Run each fixture with `kubectl apply --dry-run=server -n orchard-policy-test -f <file>`, adding `--as=<user>` when the header names a user (for the server user: `--as=system:serviceaccount:orchard:orchard-server`). Benign files must succeed, hostile files must be refused with the message in `denied-by`. The `Namespace` fixtures are UPDATE cases: apply the second document first, then the first.
 4. Read `kubectl get vap -o yaml` for `status.typeChecking`. A type warning on a `failurePolicy: Ignore` policy means a rule never denies; fix the expression.
+
+## Notes from the live run
+
+- The CNPG mutating webhook runs before validating policies and fills `spec.postgresql.parameters` with about 26 defaults (including `shared_preload_libraries`, `ssl_*`, `log_*`). The CNPG fixtures carry them, and the parameter rule only denies keys the webhook never sets. Preload libraries are checked on the top-level `postgresql.shared_preload_libraries` list instead.
+- Param lookups use `'key' in params.data ? params.data['key'] : default`, not optional selection, which behaved differently on the live API server.

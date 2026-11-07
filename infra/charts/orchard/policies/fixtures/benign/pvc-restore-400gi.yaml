@@ -1,5 +1,4 @@
 # user: system:serviceaccount:orchard:orchard-server
-# set: maxPvcSize=
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:

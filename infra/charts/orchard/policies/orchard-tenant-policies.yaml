@@ -72,14 +72,16 @@ spec:
         operations: ["CREATE"]
         resources: ["pods"]
   variables:
-    - name: p
-      expression: "params != null && has(params.data) ? params.data : {}"
+    - name: pRuntimeClass
+      expression: "params != null && has(params.data) && 'runtimeClass' in params.data ? params.data['runtimeClass'] : ''"
+    - name: pDatabaseRuntimeClass
+      expression: "params != null && has(params.data) && 'databaseRuntimeClass' in params.data ? params.data['databaseRuntimeClass'] : ''"
     - name: labels
       expression: "has(object.metadata.labels) ? object.metadata.labels : {}"
     - name: cnpg
       expression: "'cnpg.io/cluster' in variables.labels || 'cnpg.io/poolerName' in variables.labels"
     - name: acme
-      expression: "variables.labels[?'acme.cert-manager.io/http01-solver'].orValue('') == 'true'"
+      expression: "'acme.cert-manager.io/http01-solver' in variables.labels && variables.labels['acme.cert-manager.io/http01-solver'] == 'true'"
     - name: containers
       expression: >-
         has(object.spec.initContainers)
@@ -93,12 +95,12 @@ spec:
           has(c.securityContext.capabilities.drop) && c.securityContext.capabilities.drop.exists(d, d == 'ALL'))
     - message: "tenant pods should run under the configured tenant RuntimeClass"
       expression: >-
-        variables.p.?runtimeClass.orValue('') == '' || variables.acme ||
-        (variables.cnpg && variables.p.?databaseRuntimeClass.orValue('') == '') ||
+        variables.pRuntimeClass == '' || variables.acme ||
+        (variables.cnpg && variables.pDatabaseRuntimeClass == '') ||
         (has(object.spec.runtimeClassName) &&
           object.spec.runtimeClassName == (variables.cnpg
-            ? variables.p.?databaseRuntimeClass.orValue('')
-            : variables.p.?runtimeClass.orValue('')))
+            ? variables.pDatabaseRuntimeClass
+            : variables.pRuntimeClass))
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
@@ -114,20 +116,24 @@ spec:
         operations: ["CREATE", "UPDATE"]
         resources: ["services"]
   variables:
-    - name: p
-      expression: "params != null && has(params.data) ? params.data : {}"
+    - name: pServerUser
+      expression: "params != null && has(params.data) && 'serverUser' in params.data ? params.data['serverUser'] : ''"
+    - name: pAllowNodePort
+      expression: "params != null && has(params.data) && 'allowNodePort' in params.data ? params.data['allowNodePort'] : 'true'"
+    - name: pAllowLoadBalancer
+      expression: "params != null && has(params.data) && 'allowLoadBalancer' in params.data ? params.data['allowLoadBalancer'] : 'true'"
     - name: labels
       expression: "has(object.metadata.labels) ? object.metadata.labels : {}"
     - name: ann
       expression: "has(object.metadata.annotations) ? object.metadata.annotations : {}"
     - name: acme
-      expression: "variables.labels[?'acme.cert-manager.io/http01-solver'].orValue('') == 'true'"
+      expression: "'acme.cert-manager.io/http01-solver' in variables.labels && variables.labels['acme.cert-manager.io/http01-solver'] == 'true'"
     - name: type
       expression: "has(object.spec.type) ? object.spec.type : 'ClusterIP'"
     - name: serverKnown
-      expression: "variables.p.?serverUser.orValue('') != ''"
+      expression: "variables.pServerUser != ''"
     - name: server
-      expression: "variables.serverKnown && request.userInfo.username == variables.p.?serverUser.orValue('')"
+      expression: "variables.serverKnown && request.userInfo.username == variables.pServerUser"
     - name: ipamRequested
       expression: >-
         (has(object.spec.loadBalancerIP) && object.spec.loadBalancerIP != '') ||
@@ -140,18 +146,18 @@ spec:
         variables.type != 'ExternalName' && (!has(object.spec.externalName) || object.spec.externalName == '')
     - message: "NodePort Services are disabled for tenants (params.allowNodePort)"
       expression: >-
-        variables.type != 'NodePort' || variables.acme || variables.p.?allowNodePort.orValue('true') == 'true'
+        variables.type != 'NodePort' || variables.acme || variables.pAllowNodePort == 'true'
     - message: "LoadBalancer Services may only be created by the Orchard server (params.allowLoadBalancer)"
       expression: >-
         variables.type != 'LoadBalancer' ||
-        (variables.p.?allowLoadBalancer.orValue('true') == 'true' && (!variables.serverKnown || variables.server))
+        (variables.pAllowLoadBalancer == 'true' && (!variables.serverKnown || variables.server))
     - message: "load balancer IP pinning and IPAM annotations are reserved for the Orchard server"
       expression: >-
         !variables.ipamRequested || !variables.serverKnown || variables.server
     - message: "selector-less Services are reserved for the Orchard protection proxy"
       expression: >-
         variables.type == 'ExternalName' || (has(object.spec.selector) && size(object.spec.selector) > 0) ||
-        (variables.labels[?'orchard.my/type'].orValue('') == 'protection-proxy' &&
+        ('orchard.my/type' in variables.labels && variables.labels['orchard.my/type'] == 'protection-proxy' &&
          object.metadata.name.endsWith('-protection-proxy')) || variables.acme
 ---
 apiVersion: admissionregistration.k8s.io/v1
@@ -168,13 +174,15 @@ spec:
         operations: ["CREATE", "UPDATE"]
         resources: ["endpointslices"]
   variables:
-    - name: p
-      expression: "params != null && has(params.data) ? params.data : {}"
+    - name: pServerUser
+      expression: "params != null && has(params.data) && 'serverUser' in params.data ? params.data['serverUser'] : ''"
+    - name: pProtectionProxyIPs
+      expression: "params != null && has(params.data) && 'protectionProxyIPs' in params.data ? params.data['protectionProxyIPs'] : ''"
     - name: server
       expression: >-
-        variables.p.?serverUser.orValue('') != '' && request.userInfo.username == variables.p.?serverUser.orValue('')
+        variables.pServerUser != '' && request.userInfo.username == variables.pServerUser
     - name: ips
-      expression: "variables.p.?protectionProxyIPs.orValue('')"
+      expression: "variables.pProtectionProxyIPs"
   validations:
     - message: "the Orchard server may only write protection-proxy EndpointSlices, pointing at the configured addresses"
       expression: >-
@@ -201,20 +209,22 @@ spec:
       expression: >-
         !(has(object.metadata.labels) && 'acme.cert-manager.io/http01-solver' in object.metadata.labels)
   variables:
-    - name: p
-      expression: "params != null && has(params.data) ? params.data : {}"
+    - name: pIngressClass
+      expression: "params != null && has(params.data) && 'ingressClass' in params.data ? params.data['ingressClass'] : ''"
+    - name: pAllowedIssuers
+      expression: "params != null && has(params.data) && 'allowedIssuers' in params.data ? params.data['allowedIssuers'] : ''"
     - name: ann
       expression: "has(object.metadata.annotations) ? object.metadata.annotations : {}"
     - name: class
-      expression: "variables.p.?ingressClass.orValue('')"
+      expression: "variables.pIngressClass"
     - name: issuers
-      expression: "variables.p.?allowedIssuers.orValue('')"
+      expression: "variables.pAllowedIssuers"
   validations:
     - message: "only the Orchard ingress class may be used"
       expression: >-
         variables.class == '' ||
         ((!has(object.spec.ingressClassName) || object.spec.ingressClassName == variables.class) &&
-         variables.ann[?'kubernetes.io/ingress.class'].orValue(variables.class) == variables.class)
+         (!('kubernetes.io/ingress.class' in variables.ann) || variables.ann['kubernetes.io/ingress.class'] == variables.class))
     - message: "annotation not in the Orchard allow-list (no haproxy.org/*, nginx.ingress.kubernetes.io/*, traefik.*, cert-manager.io/issuer, ...)"
       expression: >-
         variables.ann.all(k,
@@ -246,16 +256,14 @@ spec:
         operations: ["CREATE"]
         resources: ["persistentvolumeclaims"]
   variables:
-    - name: p
-      expression: "params != null && has(params.data) ? params.data : {}"
+    - name: pStorageClasses
+      expression: "params != null && has(params.data) && 'storageClasses' in params.data ? params.data['storageClasses'] : ''"
     - name: labels
       expression: "has(object.metadata.labels) ? object.metadata.labels : {}"
     - name: cnpg
       expression: "'cnpg.io/cluster' in variables.labels"
     - name: classes
-      expression: "variables.p.?storageClasses.orValue('')"
-    - name: maxSize
-      expression: "variables.p.?maxPvcSize.orValue('')"
+      expression: "variables.pStorageClasses"
   validations:
     - message: "volumeName/dataSource/dataSourceRef are not allowed (PV hijack, cross-tenant clone)"
       expression: >-
@@ -270,11 +278,6 @@ spec:
       expression: >-
         variables.cnpg || !has(object.spec.accessModes) ||
         object.spec.accessModes.all(m, m in ['ReadWriteOnce','ReadWriteOncePod'])
-    - message: "volume size exceeds params.maxPvcSize"
-      expression: >-
-        variables.cnpg || variables.maxSize == '' || !has(object.spec.resources) ||
-        !has(object.spec.resources.requests) || !('storage' in object.spec.resources.requests) ||
-        !quantity(object.spec.resources.requests['storage']).isGreaterThan(quantity(variables.maxSize))
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
@@ -348,13 +351,15 @@ spec:
         operations: ["CREATE", "UPDATE"]
         resources: ["rolebindings"]
   variables:
-    - name: p
-      expression: "params != null && has(params.data) ? params.data : {}"
+    - name: pServerUser
+      expression: "params != null && has(params.data) && 'serverUser' in params.data ? params.data['serverUser'] : ''"
+    - name: pTenantSecretsRole
+      expression: "params != null && has(params.data) && 'tenantSecretsRole' in params.data ? params.data['tenantSecretsRole'] : 'orchard-server-tenant-secrets'"
     - name: server
       expression: >-
-        variables.p.?serverUser.orValue('') != '' && request.userInfo.username == variables.p.?serverUser.orValue('')
+        variables.pServerUser != '' && request.userInfo.username == variables.pServerUser
     - name: secretsRole
-      expression: "variables.p.?tenantSecretsRole.orValue('orchard-server-tenant-secrets')"
+      expression: "variables.pTenantSecretsRole"
   validations:
     - message: "the Orchard server may only bind the tenant-secrets role and Tailscale proxy roles, to service accounts"
       expression: >-
@@ -378,12 +383,14 @@ spec:
         operations: ["CREATE", "UPDATE"]
         resources: ["clusters"]
   variables:
-    - name: p
-      expression: "params != null && has(params.data) ? params.data : {}"
+    - name: pPgImagePrefixes
+      expression: "params != null && has(params.data) && 'pgImagePrefixes' in params.data ? params.data['pgImagePrefixes'] : ''"
+    - name: pPgPreloadLibraries
+      expression: "params != null && has(params.data) && 'pgPreloadLibraries' in params.data ? params.data['pgPreloadLibraries'] : ''"
     - name: pg
       expression: "has(object.spec.postgresql) ? object.spec.postgresql : {}"
     - name: prefixes
-      expression: "variables.p.?pgImagePrefixes.orValue('')"
+      expression: "variables.pPgImagePrefixes"
   validations:
     - message: "no pod-level env/envFrom/serviceAccountTemplate on tenant database clusters"
       expression: >-
@@ -399,7 +406,11 @@ spec:
         !('parameters' in variables.pg) || !variables.pg['parameters'].exists(k, k in
           ['archive_command','archive_library','restore_command','recovery_end_command','archive_cleanup_command',
            'dynamic_library_path','local_preload_libraries','session_preload_libraries','ssl_passphrase_command',
-           'ssl_library','shared_preload_libraries'])
+           'ssl_library'])
+    - message: "postgresql.shared_preload_libraries must stay inside params.pgPreloadLibraries"
+      expression: >-
+        variables.pPgPreloadLibraries == '' || !('shared_preload_libraries' in variables.pg) ||
+        variables.pg['shared_preload_libraries'].all(l, l in variables.pPgPreloadLibraries.split(','))
     - message: "managed roles may not be superuser/createrole/replication/bypassrls"
       expression: >-
         !has(object.spec.managed) || !has(object.spec.managed.roles) || object.spec.managed.roles.all(r,

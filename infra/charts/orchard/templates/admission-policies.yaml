@@ -26,7 +26,6 @@ data:
   ingressClass: {{ $ap.ingressClass | default .Values.tenant.ingressClass | default "" | quote }}
   allowedIssuers: {{ join "," $issuers | quote }}
   storageClasses: {{ join "," $ap.storageClasses | quote }}
-  maxPvcSize: {{ $ap.maxPvcSize | default "" | quote }}
   allowNodePort: {{ ternary "false" "true" (eq (toString .Values.tenant.nodePortExposure) "false") | quote }}
   allowLoadBalancer: "true"
   runtimeClass: {{ $runtimeClass | quote }}
@@ -34,6 +33,7 @@ data:
   protectionProxyIPs: {{ $ap.protectionProxyIPs | default $serverIp | quote }}
   tenantSecretsRole: "orchard-tenant-secrets"
   pgImagePrefixes: {{ join "," $ap.pgImagePrefixes | quote }}
+  pgPreloadLibraries: {{ join "," $ap.pgPreloadLibraries | quote }}
 ---
 {{ .Files.Get "policies/orchard-tenant-policies.yaml" }}
 {{- $selectors := list (dict "suffix" "" "key" "orchard.my/managed") (dict "suffix" "-legacy" "key" "orchard.dev/managed") }}

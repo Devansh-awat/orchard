@@ -42,6 +42,217 @@
  },
  {
   "expect": "allow",
+  "name": "benign/cnpg-cluster-webhook-defaults-update",
+  "object": {
+   "apiVersion": "postgresql.cnpg.io/v1",
+   "kind": "Cluster",
+   "metadata": {
+    "annotations": {
+     "orchard.my/applied-shared-buffers": "64MB"
+    },
+    "labels": {
+     "app.kubernetes.io/component": "postgres",
+     "app.kubernetes.io/managed-by": "orchard",
+     "app.kubernetes.io/name": "db"
+    },
+    "name": "db",
+    "namespace": "orchard-policy-test"
+   },
+   "spec": {
+    "bootstrap": {
+     "initdb": {
+      "database": "app",
+      "import": {
+       "databases": [
+        "x"
+       ],
+       "postImportApplicationSQL": [
+        "ANALYZE"
+       ],
+       "source": {
+        "externalCluster": "import-source"
+       },
+       "type": "microservice"
+      },
+      "owner": "u_app",
+      "secret": {
+       "name": "db-app"
+      }
+     }
+    },
+    "enablePDB": false,
+    "enableSuperuserAccess": false,
+    "externalClusters": [
+     {
+      "connectionParameters": {
+       "dbname": "x",
+       "host": "src.example.com",
+       "port": "5432",
+       "sslmode": "require",
+       "user": "u"
+      },
+      "name": "import-source",
+      "password": {
+       "key": "password",
+       "name": "db-import-source"
+      }
+     }
+    ],
+    "imageName": "ghcr.io/cloudnative-pg/postgresql:17.5",
+    "instances": 1,
+    "postgresql": {
+     "parameters": {
+      "archive_mode": "on",
+      "archive_timeout": "5min",
+      "dynamic_shared_memory_type": "posix",
+      "full_page_writes": "on",
+      "log_destination": "csvlog",
+      "log_directory": "/controller/log",
+      "log_filename": "postgres",
+      "log_rotation_age": "0",
+      "log_rotation_size": "0",
+      "log_truncate_on_rotation": "false",
+      "logging_collector": "on",
+      "max_connections": "200",
+      "max_parallel_workers": "32",
+      "max_replication_slots": "32",
+      "max_slot_wal_keep_size": "2GB",
+      "max_worker_processes": "32",
+      "shared_buffers": "64MB",
+      "shared_memory_type": "mmap",
+      "shared_preload_libraries": "pg_stat_statements",
+      "ssl_max_protocol_version": "TLSv1.3",
+      "ssl_min_protocol_version": "TLSv1.3",
+      "wal_keep_size": "512MB",
+      "wal_level": "logical",
+      "wal_log_hints": "on",
+      "wal_receiver_timeout": "5s",
+      "wal_sender_timeout": "5s",
+      "work_mem": "8MB"
+     },
+     "shared_preload_libraries": [
+      "pg_stat_statements"
+     ],
+     "syncReplicaElectionConstraint": {
+      "enabled": false
+     }
+    },
+    "primaryUpdateStrategy": "unsupervised",
+    "storage": {
+     "size": "10Gi"
+    }
+   }
+  },
+  "operation": "UPDATE",
+  "user": "system:serviceaccount:postgresql:cloudnative-pg"
+ },
+ {
+  "expect": "allow",
+  "name": "benign/cnpg-cluster-webhook-defaults",
+  "object": {
+   "apiVersion": "postgresql.cnpg.io/v1",
+   "kind": "Cluster",
+   "metadata": {
+    "annotations": {
+     "orchard.my/applied-shared-buffers": "64MB"
+    },
+    "labels": {
+     "app.kubernetes.io/component": "postgres",
+     "app.kubernetes.io/managed-by": "orchard",
+     "app.kubernetes.io/name": "db"
+    },
+    "name": "db",
+    "namespace": "orchard-policy-test"
+   },
+   "spec": {
+    "bootstrap": {
+     "initdb": {
+      "database": "app",
+      "import": {
+       "databases": [
+        "x"
+       ],
+       "postImportApplicationSQL": [
+        "ANALYZE"
+       ],
+       "source": {
+        "externalCluster": "import-source"
+       },
+       "type": "microservice"
+      },
+      "owner": "u_app",
+      "secret": {
+       "name": "db-app"
+      }
+     }
+    },
+    "enablePDB": false,
+    "enableSuperuserAccess": false,
+    "externalClusters": [
+     {
+      "connectionParameters": {
+       "dbname": "x",
+       "host": "src.example.com",
+       "port": "5432",
+       "sslmode": "require",
+       "user": "u"
+      },
+      "name": "import-source",
+      "password": {
+       "key": "password",
+       "name": "db-import-source"
+      }
+     }
+    ],
+    "imageName": "ghcr.io/cloudnative-pg/postgresql:17.5",
+    "instances": 1,
+    "postgresql": {
+     "parameters": {
+      "archive_mode": "on",
+      "archive_timeout": "5min",
+      "dynamic_shared_memory_type": "posix",
+      "full_page_writes": "on",
+      "log_destination": "csvlog",
+      "log_directory": "/controller/log",
+      "log_filename": "postgres",
+      "log_rotation_age": "0",
+      "log_rotation_size": "0",
+      "log_truncate_on_rotation": "false",
+      "logging_collector": "on",
+      "max_connections": "200",
+      "max_parallel_workers": "32",
+      "max_replication_slots": "32",
+      "max_slot_wal_keep_size": "2GB",
+      "max_worker_processes": "32",
+      "shared_buffers": "64MB",
+      "shared_memory_type": "mmap",
+      "shared_preload_libraries": "pg_stat_statements",
+      "ssl_max_protocol_version": "TLSv1.3",
+      "ssl_min_protocol_version": "TLSv1.3",
+      "wal_keep_size": "512MB",
+      "wal_level": "logical",
+      "wal_log_hints": "on",
+      "wal_receiver_timeout": "5s",
+      "wal_sender_timeout": "5s",
+      "work_mem": "8MB"
+     },
+     "shared_preload_libraries": [
+      "pg_stat_statements"
+     ],
+     "syncReplicaElectionConstraint": {
+      "enabled": false
+     }
+    },
+    "primaryUpdateStrategy": "unsupervised",
+    "storage": {
+     "size": "10Gi"
+    }
+   }
+  },
+  "user": "system:serviceaccount:orchard:orchard-server"
+ },
+ {
+  "expect": "allow",
   "name": "benign/cnpg-cluster",
   "object": {
    "apiVersion": "postgresql.cnpg.io/v1",
@@ -1900,7 +2111,6 @@
     "volumeMode": "Filesystem"
    }
   },
-  "set": "maxPvcSize=",
   "user": "system:serviceaccount:orchard:orchard-server"
  },
  {
@@ -2272,6 +2482,28 @@
    "spec": {
     "imageName": "evil.example.com/pg:17",
     "instances": 1
+   }
+  },
+  "user": "system:serviceaccount:orchard:orchard-server"
+ },
+ {
+  "denied-by": "shared_preload_libraries",
+  "expect": "deny",
+  "name": "hostile/cnpg-foreign-preload",
+  "object": {
+   "apiVersion": "postgresql.cnpg.io/v1",
+   "kind": "Cluster",
+   "metadata": {
+    "name": "db",
+    "namespace": "orchard-policy-test"
+   },
+   "spec": {
+    "instances": 1,
+    "postgresql": {
+     "shared_preload_libraries": [
+      "../../tmp/evil"
+     ]
+    }
    }
   },
   "user": "system:serviceaccount:orchard:orchard-server"
@@ -3547,30 +3779,6 @@
     "resources": {
      "requests": {
       "storage": "1Gi"
-     }
-    }
-   }
-  },
-  "user": "system:serviceaccount:orchard:orchard-server"
- },
- {
-  "denied-by": "exceeds params.maxPvcSize",
-  "expect": "deny",
-  "name": "hostile/pvc-huge",
-  "object": {
-   "apiVersion": "v1",
-   "kind": "PersistentVolumeClaim",
-   "metadata": {
-    "name": "evil",
-    "namespace": "orchard-policy-test"
-   },
-   "spec": {
-    "accessModes": [
-     "ReadWriteOnce"
-    ],
-    "resources": {
-     "requests": {
-      "storage": "100Ti"
      }
     }
    }
