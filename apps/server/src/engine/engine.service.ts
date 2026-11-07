@@ -40,6 +40,7 @@ const RETENTION_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const DB_STATS_INTERVAL_MS = 30_000;
 const VOLUME_SWEEP_INTERVAL_MS = 60_000;
 const POD_ROWS_REBUILD_INTERVAL_MS = 10 * 60 * 1000;
+const TENANT_POLICY_CHECK_INTERVAL_MS = 2 * 60 * 1000;
 const CRASH_SWEEP_INTERVAL_MS = 5_000;
 const PRESENCE_FRESH_MS = 30_000;
 const TRANSITION_RETENTION_DAYS = 30;
@@ -219,7 +220,10 @@ export class EngineService implements OnApplicationBootstrap, OnModuleDestroy {
       }, VOLUME_SWEEP_INTERVAL_MS),
       setInterval(() => {
         void this.rebuildPodRows();
-      }, POD_ROWS_REBUILD_INTERVAL_MS)
+      }, POD_ROWS_REBUILD_INTERVAL_MS),
+      setInterval(() => {
+        void this.checkTenantPolicies();
+      }, TENANT_POLICY_CHECK_INTERVAL_MS)
     ];
     this.lease.onAcquired(GLOBAL_LEADER_LEASE, () => {
       void this.rebuildPodRows().then(() => this.sweepVolumes());
@@ -528,6 +532,14 @@ export class EngineService implements OnApplicationBootstrap, OnModuleDestroy {
     if (!this.lease.isHolder(GLOBAL_LEADER_LEASE)) return;
     await this.cnpgConsumer.sweepVolumes().catch((err) => {
       this.logger.warn(`volume sweep failed: ${(err as Error)?.message ?? err}`);
+    });
+  }
+
+  private async checkTenantPolicies(): Promise<void> {
+    if (!this.enabled) return;
+    if (!this.lease.isHolder(GLOBAL_LEADER_LEASE)) return;
+    await this.guardConsumer.checkTenantPolicies().catch((err) => {
+      this.logger.warn(`tenant policy check failed: ${(err as Error)?.message ?? err}`);
     });
   }
 

@@ -2,6 +2,7 @@ import { Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { resolveNamespaceScope } from '../../projects/namespace-scope';
 import {
+  CILIUM_DENY_POLICY,
   CILIUM_INGRESS_POLICY,
   CNPG_APISERVER_POLICY,
   CNPG_OPERATOR_POLICY,
@@ -10,6 +11,7 @@ import {
   TENANT_DENY_POLICY,
   basicAuthEnvoyConfig,
   basicAuthSecretName,
+  ciliumDenyPolicy,
   ciliumIngressPolicy,
   cnpgApiserverPolicy,
   cnpgOperatorPolicy,
@@ -53,7 +55,8 @@ export class PrismaGuardDesired implements GuardDesired {
     private readonly prisma: PrismaService,
     private readonly ciliumAvailable: () => Promise<boolean>,
     private readonly cluster: GuardCluster,
-    private readonly apiserver: () => Promise<ApiserverEndpoints | null> = async () => null
+    private readonly apiserver: () => Promise<ApiserverEndpoints | null> = async () => null,
+    private readonly clusterExcepts: () => Promise<string[]> = async () => []
   ) {}
 
   async desired(key: GuardKey, hint: GuardManifest | null): Promise<DesiredObject | null> {
@@ -117,6 +120,7 @@ export class PrismaGuardDesired implements GuardDesired {
     if (!(await this.ciliumAvailable())) return [];
     for (const ns of owned) {
       add(ns, CILIUM_INGRESS_POLICY);
+      add(ns, CILIUM_DENY_POLICY);
       add(ns, CNPG_APISERVER_POLICY);
     }
     const cnpg = await this.prisma.database.findMany({
@@ -143,7 +147,8 @@ export class PrismaGuardDesired implements GuardDesired {
     const ns = key.namespace;
     if (key.name === TENANT_DENY_POLICY) {
       return tenantDenyPolicy(ns, {
-        allowProtectionProxy: await namespaceHasProtectedIngress(this.prisma, ns)
+        allowProtectionProxy: await namespaceHasProtectedIngress(this.prisma, ns),
+        clusterExcepts: await this.clusterExcepts()
       }) as GuardManifest;
     }
     if (key.name === DATABASE_PLATFORM_POLICY) {
@@ -202,6 +207,10 @@ export class PrismaGuardDesired implements GuardDesired {
 
   private async ciliumPolicy(key: GuardKey): Promise<GuardManifest | null> {
     if (key.name === CILIUM_INGRESS_POLICY) return ciliumIngressPolicy(key.namespace);
+    if (key.name === CILIUM_DENY_POLICY) {
+      const deny = ciliumDenyPolicy(key.namespace);
+      return deny.spec.egressDeny.length > 0 ? deny : null;
+    }
     if (key.name === CNPG_APISERVER_POLICY) return cnpgApiserverPolicy(key.namespace);
     if (key.name === CNPG_OPERATOR_POLICY) {
       const count = await this.prisma.database.count({

@@ -5,6 +5,7 @@ import { AuditService } from '../../audit/audit.service';
 import { EngineEventType, EngineObjectKey } from '../core/informer';
 import { GuardKind, GuardManifest, fingerprint, missingLabels, specDrift } from '../guard/compare';
 import { GuardCluster, GuardKey, K8sGuardCluster, statusOf } from '../guard/cluster';
+import { TENANT_DENY_POLICY } from '../../kubernetes/security-policies';
 import { DesiredObject, GuardDesired, PrismaGuardDesired } from '../guard/desired';
 import { RestoreLimiter } from '../guard/restore-limiter';
 
@@ -42,6 +43,10 @@ export class GuardConsumer implements OnModuleDestroy {
 
   protected now: () => number = () => Date.now();
 
+  protected clusterAddresses: () => Promise<string[]>;
+
+  private lastAddresses: string | null = null;
+
   private readonly firstDrift = new Map<string, number>();
 
   private readonly timers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -58,11 +63,13 @@ export class GuardConsumer implements OnModuleDestroy {
     private readonly audit: AuditService
   ) {
     this.cluster = new K8sGuardCluster(kubernetes);
+    this.clusterAddresses = () => kubernetes.clusterExceptCidrs({ refresh: true });
     this.desired = new PrismaGuardDesired(
       prisma,
       () => kubernetes.isCiliumAvailable(),
       this.cluster,
-      () => kubernetes.apiserverEndpoints()
+      () => kubernetes.apiserverEndpoints(),
+      () => kubernetes.clusterExceptCidrs()
     );
   }
 
@@ -102,12 +109,39 @@ export class GuardConsumer implements OnModuleDestroy {
     }
   }
 
-  enforce(key: GuardKey, hint: GuardManifest | null): Promise<Outcome> {
+  async checkTenantPolicies(): Promise<void> {
+    const addresses = (await this.clusterAddresses()).join(',');
+    const changed = this.lastAddresses !== null && this.lastAddresses !== addresses;
+    this.lastAddresses = addresses;
+    const keys = (await this.desired.expected('NetworkPolicy')).filter(
+      (key) => key.name === TENANT_DENY_POLICY
+    );
+    if (changed) {
+      this.logger.log(
+        `cluster addresses changed; rolling the tenant policy to ${keys.length} namespace(s)`
+      );
+    }
+    const live = await this.liveDenyPolicies();
+    for (const key of keys) {
+      if (!changed && live?.has(key.namespace)) continue;
+      await this.enforce(key, null, changed).catch((err) =>
+        this.logger.warn(`could not check ${idOf(key)}: ${(err as Error)?.message ?? err}`)
+      );
+    }
+  }
+
+  protected async liveDenyPolicies(): Promise<Set<string> | null> {
+    return this.cluster.namespacesWithPolicy
+      ? this.cluster.namespacesWithPolicy(TENANT_DENY_POLICY)
+      : null;
+  }
+
+  enforce(key: GuardKey, hint: GuardManifest | null, rollForward = false): Promise<Outcome> {
     const id = idOf(key);
     const prev = this.chains.get(id) ?? Promise.resolve<Outcome>('ok');
     const next = prev.then(
-      () => this.runEnforce(key, hint),
-      () => this.runEnforce(key, hint)
+      () => this.runEnforce(key, hint, rollForward),
+      () => this.runEnforce(key, hint, rollForward)
     );
     this.chains.set(id, next);
     const clear = () => {
@@ -117,7 +151,11 @@ export class GuardConsumer implements OnModuleDestroy {
     return next;
   }
 
-  private async runEnforce(key: GuardKey, hint: GuardManifest | null): Promise<Outcome> {
+  private async runEnforce(
+    key: GuardKey,
+    hint: GuardManifest | null,
+    rollForward = false
+  ): Promise<Outcome> {
     const id = idOf(key);
     if (hint) this.hints.set(id, hint);
     const want = await this.desired.desired(key, hint ?? this.hints.get(id) ?? null);
@@ -139,15 +177,26 @@ export class GuardConsumer implements OnModuleDestroy {
       return 'ok';
     }
 
+    const missingDeny =
+      live.state === 'absent' && key.kind === 'NetworkPolicy' && key.name === TENANT_DENY_POLICY;
+    if (missingDeny) {
+      this.logger.error(
+        `${id} is missing, so ${key.namespace} has no default-deny network policy; recreating it now`
+      );
+    }
+    const urgent = missingDeny || rollForward;
+
     const now = this.now();
     const first = this.firstDrift.get(id) ?? now;
     this.firstDrift.set(id, first);
-    if (now - first < this.settleMs) {
+    if (!urgent && now - first < this.settleMs) {
       this.schedule(key, first + this.settleMs - now);
       return 'pending';
     }
 
-    const gate = this.limiter.check(id);
+    const gate = urgent
+      ? { allowed: true, backingOff: false, retryAt: now }
+      : this.limiter.check(id);
     if (!gate.allowed) {
       if (gate.backingOff) {
         this.logger.error(
@@ -180,8 +229,12 @@ export class GuardConsumer implements OnModuleDestroy {
     }
 
     this.firstDrift.delete(id);
-    const state = this.limiter.record(id);
     this.rememberNormalisation(key, want.manifest, written);
+    if (rollForward && !missingDeny) {
+      this.logger.log(`rolled ${id} forward to the current cluster addresses`);
+      return 'ok';
+    }
+    const state = this.limiter.record(id);
 
     const deleted = live.state === 'absent';
     if (verdict.specChanges.length === 0) {

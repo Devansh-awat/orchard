@@ -110,11 +110,8 @@ function opened(): GuardManifest {
   return obj;
 }
 
-test('a deleted default-deny is restored after the settle window and audited', async () => {
-  const { consumer, cluster, audits, advance } = build(wantDeny);
-  await assert.rejects(consumer.onEvent('NetworkPolicy', 'delete', deny() as any), /pending/);
-  assert.equal(cluster.writes.length, 0);
-  advance(11_000);
+test('a deleted default-deny is restored at once and audited', async () => {
+  const { consumer, cluster, audits } = build(wantDeny);
   await consumer.onEvent('NetworkPolicy', 'delete', deny() as any);
   assert.equal(cluster.writes.length, 1);
   assert.equal(cluster.writes[0].op, 'create');
@@ -172,7 +169,8 @@ test('a namespace being torn down is not refilled', async () => {
 
 test('an object fixed during the settle window is not rewritten', async () => {
   const { consumer, cluster, audits, advance } = build(wantDeny);
-  await assert.rejects(consumer.onEvent('NetworkPolicy', 'delete', deny() as any));
+  cluster.put(DENY, opened());
+  await assert.rejects(consumer.onEvent('NetworkPolicy', 'update', opened() as any));
   cluster.put(DENY, deny());
   advance(11_000);
   await consumer.onEvent('NetworkPolicy', 'delete', deny() as any);
@@ -216,8 +214,6 @@ test('an apiserver that stores the spec in its own shape is accepted after one r
     m.spec.extraDefault = true;
     return m;
   };
-  await assert.rejects(consumer.onEvent('NetworkPolicy', 'delete', deny() as any));
-  advance(11_000);
   await consumer.onEvent('NetworkPolicy', 'delete', deny() as any);
   assert.equal(cluster.writes.length, 1);
   const stored = (await cluster.read(DENY)) as any;

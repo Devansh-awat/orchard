@@ -16,6 +16,7 @@ export interface GuardCluster {
   create(key: GuardKey, manifest: GuardManifest): Promise<GuardManifest>;
   replace(key: GuardKey, manifest: GuardManifest): Promise<GuardManifest>;
   secretValue(namespace: string, name: string, field: string): Promise<string | null>;
+  namespacesWithPolicy?(name: string): Promise<Set<string>>;
 }
 
 const PLURALS: Record<Exclude<GuardKind, 'NetworkPolicy'>, string> = {
@@ -56,6 +57,26 @@ export class K8sGuardCluster implements GuardCluster {
       if (statusOf(err) === 404) return { state: 'absent' };
       throw err;
     }
+  }
+
+  async namespacesWithPolicy(name: string): Promise<Set<string>> {
+    const api = this.kc.makeApiClient(k8s.NetworkingV1Api);
+    const found = new Set<string>();
+    let token: string | undefined;
+    do {
+      const { body } = await api.listNetworkPolicyForAllNamespaces(
+        undefined,
+        token,
+        `metadata.name=${name}`,
+        undefined,
+        500
+      );
+      for (const item of body.items) {
+        if (item.metadata?.namespace) found.add(item.metadata.namespace);
+      }
+      token = body.metadata?._continue || undefined;
+    } while (token);
+    return found;
   }
 
   async namespaceActive(namespace: string): Promise<boolean> {

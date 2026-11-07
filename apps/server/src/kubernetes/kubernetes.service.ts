@@ -4,6 +4,12 @@ import * as k8s from '@kubernetes/client-node';
 import { clusterPods, type SnapshotRead } from './cluster-snapshot';
 import { PrismaService } from '../prisma/prisma.service';
 import { apiserverEndpointsFrom, type ApiserverEndpoints } from './security-policies';
+import {
+  extraDenyCidrs,
+  ipv4Excepts,
+  nodeAddresses,
+  serverHostAddresses
+} from './cluster-addresses';
 import type { PodSizing } from './resource-spec';
 
 export const ALLOWED_INGRESS_ANNOTATION_KEYS = new Set<string>([
@@ -381,6 +387,46 @@ export class KubernetesService {
       console.warn(`[K8s] could not read the API server endpoints: ${(err as Error).message}`);
       return cached.result;
     }
+  }
+
+  private clusterExceptProbe: { at: number; result: string[] } | null = null;
+
+  private static readonly CLUSTER_EXCEPT_FAILURE_TTL_MS = 30 * 1000;
+
+  async clusterExceptCidrs(opts: { refresh?: boolean } = {}): Promise<string[]> {
+    const cached = this.clusterExceptProbe;
+    if (!opts.refresh && cached && Date.now() < cached.at) return cached.result;
+    const found: string[] = [...extraDenyCidrs()];
+    let complete = true;
+    if (this.kc) {
+      try {
+        const nodes = await this.kc.makeApiClient(k8s.CoreV1Api).listNode();
+        found.push(...nodeAddresses(nodes.body.items));
+      } catch (err) {
+        complete = false;
+        console.warn(
+          `[K8s] could not list nodes for the egress deny list: ${(err as Error).message}`
+        );
+      }
+      try {
+        const apiserver = await this.apiserverEndpoints();
+        found.push(...(apiserver?.ips ?? []));
+      } catch (err) {
+        complete = false;
+        console.warn(`[K8s] could not read the API server endpoints: ${(err as Error).message}`);
+      }
+      found.push(...(await serverHostAddresses(this.kc.getCurrentCluster()?.server)));
+    }
+    const result = ipv4Excepts(complete || !cached ? found : [...cached.result, ...found]);
+    this.clusterExceptProbe = {
+      at:
+        Date.now() +
+        (complete
+          ? KubernetesService.CILIUM_PROBE_TTL_MS
+          : KubernetesService.CLUSTER_EXCEPT_FAILURE_TTL_MS),
+      result
+    };
+    return result;
   }
 
   /**

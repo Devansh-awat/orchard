@@ -17,6 +17,7 @@ import {
   PROJECT_DATABASES_POLICY,
   TENANT_DENY_POLICY,
   TENANT_NAMESPACE_LABEL_SELECTORS,
+  ciliumDenyPolicy,
   ciliumIngressPolicy,
   cnpgApiserverPolicy,
   namespaceHasProtectedIngress,
@@ -569,7 +570,8 @@ export class K8sNamespaceService implements OnModuleInit {
       const networkingApi = this.kc.makeApiClient(k8s.NetworkingV1Api);
 
       const networkPolicyBody = tenantDenyPolicy(cleanNamespace, {
-        allowProtectionProxy: await namespaceHasProtectedIngress(this.prisma, cleanNamespace)
+        allowProtectionProxy: await namespaceHasProtectedIngress(this.prisma, cleanNamespace),
+        clusterExcepts: await this.kubernetes.clusterExceptCidrs()
       });
 
       // Replace on conflict: a namespace created before a configuration change
@@ -610,6 +612,21 @@ export class K8sNamespaceService implements OnModuleInit {
         );
       } catch (e: any) {
         if (e.response?.statusCode !== 409) throw e;
+      }
+
+      const denyPolicy = ciliumDenyPolicy(cleanNamespace);
+      if (denyPolicy.spec.egressDeny.length > 0) {
+        try {
+          await customApi.createNamespacedCustomObject(
+            'cilium.io',
+            'v2',
+            cleanNamespace,
+            'ciliumnetworkpolicies',
+            denyPolicy
+          );
+        } catch (e: any) {
+          if (e.response?.statusCode !== 409) throw e;
+        }
       }
 
       const cnpgApiServerPolicy = cnpgApiserverPolicy(cleanNamespace);

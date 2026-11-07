@@ -22,6 +22,72 @@ export function tenantIngressNamespaces(): string[] {
   return configured.length ? configured : ['network', 'orchard'];
 }
 
+export const TENANT_INGRESS_SERVING_PORTS = [80, 443, 8000, 8080, 8443];
+
+export const TENANT_PRIVATE_EGRESS_EXCEPT = [
+  '10.0.0.0/8',
+  '172.16.0.0/12',
+  '192.168.0.0/16',
+  '169.254.0.0/16',
+  '100.64.0.0/10'
+];
+
+export const TENANT_ABUSE_PORTS = [25, 465, 587, 2525];
+
+export const TENANT_DENY_ENTITIES = ['host', 'remote-node', 'kube-apiserver'];
+
+function portList(raw: string | undefined, fallback: number[]): number[] {
+  const value = (raw || '').trim();
+  if (!value) return fallback;
+  if (value.toLowerCase() === 'none') return [];
+  const ports = value
+    .split(',')
+    .map((entry) => Number(entry.trim()))
+    .filter((port) => Number.isInteger(port) && port > 0 && port < 65536);
+  return [...new Set(ports)].sort((a, b) => a - b);
+}
+
+export function tenantIngressPorts(): number[] {
+  const ports = portList(process.env.TENANT_INGRESS_PORTS, TENANT_INGRESS_SERVING_PORTS);
+  return ports.length ? ports : TENANT_INGRESS_SERVING_PORTS;
+}
+
+export function tenantBlockedEgressPorts(): number[] {
+  return portList(process.env.TENANT_EGRESS_BLOCK_PORTS, TENANT_ABUSE_PORTS);
+}
+
+export function tenantDenyEntities(): string[] {
+  const raw = (process.env.TENANT_DENY_ENTITIES || '').trim();
+  if (!raw) return TENANT_DENY_ENTITIES;
+  if (raw.toLowerCase() === 'none') return [];
+  return [
+    ...new Set(
+      raw
+        .split(',')
+        .map((entry) => entry.trim())
+        .filter(Boolean)
+    )
+  ];
+}
+
+export function egressPortsAvoiding(blocked: number[]): k8s.V1NetworkPolicyPort[] {
+  const sorted = [...new Set(blocked)].sort((a, b) => a - b);
+  const ports: k8s.V1NetworkPolicyPort[] = [];
+  let next = 1;
+  for (const port of [...sorted, 65536]) {
+    if (port > next) {
+      ports.push(
+        port - 1 === next
+          ? { protocol: 'TCP', port: next }
+          : { protocol: 'TCP', port: next, endPort: port - 1 }
+      );
+    }
+    next = port + 1;
+  }
+  ports.push({ protocol: 'UDP' } as k8s.V1NetworkPolicyPort);
+  return ports;
+}
+
 export function namespacePeers(names: string[]): k8s.V1NetworkPolicyPeer[] {
   return names.map((name) => ({
     namespaceSelector: { matchLabels: { 'kubernetes.io/metadata.name': name } }
@@ -98,6 +164,7 @@ export const DATABASE_PLATFORM_POLICY = 'allow-database-platform';
 export const CNPG_METRICS_PORT = 9187;
 export const PROJECT_DATABASES_POLICY = 'allow-project-databases';
 export const CILIUM_INGRESS_POLICY = 'allow-cilium-ingress';
+export const CILIUM_DENY_POLICY = 'deny-platform-egress';
 export const CNPG_APISERVER_POLICY = 'allow-cnpg-apiserver';
 export const CNPG_OPERATOR_POLICY = 'allow-cnpg-operator';
 export const PROTECTION_PROXY_SOURCE_NAMESPACE = 'orchard';
@@ -128,13 +195,25 @@ export interface CiliumPolicy {
 
 export function tenantDenyPolicy(
   namespace: string,
-  opts: { ingressNamespaces?: string[]; allowProtectionProxy?: boolean } = {}
+  opts: {
+    ingressNamespaces?: string[];
+    allowProtectionProxy?: boolean;
+    clusterExcepts?: string[];
+    blockedPorts?: number[];
+    ingressPorts?: number[];
+  } = {}
 ): k8s.V1NetworkPolicy {
   const ingressNamespaces = opts.ingressNamespaces ?? tenantIngressNamespaces();
   const from = namespacePeers([namespace, ...ingressNamespaces]);
   if (opts.allowProtectionProxy && !ingressNamespaces.includes(PROTECTION_PROXY_SOURCE_NAMESPACE)) {
     from.push(...namespacePeers([PROTECTION_PROXY_SOURCE_NAMESPACE]));
   }
+  const blocked = opts.blockedPorts ?? tenantBlockedEgressPorts();
+  const servingPorts = (opts.ingressPorts ?? tenantIngressPorts()).map((port) => ({
+    protocol: 'TCP',
+    port
+  }));
+  const egressNamespaces = tenantEgressNamespaces(ingressNamespaces);
   return {
     apiVersion: 'networking.k8s.io/v1',
     kind: 'NetworkPolicy',
@@ -150,12 +229,15 @@ export function tenantDenyPolicy(
       // Egress is allow-listed. Pods may:
       //   1. Talk to other pods in the same tenant namespace.
       //   2. Resolve DNS via kube-dns in kube-system (UDP/TCP 53).
-      //   3. Talk to the ingress controller namespaces, so an app can reach a
-      //      public hostname served by this cluster. Orchard's own namespace is
+      //   3. Talk to the ingress controller namespaces on their serving ports
+      //      only, so an app can reach a public hostname served by this
+      //      cluster without reaching the controller's stats and pprof ports,
+      //      which list every tenant's backend. Orchard's own namespace is
       //      left out: it only ever needs to reach into tenants.
       //   4. Reach the public internet, but NOT link-local / cloud
-      //      metadata (169.254.0.0/16) or the RFC1918 ranges the
-      //      platform's own infra lives on.
+      //      metadata (169.254.0.0/16), the RFC1918 ranges the platform's own
+      //      infra lives on, or the addresses of the cluster's own nodes and
+      //      apiserver (which can be public), and not outbound mail ports.
       //   5. Reach other Orchard tenant namespaces. Those namespaces are
       //      still default-deny on ingress, so this only lands on what a
       //      tenant has explicitly published via an `-allow-public`
@@ -165,8 +247,11 @@ export function tenantDenyPolicy(
       // services, and the cloud metadata IMDS.
       egress: [
         {
-          to: namespacePeers([namespace, ...tenantEgressNamespaces(ingressNamespaces)])
+          to: namespacePeers([namespace])
         },
+        ...(egressNamespaces.length
+          ? [{ to: namespacePeers(egressNamespaces), ports: servingPorts }]
+          : []),
         {
           to: [
             {
@@ -190,16 +275,11 @@ export function tenantDenyPolicy(
             {
               ipBlock: {
                 cidr: '0.0.0.0/0',
-                except: [
-                  '10.0.0.0/8',
-                  '172.16.0.0/12',
-                  '192.168.0.0/16',
-                  '169.254.0.0/16',
-                  '100.64.0.0/10'
-                ]
+                except: [...TENANT_PRIVATE_EGRESS_EXCEPT, ...(opts.clusterExcepts ?? [])]
               }
             }
-          ]
+          ],
+          ...(blocked.length ? { ports: egressPortsAvoiding(blocked) } : {})
         },
         {
           to: TENANT_NAMESPACE_EGRESS_PEERS
@@ -347,6 +427,42 @@ export function ciliumIngressPolicy(namespace: string): CiliumPolicy {
             }
           ]
         }
+      ]
+    }
+  };
+}
+
+export function ciliumDenyPolicy(
+  namespace: string,
+  opts: { entities?: string[]; blockedPorts?: number[] } = {}
+): CiliumPolicy {
+  const entities = opts.entities ?? tenantDenyEntities();
+  const blocked = opts.blockedPorts ?? tenantBlockedEgressPorts();
+  return {
+    apiVersion: 'cilium.io/v2',
+    kind: 'CiliumNetworkPolicy',
+    metadata: {
+      name: CILIUM_DENY_POLICY,
+      namespace,
+      labels: { 'orchard.my/managed': 'true' }
+    },
+    spec: {
+      endpointSelector: {
+        matchExpressions: [{ key: 'cnpg.io/cluster', operator: 'DoesNotExist' }]
+      },
+      egressDeny: [
+        ...(entities.length ? [{ toEntities: entities }] : []),
+        ...(blocked.length
+          ? [
+              {
+                toPorts: [
+                  {
+                    ports: blocked.map((port) => ({ port: String(port), protocol: 'TCP' }))
+                  }
+                ]
+              }
+            ]
+          : [])
       ]
     }
   };

@@ -255,6 +255,18 @@ true
             {{- if .Values.tenant.ingressNamespaces }}
             - { name: TENANT_INGRESS_NAMESPACES, value: {{ .Values.tenant.ingressNamespaces | quote }} }
             {{- end }}
+            {{- if .Values.tenant.ingressPorts }}
+            - { name: TENANT_INGRESS_PORTS, value: {{ .Values.tenant.ingressPorts | quote }} }
+            {{- end }}
+            {{- if .Values.tenant.egressBlockPorts }}
+            - { name: TENANT_EGRESS_BLOCK_PORTS, value: {{ .Values.tenant.egressBlockPorts | quote }} }
+            {{- end }}
+            {{- if .Values.tenant.denyEntities }}
+            - { name: TENANT_DENY_ENTITIES, value: {{ .Values.tenant.denyEntities | quote }} }
+            {{- end }}
+            {{- if .Values.tenant.extraDenyCidrs }}
+            - { name: PLATFORM_EXTRA_DENY_CIDRS, value: {{ .Values.tenant.extraDenyCidrs | quote }} }
+            {{- end }}
             {{- if and .Values.tenant.cnpgOperatorNamespace (not (include "orchard.serverEnvHas" (dict "root" . "key" "CNPG_OPERATOR_NAMESPACE"))) }}
             - { name: CNPG_OPERATOR_NAMESPACE, value: {{ .Values.tenant.cnpgOperatorNamespace | quote }} }
             {{- end }}
