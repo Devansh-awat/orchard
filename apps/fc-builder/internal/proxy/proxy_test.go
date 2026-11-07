@@ -175,3 +175,53 @@ func TestV2BaseNeedsNoCredentials(t *testing.T) {
 		t.Fatalf("got %d", rec.Code)
 	}
 }
+
+func TestRejectsDotSegmentsAfterGrantedRepository(t *testing.T) {
+	f := newFakeRegistry(t)
+	p, _ := New(f.srv.URL, "robot", "pw")
+	p.Grant(0, "orchard/app")
+	for _, path := range []string{
+		"/v2/orchard/app/blobs/sha256:abc/../../../victim/manifests/latest",
+		"/v2/orchard/app/blobs/uploads/../../../victim/manifests/latest",
+		"/v2/orchard/app/manifests/../../victim/manifests/latest",
+		"/v2/orchard/app/blobs/./sha256:abc",
+		"/v2/orchard/app/blobs//sha256:abc",
+		"/v2/orchard/app/blobs/..%2f..%2fvictim/blobs/sha256:abc",
+		"/v2/orchard/app/blobs/sha256:abc/..%5c..%5cvictim",
+	} {
+		f.mu.Lock()
+		f.lastPath = ""
+		f.mu.Unlock()
+		rec := httptest.NewRecorder()
+		p.ServeHTTP(rec, guestRequest(0, "GET", path))
+		if rec.Code != http.StatusForbidden {
+			t.Errorf("%s: got %d", path, rec.Code)
+		}
+		f.mu.Lock()
+		forwarded := f.lastPath
+		f.mu.Unlock()
+		if forwarded != "" {
+			t.Errorf("%s: reached upstream as %q", path, forwarded)
+		}
+	}
+}
+
+func TestStillForwardsUploadPaths(t *testing.T) {
+	f := newFakeRegistry(t)
+	p, _ := New(f.srv.URL, "robot", "pw")
+	p.Grant(0, "orchard/app")
+	for _, path := range []string{
+		"/v2/orchard/app/blobs/uploads/",
+		"/v2/orchard/app/blobs/uploads/6f1c1c1e-2d1a-4a6e-8a4a-1d2b3c4d5e6f",
+		"/v2/orchard/app/blobs/sha256:abc",
+		"/v2/orchard/app/blobs/sha256%3Aabc",
+		"/v2/orchard/app/manifests/v1.2-rc_1",
+		"/v2/orchard/app/tags/list",
+	} {
+		rec := httptest.NewRecorder()
+		p.ServeHTTP(rec, guestRequest(0, "GET", path))
+		if rec.Code != http.StatusOK {
+			t.Errorf("%s: got %d", path, rec.Code)
+		}
+	}
+}

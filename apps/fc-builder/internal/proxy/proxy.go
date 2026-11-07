@@ -21,6 +21,7 @@ import (
 
 var (
 	repoName  = regexp.MustCompile(`^[a-z0-9]+(?:[._-][a-z0-9]+)*(?:/[a-z0-9]+(?:[._-][a-z0-9]+)*)*$`)
+	tailSegment = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9._:+=-]*$`)
 	resources = []string{"/blobs/", "/manifests/", "/tags/", "/referrers/"}
 	hopHeaders = []string{"Connection", "Proxy-Connection", "Keep-Alive", "Proxy-Authenticate", "Proxy-Authorization", "Te", "Trailer", "Transfer-Encoding", "Upgrade"}
 )
@@ -124,7 +125,23 @@ func splitRepo(path string) (string, bool) {
 		return "", false
 	}
 	name := rest[:cut]
-	return name, ValidRepository(name)
+	if !ValidRepository(name) || !validTail(rest[cut+1:]) {
+		return "", false
+	}
+	return name, true
+}
+
+func validTail(tail string) bool {
+	segments := strings.Split(tail, "/")
+	for i, seg := range segments {
+		if seg == "" && i == len(segments)-1 && i > 0 {
+			continue
+		}
+		if !tailSegment.MatchString(seg) {
+			return false
+		}
+	}
+	return true
 }
 
 func deny(w http.ResponseWriter, status int, code, msg string) {
