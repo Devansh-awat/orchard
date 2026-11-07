@@ -1,0 +1,71 @@
+{{- if .Values.databases.runtimeClassName }}
+# Opt-in sandbox for pods Orchard does not build itself. The CloudNativePG
+# Cluster/Pooler CRDs have no runtimeClassName field, so the only way to run a
+# database pod under gVisor/Kata is to set it at admission. This native
+# MutatingAdmissionPolicy (Kubernetes >= 1.34 with the API enabled) sets
+# spec.runtimeClassName on pods that carry a cnpg.io/cluster, cnpg.io/poolerName
+# or orchard.my/tailscale label, in namespaces labelled orchard.my/managed.
+#
+# It only touches pods created after it exists and never overrides a runtime
+# class already set. Existing database pods keep running on the host kernel
+# until the operator rolls them (CNPG: a controlled switchover/rolling restart
+# per cluster). Sandboxed Postgres pays an IO and latency cost.
+apiVersion: admissionregistration.k8s.io/{{ include "orchard.mapApiVersion" . }}
+kind: MutatingAdmissionPolicy
+metadata:
+  name: orchard-database-runtime-class
+  labels:
+    {{- include "orchard.labels" . | nindent 4 }}
+spec:
+  failurePolicy: {{ .Values.databases.runtimeClassFailurePolicy | default "Ignore" }}
+  reinvocationPolicy: Never
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE"]
+        resources: ["pods"]
+  matchConditions:
+    - name: sandbox-eligible-pod
+      expression: >-
+        has(object.metadata.labels) &&
+        ('cnpg.io/cluster' in object.metadata.labels ||
+         'cnpg.io/poolerName' in object.metadata.labels ||
+         'orchard.my/tailscale' in object.metadata.labels) &&
+        !has(object.spec.runtimeClassName)
+  mutations:
+    - patchType: ApplyConfiguration
+      applyConfiguration:
+        expression: >-
+          Object{
+            spec: Object.spec{
+              runtimeClassName: {{ .Values.databases.runtimeClassName | quote }}
+            }
+          }
+---
+apiVersion: admissionregistration.k8s.io/{{ include "orchard.mapApiVersion" . }}
+kind: MutatingAdmissionPolicyBinding
+metadata:
+  name: orchard-database-runtime-class
+  labels:
+    {{- include "orchard.labels" . | nindent 4 }}
+spec:
+  policyName: orchard-database-runtime-class
+  matchResources:
+    namespaceSelector:
+      matchExpressions:
+        - { key: orchard.my/managed, operator: Exists }
+---
+apiVersion: admissionregistration.k8s.io/{{ include "orchard.mapApiVersion" . }}
+kind: MutatingAdmissionPolicyBinding
+metadata:
+  name: orchard-database-runtime-class-legacy
+  labels:
+    {{- include "orchard.labels" . | nindent 4 }}
+spec:
+  policyName: orchard-database-runtime-class
+  matchResources:
+    namespaceSelector:
+      matchExpressions:
+        - { key: orchard.dev/managed, operator: Exists }
+{{- end }}

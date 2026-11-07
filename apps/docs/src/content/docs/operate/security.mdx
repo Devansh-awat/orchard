@@ -169,6 +169,21 @@ apps/server/scripts/cnpg-disable-superuser.sh --apply --limit 1 # canary one clu
 apps/server/scripts/cnpg-disable-superuser.sh --apply
 ```
 
+### Sandbox database pods
+
+CloudNativePG pods (Postgres instances and PgBouncer poolers) run on the host kernel, because the CloudNativePG `Cluster` resource has no `runtimeClassName` field. To run them under gVisor or Kata, set the following value:
+
+```yaml
+databases:
+  runtimeClassName: gvisor
+```
+
+The chart then installs a `MutatingAdmissionPolicy` that sets the runtime class on pods that carry a `cnpg.io/cluster`, `cnpg.io/poolerName` or `orchard.my/tailscale` label in namespaces labelled `orchard.my/managed`. It needs a Kubernetes version that serves `MutatingAdmissionPolicy`, and the RuntimeClass must exist on every node that can run databases.
+
+This setting is optional, and the default is empty, which changes nothing. Sandboxed Postgres has higher IO and latency overhead. The policy applies only to pods created after you install it. To move an existing cluster, do a switchover and then delete the old pods one at a time, so you control when each database restarts. Set `databases.runtimeClassFailurePolicy: Fail` to guarantee that no unsandboxed database pod is admitted. The default `Ignore` keeps a policy fault from blocking pod creation.
+
+The Tailscale proxy pod is created by Orchard. It uses the tenant runtime class (`TENANT_RUNTIME_CLASS`), drops all capabilities, and runs in userspace mode, so it needs neither `NET_ADMIN` nor `NET_RAW`. Its image defaults to `ghcr.io/tailscale/tailscale:latest`. Set `TAILSCALE_IMAGE` to a version tag or digest to pin it. Existing proxy pods pick up these settings when you next re-enable Tailscale on the app.
+
 ## Requirements for untrusted code
 
 Code is untrusted if someone can run a process that you did not write. This includes letting other people deploy from their own repositories. In that case, set up all of the following:

@@ -36,6 +36,7 @@ import {
   type PodSizing
 } from './resource-spec';
 import { hardenedSecurityContext, tenantRuntimeClassName } from './trusted-images';
+import { TAILSCALE_EGRESS_EXCEPT, tailscaleImage, tailscaleSecurityContext } from './tailscale-pod';
 import {
   buildEnvReplacePatch,
   ENV_HASH_ANNOTATION,
@@ -3653,10 +3654,11 @@ export class K8sWorkloadService {
           metadata: { labels: podLabels },
           spec: {
             serviceAccountName: saName,
+            runtimeClassName: tenantRuntimeClassName(),
             containers: [
               {
                 name: 'tailscale',
-                image: 'ghcr.io/tailscale/tailscale:latest',
+                image: tailscaleImage(),
                 imagePullPolicy: 'IfNotPresent',
                 env: [
                   {
@@ -3675,10 +3677,7 @@ export class K8sWorkloadService {
                   requests: { cpu: '10m', memory: '64Mi' },
                   limits: { cpu: '100m', memory: '128Mi' }
                 },
-                securityContext: {
-                  runAsUser: 1000,
-                  runAsGroup: 1000
-                },
+                securityContext: tailscaleSecurityContext(),
                 volumeMounts: [
                   { name: 'tailscale-state', mountPath: '/var/lib/tailscale' },
                   { name: 'serve-config', mountPath: '/config', readOnly: true }
@@ -3775,7 +3774,7 @@ export class K8sWorkloadService {
               {
                 ipBlock: {
                   cidr: '0.0.0.0/0',
-                  except: ['10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16']
+                  except: [...TAILSCALE_EGRESS_EXCEPT]
                 }
               }
             ],

@@ -863,6 +863,21 @@ tenantSandbox:
   enabled: false
   runtimeClassName: gvisor
 
+# Pods Orchard does not build itself (CloudNativePG instance and pooler pods,
+# the Tailscale proxy) cannot take a runtimeClassName from the CNPG CRD. When
+# runtimeClassName is set, a native MutatingAdmissionPolicy sets it on those
+# pods at creation in orchard.my/managed namespaces (needs Kubernetes with the
+# MutatingAdmissionPolicy API). Empty (the default) changes nothing.
+#
+# Operator-optional: sandboxed Postgres pays an IO and latency cost. It affects
+# only pods created or recreated afterwards, so roll each cluster yourself
+# (switchover, then delete the old primary) when you are ready.
+# runtimeClassFailurePolicy Ignore keeps a policy bug from blocking pod creation;
+# Fail guarantees no unsandboxed database pod is ever admitted.
+databases:
+  runtimeClassName: ""
+  runtimeClassFailurePolicy: Ignore
+
 # Builder pod sandboxing. Image-build jobs need `privileged: true` for
 # BuildKit, which gVisor refuses. Kata Containers wraps the pod in a
 # lightweight VM, so privileged-in-VM is fine and a malicious Dockerfile

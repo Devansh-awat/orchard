@@ -861,3 +861,13 @@ Managed tenant namespaces are matched by label instead.
 - { key: orchard.dev/managed, operator: DoesNotExist }
 - { key: kubernetes.io/metadata.name, operator: NotIn, values: {{ include "orchard.untrustedNamespaces" . }} }
 {{- end -}}
+
+{{- define "orchard.mapApiVersion" -}}
+{{- if .Capabilities.APIVersions.Has "admissionregistration.k8s.io/v1/MutatingAdmissionPolicy" -}}
+v1
+{{- else if .Capabilities.APIVersions.Has "admissionregistration.k8s.io/v1beta1/MutatingAdmissionPolicy" -}}
+v1beta1
+{{- else -}}
+v1
+{{- end -}}
+{{- end }}

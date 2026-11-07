@@ -744,3 +744,15 @@ test('per-database public db certificates are opt-in', { skip: !helmAvailable() 
   assert.match(out, /PUBLIC_DB_TLS_ISSUER_NAME/);
   assert.match(out, /resources: \["certificates"\]\s+verbs: \["get", "list", "watch", "create"/);
 });
+
+test(
+  'the database sandbox MutatingAdmissionPolicy renders only when databases.runtimeClassName is set',
+  { skip: !helmAvailable() },
+  () => {
+    assert.ok(!render([]).includes('orchard-database-runtime-class'));
+    const out = render(['databases.runtimeClassName=gvisor']);
+    assert.match(out, /kind: MutatingAdmissionPolicy\n/);
+    assert.match(out, /runtimeClassName: "gvisor"/);
+    assert.match(out, /'cnpg\.io\/cluster' in object\.metadata\.labels/);
+  }
+);
