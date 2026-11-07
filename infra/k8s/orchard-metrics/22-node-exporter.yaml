@@ -32,7 +32,6 @@ spec:
         app: node-exporter
     spec:
       hostNetwork: true
-      hostPID: true
       dnsPolicy: ClusterFirstWithHostNet
       tolerations:
         - operator: Exists
@@ -40,7 +39,7 @@ spec:
         - name: node-exporter
           image: prom/node-exporter:v1.8.2
           args:
-            - "--web.listen-address=:9100"
+            - "--web.listen-address=$(HOST_IP):9100"
             - "--path.procfs=/host/proc"
             - "--path.sysfs=/host/sys"
             - "--path.rootfs=/host/root"
@@ -48,6 +47,10 @@ spec:
             - "--collector.filesystem.fs-types-exclude=^(autofs|binfmt_misc|bpf|cgroup2?|configfs|debugfs|devpts|devtmpfs|fusectl|hugetlbfs|iso9660|mqueue|nsfs|overlay|proc|procfs|pstore|rpc_pipefs|securityfs|selinuxfs|squashfs|sysfs|tracefs)$"
             - "--no-collector.wifi"
             - "--no-collector.hwmon"
+          env:
+            - name: HOST_IP
+              valueFrom:
+                fieldRef: { fieldPath: status.hostIP }
           ports:
             - { name: metrics, containerPort: 9100 }
           volumeMounts:

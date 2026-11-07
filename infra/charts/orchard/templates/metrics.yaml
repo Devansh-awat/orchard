@@ -95,7 +95,7 @@ metadata:
   name: {{ .Release.Name }}-vmagent
 rules:
   - apiGroups: [""]
-    resources: ["nodes", "nodes/metrics", "nodes/proxy", "services", "endpoints", "pods"]
+    resources: ["nodes", "nodes/metrics", "services", "endpoints", "pods"]
     verbs: ["get", "list", "watch"]
   - apiGroups: ["discovery.k8s.io"]
     resources: ["endpointslices"]
@@ -132,17 +132,13 @@ metadata:
 rules:
   - apiGroups: [""]
     resources:
-      - configmaps
-      - secrets
       - nodes
       - pods
       - services
-      - serviceaccounts
       - resourcequotas
       - replicationcontrollers
       - limitranges
       - persistentvolumeclaims
-      - persistentvolumes
       - namespaces
       - endpoints
     verbs: ["list", "watch"]
@@ -156,22 +152,10 @@ rules:
     resources: ["horizontalpodautoscalers"]
     verbs: ["list", "watch"]
   - apiGroups: ["networking.k8s.io"]
-    resources: ["networkpolicies", "ingressclasses", "ingresses"]
+    resources: ["networkpolicies", "ingresses"]
     verbs: ["list", "watch"]
   - apiGroups: ["storage.k8s.io"]
-    resources: ["storageclasses", "volumeattachments"]
-    verbs: ["list", "watch"]
-  - apiGroups: ["policy"]
-    resources: ["poddisruptionbudgets"]
-    verbs: ["list", "watch"]
-  - apiGroups: ["certificates.k8s.io"]
-    resources: ["certificatesigningrequests"]
-    verbs: ["list", "watch"]
-  - apiGroups: ["discovery.k8s.io"]
-    resources: ["endpointslices"]
-    verbs: ["list", "watch"]
-  - apiGroups: ["rbac.authorization.k8s.io"]
-    resources: ["clusterroles", "clusterrolebindings", "roles", "rolebindings"]
+    resources: ["storageclasses"]
     verbs: ["list", "watch"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -226,7 +210,7 @@ spec:
           args:
             - "--port=8080"
             - "--telemetry-port=8081"
-            - "--resources=daemonsets,deployments,jobs,pods,replicasets,statefulsets,nodes,namespaces,services,horizontalpodautoscalers,resourcequotas,persistentvolumeclaims,cronjobs,limitranges,replicationcontrollers,storageclasses,configmaps,endpoints,ingresses,networkpolicies"
+            - "--resources=daemonsets,deployments,jobs,pods,replicasets,statefulsets,nodes,namespaces,services,horizontalpodautoscalers,resourcequotas,persistentvolumeclaims,cronjobs,limitranges,replicationcontrollers,storageclasses,endpoints,ingresses,networkpolicies"
           ports:
             - { name: http-metrics, containerPort: 8080 }
             - { name: telemetry,    containerPort: 8081 }
@@ -279,7 +263,6 @@ spec:
         app: node-exporter
     spec:
       hostNetwork: true
-      hostPID: true
       dnsPolicy: ClusterFirstWithHostNet
       tolerations:
         - operator: Exists
@@ -287,7 +270,7 @@ spec:
         - name: node-exporter
           image: {{ .Values.metrics.nodeExporter.image }}
           args:
-            - "--web.listen-address=:9100"
+            - "--web.listen-address=$(HOST_IP):9100"
             - "--path.procfs=/host/proc"
             - "--path.sysfs=/host/sys"
             - "--path.rootfs=/host/root"
@@ -295,6 +278,10 @@ spec:
             - "--collector.filesystem.fs-types-exclude=^(autofs|binfmt_misc|bpf|cgroup2?|configfs|debugfs|devpts|devtmpfs|fusectl|hugetlbfs|iso9660|mqueue|nsfs|overlay|proc|procfs|pstore|rpc_pipefs|securityfs|selinuxfs|squashfs|sysfs|tracefs)$"
             - "--no-collector.wifi"
             - "--no-collector.hwmon"
+          env:
+            - name: HOST_IP
+              valueFrom:
+                fieldRef: { fieldPath: status.hostIP }
           ports:
             - { name: metrics, containerPort: 9100 }
           volumeMounts:

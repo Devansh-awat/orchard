@@ -10,7 +10,7 @@ metadata:
   name: vmagent
 rules:
   - apiGroups: [""]
-    resources: ["nodes", "nodes/metrics", "nodes/proxy", "services", "endpoints", "pods"]
+    resources: ["nodes", "nodes/metrics", "services", "endpoints", "pods"]
     verbs: ["get", "list", "watch"]
   - apiGroups: ["discovery.k8s.io"]
     resources: ["endpointslices"]
@@ -47,17 +47,13 @@ metadata:
 rules:
   - apiGroups: [""]
     resources:
-      - configmaps
-      - secrets
       - nodes
       - pods
       - services
-      - serviceaccounts
       - resourcequotas
       - replicationcontrollers
       - limitranges
       - persistentvolumeclaims
-      - persistentvolumes
       - namespaces
       - endpoints
     verbs: ["list", "watch"]
@@ -71,22 +67,10 @@ rules:
     resources: ["horizontalpodautoscalers"]
     verbs: ["list", "watch"]
   - apiGroups: ["networking.k8s.io"]
-    resources: ["networkpolicies", "ingressclasses", "ingresses"]
+    resources: ["networkpolicies", "ingresses"]
     verbs: ["list", "watch"]
   - apiGroups: ["storage.k8s.io"]
-    resources: ["storageclasses", "volumeattachments"]
-    verbs: ["list", "watch"]
-  - apiGroups: ["policy"]
-    resources: ["poddisruptionbudgets"]
-    verbs: ["list", "watch"]
-  - apiGroups: ["certificates.k8s.io"]
-    resources: ["certificatesigningrequests"]
-    verbs: ["list", "watch"]
-  - apiGroups: ["discovery.k8s.io"]
-    resources: ["endpointslices"]
-    verbs: ["list", "watch"]
-  - apiGroups: ["rbac.authorization.k8s.io"]
-    resources: ["clusterroles", "clusterrolebindings", "roles", "rolebindings"]
+    resources: ["storageclasses"]
     verbs: ["list", "watch"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
