@@ -1810,14 +1810,14 @@ export class ProjectsService {
     // key is queried with an undefined organizationId, so a missing orgId
     // query param must 404 before the lookup.
     if (!organizationId) {
-      throw new NotFoundException(`Project with slug ${slug} not found`);
+      throw new NotFoundException('Project not found');
     }
     const proj = await this.prisma.project.findUnique({
       where: { organizationId_slug: { organizationId, slug } },
       select: { id: true, organizationId: true }
     });
     if (!proj) {
-      throw new NotFoundException(`Project with slug ${slug} not found`);
+      throw new NotFoundException('Project not found');
     }
     const access = await this.authz.requireProjectView(proj.id, user.id);
     const project = await this.prisma.project.findUnique({

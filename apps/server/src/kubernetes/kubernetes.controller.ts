@@ -24,6 +24,9 @@ import { assertValidPodName } from './pod-name';
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const RFC3339_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/;
 
+const NAMESPACE_NOT_FOUND = 'Not found';
+const NIL_PROJECT_ID = '00000000-0000-0000-0000-000000000000';
+
 @Auth()
 @Controller()
 export class KubernetesController {
@@ -49,14 +52,21 @@ export class KubernetesController {
   ) {
     if (!namespace) throw new BadRequestException('namespace query parameter is required');
     const scope = await resolveNamespaceScope(this.prisma, namespace);
-    if (!scope) throw new NotFoundException(`Namespace ${namespace} not found`);
     const userId = await this.resolveUserId(req);
-    if (mode === 'edit') {
-      await this.authz.requireProjectEdit(scope.projectId, userId, action);
-      return { projectId: scope.projectId, canEdit: true };
+    const projectId = scope?.projectId ?? NIL_PROJECT_ID;
+    try {
+      if (mode === 'edit') {
+        await this.authz.requireProjectEdit(projectId, userId, action);
+        if (!scope) throw new NotFoundException(NAMESPACE_NOT_FOUND);
+        return { projectId, canEdit: true };
+      }
+      const access = await this.authz.requireProjectView(projectId, userId);
+      if (!scope) throw new NotFoundException(NAMESPACE_NOT_FOUND);
+      return { projectId, canEdit: access.canEdit };
+    } catch (error) {
+      if (error instanceof NotFoundException) throw new NotFoundException(NAMESPACE_NOT_FOUND);
+      throw error;
     }
-    const access = await this.authz.requireProjectView(scope.projectId, userId);
-    return { projectId: scope.projectId, canEdit: access.canEdit };
   }
 
   /**

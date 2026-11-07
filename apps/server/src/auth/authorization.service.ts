@@ -471,7 +471,7 @@ export class AuthorizationService {
   async requireProjectView(projectId: string, userId: string): Promise<ProjectAccess> {
     const access = await this.getProjectAccess(projectId, userId);
     if (!access || !access.canView) {
-      throw new NotFoundException(`Project ${projectId} not found`);
+      throw new NotFoundException('Project not found');
     }
     return access;
   }
