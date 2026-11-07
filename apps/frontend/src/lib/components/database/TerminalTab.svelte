@@ -94,7 +94,6 @@
 	const MAX_LINES = 5_000;
 
 	const dedicated = $derived(database.mode === 'cnpg' || database.mode === 'container');
-	const shellAllowed = $derived(database.mode === 'container');
 	const pods = $derived(database.pods ?? []);
 
 	const primaryName = $derived.by(() => {
@@ -126,14 +125,6 @@
 	function roleOf(name: string) {
 		if (database.mode !== 'cnpg') return null;
 		return name === primaryName ? 'Primary' : 'Standby';
-	}
-
-	function containerOf(pod: DatabasePod) {
-		return (
-			pod.containers?.find((c) => c.name === 'postgres')?.name ??
-			pod.containers?.[0]?.name ??
-			'postgres'
-		);
 	}
 
 	function restarted(pod: DatabasePod) {
@@ -196,10 +187,6 @@
 		} finally {
 			loadingMore = false;
 		}
-	}
-
-	function openShell(pod: DatabasePod | null) {
-		if (pod) onOpenShellTab(pod.name, containerOf(pod));
 	}
 </script>
 
@@ -293,43 +280,6 @@
 						loading={killedLoading}
 						onclick={() => onFetchKilled?.()}
 					/>
-				{/if}
-
-				{#if shellAllowed}
-					<Button
-						shape="capsule"
-						variant="secondary"
-						size="sm"
-						icon={SquareTerminal}
-						disabled={!primaryPod}
-						title={primaryPod
-							? `Open a shell on ${podShortName(primaryPod.name)}`
-							: 'Waiting for the Postgres pod'}
-						onclick={() => openShell(primaryPod)}>Shell</Button
-					>
-					{#if pods.length > 1}
-						<Menu placement="bottom-end">
-							{#snippet trigger(attrs)}
-								<Button
-									shape="capsule"
-									{...attrs}
-									variant="ghost"
-									size="sm"
-									icon={ChevronDown}
-									label="Open a shell on another instance"
-								/>
-							{/snippet}
-							{#each ordered as pod (pod.name)}
-								<MenuItem
-									icon={SquareTerminal}
-									description={roleOf(pod.name) ?? undefined}
-									onclick={() => openShell(pod)}
-								>
-									{podShortName(pod.name)}
-								</MenuItem>
-							{/each}
-						</Menu>
-					{/if}
 				{/if}
 
 				<TerminalSettings />
