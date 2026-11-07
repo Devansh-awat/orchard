@@ -2803,6 +2803,30 @@ k3s_download() {
     --service-node-port-range="$NODE_PORT_RANGE"
 }
 
+coredns_custom_manifest() {
+  cat <<'YAML'
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: coredns-custom
+  namespace: kube-system
+data:
+  orchard-reverse-dns.override: |
+    acl in-addr.arpa ip6.arpa {
+      block type PTR
+    }
+YAML
+}
+
+# Without this any pod can sweep the service CIDR with reverse lookups and read
+# <service>.<namespace>.svc for every Service in the cluster.
+harden_coredns() {
+  coredns_custom_manifest | kubectl apply -f -
+  if kubectl -n kube-system get deploy coredns >/dev/null 2>&1; then
+    kubectl -n kube-system rollout restart deploy/coredns || true
+  fi
+}
+
 wait_for_node() {
   local tries=0
   until [ "$(kubectl get nodes --no-headers 2>/dev/null | wc -l)" -gt 0 ]; do
@@ -2896,6 +2920,7 @@ install_k3s() {
   chmod 700 "$STATE_DIR"
   export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
   run_step "waiting for the node to be ready" 30s wait_for_node
+  run_step "blocking reverse DNS lookups from pods" 15s harden_coredns
 }
 
 helm_download() {

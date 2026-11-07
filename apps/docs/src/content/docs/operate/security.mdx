@@ -65,6 +65,22 @@ Orchard labels namespaces and restores the rule every five minutes.
 
 A `ufw` deny rule does not close ports `80` and `443` on a machine that runs the installer. Traffic to these ports is forwarded to pods and does not pass through the rules that `ufw` applies to the machine. The installer leaves your deny rule in place and warns you. To close a port, use a firewall in front of the machine.
 
+### Reverse DNS lookups
+
+Every pod can reach cluster DNS. With the default CoreDNS configuration, a pod can sweep the service address range with reverse (`PTR`) lookups and read the name of every Service, which includes the namespace names of other tenants. Orchard cannot close this from inside a tenant namespace, so the block belongs in CoreDNS.
+
+The installer does this on its own k3s cluster. It writes a `coredns-custom` ConfigMap in `kube-system` and restarts CoreDNS. On any other cluster, add the same rule to the CoreDNS `Corefile`, inside the main server block:
+
+```
+acl in-addr.arpa ip6.arpa {
+  block type PTR
+}
+```
+
+On k3s without the installer, put the block in a `coredns-custom` ConfigMap under a key that ends in `.override`. Check the result from a tenant pod. `dig -x <any Service ClusterIP>` must return `REFUSED`.
+
+The block also stops pods from reverse-resolving public addresses through cluster DNS. This rarely matters, because few programs need it. Forward lookups such as `service.namespace.svc.cluster.local` keep working, and a name that has never been published stays unguessable because namespace names end in a random suffix.
+
 ## Kernel isolation
 
 Kernel isolation is off by default. Tenant pods and build jobs share the host kernel, like ordinary containers. A container escape compromises the host.
