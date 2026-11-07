@@ -469,10 +469,7 @@ export class ProtectionService {
     }
   }
 
-  private async protectionCookieGrants(
-    token: string,
-    ingress: CachedIngress
-  ): Promise<boolean> {
+  private async protectionCookieGrants(token: string, ingress: CachedIngress): Promise<boolean> {
     const payload = await this.verifyProtectionJwt(token, 'protection', ingress);
     if (!payload) return false;
     const subject = payload.sub;

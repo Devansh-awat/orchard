@@ -1062,7 +1062,9 @@ export class SsoService implements OnApplicationBootstrap {
       where: { id: provider.id, samlIdpEntityId: null },
       data: { samlIdpEntityId: entityId }
     });
-    this.logger.log(`SAML provider ${provider.id} (${provider.name}): IdP entity ID set from metadata`);
+    this.logger.log(
+      `SAML provider ${provider.id} (${provider.name}): IdP entity ID set from metadata`
+    );
     this.entityIdAttempts.delete(provider.id);
     return { ...provider, samlIdpEntityId: entityId };
   }

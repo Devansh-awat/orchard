@@ -31,9 +31,12 @@ function makeDb(email: string, emailVerified: boolean) {
     gitConnections: [{ id: 'g1', userId: 'u1' }],
     installs: [{ id: 'i1', userId: 'u1' }]
   };
-  const drop = (rows: any[]) => async ({ where }: any) => {
-    for (let i = rows.length - 1; i >= 0; i -= 1) if (rows[i].userId === where.userId) rows.splice(i, 1);
-  };
+  const drop =
+    (rows: any[]) =>
+    async ({ where }: any) => {
+      for (let i = rows.length - 1; i >= 0; i -= 1)
+        if (rows[i].userId === where.userId) rows.splice(i, 1);
+    };
   const db: any = {
     user: {
       findUnique: async ({ where }: any) =>
@@ -75,9 +78,13 @@ function assertWiped(state: ReturnType<typeof makeDb>['state']) {
 
 test('OAuth sign-in adopting an unverified row discards every prior credential', async () => {
   const { db, state } = makeDb('victim@example.com', false);
-  const users = new UsersService(db, { log: async () => {} } as any, {
-    ensureImageUrl: async () => {}
-  } as any);
+  const users = new UsersService(
+    db,
+    { log: async () => {} } as any,
+    {
+      ensureImageUrl: async () => {}
+    } as any
+  );
   (users as any).ensureImageUrl = async () => {};
   const found = await users.findOrCreateByExternalAuthId({
     id: 'ext-1',
@@ -100,10 +107,14 @@ test('OAuth sign-in on an already verified row keeps its credentials', async () 
 
 test('OTP verification of an unverified row discards every prior credential', async () => {
   const { db, state } = makeDb('victim@example.com', false);
-  const otp = new OtpService(db, {} as any, {
-    checkRateLimit: async () => {},
-    resetRateLimit: async () => {}
-  } as any);
+  const otp = new OtpService(
+    db,
+    {} as any,
+    {
+      checkRateLimit: async () => {},
+      resetRateLimit: async () => {}
+    } as any
+  );
   const result = await otp.verifyOtp('victim@example.com', '123456', '1.1.1.1');
   assert.equal(result.valid, true);
   assertWiped(state);
@@ -111,10 +122,14 @@ test('OTP verification of an unverified row discards every prior credential', as
 
 test('OTP verification of a verified row leaves credentials alone', async () => {
   const { db, state } = makeDb('victim@example.com', true);
-  const otp = new OtpService(db, {} as any, {
-    checkRateLimit: async () => {},
-    resetRateLimit: async () => {}
-  } as any);
+  const otp = new OtpService(
+    db,
+    {} as any,
+    {
+      checkRateLimit: async () => {},
+      resetRateLimit: async () => {}
+    } as any
+  );
   await otp.verifyOtp('victim@example.com', '123456', '1.1.1.1');
   assert.equal(state.user.passwordHash, 'admin-chosen-hash');
   assert.equal(state.apiTokens.length, 1);

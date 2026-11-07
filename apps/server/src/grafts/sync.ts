@@ -166,7 +166,9 @@ function fileStateStore(env: NodeJS.ProcessEnv): RegistryIndexStateStore {
   };
 }
 
-export function registryStateStoreFromEnv(env: NodeJS.ProcessEnv = process.env): RegistryIndexStateStore {
+export function registryStateStoreFromEnv(
+  env: NodeJS.ProcessEnv = process.env
+): RegistryIndexStateStore {
   const file = fileStateStore(env);
   const databaseUrl = env.DATABASE_URL;
   if (!databaseUrl) return file;

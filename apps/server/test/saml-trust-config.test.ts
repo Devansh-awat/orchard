@@ -41,7 +41,9 @@ test('IdP metadata ignores commented-out certificates and refuses federations an
   const commented = entity(`<!-- ${key('signing', 'OLDCERT')} -->${key('signing', 'NEWCERT')}`);
   assert.equal(s.parseIdpMetadata(commented).certificate, 'NEWCERT');
 
-  const rotating = entity(`${key('signing', 'ONE')}${key('signing', 'TWO')}${key('encryption', 'ENC')}`);
+  const rotating = entity(
+    `${key('signing', 'ONE')}${key('signing', 'TWO')}${key('encryption', 'ENC')}`
+  );
   assert.equal(s.parseIdpMetadata(rotating).certificate, 'ONE,TWO');
 
   const both = `<EntitiesDescriptor>${entity(key('signing', 'ONE'))}${entity(key('signing', 'TWO'))}</EntitiesDescriptor>`;

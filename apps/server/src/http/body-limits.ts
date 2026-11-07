@@ -16,7 +16,11 @@ export const BODY_TIER_LIMITS: Record<BodyTier, number> = {
 
 const PREFIX = /^\/(?:apiv1|api)(?=\/|$)/;
 
-const WEBHOOK_ROUTES = [/^\/webhooks?(?:\/|$)/, /^\/github\/app\/webhook(?:\/|$)/, /\/webhook(?:s)?(?:\/|$)/];
+const WEBHOOK_ROUTES = [
+  /^\/webhooks?(?:\/|$)/,
+  /^\/github\/app\/webhook(?:\/|$)/,
+  /\/webhook(?:s)?(?:\/|$)/
+];
 
 const PUBLIC_ROUTES = [
   /^\/auth(?:\/|$)/,
@@ -101,7 +105,9 @@ function runParser(
   req: any,
   res: any
 ): Promise<void> {
-  return new Promise((resolve, reject) => parser(req, res, (err) => (err ? reject(err) : resolve())));
+  return new Promise((resolve, reject) =>
+    parser(req, res, (err) => (err ? reject(err) : resolve()))
+  );
 }
 
 export async function parseLargeBody(req: any, res: any): Promise<void> {

@@ -37,7 +37,9 @@ export class VanityDomainService {
   }
 
   async setSubdomain(organizationId: string, subdomain: string | null) {
-    const normalized = subdomain ? normalizeHost(subdomain) || subdomain.trim().toLowerCase() : null;
+    const normalized = subdomain
+      ? normalizeHost(subdomain) || subdomain.trim().toLowerCase()
+      : null;
 
     if (normalized) {
       if (!this.baseDomain) {

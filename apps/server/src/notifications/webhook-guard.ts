@@ -94,7 +94,9 @@ export async function resolvePublicHost(raw: string, label = 'Host'): Promise<Re
   try {
     addresses = await dnsLookupAsync(hostname, { all: true, verbatim: true });
   } catch {
-    throw new BadRequestException(`Could not resolve the ${label.toLowerCase()} host "${hostname}"`);
+    throw new BadRequestException(
+      `Could not resolve the ${label.toLowerCase()} host "${hostname}"`
+    );
   }
   if (addresses.length === 0 || addresses.some((a) => !isPublicAddress(a.address))) {
     throw new BlockedDestinationError(`${label} must resolve to a public address`);

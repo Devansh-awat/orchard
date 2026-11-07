@@ -585,13 +585,13 @@ the caller. `X-Real-IP` is never read. A pod in the cluster, or a client behind
 SNAT, is therefore keyed on its own address and cannot pick another by sending
 its own headers.
 
-| Variable                | What it does                                                                                       |
-| ----------------------- | -------------------------------------------------------------------------------------------------- |
+| Variable                | What it does                                                                                                                                |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
 | `TRUST_PROXY`           | Hops to trust (`1` = one ingress, `2` = load balancer plus ingress), or a CIDR list. Unset trusts nothing. The chart and installer set `1`. |
-| `TRUSTED_PROXY_RANGES`  | Extra proxy CIDRs trusted at any position, for a CDN or load balancer Orchard does not ship.       |
-| `TRUST_CLOUDFLARE`      | `false` to stop skipping Cloudflare's published edge ranges.                                       |
-| `CLIENT_IP_HEADER`      | Header carrying the real client address, for example `cf-connecting-ip`.                           |
-| `CLIENT_IP_HEADER_FROM` | CIDRs of the hop allowed to supply that header. Without a match the header is ignored.             |
+| `TRUSTED_PROXY_RANGES`  | Extra proxy CIDRs trusted at any position, for a CDN or load balancer Orchard does not ship.                                                |
+| `TRUST_CLOUDFLARE`      | `false` to stop skipping Cloudflare's published edge ranges.                                                                                |
+| `CLIENT_IP_HEADER`      | Header carrying the real client address, for example `cf-connecting-ip`.                                                                    |
+| `CLIENT_IP_HEADER_FROM` | CIDRs of the hop allowed to supply that header. Without a match the header is ignored.                                                      |
 
 In chart values these are `clientIp.trustProxy`, `clientIp.trustedProxyRanges`,
 `clientIp.trustCloudflare`, `clientIp.header` and `clientIp.headerFrom`.

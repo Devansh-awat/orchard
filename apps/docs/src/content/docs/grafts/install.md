@@ -177,18 +177,18 @@ Go to **Instance admin** > **Grafts**. The page lists each graft with its status
 
 ## Settings
 
-| Value                          | Environment variable            | Default                                                                                                                              |
-| ------------------------------ | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `grafts`                       | `ORCHARD_GRAFTS`                | None                                                                                                                                 |
-| `graftSettings.trust`          | `ORCHARD_GRAFT_TRUST`           | `listed`. One of `official`, `listed`, `taps`, or `any`.                                                                             |
-| `graftSettings.registrySignature` | `ORCHARD_REGISTRY_SIGNATURE` | `auto`. Set `required` to refuse an unsigned marketplace revocation list. |
-| `graftSettings.taps`           | `ORCHARD_GRAFT_TAPS`            | None. Each tap has a `name`, `url`, and `key`.                                                                                       |
-| `graftSettings.keys`           | `ORCHARD_GRAFT_KEYS`            | None                                                                                                                                 |
-| `graftSettings.marketplaceUrl` | `ORCHARD_GRAFT_MARKETPLACE_URL` | `https://assets.orchard.my/registry`                                                                                                 |
-| `graftSettings.strict`         | `ORCHARD_GRAFTS_STRICT`         | `false`. When true, a graft that fails stops the pod instead of being skipped. The rollout halts and the previous pods keep serving. |
-| `graftSettings.safeMode`       | `ORCHARD_GRAFTS_SAFE_MODE`      | `false`. When true, no grafts load.                                                                                                  |
-| `graftSettings.pools`          | `ORCHARD_GRAFT_POOLS`           | None. Database connections per pod by graft ID, for example `{ greenhouse: 15 }`.                                                    |
-|                                | `ORCHARD_GRAFT_DB_POOL`         | `3`. Database connections per pod for grafts that do not ask for a size.                                                             |
+| Value                             | Environment variable            | Default                                                                                                                              |
+| --------------------------------- | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `grafts`                          | `ORCHARD_GRAFTS`                | None                                                                                                                                 |
+| `graftSettings.trust`             | `ORCHARD_GRAFT_TRUST`           | `listed`. One of `official`, `listed`, `taps`, or `any`.                                                                             |
+| `graftSettings.registrySignature` | `ORCHARD_REGISTRY_SIGNATURE`    | `auto`. Set `required` to refuse an unsigned marketplace revocation list.                                                            |
+| `graftSettings.taps`              | `ORCHARD_GRAFT_TAPS`            | None. Each tap has a `name`, `url`, and `key`.                                                                                       |
+| `graftSettings.keys`              | `ORCHARD_GRAFT_KEYS`            | None                                                                                                                                 |
+| `graftSettings.marketplaceUrl`    | `ORCHARD_GRAFT_MARKETPLACE_URL` | `https://assets.orchard.my/registry`                                                                                                 |
+| `graftSettings.strict`            | `ORCHARD_GRAFTS_STRICT`         | `false`. When true, a graft that fails stops the pod instead of being skipped. The rollout halts and the previous pods keep serving. |
+| `graftSettings.safeMode`          | `ORCHARD_GRAFTS_SAFE_MODE`      | `false`. When true, no grafts load.                                                                                                  |
+| `graftSettings.pools`             | `ORCHARD_GRAFT_POOLS`           | None. Database connections per pod by graft ID, for example `{ greenhouse: 15 }`.                                                    |
+|                                   | `ORCHARD_GRAFT_DB_POOL`         | `3`. Database connections per pod for grafts that do not ask for a size.                                                             |
 
 ## Database connections
 

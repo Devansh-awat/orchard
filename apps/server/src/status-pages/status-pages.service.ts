@@ -10,7 +10,11 @@ import { PrismaService } from '../prisma/prisma.service';
 import { K8sNetworkService } from '../kubernetes/k8s-network.service';
 import { AuditService } from '../audit/audit.service';
 import { optionalDomain } from '../env/platform-domains';
-import { isReservedSubdomainLabel, lockHostnameClaims, normalizeHost } from '../instance-network/reserved-hosts';
+import {
+  isReservedSubdomainLabel,
+  lockHostnameClaims,
+  normalizeHost
+} from '../instance-network/reserved-hosts';
 import { CERT_CLUSTER_ISSUER } from '../projects/projects.utils';
 import {
   MAX_COMPONENTS,

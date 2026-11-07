@@ -146,7 +146,12 @@ test('a live socket is hard-closed at token expiry', async () => {
     authenticate: async () => ({ ...tokenAuth('t1'), tokenExpiresAt: expiresAt }),
     async resolveTarget(match) {
       return {
-        target: { kind: 'sandbox', key: `sandbox:${match[1]}/-/0/rw`, sandboxId: match[1], index: '0' },
+        target: {
+          kind: 'sandbox',
+          key: `sandbox:${match[1]}/-/0/rw`,
+          sandboxId: match[1],
+          index: '0'
+        },
         recheckAuth: async () => true,
         logAudit: () => {}
       };

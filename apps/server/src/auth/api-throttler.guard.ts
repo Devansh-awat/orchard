@@ -32,7 +32,9 @@ export function apiThrottlerLimit(context: ExecutionContext): number {
   if (context.getType() !== 'http') return IP_RATE_LIMIT;
   const req = context.switchToHttp().getRequest();
   if (bearerApiToken(req)) return API_TOKEN_RATE_LIMIT;
-  return isCollapsedAddress(getClientIp(req)) ? IP_RATE_LIMIT * COLLAPSED_IP_MULTIPLIER : IP_RATE_LIMIT;
+  return isCollapsedAddress(getClientIp(req))
+    ? IP_RATE_LIMIT * COLLAPSED_IP_MULTIPLIER
+    : IP_RATE_LIMIT;
 }
 
 // ThrottlerGuard that keys buckets per API token instead of per IP for

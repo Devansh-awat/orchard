@@ -281,7 +281,9 @@ export class SsoLoginService {
   }
 
   private plainReturnTo(returnTo: string | undefined): string | undefined {
-    return returnTo && returnTo.length <= 512 && /^\/(?![/\\])[^\u0000-\u0020\u007f\\]*$/.test(returnTo)
+    return returnTo &&
+      returnTo.length <= 512 &&
+      /^\/(?![/\\])[^\u0000-\u0020\u007f\\]*$/.test(returnTo)
       ? returnTo
       : undefined;
   }

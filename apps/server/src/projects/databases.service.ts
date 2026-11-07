@@ -80,7 +80,11 @@ import {
   type DbStats,
   type MirroredDbPod
 } from '../kubernetes/cnpg-status';
-import { guardedS3Options, resolvePublicHost, type ResolvedHost } from '../notifications/webhook-guard';
+import {
+  guardedS3Options,
+  resolvePublicHost,
+  type ResolvedHost
+} from '../notifications/webhook-guard';
 
 /** The org fields that locate a managed database's backups in R2. */
 export type OrgR2 = {
@@ -485,7 +489,11 @@ export class DatabasesService {
     password: string;
     database: string;
     sslMode?: string;
-  }): Promise<{ sourceSizeBytes: number | null; sourceMajor: number; pinned: ResolvedHost | null }> {
+  }): Promise<{
+    sourceSizeBytes: number | null;
+    sourceMajor: number;
+    pinned: ResolvedHost | null;
+  }> {
     let pinned: ResolvedHost | null = null;
     if (process.env.DB_IMPORT_ALLOW_INTERNAL !== 'true') {
       try {

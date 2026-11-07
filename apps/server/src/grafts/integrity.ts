@@ -116,7 +116,11 @@ export function verifyFileManifest(root: string): void {
   }
 }
 
-export function signedWith(message: Buffer, signatureB64: string, keys: string[]): string | undefined {
+export function signedWith(
+  message: Buffer,
+  signatureB64: string,
+  keys: string[]
+): string | undefined {
   const signature = Buffer.from(signatureB64.trim(), 'base64');
   return keys.find((k) => {
     try {

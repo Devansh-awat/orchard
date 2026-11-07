@@ -333,9 +333,7 @@ export class FaviconService {
     return candidates[0].url;
   }
 
-  private async resizeBanner(
-    buffer: Buffer
-  ): Promise<{ buffer: Buffer; contentType: string }> {
+  private async resizeBanner(buffer: Buffer): Promise<{ buffer: Buffer; contentType: string }> {
     const image = await reencodeImage(buffer, {
       format: 'webp',
       maxDimension: 1280,

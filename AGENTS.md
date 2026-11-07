@@ -81,7 +81,7 @@ credits.
   applied migration. Migrations run on server boot. `prisma migrate dev` still proposes DROPs for
   tables a graft adopted (`apps/server/prisma/graft-owned.json`); on a real instance those names are
   compat views over `ext_*` tables, so never keep those DROPs. Run `pnpm --filter server
-  prisma:check-drift` (set `SHADOW_DATABASE_URL`) before committing a migration.
+prisma:check-drift` (set `SHADOW_DATABASE_URL`) before committing a migration.
 - Typecheck errors claiming a schema column "does not exist" mean a stale generated client, not a
   missing migration. Check `schema.prisma` first, then `pnpm prisma:generate`.
 - A URL is server-computed, never assembled client-side. The API returns `url` on every ingress it

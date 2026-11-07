@@ -110,9 +110,8 @@ test('the guarded agent refuses to connect to a private listener at connect time
   const { port } = server.address() as { port: number };
   try {
     const err = await new Promise<NodeJS.ErrnoException>((resolve) => {
-      const req = request(
-        { hostname: 'localhost', port, agent: guardedAgents().httpAgent },
-        () => resolve(new Error('connected') as NodeJS.ErrnoException)
+      const req = request({ hostname: 'localhost', port, agent: guardedAgents().httpAgent }, () =>
+        resolve(new Error('connected') as NodeJS.ErrnoException)
       );
       req.on('error', resolve);
       req.end();
