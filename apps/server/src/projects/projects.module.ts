@@ -55,6 +55,8 @@ import { DatabaseRecoveryService } from './database-recovery.service';
 import { DatabaseCatalogService } from './database-catalog.service';
 import { PostgresSecurityService } from './postgres-security.service';
 import { DatabaseRecoveryController } from './database-recovery.controller';
+import { DatabaseShellService } from './database-shell.service';
+import { DatabaseShellController } from './database-shell.controller';
 import { DatabaseAdminController } from './database-admin.controller';
 @Module({
   imports: [
@@ -87,6 +89,7 @@ import { DatabaseAdminController } from './database-admin.controller';
     DatabaseDrillsService,
     DatabasePluginMigrationService,
     DatabaseRecoveryService,
+    DatabaseShellService,
     DatabaseCatalogService,
     PostgresSecurityService,
     BackupSyncService,
@@ -110,6 +113,7 @@ import { DatabaseAdminController } from './database-admin.controller';
     IngressesController,
     DatabasesController,
     DatabaseRecoveryController,
+    DatabaseShellController,
     DatabaseAdminController,
     EnvironmentsController,
     OverviewController,

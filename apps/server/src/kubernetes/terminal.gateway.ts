@@ -15,6 +15,7 @@ import { loadKubeConfigFromPathOrBase64 } from './kubeconfig';
 import { ResizableOutput, isPodTarget, type PodExecTarget } from './exec-sessions';
 import { execRequestContext, execSessionEngine, type ExecRouteHooks } from './exec-session-engine';
 import { isValidPodName } from './pod-name';
+import { PSQL_ENV_MARKER } from './psql-session';
 import { POD_EXEC_DENIED_MESSAGE, checkPodExecable } from './pod-exec-policy';
 
 function describeExecFailure(message: string): string {
@@ -27,11 +28,12 @@ function describeExecFailure(message: string): string {
   return `Couldn't start a shell: ${message}`;
 }
 
-function shellCommand(sessionId: string): string[] {
+export function shellCommand(sessionId: string): string[] {
   return [
     '/bin/sh',
     '-c',
     'export TERM=xterm-256color COLORTERM=truecolor; ' +
+      `if [ -n "\${${PSQL_ENV_MARKER}:-}" ]; then exec psql; fi; ` +
       `if command -v tmux >/dev/null 2>&1; then exec tmux -u new-session -A -s "orchard-${sessionId}"; fi; ` +
       'for s in bash zsh sh ash dash; do ' +
       'if command -v "$s" >/dev/null 2>&1; then exec "$s"; fi; done; exec sh'
