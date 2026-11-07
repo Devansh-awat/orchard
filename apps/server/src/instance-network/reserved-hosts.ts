@@ -1,4 +1,5 @@
 import { domainToASCII } from 'node:url';
+import { platformWildcardDomains } from '../projects/projects.utils';
 
 const RESERVED_LABELS = new Set([
   'www',
@@ -112,6 +113,25 @@ export function isReservedHost(rawHost: string, options: ReservedHostOptions = {
   return false;
 }
 
+const GENERATED_APP_LABEL = /^[a-z0-9-]*-[0-9a-f]{6}$/;
+
+function generatedAppZones(env: NodeJS.ProcessEnv): string[] {
+  const zones: string[] = [normalizeSuffix(env.APP_DOMAIN || '')];
+  for (const entry of (env.PLATFORM_WILDCARD_DOMAINS || '').split(',')) {
+    zones.push(normalizeSuffix(entry.split('=')[0] || ''));
+  }
+  if (env === process.env) {
+    for (const wildcard of platformWildcardDomains()) zones.push(normalizeSuffix(wildcard.suffix));
+  }
+  return zones.filter(Boolean);
+}
+
+function machineHostZones(env: NodeJS.ProcessEnv): string[] {
+  return [env.PUBLIC_DB_DOMAIN, env.SANDBOX_PREVIEW_DOMAIN]
+    .map((value) => normalizeSuffix(value || ''))
+    .filter(Boolean);
+}
+
 export function isReservedSubdomainLabel(
   rawLabel: string,
   baseDomain: string,
@@ -122,6 +142,8 @@ export function isReservedSubdomainLabel(
   if (RESERVED_LABELS.has(label)) return true;
   const zone = normalizeHost(baseDomain);
   if (!zone) return false;
+  if (machineHostZones(env).includes(zone)) return true;
+  if (GENERATED_APP_LABEL.test(label) && generatedAppZones(env).includes(zone)) return true;
   return isReservedHost(`${label}.${zone}`, { env, withinZone: zone });
 }
 
