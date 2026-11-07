@@ -47,6 +47,7 @@ import { parseMemory } from '../kubernetes/quantity';
 import { projectedFill, sizeToResumeWrites, WRITE_GUARD_EXIT } from '../kubernetes/volume-stats';
 import { deriveDbTuning } from '../kubernetes/db-tuning';
 import { requestAuthStorage } from '../auth/request-context';
+import type { UploadOwner } from '../organizations/upload-references';
 
 const MAX_NAMESPACE_ATTEMPTS = 20;
 
@@ -1029,7 +1030,7 @@ export class ProjectsService {
     file: Express.Multer.File,
     storageService: {
       uploadImage: (f: Express.Multer.File, folder: string) => Promise<string>;
-      deleteFile: (url: string, namespace: string) => Promise<void>;
+      deleteReplaced: (url: string, namespace: string, owner: UploadOwner) => Promise<void>;
     },
     clerkId: string,
     userData?: {
@@ -1053,7 +1054,11 @@ export class ProjectsService {
     const previous = existing[field];
     if (previous) {
       try {
-        await storageService.deleteFile(previous, namespace);
+        await storageService.deleteReplaced(previous, namespace, {
+          model: 'project',
+          id: projectId,
+          column: field
+        });
       } catch (e) {
         console.error(`Failed to delete old ${field}:`, e);
       }

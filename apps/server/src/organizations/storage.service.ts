@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Injectable,
   Logger,
+  Optional,
   ServiceUnavailableException
 } from '@nestjs/common';
 import {
@@ -23,7 +24,9 @@ import {
   s3ClientConfig,
   uploadStorage
 } from '../instance-config/object-storage';
-import { uploadKeyOf, keyInNamespace } from './upload-namespace';
+import { PrismaService } from '../prisma/prisma.service';
+import { uploadKeyOf, keyInNamespace, isLegacyUploadKey } from './upload-namespace';
+import { uploadReferencedElsewhere, type UploadOwner } from './upload-references';
 
 export class StorageNotConfiguredError extends BadRequestException {
   constructor() {
@@ -43,6 +46,8 @@ export class StorageService {
     client: S3Client;
     target: BuildContextStorage;
   } | null = null;
+
+  constructor(@Optional() private readonly prisma?: PrismaService) {}
 
   uploadsEnabled(): boolean {
     return uploadStorage() !== null;
@@ -113,6 +118,38 @@ export class StorageService {
         Key: `${target.keyPrefix}${key}`
       })
     );
+  }
+
+  async deleteReplaced(url: string, namespace: string, owner: UploadOwner): Promise<void> {
+    if (!uploadStorage()) return;
+    const key = uploadKeyOf(url);
+    if (key === null) return;
+    if (keyInNamespace(key, namespace)) {
+      await this.deleteFile(url, namespace).catch((e: any) => {
+        if (e?.name !== 'NoSuchKey' && e?.name !== 'NotFound') throw e;
+      });
+      return;
+    }
+    if (!isLegacyUploadKey(key)) {
+      this.logger.warn(`refused to delete upload outside namespace ${namespace}`);
+      return;
+    }
+    if (!this.prisma) {
+      this.logger.warn('refused to delete a legacy upload without a way to check references');
+      return;
+    }
+    if (await uploadReferencedElsewhere(this.prisma, key, owner)) return;
+    const { client, target } = this.uploads();
+    try {
+      await client.send(
+        new DeleteObjectCommand({
+          Bucket: target.bucket,
+          Key: `${target.keyPrefix}${key}`
+        })
+      );
+    } catch (e: any) {
+      if (e?.name !== 'NoSuchKey' && e?.name !== 'NotFound') throw e;
+    }
   }
 
   async readUpload(path: string): Promise<{

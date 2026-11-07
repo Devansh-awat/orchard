@@ -697,7 +697,11 @@ export class OrganizationsService {
 
     if (organization.avatarUrl) {
       try {
-        await storageService.deleteFile(organization.avatarUrl, `organizations/${organizationId}`);
+        await storageService.deleteReplaced(
+          organization.avatarUrl,
+          `organizations/${organizationId}`,
+          { model: 'organization', id: organizationId, column: 'avatarUrl' }
+        );
       } catch (error) {
         console.error('Failed to delete old avatar:', error);
       }
@@ -761,7 +765,11 @@ export class OrganizationsService {
 
     if (organization.avatarUrl) {
       try {
-        await storageService.deleteFile(organization.avatarUrl, `organizations/${organizationId}`);
+        await storageService.deleteReplaced(
+          organization.avatarUrl,
+          `organizations/${organizationId}`,
+          { model: 'organization', id: organizationId, column: 'avatarUrl' }
+        );
       } catch (error) {
         console.error('Failed to delete avatar:', error);
       }

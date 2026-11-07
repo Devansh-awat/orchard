@@ -33,3 +33,18 @@ export function assertUploadUrlOwned(
   if (namespace && keyInNamespace(key, namespace)) return;
   throw new BadRequestException(`${label} must be a file uploaded to this resource`);
 }
+
+const LEGACY_UPLOAD_FOLDERS = new Set([
+  'project-icons',
+  'project-backgrounds',
+  'organizations',
+  'users',
+  'sso-icons'
+]);
+
+export function isLegacyUploadKey(key: string): boolean {
+  if (!SAFE_KEY.test(key) || key.includes('..')) return false;
+  const parts = key.split('/');
+  if (parts.length === 2) return LEGACY_UPLOAD_FOLDERS.has(parts[0]);
+  return parts.length === 3 && parts[0] === 'users' && parts[1] === 'email-avatar';
+}

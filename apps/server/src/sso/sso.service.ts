@@ -760,7 +760,11 @@ export class SsoService implements OnApplicationBootstrap {
   private async discardIcon(url: string | null, providerId: string) {
     if (!url) return;
     try {
-      await this.storage.deleteFile(url, `sso-icons/${providerId}`);
+      await this.storage.deleteReplaced(url, `sso-icons/${providerId}`, {
+        model: 'identityProvider',
+        id: providerId,
+        column: 'iconUrl'
+      });
     } catch (err) {
       this.logger.warn(
         `Could not delete provider icon: ${err instanceof Error ? err.message : 'storage error'}`
@@ -1099,7 +1103,10 @@ export class SsoService implements OnApplicationBootstrap {
           'The IdP signing certificate is not a valid X.509 certificate'
         );
       }
-      if (key.asymmetricKeyType === 'rsa' && (key.asymmetricKeyDetails?.modulusLength ?? 0) < 2048) {
+      if (
+        key.asymmetricKeyType === 'rsa' &&
+        (key.asymmetricKeyDetails?.modulusLength ?? 0) < 2048
+      ) {
         throw new BadRequestException(
           'The IdP signing certificate needs an RSA key of 2048 bits or more'
         );
