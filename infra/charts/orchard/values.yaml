@@ -368,7 +368,10 @@ builders:
   # is not on this list fails the build with "connection refused" once the build
   # itself has succeeded.
   #
-  # The defaults describe this project's own cluster. A self-hosted instance
+  # The defaults describe this project's own cluster: Harbor's core pods (the
+  # only thing a push talks to) and the ingress controller on its serving ports.
+  # Other pods in those namespaces, and the controller's stats and pprof ports,
+  # stay closed. A self-hosted instance
   # running its registry somewhere else (zot in the release namespace, a
   # registry in its own namespace, ...) has to add it here. It is deliberately
   # not defaulted to the release namespace: the whole point of this policy is
@@ -387,9 +390,20 @@ builders:
   #         - port: 5000
   registryEgress:
     - namespace: harbor
+      podLabels:
+        component: core
+      ports:
+        - port: 80
+        - port: 8080
     - namespace: network
       podLabels:
         app.kubernetes.io/name: kubernetes-ingress
+      ports:
+        - port: 80
+        - port: 443
+        - port: 8000
+        - port: 8080
+        - port: 8443
   # Local on-cluster BuildKit cache backed by a PVC. When enabled, the server
   # configures build jobs to use a `type=local` cache instead of S3/R2.
   # Pin build jobs to a dedicated node labelled `orchard-builder=true`. When

@@ -196,10 +196,53 @@ spec:
   ingress: []
   egress:
     - to:
-        - namespaceSelector: {}
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - { port: 53, protocol: UDP }
+        - { port: 53, protocol: TCP }
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: trivy
+      ports:
+        - { port: 4954, protocol: TCP }
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.namespace }}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: server
+      ports:
+        - { port: 3001, protocol: TCP }
+        {{- if ne (int .Values.server.service.port) 3001 }}
+        - { port: {{ .Values.server.service.port }}, protocol: TCP }
+        {{- end }}
+{{- range .Values.builders.registryEgress }}
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .namespace }}
+          {{- with .podLabels }}
+          podSelector:
+            matchLabels:
+              {{- toYaml . | nindent 14 }}
+          {{- end }}
+      {{- with .ports }}
+      ports:
+        {{- range . }}
+        - { port: {{ .port }}, protocol: {{ .protocol | default "TCP" }} }
+        {{- end }}
+      {{- end }}
+{{- end }}
     - to:
         - ipBlock:
             cidr: 0.0.0.0/0
             except:
-              - 169.254.0.0/16
+{{ include "orchard.egressExceptList" . | trim | indent 14 }}
 {{- end }}

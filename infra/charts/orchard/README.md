@@ -428,7 +428,7 @@ is the single place the MCP's address is configured.
 | `builders.quota.limitsCpu` | `"32"` | Total CPU limits. |
 | `builders.quota.limitsMemory` | `"100Gi"` | Total memory limits. |
 | `builders.quota.pods` | `"10"` | Max concurrent builder pods. |
-| `builders.registryEgress` | `harbor`, plus the `kubernetes-ingress` pods in `network` | In-cluster destinations builders may reach on top of DNS and public IPs on 80/443. A registry not listed here fails the build at the push. Not defaulted to the release namespace on purpose: a build runs untrusted repo code. |
+| `builders.registryEgress` | Harbor's `core` pods on 80 and 8080, plus the `kubernetes-ingress` pods in `network` on 80, 443, 8000, 8080 and 8443 | In-cluster destinations builders may reach on top of DNS and public IPs on 80/443. A registry not listed here fails the build at the push. Not defaulted to the release namespace on purpose: a build runs untrusted repo code. |
 | `builders.dedicatedNode.enabled` | `false` | Pin builds to nodes labelled `orchard-builder=true`, tolerating an `orchard-builder` NoSchedule taint. |
 | `builders.platform` | `""` | `linux/amd64` or `linux/arm64`. Set, it also pins Orchard-built apps to that architecture. Empty builds `linux/amd64` and leaves app placement alone. |
 | `builders.localCache.enabled` | `true` | Keep the BuildKit cache on a PVC instead of S3/R2. |
