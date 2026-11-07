@@ -2,6 +2,21 @@
 
 Status: proposal, written against `main` at 88b65059. No product code changes. Principle: library-first. Custom code is limited to thin glue and the policy layer (rules, tenancy invariants, audit).
 
+## Implementation status (feat/enterprise-identity-p1)
+
+Owner decisions (final): rules never grant `owner` (cap admin); deny when an IdP has rules and the user matches none; roles re-sync on every login; IdP-initiated SAML is tier 1 only (app tile points at `/apiv1/sso/start/:providerId`, unsolicited responses stay rejected); instance IdP auto-create of orgs is a later, default-off setting; LDAP is bridge-only (Dex/Keycloak).
+
+Shipped in the first slice (design phases 1 and 2, plus the org-targeted part of phase 4):
+
+- `FederatedIdentity (providerId, subject, userId)`, bound on first login and matched ahead of email afterward; a different subject for an already-bound account is refused.
+- `IdpGroupRule (providerId, organizationId, value, role)` and `IdentityProvider.groupClaim`; `OrganizationMember.managedByProviderId` marks memberships a rule created or last changed. Differences from the sketch above: no `denyUnmapped`/`syncOnLogin`/`maxRole` columns (the decisions make them constants), `grantedByRuleId` became a provider-level marker, and rule ids are recorded in audit entries instead.
+- `sso/group-rules.ts`: pure NFC + case-sensitive exact-match resolver, bounded claim extraction (500 groups, 16 KB, 256-character names, overage markers mean unknown), no regex or expression language.
+- `IdentityMappingService`: shared by org and instance providers; denies, provisions, re-roles and removes; revokes SSO sessions, org-scoped API tokens and membership cache entries on downgrade and removal; audits `sso.login.denied`, `sso.member.provisioned|role_synced|removed`, `sso.identity.bound`, `sso.rules.updated`.
+- Routes: `GET|PUT organizations/:id/sso/providers/:providerId/rules`, `POST .../rules/preview`, and the same under `admin/sso/providers/:providerId/rules` (instance rules name a target organization).
+- Instance providers: a rule match counts as signup access; superadmins are exempt from deny and never changed by rules.
+
+Not in this slice: SCIM Groups write (phase 3), instance auto-create of organizations, the instance-admin superadmin rule, project-level bindings, the Rules tab UI, Tofu resources and CLI, the node-saml 5.2.0 / xml-crypto / xmldom bump and `pnpm audit` gate (phase 0), native LDAP (phase 6).
+
 ## 1. Current state (verified in code)
 
 **Instance level.** `apps/server/src/sso/sso-instance.controller.ts` serves `admin/sso/*`: provider CRUD, `enforcement` get/patch, icon, `providers/:id/test`, and `organizations/:id` PATCH (flips `OrgSsoSettings.platformEnabled`). Providers with `organizationId = null` are instance providers, listed publicly by `GET sso/providers` (`sso.controller.ts`). Instance enforcement is the `sso_enforced` key (`instance-settings.service.ts`), checked by `assertInstanceSsoNotEnforced` (`auth/authorization.service.ts:225`); superadmins are exempt.
@@ -22,17 +37,17 @@ Status: proposal, written against `main` at 88b65059. No product code changes. P
 
 ## 2. How others do it (official docs)
 
-| Product | Findings |
-|---|---|
-| Datadog | JIT toggle + default role; role mapping, when on, overrides the JIT default and can leave users role-less ([saml](https://docs.datadoghq.com/account_management/saml/)). Case-sensitive attribute-to-role mappings applied at login; role removed when attribute goes; no match = roles lost and SAML login blocked; max 1,000; team mappings only provision ([mapping](https://docs.datadoghq.com/account_management/saml/mapping/)). Strict mode disables other login methods, with per-user overrides. SAML is per child org, not inherited; children are isolated ([multi-org](https://docs.datadoghq.com/account_management/multi_organization/)). |
-| Vercel | SAML (Enterprise, Pro add-on), owner-only; enforcement; editing config turns enforcement off; roles manual after JIT ([saml](https://vercel.com/docs/saml)). Directory Sync (Enterprise) maps directory groups to team roles, overwrites roles, removes deleted users; break-glass groups `vercel-role-owner` etc. ([directory-sync](https://vercel.com/docs/directory-sync)). |
-| Railway | Workspace SAML, Enterprise; Trusted Domains first; SAML or OIDC; IdP-initiated supported; per-workspace enforcement ([docs](https://docs.railway.com/enterprise/saml), via search summary). Group/role mapping: not found. |
-| GitHub | One IdP group per team via SCIM; daily and on-change reconcile; unlinking removes users who joined only via that team ([docs](https://docs.github.com/en/enterprise-cloud@latest/admin/managing-iam/provisioning-user-accounts-with-scim/managing-team-memberships-with-identity-provider-groups)). |
-| GitLab | Case-sensitive SAML group name to role; highest role wins; evaluated every sign-in; unmapped users removed ([docs](https://docs.gitlab.com/user/group/saml_sso/group_sync/)). |
-| Grafana | `role_attribute_path`, `role_attribute_strict` (deny if unresolved), `skip_org_role_sync`, `org_mapping`; server admin only with `allow_assign_grafana_admin` ([docs](https://grafana.com/docs/grafana/latest/setup-grafana/configure-access/configure-authentication/generic-oauth/)). |
-| Sentry | JIT with org default role; no automatic deprovisioning; no attribute-to-role mapping on the page ([docs](https://docs.sentry.io/organization/authentication/sso/saml2/)). |
-| Okta / Entra | Okta `groups` claim by Filter/Expression; thin tokens may omit groups ([docs](https://developer.okta.com/docs/guides/customize-tokens-groups-claim/main/)). Entra caps groups (150 SAML, 200 JWT) with an overage claim; identify by `oid`/`sub`, never email ([docs](https://learn.microsoft.com/en-us/entra/identity-platform/id-token-claims-reference)). |
-| Keycloak / Authentik | Not found (Keycloak page truncated, Authentik URL a parking page). |
+| Product              | Findings                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Datadog              | JIT toggle + default role; role mapping, when on, overrides the JIT default and can leave users role-less ([saml](https://docs.datadoghq.com/account_management/saml/)). Case-sensitive attribute-to-role mappings applied at login; role removed when attribute goes; no match = roles lost and SAML login blocked; max 1,000; team mappings only provision ([mapping](https://docs.datadoghq.com/account_management/saml/mapping/)). Strict mode disables other login methods, with per-user overrides. SAML is per child org, not inherited; children are isolated ([multi-org](https://docs.datadoghq.com/account_management/multi_organization/)). |
+| Vercel               | SAML (Enterprise, Pro add-on), owner-only; enforcement; editing config turns enforcement off; roles manual after JIT ([saml](https://vercel.com/docs/saml)). Directory Sync (Enterprise) maps directory groups to team roles, overwrites roles, removes deleted users; break-glass groups `vercel-role-owner` etc. ([directory-sync](https://vercel.com/docs/directory-sync)).                                                                                                                                                                                                                                                                          |
+| Railway              | Workspace SAML, Enterprise; Trusted Domains first; SAML or OIDC; IdP-initiated supported; per-workspace enforcement ([docs](https://docs.railway.com/enterprise/saml), via search summary). Group/role mapping: not found.                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| GitHub               | One IdP group per team via SCIM; daily and on-change reconcile; unlinking removes users who joined only via that team ([docs](https://docs.github.com/en/enterprise-cloud@latest/admin/managing-iam/provisioning-user-accounts-with-scim/managing-team-memberships-with-identity-provider-groups)).                                                                                                                                                                                                                                                                                                                                                     |
+| GitLab               | Case-sensitive SAML group name to role; highest role wins; evaluated every sign-in; unmapped users removed ([docs](https://docs.gitlab.com/user/group/saml_sso/group_sync/)).                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| Grafana              | `role_attribute_path`, `role_attribute_strict` (deny if unresolved), `skip_org_role_sync`, `org_mapping`; server admin only with `allow_assign_grafana_admin` ([docs](https://grafana.com/docs/grafana/latest/setup-grafana/configure-access/configure-authentication/generic-oauth/)).                                                                                                                                                                                                                                                                                                                                                                 |
+| Sentry               | JIT with org default role; no automatic deprovisioning; no attribute-to-role mapping on the page ([docs](https://docs.sentry.io/organization/authentication/sso/saml2/)).                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| Okta / Entra         | Okta `groups` claim by Filter/Expression; thin tokens may omit groups ([docs](https://developer.okta.com/docs/guides/customize-tokens-groups-claim/main/)). Entra caps groups (150 SAML, 200 JWT) with an overage claim; identify by `oid`/`sub`, never email ([docs](https://learn.microsoft.com/en-us/entra/identity-platform/id-token-claims-reference)).                                                                                                                                                                                                                                                                                            |
+| Keycloak / Authentik | Not found (Keycloak page truncated, Authentik URL a parking page).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 
 **Common model:** IdP, claim/group, ordered rules, (org, role[, team]). Exact case-sensitive match; highest role wins; explicit default; strict deny-if-unmapped; re-evaluate each login plus SCIM for offline removal; instance admin never IdP-grantable by default; lockout escape hatch.
 
@@ -41,6 +56,7 @@ Status: proposal, written against `main` at 88b65059. No product code changes. P
 Evidence date 2026-11-07: npm registry, npm weekly downloads (Oct 30 - Nov 5), GitHub advisory lists. "Not verified" means I did not read the source or advisory detail. All candidates below are MIT or Apache-2.0 (both AGPL-3.0 compatible).
 
 **(1) SAML SP.** Candidates:
+
 - `@node-saml/node-saml`: MIT, 2.0M/wk, 5.2.0 released 2026-10-26 (deps `xml-crypto ^6.4.0`, `@xmldom/xmldom ^0.8.15`), TypeScript, used by passport-saml. Advisories: 4 listed; two Critical in Jul 2025, including GHSA-4mxg-3p6v-xgq3 / CVE-2025-54419 (assertion read from the unsigned document), fixed in 5.1.0 (our pin is exactly the first safe version).
 - `samlify`: MIT, 2.9M/wk, 2.15.1. Advisory page shows 10 entries dated 2026-05 to 2026-10, including a Critical (attacker-controlled signing cert via RSAKeyValue metadata, GHSA-w8r9-gp23-wcxp), missing InResponseTo (GHSA-wj54-2vfp-35f2) and missing AudienceRestriction (GHSA-wxh7-j2vx-w63f). **Rejected.** Patched versions not verified.
 - `@boxyhq/saml-jackson`: Apache-2.0 core (enterprise features under a separate Ory license), 88K/wk, 26.2.0, embeddable as an npm library or service, SAML SSO plus SCIM directory sync; production adopters listed by Ory include OpenAI and Cisco. No audit statement found. Its per-check coverage: not verified. It wants its own DB store and tenancy model, which would duplicate our org/provider tables.
@@ -58,24 +74,27 @@ Evidence date 2026-11-07: npm registry, npm weekly downloads (Oct 30 - Nov 5), G
 
 **(6) XML security.** Pin via pnpm overrides: `xml-crypto >= 6.4.0` (installed lock is 6.1.2; GHSA-9p8x-f768-wp2g signature bypasses patched in 6.0.1, so 6.1.2 is not known-vulnerable, but 5.2.0 raises the floor), `@xmldom/xmldom >= 0.8.15` (installed 0.8.15; ReDoS GHSA-x4fp-j954-r2f4 affects 0.7.0 to 0.8.14; ten more advisories published 2026-08, patched versions not verified: re-check before pinning; 0.9.x not affected by that one). CI check: `pnpm audit` gate.
 
-| Capability | Library | Pin | Covers | We still write | Risk |
-|---|---|---|---|---|---|
-| SAML SP | node-saml (alt Jackson) | 5.2.0 | sig, audience, InResponseTo, time, issuer | Destination/Recipient, caps | Medium: history of critical bugs |
-| OIDC | openid-client + jose | 6.8.9 / 5.10.x | discovery, code+PKCE, ID token checks | state store, claim use | Low |
-| SCIM | scimmy | latest 1.x | schemas, filter, PATCH | auth, mapping, Groups | Low-Med |
-| LDAP | ldapts (alt bridge) | 9.2.0 | bind, search, StartTLS, escape | SSRF guard, policy | High |
-| Rules | none (declarative) | n/a | n/a | exact-match resolver | Low |
-| XML | xml-crypto, xmldom | >=6.4.0, >=0.8.15 | c14n, signatures | audit gate | Medium |
+| Capability | Library                 | Pin               | Covers                                    | We still write              | Risk                             |
+| ---------- | ----------------------- | ----------------- | ----------------------------------------- | --------------------------- | -------------------------------- |
+| SAML SP    | node-saml (alt Jackson) | 5.2.0             | sig, audience, InResponseTo, time, issuer | Destination/Recipient, caps | Medium: history of critical bugs |
+| OIDC       | openid-client + jose    | 6.8.9 / 5.10.x    | discovery, code+PKCE, ID token checks     | state store, claim use      | Low                              |
+| SCIM       | scimmy                  | latest 1.x        | schemas, filter, PATCH                    | auth, mapping, Groups       | Low-Med                          |
+| LDAP       | ldapts (alt bridge)     | 9.2.0             | bind, search, StartTLS, escape            | SSRF guard, policy          | High                             |
+| Rules      | none (declarative)      | n/a               | n/a                                       | exact-match resolver        | Low                              |
+| XML        | xml-crypto, xmldom      | >=6.4.0, >=0.8.15 | c14n, signatures                          | audit gate                  | Medium                           |
 
 ## 4. Proposed design
 
 ### 4a. Instance level (one company per instance)
+
 Instance IdPs as today. Add rules `(provider, claimPath, value) -> (organization | autoCreate, role, project bindings)` evaluated each instance login. Per org, highest role wins; `owner` only via an explicit rule written by an instance admin. `denyUnmapped` per provider (default deny once any rule exists). Superadmin only through a separate `InstanceAdminRule`, off by default, writable only by a superadmin. Rule-granted memberships are tracked (`grantedByRuleId`) and removed when no longer matched.
 
 ### 4b. Org level (multi-org host)
+
 Each owner configures providers, DNS-verified domains, JIT, rules (admin/member/guest, optionally project role), SCIM tokens, enforcement.
 
 **Invariants** (each needs a test):
+
 1. Org id always comes from `provider.organizationId`, never a claim.
 2. No instance roles, ever; the superadmin refusal stays.
 3. No org creation; no touching other orgs.
@@ -90,41 +109,46 @@ Each owner configures providers, DNS-verified domains, JIT, rules (admin/member/
 12. IdP URLs keep the SSRF guard.
 
 ### 4c. Data, API, UI, IaC
+
 Prisma (CLI-generated migrations only): `IdpGroupRule`, `FederatedIdentity (providerId, subject, userId)`, provider fields `groupClaim`, `denyUnmapped`, `syncOnLogin`, `maxRole`, `allowIdpInitiated=false`; `grantedByRuleId` on `OrganizationMember`/`ProjectMember`. Routes: `organizations/:id/sso/rules` CRUD + dry-run preview, `admin/sso/rules`; SCIM Groups via SCIMMY. Regenerate the auth-coverage snapshot, then contracts bootstrap/generate. UI: Rules tab in `[orgSlug]/settings` and `admin/sso`, with a sample-claims tester. Tofu: `orchard_identity_provider`, `orchard_sso_rule`, `orchard_org_domain`. Docs: `teams/sso.md`, `teams/scim.md`, `operate/instance-admin.mdx`.
 
 ### 4d. LDAP recommendation
+
 Supported path: a SAML/OIDC bridge (Dex, Keycloak) in front of LDAP/AD. Native bind (`ldapts`) is optional, instance-level first, never per-org until an egress allowlist exists. If built: LDAPS/StartTLS with cert validation, existing SSRF guard on the host, service-account bind, `escapeFilter` on every value, bind-as-user, referrals off, timeouts, rate limits, depth-capped nested groups. Risk: Orchard becomes a password proxy to the customer's directory.
 
 ### 4e. Migration
+
 All new fields default to today's behaviour; with no rules the login path is unchanged. hq-orchard has zero providers. `FederatedIdentity` backfills lazily at next login.
 
 ### 4f. Phases and threats
-| Phase | Size | Libraries | Unlocks |
-|---|---|---|---|
-| 0. Bump node-saml 5.2.0, xml-crypto/xmldom overrides, `pnpm audit` gate | S | node-saml, xml-crypto | patched floor |
-| 1. FederatedIdentity, shared resolver, audit | M | openid-client | stable identity |
-| 2. Org rules, sync on login, deny-unmapped, revocation | L | none | per-org role mapping |
-| 3. SCIM Groups write | M | scimmy | Okta/Entra push |
-| 4. Instance rules, auto-create orgs | M | none | single-company routing |
-| 5. Tofu, CLI, docs | S | none | IaC |
-| 6. Native LDAP (optional) | L | ldapts | direct AD |
+
+| Phase                                                                   | Size | Libraries             | Unlocks                |
+| ----------------------------------------------------------------------- | ---- | --------------------- | ---------------------- |
+| 0. Bump node-saml 5.2.0, xml-crypto/xmldom overrides, `pnpm audit` gate | S    | node-saml, xml-crypto | patched floor          |
+| 1. FederatedIdentity, shared resolver, audit                            | M    | openid-client         | stable identity        |
+| 2. Org rules, sync on login, deny-unmapped, revocation                  | L    | none                  | per-org role mapping   |
+| 3. SCIM Groups write                                                    | M    | scimmy                | Okta/Entra push        |
+| 4. Instance rules, auto-create orgs                                     | M    | none                  | single-company routing |
+| 5. Tofu, CLI, docs                                                      | S    | none                  | IaC                    |
+| 6. Native LDAP (optional)                                               | L    | ldapts                | direct AD              |
 
 Tests: the planned isolation harness (two orgs plus a hostile IdP fake) per invariant; pure resolver tests; auth-coverage snapshot.
 
-| Abuse case | Mitigation |
-|---|---|
-| Evil org IdP asserts `admins` | per-org rules, capped role, no cross-org or instance path |
-| Forged group claim | verified assertion/ID token only |
-| IdP-initiated login | rejected by default |
-| Stale membership | `grantedByRuleId` sweep, SCIM, token revocation |
-| Group rename collision | match stable group id where offered |
-| Case/Unicode | NFKC then exact case-sensitive; reject mixed-script rules |
-| Claim size | cap 500 groups / 16KB; overage never grants |
-| Same domain, several providers | one verifying org; highest role wins |
-| IdP email change | subject binding |
-| Rule flood | 1,000 rules per org |
+| Abuse case                     | Mitigation                                                |
+| ------------------------------ | --------------------------------------------------------- |
+| Evil org IdP asserts `admins`  | per-org rules, capped role, no cross-org or instance path |
+| Forged group claim             | verified assertion/ID token only                          |
+| IdP-initiated login            | rejected by default                                       |
+| Stale membership               | `grantedByRuleId` sweep, SCIM, token revocation           |
+| Group rename collision         | match stable group id where offered                       |
+| Case/Unicode                   | NFKC then exact case-sensitive; reject mixed-script rules |
+| Claim size                     | cap 500 groups / 16KB; overage never grants               |
+| Same domain, several providers | one verifying org; highest role wins                      |
+| IdP email change               | subject binding                                           |
+| Rule flood                     | 1,000 rules per org                                       |
 
 ## 5. Decisions needed
+
 1. Org rule granting `owner`? Recommend no. Default: no (cap admin).
 2. Deny-unmapped once rules exist? Recommend yes. Default: yes.
 3. Sync every login? Recommend yes. Default: yes for orgs with rules.
