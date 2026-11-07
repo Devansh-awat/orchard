@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Patch,
+  Put,
   Delete,
   Param,
   Body,
@@ -16,6 +17,7 @@ import { SsoService, ProviderInput, SettingsInput } from './sso.service';
 import { assertProviderIcon, PROVIDER_ICON_UPLOAD } from './provider-icon';
 import { SsoLoginService } from './sso-login.service';
 import { OrgDomainsService } from './org-domains.service';
+import { IdentityMappingService, RulesInput } from './identity-mapping.service';
 import { publicPresets } from './presets';
 import { Auth } from '../auth/decorators';
 import { AuthorizationService } from '../auth/authorization.service';
@@ -36,7 +38,8 @@ export class SsoAdminController {
     private readonly login: SsoLoginService,
     private readonly domains: OrgDomainsService,
     private readonly authz: AuthorizationService,
-    private readonly users: UsersService
+    private readonly users: UsersService,
+    private readonly mapping: IdentityMappingService
   ) {}
 
   private async requireAdmin(organizationId: string, req: any) {
@@ -197,6 +200,40 @@ export class SsoAdminController {
   ) {
     const actor = await this.requireOwner(organizationId, req);
     return this.sso.removeProviderIcon(providerId, organizationId, actor);
+  }
+
+  @Get('providers/:providerId/rules')
+  async listRules(
+    @Param('id') organizationId: string,
+    @Param('providerId') providerId: string,
+    @Request() req
+  ) {
+    await this.requireAdmin(organizationId, req);
+    return this.mapping.listRules(await this.mapping.requireProvider(providerId, organizationId));
+  }
+
+  @Put('providers/:providerId/rules')
+  async replaceRules(
+    @Param('id') organizationId: string,
+    @Param('providerId') providerId: string,
+    @Body() body: RulesInput,
+    @Request() req
+  ) {
+    const actor = await this.requireOwner(organizationId, req);
+    const provider = await this.mapping.requireProvider(providerId, organizationId);
+    return this.mapping.replaceRules(provider, body, actor);
+  }
+
+  @Post('providers/:providerId/rules/preview')
+  async previewRules(
+    @Param('id') organizationId: string,
+    @Param('providerId') providerId: string,
+    @Body('groups') groups: string[],
+    @Request() req
+  ) {
+    await this.requireAdmin(organizationId, req);
+    const provider = await this.mapping.requireProvider(providerId, organizationId);
+    return this.mapping.preview(provider, groups);
   }
 
   @Post('providers/:providerId/test')

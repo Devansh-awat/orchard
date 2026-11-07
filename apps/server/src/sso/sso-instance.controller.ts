@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Patch,
+  Put,
   Delete,
   Param,
   Body,
@@ -13,6 +14,7 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { SsoService, ProviderInput } from './sso.service';
 import { SsoLoginService } from './sso-login.service';
+import { IdentityMappingService, RulesInput } from './identity-mapping.service';
 import { publicPresets } from './presets';
 import { assertProviderIcon, PROVIDER_ICON_UPLOAD } from './provider-icon';
 
@@ -28,7 +30,8 @@ import { assertProviderIcon, PROVIDER_ICON_UPLOAD } from './provider-icon';
 export class SsoInstanceController {
   constructor(
     private readonly sso: SsoService,
-    private readonly login: SsoLoginService
+    private readonly login: SsoLoginService,
+    private readonly mapping: IdentityMappingService
   ) {}
 
   private actor(req: any) {
@@ -103,6 +106,26 @@ export class SsoInstanceController {
   @Delete('providers/:providerId/icon')
   removeProviderIcon(@Param('providerId') providerId: string, @Request() req) {
     return this.sso.removeProviderIcon(providerId, null, this.actor(req));
+  }
+
+  @Get('providers/:providerId/rules')
+  async listRules(@Param('providerId') providerId: string) {
+    return this.mapping.listRules(await this.mapping.requireProvider(providerId, null));
+  }
+
+  @Put('providers/:providerId/rules')
+  async replaceRules(
+    @Param('providerId') providerId: string,
+    @Body() body: RulesInput,
+    @Request() req
+  ) {
+    const provider = await this.mapping.requireProvider(providerId, null);
+    return this.mapping.replaceRules(provider, body, this.actor(req));
+  }
+
+  @Post('providers/:providerId/rules/preview')
+  async previewRules(@Param('providerId') providerId: string, @Body('groups') groups: string[]) {
+    return this.mapping.preview(await this.mapping.requireProvider(providerId, null), groups);
   }
 
   @Post('providers/:providerId/test')
