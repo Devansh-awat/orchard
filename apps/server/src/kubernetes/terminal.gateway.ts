@@ -15,6 +15,7 @@ import { loadKubeConfigFromPathOrBase64 } from './kubeconfig';
 import { ResizableOutput, isPodTarget, type PodExecTarget } from './exec-sessions';
 import { execRequestContext, execSessionEngine, type ExecRouteHooks } from './exec-session-engine';
 import { isValidPodName } from './pod-name';
+import { POD_EXEC_DENIED_MESSAGE, checkPodExecable } from './pod-exec-policy';
 
 function describeExecFailure(message: string): string {
   if (/failed to load \/bin\/sh|no such file or directory/i.test(message)) {
@@ -159,6 +160,14 @@ export function attachTerminalWebSocket(server: http.Server, app: INestApplicati
       } catch {
         return { reject: 404, message: 'Not Found' };
       }
+      const verdict = await checkPodExecable(
+        async (ns, name) =>
+          (await kc.makeApiClient(k8s.CoreV1Api).readNamespacedPod(name, ns)).body.metadata?.labels,
+        namespace,
+        podName
+      );
+      if (verdict === 'missing') return { reject: 404, message: 'Not Found' };
+      if (verdict === 'denied') return { reject: 403, message: POD_EXEC_DENIED_MESSAGE };
       const target: PodExecTarget = {
         kind: 'pod',
         namespace,

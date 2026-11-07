@@ -465,7 +465,7 @@ func dbLogsCmd() *cobra.Command {
 func dbPsqlCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "psql <id>",
-		Short: "Open an interactive psql session in the database pod",
+		Short: "Open an interactive psql session (container-mode databases only)",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if !output.IsTTY() {
@@ -478,6 +478,9 @@ func dbPsqlCmd() *cobra.Command {
 			db, err := dbFetch(cmd.Context(), cl, args[0])
 			if err != nil {
 				return err
+			}
+			if str(db["mode"]) == "cnpg" {
+				return errors.New("database pods are not accessible by exec; connect with the connection string from `orchard db connection " + args[0] + "` using psql from your app, or enable public access and run psql locally")
 			}
 			namespace := str(db["namespace"])
 			pod := dbFirstPod(db)
