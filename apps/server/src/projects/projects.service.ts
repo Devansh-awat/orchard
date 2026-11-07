@@ -1470,19 +1470,22 @@ export class ProjectsService {
       throw new BadRequestException('A userId or email for the new owner is required');
     }
 
-    const user = await this.prisma.user.findUnique({
-      where: targetUserId ? { id: targetUserId } : { email: targetEmail! },
-      select: { id: true, email: true, username: true }
-    });
-    if (!user) throw new NotFoundException("The new owner doesn't have an Orchard account");
-
     const membership = await this.prisma.projectMember.findFirst({
-      where: { projectId, userId: user.id },
-      select: { id: true, roleId: true, role: { select: { name: true } } }
+      where: {
+        projectId,
+        user: targetUserId ? { id: targetUserId } : { email: targetEmail! }
+      },
+      select: {
+        id: true,
+        roleId: true,
+        role: { select: { name: true } },
+        user: { select: { id: true, email: true, username: true } }
+      }
     });
     if (!membership) throw new BadRequestException(notAMemberMessage);
+    const { user, ...rest } = membership;
 
-    return { user, membership };
+    return { user, membership: rest };
   }
 
   /**
