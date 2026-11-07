@@ -1885,7 +1885,7 @@ export class OrganizationsService {
     return { success: true };
   }
 
-  private async detachMember(
+  async detachMember(
     member: { id: string; userId: string },
     organizationId: string
   ): Promise<void> {

@@ -232,7 +232,8 @@ export class SsoController {
   private fail(res: Response, err: unknown) {
     this.logger.warn(`SSO callback failed: ${err instanceof Error ? err.message : String(err)}`);
     const reason =
-      err instanceof Error && /private_beta|signups_disabled|sso_link_required/.test(err.message)
+      err instanceof Error &&
+      /private_beta|signups_disabled|sso_link_required|sso_not_mapped/.test(err.message)
         ? err.message
         : 'sso_failed';
     const orgSlug = err instanceof HttpException && (err.getResponse() as any)?.orgSlug;

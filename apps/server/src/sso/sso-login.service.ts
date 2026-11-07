@@ -25,6 +25,7 @@ import { assertSafeSamlResponse } from './saml-guard';
 import { SsoCryptoService } from './sso-crypto.service';
 import { SsoService } from './sso.service';
 import { OrgDomainsService } from './org-domains.service';
+import { IdentityMappingService, MappingContext, cleanSubject } from './identity-mapping.service';
 import { SignJWT, jwtVerify } from 'jose';
 import {
   SamlRejected,
@@ -52,6 +53,7 @@ interface IdpProfile {
   name: string;
   emailVerified: boolean | undefined;
   subject?: string | null;
+  claims?: Record<string, unknown> | null;
 }
 
 export interface SsoLoginResult {
@@ -78,7 +80,8 @@ export class SsoLoginService {
     private readonly sessionsService: SessionsService,
     private readonly authz: AuthorizationService,
     private readonly audit: AuditService,
-    private readonly domains: OrgDomainsService
+    private readonly domains: OrgDomainsService,
+    private readonly mapping: IdentityMappingService
   ) {
     this.frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
   }
@@ -366,7 +369,8 @@ export class SsoLoginService {
         email,
         name: (claims.name as string) || email.split('@')[0],
         emailVerified: claims.email_verified as boolean | undefined,
-        subject: (claims.sub as string) ?? null
+        subject: (claims.sub as string) ?? null,
+        claims
       },
       stateData.returnTo,
       linkedUserId
@@ -436,6 +440,7 @@ export class SsoLoginService {
     }
 
     let identity: { email: string; name: string; subject: string };
+    let attributes: Record<string, unknown> = {};
     try {
       const safeResponse = assertSafeSamlResponse(samlResponse);
       precheckSamlResponse(safeResponse, this.sso.callbackUrl(provider));
@@ -468,6 +473,7 @@ export class SsoLoginService {
         throw new SamlRejected('assertion replayed');
       }
       identity = { ...claimed, subject: verified.nameId };
+      attributes = (profile.attributes ?? {}) as Record<string, unknown>;
     } catch (err) {
       this.logger.warn(
         `SAML response rejected for provider ${providerId}: ${err instanceof Error ? err.message : 'error'}`
@@ -481,7 +487,8 @@ export class SsoLoginService {
         email: identity.email,
         name: identity.name,
         emailVerified: true,
-        subject: identity.subject
+        subject: identity.subject,
+        claims: attributes
       },
       record.returnTo,
       record.linkedUserId
@@ -572,9 +579,16 @@ export class SsoLoginService {
       }
     }
 
+    const subject = cleanSubject(profile.subject);
+    const bound = await this.mapping.findBound(provider, subject);
+    const mapping = await this.mapping.prepare(provider, profile.claims ?? null);
+
     const user = provider.organizationId
-      ? await this.resolveOrgUser(provider, email, profile.name, linkedUserId)
-      : await this.resolveInstanceUser(provider, email, profile.name);
+      ? await this.resolveOrgUser(provider, email, profile.name, linkedUserId, bound, mapping)
+      : await this.resolveInstanceUser(provider, email, profile.name, bound, mapping);
+
+    await this.mapping.bind(provider, subject, user);
+    if (!user.isSuperAdmin) await this.mapping.apply(provider, user, mapping);
 
     if (!user.setupCompleted) {
       await this.prisma.user.update({ where: { id: user.id }, data: { setupCompleted: true } });
@@ -678,10 +692,12 @@ export class SsoLoginService {
     provider: IdentityProvider,
     email: string,
     name: string,
-    linkedUserId?: string
+    linkedUserId?: string,
+    bound?: { id: string; email: string; [key: string]: any } | null,
+    mapping?: MappingContext
   ) {
     const organizationId = provider.organizationId;
-    let user = await this.prisma.user.findUnique({ where: { email } });
+    let user = bound ?? (await this.prisma.user.findUnique({ where: { email } }));
 
     if (user) {
       const membership = await this.prisma.organizationMember.findUnique({
@@ -719,7 +735,7 @@ export class SsoLoginService {
       if (
         membership.role !== OrganizationRole.owner &&
         !consented &&
-        !(await this.domains.isVerifiedFor(organizationId, email.split('@')[1] || ''))
+        !(await this.domains.isVerifiedFor(organizationId, user.email.split('@')[1] || ''))
       ) {
         const organization = await this.prisma.organization.findUnique({
           where: { id: organizationId },
@@ -729,6 +745,9 @@ export class SsoLoginService {
           message: 'sso_link_required',
           orgSlug: organization?.slug
         });
+      }
+      if (mapping?.hasRules && !mapping.allowed && membership.role !== OrganizationRole.owner) {
+        await this.mapping.deny(provider, mapping, { email: user.email, userId: user.id });
       }
       return user;
     }
@@ -749,6 +768,10 @@ export class SsoLoginService {
         `Refused SSO account creation for ${domain} in org ${organizationId}: domain not verified`
       );
       throw new UnauthorizedException('SSO authentication failed');
+    }
+
+    if (mapping?.hasRules && !mapping.allowed) {
+      await this.mapping.deny(provider, mapping, { email });
     }
 
     user = await this.createUser(email, name);
@@ -835,8 +858,14 @@ export class SsoLoginService {
    * the platform's Google button, and signup mode still decides who may create
    * an account.
    */
-  private async resolveInstanceUser(provider: IdentityProvider, email: string, name: string) {
-    const existing = await this.prisma.user.findUnique({ where: { email } });
+  private async resolveInstanceUser(
+    provider: IdentityProvider,
+    email: string,
+    name: string,
+    bound?: { id: string; email: string; isSuperAdmin: boolean; [key: string]: any } | null,
+    mapping?: MappingContext
+  ) {
+    const existing = bound ?? (await this.prisma.user.findUnique({ where: { email } }));
 
     if (existing) {
       await this.authz.assertSsoNotEnforced(existing, 'instance_sso');
@@ -844,7 +873,11 @@ export class SsoLoginService {
       await this.authz.assertSsoNotEnforcedForEmail(email, 'instance_sso');
     }
 
-    if (!(await this.hasSignupAccess(email, existing))) {
+    if (mapping?.hasRules && !mapping.allowed && !existing?.isSuperAdmin) {
+      await this.mapping.deny(provider, mapping, { email, userId: existing?.id });
+    }
+
+    if (!(await this.hasSignupAccess(email, existing, Boolean(mapping?.hasRules)))) {
       throw new UnauthorizedException(
         signupMode() === 'closed' ? 'signups_disabled' : 'private_beta'
       );
@@ -870,9 +903,10 @@ export class SsoLoginService {
 
   private async hasSignupAccess(
     email: string,
-    existingUser: { id: string; isSuperAdmin: boolean } | null
+    existingUser: { id: string; isSuperAdmin: boolean } | null,
+    ruleGranted = false
   ): Promise<boolean> {
-    if (signupMode() === 'open') return true;
+    if (signupMode() === 'open' || ruleGranted) return true;
     if (existingUser?.isSuperAdmin) return true;
 
     if (existingUser) {

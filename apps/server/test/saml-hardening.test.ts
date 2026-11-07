@@ -90,6 +90,7 @@ interface Opts {
   keyInfoCert?: boolean;
   sha1?: boolean;
   email?: string | string[];
+  groups?: string[];
   extraAssertion?: boolean;
   wrap?: (xml: string) => string;
 }
@@ -125,6 +126,9 @@ function response(o: Opts): string {
   const irt = o.requestId ? ` InResponseTo="${o.requestId}"` : '';
   const emails = Array.isArray(o.email) ? o.email : [o.email ?? 'ana@acme.test'];
   const values = emails.map((e) => `<saml:AttributeValue>${e}</saml:AttributeValue>`).join('');
+  const groupAttr = o.groups
+    ? `<saml:Attribute Name="groups">${o.groups.map((g) => `<saml:AttributeValue>${g}</saml:AttributeValue>`).join('')}</saml:Attribute>`
+    : '';
   const assertion = (id: string) =>
     `<saml:Assertion xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="${id}" Version="2.0" IssueInstant="${iso(now)}">` +
     `<saml:Issuer>${o.assertionIssuer ?? IDP}</saml:Issuer>` +
@@ -132,7 +136,7 @@ function response(o: Opts): string {
     `<saml:SubjectConfirmation Method="urn:oasis:names:tc:SAML:2.0:cm:bearer"><saml:SubjectConfirmationData${irt} Recipient="${o.recipient ?? ACS_A}" NotOnOrAfter="${end}"/></saml:SubjectConfirmation></saml:Subject>` +
     `<saml:Conditions NotBefore="${iso(now - 1000)}" NotOnOrAfter="${end}"><saml:AudienceRestriction><saml:Audience>${o.audience ?? SP_A}</saml:Audience></saml:AudienceRestriction></saml:Conditions>` +
     `<saml:AuthnStatement AuthnInstant="${iso(now)}"><saml:AuthnContext><saml:AuthnContextClassRef>urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport</saml:AuthnContextClassRef></saml:AuthnContext></saml:AuthnStatement>` +
-    `<saml:AttributeStatement><saml:Attribute Name="email">${values}</saml:Attribute></saml:AttributeStatement>` +
+    `<saml:AttributeStatement><saml:Attribute Name="email">${values}</saml:Attribute>${groupAttr}</saml:AttributeStatement>` +
     `</saml:Assertion>`;
   let a = assertion(o.assertionId ?? `_a${randomBytes(12).toString('hex')}`);
   if (o.signAssertion !== false) {
@@ -179,6 +183,36 @@ test('a valid SP-initiated response logs the user in', async () => {
   assert.match(
     s.request,
     /AssertionConsumerServiceURL="https:\/\/api\.example\/apiv1\/sso\/callback\/provA"/
+  );
+});
+
+test('groups reach the mapper only from the signed assertion', async () => {
+  const login = harness();
+  const s = await begin(login, 'provA');
+  const out = await login.handleSamlCallback(
+    'provA',
+    response({ requestId: s.requestId, groups: ['eng', 'leads'] }),
+    s.relay,
+    s.startToken
+  );
+  assert.deepEqual(out.profile.claims.groups, ['eng', 'leads']);
+
+  const s2 = await begin(login, 'provA');
+  await rejected(
+    login.handleSamlCallback(
+      'provA',
+      response({ requestId: s2.requestId, groups: ['admins'], signAssertion: false }),
+      s2.relay,
+      s2.startToken
+    )
+  );
+});
+
+test('an unsolicited response carrying admin groups is still refused', async () => {
+  const login = harness();
+  const s = await begin(login, 'provA');
+  await rejected(
+    login.handleSamlCallback('provA', response({ groups: ['admins'] }), s.relay, s.startToken)
   );
 });
 

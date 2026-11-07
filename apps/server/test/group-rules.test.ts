@@ -102,10 +102,10 @@ test('claim lookup takes a literal key first, then a bounded dotted path', () =>
     kind: 'groups',
     groups: new Set(['admin'])
   });
-  assert.deepEqual(
-    extractGroups({ a: { b: { c: { d: { e: ['x'] } } } } }, 'a.b.c.d.e'),
-    { kind: 'groups', groups: new Set() }
-  );
+  assert.deepEqual(extractGroups({ a: { b: { c: { d: { e: ['x'] } } } } }, 'a.b.c.d.e'), {
+    kind: 'groups',
+    groups: new Set()
+  });
 });
 
 test('prototype keys are never a claim path', () => {
