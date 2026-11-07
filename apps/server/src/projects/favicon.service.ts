@@ -601,7 +601,7 @@ export class FaviconService {
     domain: string,
     key: string,
     buffer: Buffer,
-    contentType: string
+    _contentType: string
   ): Promise<string | null> {
     if (!this.s3Client || !this.bucketName) {
       // R2 not configured: return the original URL from memory

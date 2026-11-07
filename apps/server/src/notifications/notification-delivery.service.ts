@@ -179,18 +179,18 @@ export class NotificationDeliveryService implements OnModuleInit, OnModuleDestro
     `;
   }
 
-  private async processGroup(destinationKey: string, batch: ClaimedDelivery[]) {
-    const destination = await this.resolveDestination(batch[0]);
+  private async processGroup(destinationKey: string, claimed: ClaimedDelivery[]) {
+    const destination = await this.resolveDestination(claimed[0]);
     if (!destination) {
-      await this.markAll(batch, 'failed', 'Destination no longer exists');
+      await this.markAll(claimed, 'failed', 'Destination no longer exists');
       return;
     }
     if (!destination.enabled) {
-      await this.markAll(batch, 'dropped', 'Destination is disabled');
+      await this.markAll(claimed, 'dropped', 'Destination is disabled');
       return;
     }
 
-    batch = await this.enforceRecipientAccess(batch);
+    const batch = await this.enforceRecipientAccess(claimed);
     if (batch.length === 0) return;
 
     // A destination whose breaker is open gets its work parked, not attempted.

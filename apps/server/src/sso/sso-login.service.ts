@@ -283,6 +283,7 @@ export class SsoLoginService {
   private plainReturnTo(returnTo: string | undefined): string | undefined {
     return returnTo &&
       returnTo.length <= 512 &&
+      // oxlint-disable-next-line no-control-regex
       /^\/(?![/\\])[^\u0000-\u0020\u007f\\]*$/.test(returnTo)
       ? returnTo
       : undefined;
@@ -612,6 +613,7 @@ export class SsoLoginService {
     if (
       returnTo &&
       returnTo.length <= 512 &&
+      // oxlint-disable-next-line no-control-regex
       /^\/(?![/\\])[^\u0000-\u0020\u007f\\]*$/.test(returnTo)
     ) {
       return `${this.frontendUrl}${returnTo}`;

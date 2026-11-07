@@ -104,7 +104,7 @@ export async function assertRepoNameFree(
 }
 
 export function isPlatformGeneratedName(name: string): boolean {
-  return name.includes('--') || /-pub-[tu]\d+$/.test(name) || /-allow-public$/.test(name);
+  return name.includes('--') || /-pub-[tu]\d+$/.test(name) || name.endsWith('-allow-public');
 }
 
 export async function assertIngressNameFree(
