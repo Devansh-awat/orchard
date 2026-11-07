@@ -313,20 +313,14 @@ export class ComposeStacksService {
       branch
     );
 
-    // Best-effort: capture an installation id we can use for webhook matching.
     let installationId: bigint | null = null;
     try {
-      const installations = await this.prisma.gitHubAppInstallation.findMany({
-        where: { userId },
-        select: { installationId: true }
-      });
-      // Heuristic: assume the user's first installation owns the repo. If we get
-      // it wrong, webhooks still won't trigger; the user can repick.
-      if (installations.length > 0) {
-        installationId = installations[0].installationId;
+      if (canAccess && (await this.github.userMaintainsRepo(userId, parsed.owner, parsed.repo))) {
+        const installation = await this.github.findInstallationForRepo(parsed.owner, parsed.repo);
+        installationId = installation?.installationId ?? null;
       }
     } catch {
-      /* ignore */
+      installationId = null;
     }
 
     return { composeYaml, installationId };
