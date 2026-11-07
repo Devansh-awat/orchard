@@ -1,4 +1,15 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  Logger,
+  NotFoundException
+} from '@nestjs/common';
+import {
+  PERSONAL_CREDENTIAL_REFUSED,
+  personalCredentialsRefused,
+  personalSourceSelectionRefused
+} from '../auth/request-context';
 import { randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
@@ -111,6 +122,7 @@ export class GitConnectionsService {
   }
 
   private async rowOrThrow(userId: string, connectionId: string) {
+    if (personalCredentialsRefused()) throw new ForbiddenException(PERSONAL_CREDENTIAL_REFUSED);
     const row = await this.prisma.gitConnection.findUnique({ where: { id: connectionId } });
     if (!row || row.userId !== userId) {
       throw new NotFoundException('Git connection not found');
@@ -545,6 +557,7 @@ export class GitConnectionsService {
 
   /** Resolve a connection an org member is allowed to deploy from. */
   async forDeploy(userId: string, connectionId: string) {
+    if (personalSourceSelectionRefused()) throw new ForbiddenException(PERSONAL_CREDENTIAL_REFUSED);
     return this.rowOrThrow(userId, connectionId);
   }
 }

@@ -12,6 +12,10 @@ import { ProjectsService } from '../projects/projects.service';
 import { DeploymentsService } from '../projects/deployments.service';
 import { EnvironmentsService } from '../projects/environments.service';
 import { AuthorizationService } from '../auth/authorization.service';
+import {
+  PERSONAL_CREDENTIAL_REFUSED,
+  personalSourceSelectionRefused
+} from '../auth/request-context';
 import { UsersService } from '../users/users.service';
 import { GitHubService } from '../github/github.service';
 import { looksSecret } from '../projects/env-write-rules';
@@ -293,7 +297,9 @@ export class ComposeStacksService {
       const isPublic = await this.github.isRepoPublic(parsed.owner, parsed.repo);
       if (!isPublic) {
         throw new ForbiddenException(
-          "You don't have access to this repository on GitHub. Connect your GitHub account or request access."
+          personalSourceSelectionRefused()
+            ? PERSONAL_CREDENTIAL_REFUSED
+            : "You don't have access to this repository on GitHub. Connect your GitHub account or request access."
         );
       }
     }

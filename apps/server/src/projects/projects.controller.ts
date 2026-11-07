@@ -33,6 +33,10 @@ import { FaviconService } from './favicon.service';
 import { WebhooksService } from '../webhooks/webhooks.service';
 import { StorageService } from '../organizations/storage.service';
 import { Auth, RequireScope } from '../auth/decorators';
+import {
+  PERSONAL_CREDENTIAL_REFUSED,
+  personalSourceSelectionRefused
+} from '../auth/request-context';
 import { MetricsService } from '../metrics/metrics.service';
 import { RightsizingService } from '../rightsizing/rightsizing.service';
 import { MetricsStoreError } from '../metrics/victoria-metrics.service';
@@ -120,7 +124,9 @@ export class ProjectsController {
     const token = await this.githubService.resolveReadAccessToken(user, parsed.owner, parsed.repo);
     if (token === null) {
       throw new ForbiddenException(
-        "You don't have access to this repository on GitHub. Connect your GitHub account or check the repository URL."
+        personalSourceSelectionRefused()
+          ? PERSONAL_CREDENTIAL_REFUSED
+          : "You don't have access to this repository on GitHub. Connect your GitHub account or check the repository URL."
       );
     }
 

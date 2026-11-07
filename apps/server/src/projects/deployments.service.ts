@@ -44,6 +44,10 @@ import { QuotasService } from '../quotas/quotas.service';
 import { TailscaleService } from '../tailscale/tailscale.service';
 import { MembershipCacheService } from '../auth/membership-cache.service';
 import { AuthorizationService } from '../auth/authorization.service';
+import {
+  PERSONAL_CREDENTIAL_REFUSED,
+  personalSourceSelectionRefused
+} from '../auth/request-context';
 import { AuditService, type AuditMetadataValue } from '../audit/audit.service';
 import { InstanceConfigService } from '../instance-config/instance-config.service';
 import { LeaderElectionService } from '../events/leader-election.service';
@@ -3284,6 +3288,9 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     // a project editor aim someone else's credential at a repository of
     // their choosing.
     if (deployment.gitConnectionId) {
+      if (personalSourceSelectionRefused()) {
+        throw new ForbiddenException(PERSONAL_CREDENTIAL_REFUSED);
+      }
       const connection = await this.prisma.gitConnection.findUnique({
         where: { id: deployment.gitConnectionId },
         select: { id: true, name: true, baseUrl: true, userId: true }
@@ -3362,7 +3369,9 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       const isPublic = await this.githubService.isRepoPublic(parsed.owner, parsed.repo);
       if (!isPublic) {
         throw new ForbiddenException(
-          "You don't have access to this repository on GitHub. Connect your GitHub account or request access."
+          personalSourceSelectionRefused()
+            ? PERSONAL_CREDENTIAL_REFUSED
+            : "You don't have access to this repository on GitHub. Connect your GitHub account or request access."
         );
       }
     }
@@ -7212,7 +7221,9 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         const isPublic = await this.githubService.isRepoPublic(parsed.owner, parsed.repo);
         if (!isPublic) {
           throw new ForbiddenException(
-            "You don't have access to this repository on GitHub. Connect your GitHub account or request access."
+            personalSourceSelectionRefused()
+              ? PERSONAL_CREDENTIAL_REFUSED
+              : "You don't have access to this repository on GitHub. Connect your GitHub account or request access."
           );
         }
       }

@@ -9,6 +9,10 @@ import {
 import * as crypto from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { SharedCache } from '../cache/shared-cache.service';
+import {
+  personalCredentialsRefused,
+  personalSourceSelectionRefused
+} from '../auth/request-context';
 import { OAuthService } from '../auth/oauth.service';
 import { LeaderElectionService } from '../events/leader-election.service';
 import { canonicalRepoUrl, isNullSha, repoUrlVariants } from './auto-deploy-match';
@@ -405,6 +409,7 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
   // Return a usable access token for the user, refreshing if expired/near-expiry.
   // Returns null if no token, refresh failed, or refresh token also expired.
   async getValidUserToken(userId: string): Promise<string | null> {
+    if (personalCredentialsRefused()) return null;
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: { githubAccessToken: true, githubTokenExpiresAt: true, githubRefreshToken: true }
@@ -1658,6 +1663,7 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
   // Uses the user-to-server token: GitHub returns 200 only if the user can see the repo.
   // Returns false if no token, repo not found, or any non-OK response.
   async verifyUserCanAccessRepo(userId: string, owner: string, repo: string): Promise<boolean> {
+    if (personalSourceSelectionRefused()) return false;
     const token = await this.getValidUserToken(userId);
     if (!token) return false;
 
@@ -1675,6 +1681,7 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
   }
 
   async userMaintainsRepo(userId: string, owner: string, repo: string): Promise<boolean> {
+    if (personalSourceSelectionRefused()) return false;
     const token = await this.getValidUserToken(userId);
     if (!token) return false;
     const response = await fetch(
@@ -2268,6 +2275,7 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
   }
 
   async resolveRepoToken(userId: string, owner: string, repo: string): Promise<string | null> {
+    if (personalSourceSelectionRefused()) return null;
     const installation = await this.findInstallationForRepo(owner, repo);
     if (installation) {
       try {
@@ -2375,6 +2383,9 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
     repo: string
   ): Promise<string | null> {
     type Decision = { via: 'installation'; installationId: string } | { via: 'user' | 'public' };
+    if (personalSourceSelectionRefused()) {
+      return (await this.isRepoPublic(owner, repo)) ? '' : null;
+    }
     const epoch = await this.installationsEpoch(user.id);
     const key = `github:repo-access:${epoch}:${user.id}:${owner.toLowerCase()}/${repo.toLowerCase()}`;
     const cached = await this.cache.get<Decision>(key);

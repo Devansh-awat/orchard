@@ -17,3 +17,15 @@ export interface RequestAuthContext {
 }
 
 export const requestAuthStorage = new AsyncLocalStorage<RequestAuthContext>();
+
+export const PERSONAL_CREDENTIAL_REFUSED =
+  "This credential can't use a personal GitHub link or personal git connection. Connect an organization-level credential (a GitHub App installation or git connection owned by the organization) or deploy a public repository.";
+
+export function personalCredentialsRefused(): boolean {
+  return Boolean(requestAuthStorage.getStore()?.sessionOrgId);
+}
+
+export function personalSourceSelectionRefused(): boolean {
+  const ctx = requestAuthStorage.getStore();
+  return Boolean(ctx?.sessionOrgId || ctx?.tokenProjectIds?.length);
+}
