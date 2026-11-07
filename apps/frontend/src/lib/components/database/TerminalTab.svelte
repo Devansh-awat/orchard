@@ -1,6 +1,5 @@
 <script lang="ts">
 	import {
-		ChevronDown,
 		Database,
 		History,
 		Maximize2,
@@ -48,7 +47,8 @@
 		onFetchLogs,
 		onFetchKilled,
 		onToggleKilled,
-		onOpenShellTab,
+		onOpenSqlShell,
+		sqlShellOpening = false,
 		onCloseTerminalTab,
 		onTerminalTitle,
 		onTerminalBell,
@@ -81,7 +81,8 @@
 		onFetchLogs: () => void | Promise<void>;
 		onFetchKilled?: () => void;
 		onToggleKilled?: (entryId: string) => void;
-		onOpenShellTab: (podName: string, container: string) => void;
+		onOpenSqlShell: () => void | Promise<void>;
+		sqlShellOpening?: boolean;
 		onCloseTerminalTab: (id: string) => void;
 		onTerminalTitle?: (id: string, title: string) => void;
 		onTerminalBell?: (id: string) => void;
@@ -281,6 +282,19 @@
 						onclick={() => onFetchKilled?.()}
 					/>
 				{/if}
+
+				<Button
+					shape="capsule"
+					variant="secondary"
+					size="sm"
+					icon={SquareTerminal}
+					loading={sqlShellOpening}
+					disabled={!primaryPod}
+					title={primaryPod
+						? 'Open a psql session as the app role'
+						: 'Waiting for the Postgres pod'}
+					onclick={() => onOpenSqlShell()}>SQL shell</Button
+				>
 
 				<TerminalSettings />
 

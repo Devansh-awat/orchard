@@ -1247,14 +1247,16 @@
 
 	$effect(() => {
 		const id = dbId;
-		const tabsSnapshot = terminalTabs.map((t) => ({
-			id: t.id,
-			podName: t.podName,
-			container: t.container,
-			label: t.label,
-			title: t.title,
-			sessionHandle: t.sessionHandle
-		}));
+		const tabsSnapshot = terminalTabs
+			.filter((t) => !t.ephemeral)
+			.map((t) => ({
+				id: t.id,
+				podName: t.podName,
+				container: t.container,
+				label: t.label,
+				title: t.title,
+				sessionHandle: t.sessionHandle
+			}));
 		const active = activeConsoleTab;
 		if (!id || restoredTabsFor !== id) return;
 		saveTerminalTabs(terminalTabsKey('database', id), {
@@ -1264,11 +1266,37 @@
 		});
 	});
 
-	function openShellTab(podName: string, container: string) {
-		terminalCounter++;
-		const id = `term-${Date.now()}-${terminalCounter}`;
-		terminalTabs = [...terminalTabs, { id, podName, container, label: `Shell ${terminalCounter}` }];
-		activeConsoleTab = id;
+	let sqlShellOpening = $state(false);
+
+	async function openSqlShell() {
+		if (sqlShellOpening) return;
+		sqlShellOpening = true;
+		try {
+			const response = await apiFetch(`/apiv1/databases/${dbId}/shell`, { method: 'POST' });
+			const data = await response.json().catch(() => ({}));
+			if (!response.ok) throw new Error(data.message || "Couldn't open a SQL shell");
+			terminalCounter++;
+			const id = `term-${Date.now()}-${terminalCounter}`;
+			terminalTabs = [
+				...terminalTabs,
+				{
+					id,
+					podName: data.pod,
+					container: data.container,
+					label: `SQL ${terminalCounter}`,
+					ephemeral: true
+				}
+			];
+			activeConsoleTab = id;
+		} catch (e) {
+			toasts.add({
+				title: "Couldn't open a SQL shell",
+				description: e instanceof Error ? e.message : undefined,
+				color: 'error'
+			});
+		} finally {
+			sqlShellOpening = false;
+		}
 	}
 
 	function setTerminalTitle(id: string, title: string) {
@@ -1287,6 +1315,12 @@
 	}
 
 	function closeTerminalTab(id: string) {
+		const closing = terminalTabs.find((t) => t.id === id);
+		if (closing?.ephemeral) {
+			void apiFetch(`/apiv1/databases/${dbId}/shell/${encodeURIComponent(closing.podName)}`, {
+				method: 'DELETE'
+			}).catch(() => {});
+		}
 		terminalTabs = terminalTabs.filter((t) => t.id !== id);
 		if (activeConsoleTab === id) {
 			activeConsoleTab =
@@ -1617,7 +1651,8 @@
 							onFetchLogs={fetchLogs}
 							onFetchKilled={fetchKilled}
 							onToggleKilled={toggleKilled}
-							onOpenShellTab={openShellTab}
+							onOpenSqlShell={openSqlShell}
+							{sqlShellOpening}
 							onCloseTerminalTab={closeTerminalTab}
 							onTerminalTitle={setTerminalTitle}
 							onTerminalBell={setTerminalBell}

@@ -152,6 +152,7 @@ export interface TerminalTab {
 	title?: string;
 	bell?: boolean;
 	sessionHandle?: string;
+	ephemeral?: boolean;
 }
 
 export type DatabaseVerdict =
