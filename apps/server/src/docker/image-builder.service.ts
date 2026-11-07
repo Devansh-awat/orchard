@@ -806,13 +806,12 @@ export class ImageBuilderService {
     }
   }
 
-  private async upsertDockerConfigSecret(
+  private dockerConfigSecretBody(
     name: string,
     auths: RegistryAuths,
-    extraMetadata: k8s.V1ObjectMeta = {}
-  ): Promise<void> {
-    const coreApi = this.kc!.makeApiClient(k8s.CoreV1Api);
-    const body: k8s.V1Secret = {
+    extraMetadata: k8s.V1ObjectMeta
+  ): k8s.V1Secret {
+    return {
       metadata: {
         name,
         namespace: this.builderNamespace,
@@ -823,6 +822,27 @@ export class ImageBuilderService {
         '.dockerconfigjson': Buffer.from(JSON.stringify(dockerConfigJson(auths))).toString('base64')
       }
     };
+  }
+
+  private async createDockerConfigSecret(
+    name: string,
+    auths: RegistryAuths,
+    extraMetadata: k8s.V1ObjectMeta = {}
+  ): Promise<void> {
+    const coreApi = this.kc!.makeApiClient(k8s.CoreV1Api);
+    await coreApi.createNamespacedSecret(
+      this.builderNamespace,
+      this.dockerConfigSecretBody(name, auths, extraMetadata)
+    );
+  }
+
+  private async upsertDockerConfigSecret(
+    name: string,
+    auths: RegistryAuths,
+    extraMetadata: k8s.V1ObjectMeta = {}
+  ): Promise<void> {
+    const coreApi = this.kc!.makeApiClient(k8s.CoreV1Api);
+    const body = this.dockerConfigSecretBody(name, auths, extraMetadata);
     try {
       await coreApi.readNamespacedSecret(name, this.builderNamespace);
       await coreApi.replaceNamespacedSecret(name, this.builderNamespace, body);
@@ -835,26 +855,17 @@ export class ImageBuilderService {
     }
   }
 
-  private async upsertOpaqueSecret(
+  private async createOpaqueSecret(
     name: string,
     stringData: Record<string, string>,
     extraMetadata: k8s.V1ObjectMeta = {}
   ): Promise<void> {
     const coreApi = this.kc!.makeApiClient(k8s.CoreV1Api);
-    const body: k8s.V1Secret = {
+    await coreApi.createNamespacedSecret(this.builderNamespace, {
       metadata: { name, namespace: this.builderNamespace, ...extraMetadata },
       type: 'Opaque',
       stringData
-    };
-    try {
-      await coreApi.createNamespacedSecret(this.builderNamespace, body);
-    } catch (error) {
-      if (error.statusCode === 409) {
-        await coreApi.replaceNamespacedSecret(name, this.builderNamespace, body);
-      } else {
-        throw error;
-      }
-    }
+    });
   }
 
   private async deleteBuildJobSecrets(jobName: string): Promise<void> {
@@ -1483,10 +1494,12 @@ exit $EXIT_CODE
     }
 
     const jobName = this.generateJobName(imageName);
-    const buildEnvSecret = `benv-${jobName.slice(-8)}`;
-    const jobDockerConfigSecret = hasAppPullAuth ? `bdc-${jobName.slice(-8)}` : null;
+    const buildEnvSecret = `benv-${crypto.randomBytes(16).toString('hex')}`;
+    const jobDockerConfigSecret = hasAppPullAuth
+      ? `bdc-${crypto.randomBytes(16).toString('hex')}`
+      : null;
     if (jobDockerConfigSecret) {
-      await this.upsertDockerConfigSecret(
+      await this.createDockerConfigSecret(
         jobDockerConfigSecret,
         this.sidecarPushEnabled
           ? appPullAuths
@@ -2326,7 +2339,7 @@ exit $rc`
     const jobSecrets = [buildEnvSecret, ...(jobDockerConfigSecret ? [jobDockerConfigSecret] : [])];
 
     try {
-      await this.upsertOpaqueSecret(buildEnvSecret, buildEnvSecretData, {
+      await this.createOpaqueSecret(buildEnvSecret, buildEnvSecretData, {
         labels: { 'orchard.my/build-job': jobName }
       });
       const jobCreationResult = await batchApi.createNamespacedJob(this.builderNamespace, job);
