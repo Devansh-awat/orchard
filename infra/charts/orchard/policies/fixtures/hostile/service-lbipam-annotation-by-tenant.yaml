@@ -1,0 +1,14 @@
+# user: system:serviceaccount:orchard-policy-test:default
+# denied-by: load balancer IP pinning
+"apiVersion": "v1"
+"kind": "Service"
+"metadata":
+  "name": "evil"
+  "annotations":
+    "lbipam.cilium.io/ips": "203.0.113.7"
+  "namespace": "orchard-policy-test"
+"spec":
+  "selector":
+    "a": "b"
+  "ports":
+    - "port": 80

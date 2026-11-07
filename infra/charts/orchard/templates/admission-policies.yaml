@@ -1,0 +1,85 @@
+{{- if .Values.admissionPolicies.enabled }}
+{{- $ap := .Values.admissionPolicies }}
+{{- $ns := .Values.namespace }}
+{{- $serverIp := "" }}
+{{- with (lookup "v1" "Service" $ns "server") }}
+{{- $serverIp = (.spec.clusterIP | default "") }}
+{{- end }}
+{{- $issuers := list }}
+{{- if .Values.tenant.certClusterIssuer }}{{- $issuers = append $issuers .Values.tenant.certClusterIssuer }}{{- end }}
+{{- range $ap.extraIssuers }}{{- $issuers = append $issuers . }}{{- end }}
+{{- $runtimeClass := "" }}
+{{- if and .Values.tenantSandbox.enabled .Values.tenantSandbox.runtimeClassName }}{{- $runtimeClass = .Values.tenantSandbox.runtimeClassName }}{{- end }}
+# Tenant-namespace admission guard. Policy bodies live in policies/orchard-tenant-policies.yaml (also what the
+# CEL test harness evaluates); this template adds the parameter ConfigMap and the bindings.
+# Every policy has failurePolicy Ignore and every binding allows a missing parameter, so a fault in the guard
+# can never block the cluster. See policies/README.md.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: orchard-tenant-policy
+  namespace: {{ $ns }}
+  labels:
+    {{- include "orchard.labels" (dict "root" $ "name" "admission-policies") | nindent 4 }}
+data:
+  serverUser: {{ $ap.serverUser | default (printf "system:serviceaccount:%s:orchard-server" $ns) | quote }}
+  ingressClass: {{ $ap.ingressClass | default .Values.tenant.ingressClass | default "" | quote }}
+  allowedIssuers: {{ join "," $issuers | quote }}
+  storageClasses: {{ join "," $ap.storageClasses | quote }}
+  maxPvcSize: {{ $ap.maxPvcSize | default "" | quote }}
+  allowNodePort: {{ ternary "false" "true" (eq (toString .Values.tenant.nodePortExposure) "false") | quote }}
+  allowLoadBalancer: "true"
+  runtimeClass: {{ $runtimeClass | quote }}
+  databaseRuntimeClass: {{ .Values.databases.runtimeClassName | default "" | quote }}
+  protectionProxyIPs: {{ $ap.protectionProxyIPs | default $serverIp | quote }}
+  tenantSecretsRole: "orchard-tenant-secrets"
+  pgImagePrefixes: {{ join "," $ap.pgImagePrefixes | quote }}
+---
+{{ .Files.Get "policies/orchard-tenant-policies.yaml" }}
+{{- $selectors := list (dict "suffix" "" "key" "orchard.my/managed") (dict "suffix" "-legacy" "key" "orchard.dev/managed") }}
+{{- $bindings := list
+  (dict "name" "orchard-tenant-pods" "param" false "actions" $ap.validationActions)
+  (dict "name" "orchard-tenant-pods-hardening" "param" true "actions" $ap.hardeningActions)
+  (dict "name" "orchard-tenant-services" "param" true "actions" $ap.validationActions)
+  (dict "name" "orchard-tenant-endpointslices" "param" true "actions" $ap.validationActions)
+  (dict "name" "orchard-tenant-ingresses" "param" true "actions" $ap.validationActions)
+  (dict "name" "orchard-tenant-pvcs" "param" true "actions" $ap.validationActions)
+  (dict "name" "orchard-tenant-networkpolicies" "param" false "actions" $ap.validationActions)
+  (dict "name" "orchard-tenant-rolebindings" "param" true "actions" $ap.validationActions)
+  (dict "name" "orchard-tenant-cnpg-clusters" "param" true "actions" $ap.validationActions)
+}}
+{{- range $b := $bindings }}
+{{- range $sel := $selectors }}
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: {{ $b.name }}{{ $sel.suffix }}
+  labels:
+    {{- include "orchard.labels" (dict "root" $ "name" "admission-policies") | nindent 4 }}
+spec:
+  policyName: {{ $b.name }}
+  {{- if $b.param }}
+  paramRef:
+    name: orchard-tenant-policy
+    namespace: {{ $ns }}
+    parameterNotFoundAction: Allow
+  {{- end }}
+  validationActions: {{ toJson $b.actions }}
+  matchResources:
+    namespaceSelector:
+      matchExpressions:
+        - { key: {{ $sel.key }}, operator: Exists }
+{{- end }}
+{{- end }}
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: orchard-managed-namespaces
+  labels:
+    {{- include "orchard.labels" (dict "root" $ "name" "admission-policies") | nindent 4 }}
+spec:
+  policyName: orchard-managed-namespaces
+  validationActions: {{ toJson $ap.validationActions }}
+{{- end }}

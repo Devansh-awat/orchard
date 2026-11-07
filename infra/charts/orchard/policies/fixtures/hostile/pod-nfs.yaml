@@ -1,0 +1,23 @@
+# denied-by: host-backed
+"apiVersion": "v1"
+"kind": "Pod"
+"metadata":
+  "name": "evil"
+  "labels":
+    "app.kubernetes.io/name": "evil"
+  "namespace": "orchard-policy-test"
+"spec":
+  "runtimeClassName": "gvisor"
+  "containers":
+    - "name": "c"
+      "image": "registry.example.com/org/app:1"
+      "securityContext":
+        "allowPrivilegeEscalation": false
+        "capabilities":
+          "drop":
+            - "ALL"
+  "volumes":
+    - "name": "h"
+      "nfs":
+        "server": "10.0.0.1"
+        "path": "/"

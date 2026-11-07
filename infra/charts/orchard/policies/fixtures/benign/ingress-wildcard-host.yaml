@@ -1,0 +1,27 @@
+# user: system:serviceaccount:orchard:orchard-server
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: app-wild
+  labels:
+    leaf.dev/managed: 'true'
+  annotations:
+    acme.cert-manager.io/http01-edit-in-place: 'true'
+  namespace: orchard-policy-test
+spec:
+  ingressClassName: haproxy
+  rules:
+    - host: app.apps.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: app
+                port:
+                  number: 80
+  tls:
+    - hosts:
+        - app.apps.example.com
+      secretName: wildcard-apps-example-com-tls

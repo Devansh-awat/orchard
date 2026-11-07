@@ -1,0 +1,15 @@
+# user: system:serviceaccount:orchard:orchard-server
+apiVersion: v1
+kind: Service
+metadata:
+  name: orchard-protection-proxy
+  namespace: orchard-policy-test
+  labels:
+    orchard.my/managed: 'true'
+    orchard.my/type: protection-proxy
+spec:
+  clusterIP: None
+  ports:
+    - port: 3001
+      targetPort: 3001
+      protocol: TCP

@@ -1,0 +1,88 @@
+# Bindings for a live test: every policy applied with Deny to namespaces labelled orchard.my/policy-sandbox=true only.
+# The namespace policy has no namespace selector (it watches Namespace objects), so it is Warn-only here.
+# Needs the parameter ConfigMap from fixtures/params.yaml in the orchard namespace.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata: { name: sandbox-orchard-tenant-pods }
+spec:
+  policyName: orchard-tenant-pods
+  validationActions: ["Deny"]
+  matchResources: { namespaceSelector: { matchLabels: { orchard.my/policy-sandbox: "true" } } }
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata: { name: sandbox-orchard-tenant-pods-hardening }
+spec:
+  policyName: orchard-tenant-pods-hardening
+  paramRef: { name: orchard-tenant-policy, namespace: orchard, parameterNotFoundAction: Allow }
+  validationActions: ["Deny"]
+  matchResources: { namespaceSelector: { matchLabels: { orchard.my/policy-sandbox: "true" } } }
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata: { name: sandbox-orchard-tenant-services }
+spec:
+  policyName: orchard-tenant-services
+  paramRef: { name: orchard-tenant-policy, namespace: orchard, parameterNotFoundAction: Allow }
+  validationActions: ["Deny"]
+  matchResources: { namespaceSelector: { matchLabels: { orchard.my/policy-sandbox: "true" } } }
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata: { name: sandbox-orchard-tenant-endpointslices }
+spec:
+  policyName: orchard-tenant-endpointslices
+  paramRef: { name: orchard-tenant-policy, namespace: orchard, parameterNotFoundAction: Allow }
+  validationActions: ["Deny"]
+  matchResources: { namespaceSelector: { matchLabels: { orchard.my/policy-sandbox: "true" } } }
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata: { name: sandbox-orchard-tenant-ingresses }
+spec:
+  policyName: orchard-tenant-ingresses
+  paramRef: { name: orchard-tenant-policy, namespace: orchard, parameterNotFoundAction: Allow }
+  validationActions: ["Deny"]
+  matchResources: { namespaceSelector: { matchLabels: { orchard.my/policy-sandbox: "true" } } }
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata: { name: sandbox-orchard-tenant-pvcs }
+spec:
+  policyName: orchard-tenant-pvcs
+  paramRef: { name: orchard-tenant-policy, namespace: orchard, parameterNotFoundAction: Allow }
+  validationActions: ["Deny"]
+  matchResources: { namespaceSelector: { matchLabels: { orchard.my/policy-sandbox: "true" } } }
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata: { name: sandbox-orchard-tenant-networkpolicies }
+spec:
+  policyName: orchard-tenant-networkpolicies
+  validationActions: ["Deny"]
+  matchResources: { namespaceSelector: { matchLabels: { orchard.my/policy-sandbox: "true" } } }
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata: { name: sandbox-orchard-tenant-rolebindings }
+spec:
+  policyName: orchard-tenant-rolebindings
+  paramRef: { name: orchard-tenant-policy, namespace: orchard, parameterNotFoundAction: Allow }
+  validationActions: ["Deny"]
+  matchResources: { namespaceSelector: { matchLabels: { orchard.my/policy-sandbox: "true" } } }
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata: { name: sandbox-orchard-tenant-cnpg-clusters }
+spec:
+  policyName: orchard-tenant-cnpg-clusters
+  paramRef: { name: orchard-tenant-policy, namespace: orchard, parameterNotFoundAction: Allow }
+  validationActions: ["Deny"]
+  matchResources: { namespaceSelector: { matchLabels: { orchard.my/policy-sandbox: "true" } } }
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata: { name: sandbox-orchard-managed-namespaces }
+spec:
+  policyName: orchard-managed-namespaces
+  validationActions: ["Warn", "Audit"]

@@ -872,6 +872,41 @@ tenantSandbox:
   enabled: false
   runtimeClassName: gvisor
 
+# Admission guard for tenant namespaces (namespaces labelled orchard.my/managed):
+# native ValidatingAdmissionPolicies that refuse the object shapes Orchard never
+# creates (hostPath, privileged pods, externalIPs, NodePort when off, foreign
+# Ingress annotations, PVC hijack, open NetworkPolicy egress, ...). Needs
+# Kubernetes >= 1.30. Every policy fails open (failurePolicy Ignore, missing
+# parameters skip the rule), so a fault in the guard cannot block the cluster.
+#
+# validationActions: [Warn, Audit] reports violations without refusing them; set
+# [Deny] after a week with no unexpected warnings (kubectl get events, API audit
+# log). hardeningActions covers the rules legacy pods may fail (drop ALL
+# capabilities, tenant RuntimeClass), so it is advisory by default.
+admissionPolicies:
+  enabled: true
+  validationActions: [Warn, Audit]
+  hardeningActions: [Warn, Audit]
+  # Defaults to system:serviceaccount:<namespace>:orchard-server.
+  serverUser: ""
+  # Defaults to tenant.ingressClass; empty skips the ingress class rule.
+  ingressClass: ""
+  # Issuers allowed on tenant Ingresses besides tenant.certClusterIssuer, e.g.
+  # your DNS-01 wildcard issuer. With none configured the rule is skipped.
+  extraIssuers: []
+  # StorageClasses a tenant PVC may name. Empty skips the rule.
+  storageClasses: []
+  # Largest PVC the guard admits. Empty (default) skips the rule: restores, clones
+  # and admin quotas legitimately exceed the 200Gi cap the server applies to
+  # user-initiated creates (MAX_VOLUME_SIZE), and existing fleets hold bigger
+  # volumes. Set it to your org storage quota ceiling to turn the backstop on.
+  maxPvcSize: ""
+
+  # Defaults to the ClusterIP of the server Service (looked up at install time).
+  protectionProxyIPs: ""
+  # Image prefixes CNPG clusters may use, e.g. ["ghcr.io/cloudnative-pg/postgresql:"]. Empty skips.
+  pgImagePrefixes: []
+
 # Pods Orchard does not build itself (CloudNativePG instance and pooler pods,
 # the Tailscale proxy) cannot take a runtimeClassName from the CNPG CRD. When
 # runtimeClassName is set, a native MutatingAdmissionPolicy sets it on those

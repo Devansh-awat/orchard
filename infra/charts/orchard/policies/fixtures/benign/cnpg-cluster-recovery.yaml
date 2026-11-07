@@ -1,0 +1,24 @@
+# user: system:serviceaccount:orchard:orchard-server
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: db-restore
+  labels:
+    app.kubernetes.io/managed-by: orchard
+  namespace: orchard-policy-test
+spec:
+  instances: 1
+  enablePDB: false
+  imageName: ghcr.io/cloudnative-pg/postgresql:17.5
+  primaryUpdateStrategy: unsupervised
+  storage:
+    size: 10Gi
+  bootstrap:
+    recovery:
+      source: origin
+  externalClusters:
+    - name: origin
+  postgresql:
+    parameters:
+      shared_buffers: 64MB
+  enableSuperuserAccess: false

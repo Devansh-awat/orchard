@@ -1,0 +1,40 @@
+# user: system:serviceaccount:postgresql:cloudnative-pg
+# groups: system:serviceaccounts,system:serviceaccounts:postgresql,system:authenticated
+apiVersion: v1
+kind: Pod
+metadata:
+  name: db-1
+  labels:
+    cnpg.io/cluster: db
+    cnpg.io/podRole: instance
+    cnpg.io/instanceRole: primary
+    app.kubernetes.io/managed-by: orchard
+  namespace: orchard-policy-test
+spec:
+  containers:
+    - name: postgres
+      image: ghcr.io/cloudnative-pg/postgresql:17.5
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        runAsNonRoot: true
+  initContainers:
+    - name: bootstrap-controller
+      image: ghcr.io/cloudnative-pg/cloudnative-pg:1.26
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop:
+            - ALL
+  volumes:
+    - name: pgdata
+      persistentVolumeClaim:
+        claimName: db-1
+    - name: scratch-data
+      emptyDir: {}
+    - name: shm
+      emptyDir:
+        medium: Memory
+    - name: projected
+      projected:
+        sources: []

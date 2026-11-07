@@ -1,0 +1,15 @@
+# user: system:serviceaccount:cert-manager:cert-manager
+apiVersion: v1
+kind: Service
+metadata:
+  name: cm-acme-http-solver-abcde
+  labels:
+    acme.cert-manager.io/http01-solver: 'true'
+  namespace: orchard-policy-test
+spec:
+  type: NodePort
+  selector:
+    acme.cert-manager.io/http01-solver: 'true'
+  ports:
+    - port: 8089
+      targetPort: 8089

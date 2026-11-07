@@ -1,0 +1,14 @@
+# user: system:serviceaccount:orchard:orchard-server
+# set: protectionProxyIPs=10.43.1.2
+# denied-by: protection-proxy EndpointSlices
+"apiVersion": "discovery.k8s.io/v1"
+"kind": "EndpointSlice"
+"metadata":
+  "name": "orchard-protection-proxy-1"
+  "namespace": "orchard-policy-test"
+"addressType": "IPv4"
+"endpoints":
+  - "addresses":
+      - "169.254.169.254"
+"ports":
+  - "port": 80

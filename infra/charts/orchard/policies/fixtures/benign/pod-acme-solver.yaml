@@ -1,0 +1,21 @@
+# user: system:serviceaccount:cert-manager:cert-manager
+apiVersion: v1
+kind: Pod
+metadata:
+  name: cm-acme-http-solver-abcde
+  labels:
+    acme.cert-manager.io/http01-solver: 'true'
+  namespace: orchard-policy-test
+spec:
+  containers:
+    - name: acmesolver
+      image: quay.io/jetstack/cert-manager-acmesolver:v1.17.0
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop:
+            - ALL
+        readOnlyRootFilesystem: true
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault

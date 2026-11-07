@@ -1,0 +1,70 @@
+# user: system:serviceaccount:orchard:orchard-server
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: orchard-policy-test
+  labels:
+    orchard.my/managed: 'true'
+    app.kubernetes.io/managed-by: orchard
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: orchard-policy-test
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: network
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: orchard
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: orchard-policy-test
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: network
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+              - 169.254.0.0/16
+              - 100.64.0.0/10
+    - to:
+        - namespaceSelector:
+            matchExpressions:
+              - key: orchard.my/managed
+                operator: Exists
+        - namespaceSelector:
+            matchExpressions:
+              - key: orchard.dev/managed
+                operator: Exists
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: orchard-r2-proxy
+      ports:
+        - protocol: TCP
+          port: 9000

@@ -1,0 +1,59 @@
+# user: system:serviceaccount:orchard:orchard-server
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ts--isolate--app
+  namespace: orchard-policy-test
+  labels:
+    app.kubernetes.io/managed-by: orchard
+    orchard.my/tailscale: 'true'
+    orchard.my/target-deployment: app
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: ts--proxy--app
+      orchard.my/tailscale: 'true'
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress: []
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: app
+              app.kubernetes.io/managed-by: orchard
+            matchExpressions:
+              - key: orchard.my/tailscale
+                operator: DoesNotExist
+      ports:
+        - port: 8080
+          protocol: TCP
+    - to: []
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+              - 169.254.0.0/16
+              - 100.64.0.0/10
+      ports:
+        - port: 443
+          protocol: TCP
+        - port: 3478
+          protocol: UDP
+        - port: 41641
+          protocol: UDP
+    - to:
+        - ipBlock:
+            cidr: 10.0.0.1/32
+      ports:
+        - port: 6443
+          protocol: TCP

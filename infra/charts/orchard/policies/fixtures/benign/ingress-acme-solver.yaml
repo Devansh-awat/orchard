@@ -1,0 +1,24 @@
+# user: system:serviceaccount:cert-manager:cert-manager
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: cm-acme-http-solver-abcde
+  labels:
+    acme.cert-manager.io/http01-solver: 'true'
+  annotations:
+    nginx.ingress.kubernetes.io/whitelist-source-range: 0.0.0.0/0,::/0
+    kubernetes.io/ingress.class: haproxy
+  namespace: orchard-policy-test
+spec:
+  ingressClassName: haproxy
+  rules:
+    - host: app.example.com
+      http:
+        paths:
+          - path: /.well-known/acme-challenge/tok
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: cm-acme-http-solver-abcde
+                port:
+                  number: 8089

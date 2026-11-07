@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: orchard-tenant-policy
+  namespace: orchard
+data:
+  serverUser: "system:serviceaccount:orchard:orchard-server"
+  ingressClass: "haproxy"
+  allowedIssuers: "letsencrypt-prod,letsencrypt-dns01-wildcard"
+  storageClasses: "longhorn,longhorn-nvme,longhorn-ssd,longhorn-static,longhorn-build-scratch"
+  maxPvcSize: "200Gi"
+  allowNodePort: "true"
+  allowLoadBalancer: "true"
+  runtimeClass: "gvisor"
+  databaseRuntimeClass: ""
+  protectionProxyIPs: ""
+  tenantSecretsRole: "orchard-tenant-secrets"
+  pgImagePrefixes: "ghcr.io/cloudnative-pg/postgresql:"

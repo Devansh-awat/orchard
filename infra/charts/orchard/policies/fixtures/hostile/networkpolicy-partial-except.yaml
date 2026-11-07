@@ -1,0 +1,17 @@
+# user: system:serviceaccount:orchard:orchard-server
+# denied-by: 0.0.0.0/0 must except
+"apiVersion": "networking.k8s.io/v1"
+"kind": "NetworkPolicy"
+"metadata":
+  "name": "evil"
+  "namespace": "orchard-policy-test"
+"spec":
+  "podSelector": {}
+  "policyTypes":
+    - "Egress"
+  "egress":
+    - "to":
+        - "ipBlock":
+            "cidr": "0.0.0.0/0"
+            "except":
+              - "10.0.0.0/8"

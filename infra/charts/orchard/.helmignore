@@ -1,0 +1,8 @@
+.git
+.DS_Store
+*.swp
+*.bak
+policies/celtest/
+policies/fixtures/
+policies/README.md
+policies/sandbox-bindings.yaml

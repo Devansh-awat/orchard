@@ -1,0 +1,15 @@
+# user: system:serviceaccount:orchard:orchard-server
+# denied-by: ingress from 0.0.0.0/0
+"apiVersion": "networking.k8s.io/v1"
+"kind": "NetworkPolicy"
+"metadata":
+  "name": "evil"
+  "namespace": "orchard-policy-test"
+"spec":
+  "podSelector": {}
+  "policyTypes":
+    - "Ingress"
+  "ingress":
+    - "from":
+        - "ipBlock":
+            "cidr": "0.0.0.0/0"

@@ -1,0 +1,23 @@
+# user: system:serviceaccount:orchard:orchard-server
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: db-allow-public
+  namespace: orchard-policy-test
+  labels:
+    app.kubernetes.io/managed-by: orchard
+    cnpg.io/cluster: db
+spec:
+  podSelector:
+    matchLabels:
+      cnpg.io/cluster: db
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+        - namespaceSelector: {}
+      ports:
+        - protocol: TCP
+          port: 5432

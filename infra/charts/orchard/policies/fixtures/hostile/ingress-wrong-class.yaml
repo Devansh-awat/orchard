@@ -1,0 +1,11 @@
+# user: system:serviceaccount:orchard:orchard-server
+# denied-by: ingress class
+"apiVersion": "networking.k8s.io/v1"
+"kind": "Ingress"
+"metadata":
+  "name": "evil"
+  "annotations": {}
+  "namespace": "orchard-policy-test"
+"spec":
+  "ingressClassName": "other"
+  "rules": []

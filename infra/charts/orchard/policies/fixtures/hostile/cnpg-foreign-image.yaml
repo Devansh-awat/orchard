@@ -1,0 +1,10 @@
+# user: system:serviceaccount:orchard:orchard-server
+# denied-by: image must come
+"apiVersion": "postgresql.cnpg.io/v1"
+"kind": "Cluster"
+"metadata":
+  "name": "db"
+  "namespace": "orchard-policy-test"
+"spec":
+  "instances": 1
+  "imageName": "evil.example.com/pg:17"

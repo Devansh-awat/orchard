@@ -1,0 +1,15 @@
+# user: system:serviceaccount:orchard:orchard-server
+# denied-by: may only bind
+"apiVersion": "rbac.authorization.k8s.io/v1"
+"kind": "RoleBinding"
+"metadata":
+  "name": "evil"
+  "namespace": "orchard-policy-test"
+"roleRef":
+  "apiGroup": "rbac.authorization.k8s.io"
+  "kind": "ClusterRole"
+  "name": "cluster-admin"
+"subjects":
+  - "kind": "ServiceAccount"
+    "name": "x"
+    "namespace": "orchard"

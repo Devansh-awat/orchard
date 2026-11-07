@@ -1,0 +1,13 @@
+# user: system:serviceaccount:orchard:orchard-server
+# denied-by: protection-proxy EndpointSlices
+"apiVersion": "discovery.k8s.io/v1"
+"kind": "EndpointSlice"
+"metadata":
+  "name": "victim-hijack"
+  "namespace": "orchard-policy-test"
+"addressType": "IPv4"
+"endpoints":
+  - "addresses":
+      - "10.0.0.9"
+"ports":
+  - "port": 80

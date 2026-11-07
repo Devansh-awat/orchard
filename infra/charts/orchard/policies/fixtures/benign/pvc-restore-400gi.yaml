@@ -1,0 +1,17 @@
+# user: system:serviceaccount:orchard:orchard-server
+# set: maxPvcSize=
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: restored-data
+  labels:
+    app.kubernetes.io/managed-by: orchard
+  namespace: orchard-policy-test
+spec:
+  accessModes:
+    - ReadWriteOnce
+  volumeMode: Filesystem
+  storageClassName: longhorn
+  resources:
+    requests:
+      storage: 400Gi

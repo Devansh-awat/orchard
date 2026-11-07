@@ -169,6 +169,22 @@ apps/server/scripts/cnpg-disable-superuser.sh --apply --limit 1 # canary one clu
 apps/server/scripts/cnpg-disable-superuser.sh --apply
 ```
 
+### Admission guard for tenant namespaces
+
+The chart installs native `ValidatingAdmissionPolicy` objects for namespaces that carry the `orchard.my/managed` label. They are a second wall behind Orchard's own checks: if a bug ever makes the server build a bad object, the API server refuses it. They refuse host-backed volumes, privileged pods, `externalIPs` and `ExternalName` Services, LoadBalancer or load-balancer-IP pinning by anyone but the server, Ingress annotations outside the allow-list, a cert-manager issuer that is not configured, PVC volume hijacking, open NetworkPolicy egress, and unsafe CloudNativePG cluster settings. They need Kubernetes 1.30 or later.
+
+The policies are safe to install. Every policy fails open (`failurePolicy: Ignore`), every parameter is optional, and cert-manager, CloudNativePG and the Kubernetes controllers are recognised by the labels on what they create, not by a username that differs on every install.
+
+The default action is `Warn` and `Audit`, so nothing is refused yet. Pods and Tailscale proxies that were created before this change can fail the hardening rules, and a refusal would stop them restarting. Watch `kubectl get events` and the API server audit log for a week, then switch to refusing:
+
+```yaml
+admissionPolicies:
+  validationActions: [Deny]
+  extraIssuers: [letsencrypt-dns01-wildcard]
+```
+
+Set `extraIssuers` to every other `ClusterIssuer` you use for tenant hosts, or the issuer rule reports them. Set `admissionPolicies.enabled: false` to remove the guard. The parameter reference, the CEL tests and the fixtures for a live dry run are in `infra/charts/orchard/policies/README.md`.
+
 ### Public TCP and UDP ports
 
 A tenant can publish a raw TCP or UDP port in two ways. The two have different exposure, so Orchard treats them differently.

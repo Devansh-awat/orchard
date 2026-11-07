@@ -1,0 +1,15 @@
+# user: system:serviceaccount:kube-system:endpointslice-controller
+apiVersion: discovery.k8s.io/v1
+kind: EndpointSlice
+metadata:
+  name: app-abcde
+  labels:
+    kubernetes.io/service-name: app
+  namespace: orchard-policy-test
+addressType: IPv4
+endpoints:
+  - addresses:
+      - 10.42.0.5
+ports:
+  - port: 8080
+    protocol: TCP

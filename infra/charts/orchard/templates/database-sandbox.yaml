@@ -15,7 +15,7 @@ kind: MutatingAdmissionPolicy
 metadata:
   name: orchard-database-runtime-class
   labels:
-    {{- include "orchard.labels" . | nindent 4 }}
+    {{- include "orchard.labels" (dict "root" $ "name" "database-sandbox") | nindent 4 }}
 spec:
   failurePolicy: {{ .Values.databases.runtimeClassFailurePolicy | default "Ignore" }}
   reinvocationPolicy: Never
@@ -48,7 +48,7 @@ kind: MutatingAdmissionPolicyBinding
 metadata:
   name: orchard-database-runtime-class
   labels:
-    {{- include "orchard.labels" . | nindent 4 }}
+    {{- include "orchard.labels" (dict "root" $ "name" "database-sandbox") | nindent 4 }}
 spec:
   policyName: orchard-database-runtime-class
   matchResources:
@@ -61,7 +61,7 @@ kind: MutatingAdmissionPolicyBinding
 metadata:
   name: orchard-database-runtime-class-legacy
   labels:
-    {{- include "orchard.labels" . | nindent 4 }}
+    {{- include "orchard.labels" (dict "root" $ "name" "database-sandbox") | nindent 4 }}
 spec:
   policyName: orchard-database-runtime-class
   matchResources:

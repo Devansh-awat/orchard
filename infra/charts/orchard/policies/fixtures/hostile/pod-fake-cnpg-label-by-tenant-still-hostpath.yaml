@@ -1,0 +1,22 @@
+# denied-by: host-backed
+"apiVersion": "v1"
+"kind": "Pod"
+"metadata":
+  "name": "evil"
+  "labels":
+    "cnpg.io/cluster": "x"
+  "namespace": "orchard-policy-test"
+"spec":
+  "runtimeClassName": "gvisor"
+  "containers":
+    - "name": "c"
+      "image": "registry.example.com/org/app:1"
+      "securityContext":
+        "allowPrivilegeEscalation": false
+        "capabilities":
+          "drop":
+            - "ALL"
+  "volumes":
+    - "name": "h"
+      "hostPath":
+        "path": "/"

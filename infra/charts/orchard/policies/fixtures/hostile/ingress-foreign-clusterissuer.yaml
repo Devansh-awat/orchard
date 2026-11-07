@@ -1,0 +1,22 @@
+# user: system:serviceaccount:orchard:orchard-server
+# denied-by: issuer must be
+"apiVersion": "networking.k8s.io/v1"
+"kind": "Ingress"
+"metadata":
+  "name": "evil"
+  "annotations":
+    "cert-manager.io/cluster-issuer": "internal-ca"
+  "namespace": "orchard-policy-test"
+"spec":
+  "ingressClassName": "haproxy"
+  "rules":
+    - "host": "a.example.com"
+      "http":
+        "paths":
+          - "path": "/"
+            "pathType": "Prefix"
+            "backend":
+              "service":
+                "name": "s"
+                "port":
+                  "number": 80

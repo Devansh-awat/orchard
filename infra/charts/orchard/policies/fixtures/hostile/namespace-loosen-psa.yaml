@@ -1,0 +1,18 @@
+# user: system:serviceaccount:orchard-policy-test:default
+# operation: UPDATE
+# denied-by: Pod Security
+"apiVersion": "v1"
+"kind": "Namespace"
+"metadata":
+  "name": "orchard-policy-test"
+  "labels":
+    "orchard.my/managed": "true"
+    "pod-security.kubernetes.io/enforce": "privileged"
+---
+"apiVersion": "v1"
+"kind": "Namespace"
+"metadata":
+  "name": "orchard-policy-test"
+  "labels":
+    "orchard.my/managed": "true"
+    "pod-security.kubernetes.io/enforce": "baseline"

@@ -1,0 +1,71 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ts--proxy--app-7d9f8c5b6-x2k4p
+  labels:
+    app.kubernetes.io/managed-by: orchard
+    orchard.my/tailscale: 'true'
+    orchard.my/target-deployment: app
+    app.kubernetes.io/name: ts--proxy--app
+    pod-template-hash: 7d9f8c5b6
+  namespace: orchard-policy-test
+spec:
+  serviceAccountName: ts--proxy--app
+  runtimeClassName: gvisor
+  containers:
+    - name: tailscale
+      image: ghcr.io/tailscale/tailscale:latest
+      imagePullPolicy: IfNotPresent
+      env:
+        - name: TS_AUTHKEY
+          valueFrom:
+            secretKeyRef:
+              name: ts--key--app
+              key: TS_AUTHKEY
+        - name: TS_HOSTNAME
+          value: host
+        - name: TS_STATE_DIR
+          value: /var/lib/tailscale
+        - name: TS_USERSPACE
+          value: 'true'
+        - name: TS_KUBE_SECRET
+          value: ts--state--app
+        - name: TS_SERVE_CONFIG
+          value: /config/serve-config.json
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_UID
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.uid
+      resources:
+        requests:
+          cpu: 10m
+          memory: 64Mi
+        limits:
+          cpu: 100m
+          memory: 128Mi
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        runAsNonRoot: true
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop:
+            - ALL
+        seccompProfile:
+          type: RuntimeDefault
+      volumeMounts:
+        - name: tailscale-state
+          mountPath: /var/lib/tailscale
+        - name: serve-config
+          mountPath: /config
+          readOnly: true
+  volumes:
+    - name: tailscale-state
+      emptyDir: {}
+    - name: serve-config
+      configMap:
+        name: ts--serve--app

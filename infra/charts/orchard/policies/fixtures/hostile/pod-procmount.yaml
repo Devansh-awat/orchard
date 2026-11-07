@@ -1,0 +1,18 @@
+# denied-by: procMount
+"apiVersion": "v1"
+"kind": "Pod"
+"metadata":
+  "name": "evil"
+  "labels":
+    "app.kubernetes.io/name": "evil"
+  "namespace": "orchard-policy-test"
+"spec":
+  "runtimeClassName": "gvisor"
+  "containers":
+    - "name": "c"
+      "image": "registry.example.com/org/app:1"
+      "securityContext":
+        "procMount": "Unmasked"
+        "capabilities":
+          "drop":
+            - "ALL"

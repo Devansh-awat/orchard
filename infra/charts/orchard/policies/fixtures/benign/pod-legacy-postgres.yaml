@@ -1,0 +1,162 @@
+# warns: orchard-tenant-pods-hardening
+apiVersion: v1
+kind: Pod
+metadata:
+  name: legacy-pg-7d9f8c5b6-x2k4p
+  labels:
+    app.kubernetes.io/name: legacy-pg
+    app.kubernetes.io/component: postgres
+    app.kubernetes.io/managed-by: orchard
+    pod-template-hash: 7d9f8c5b6
+  namespace: orchard-policy-test
+spec:
+  initContainers:
+    - name: pgbackrest-install
+      image: postgres:17
+      imagePullPolicy: IfNotPresent
+      command:
+        - /bin/bash
+        - '-c'
+        - >-
+          set -e && if [ -x /shared/pgbackrest ]; then echo "pgbackrest already installed"; exit 0; fi && echo
+          "Installing pgbackrest into /shared..." && export DEBIAN_FRONTEND=noninteractive && apt-get update -qq &&
+          apt-get install -y --no-install-recommends pgbackrest && cp "$(command -v pgbackrest)" /shared/pgbackrest &&
+          chmod 0755 /shared/pgbackrest && echo "done"
+      volumeMounts:
+        - name: pgbackrest-bin
+          mountPath: /shared
+  containers:
+    - name: postgres
+      image: postgres:17
+      imagePullPolicy: IfNotPresent
+      ports:
+        - name: postgres
+          containerPort: 5432
+          protocol: TCP
+      env:
+        - name: POSTGRES_DB
+          valueFrom:
+            secretKeyRef:
+              name: legacy-pg-pg
+              key: POSTGRES_DB
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              name: legacy-pg-pg
+              key: POSTGRES_USER
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: legacy-pg-pg
+              key: POSTGRES_PASSWORD
+        - name: PGDATA
+          value: /var/lib/postgresql/data/pgdata
+        - name: PGBACKREST_REPO1_S3_KEY
+          valueFrom:
+            secretKeyRef:
+              name: legacy-pg-pg
+              key: R2_ACCESS_KEY
+        - name: PGBACKREST_REPO1_S3_KEY_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: legacy-pg-pg
+              key: R2_SECRET_KEY
+      args:
+        - postgres
+        - '-c'
+        - archive_mode=on
+        - '-c'
+        - >-
+          archive_command=/opt/pgbackrest/pgbackrest --stanza=app --config=/etc/pgbackrest/pgbackrest.conf archive-push
+          %p
+        - '-c'
+        - archive_timeout=60
+        - '-c'
+        - max_wal_senders=3
+        - '-c'
+        - wal_level=replica
+      volumeMounts:
+        - name: data
+          mountPath: /var/lib/postgresql/data
+        - name: pgbackrest-config
+          mountPath: /etc/pgbackrest-config
+        - name: pgbackrest-conf
+          mountPath: /etc/pgbackrest
+        - name: pgbackrest-bin
+          mountPath: /opt/pgbackrest
+      readinessProbe:
+        exec:
+          command:
+            - pg_isready
+            - '-U'
+            - u
+            - '-d'
+            - app
+        periodSeconds: 10
+        timeoutSeconds: 5
+        failureThreshold: 6
+      livenessProbe:
+        exec:
+          command:
+            - pg_isready
+            - '-U'
+            - u
+            - '-d'
+            - app
+        periodSeconds: 30
+        timeoutSeconds: 5
+        failureThreshold: 6
+    - name: pgbackrest
+      image: woblerr/pgbackrest:2.56.0-alpine
+      imagePullPolicy: IfNotPresent
+      command:
+        - /bin/sh
+        - '-c'
+        - cp /etc/pgbackrest-config/pgbackrest.conf /etc/pgbackrest/pgbackrest.conf 2>/dev/null || true; sleep infinity
+      env:
+        - name: POSTGRES_DB
+          valueFrom:
+            secretKeyRef:
+              name: legacy-pg-pg
+              key: POSTGRES_DB
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              name: legacy-pg-pg
+              key: POSTGRES_USER
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: legacy-pg-pg
+              key: POSTGRES_PASSWORD
+        - name: PGDATA
+          value: /var/lib/postgresql/data/pgdata
+        - name: PGBACKREST_REPO1_S3_KEY
+          valueFrom:
+            secretKeyRef:
+              name: legacy-pg-pg
+              key: R2_ACCESS_KEY
+        - name: PGBACKREST_REPO1_S3_KEY_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: legacy-pg-pg
+              key: R2_SECRET_KEY
+      volumeMounts:
+        - name: data
+          mountPath: /var/lib/postgresql/data
+        - name: pgbackrest-config
+          mountPath: /etc/pgbackrest-config
+        - name: pgbackrest-conf
+          mountPath: /etc/pgbackrest
+  volumes:
+    - name: data
+      persistentVolumeClaim:
+        claimName: legacy-pg-data
+    - name: pgbackrest-config
+      configMap:
+        name: legacy-pg-pgbackrest
+        defaultMode: 493
+    - name: pgbackrest-conf
+      emptyDir: {}
+    - name: pgbackrest-bin
+      emptyDir: {}

@@ -1,0 +1,17 @@
+# user: system:serviceaccount:postgresql:cloudnative-pg
+# groups: system:serviceaccounts,system:serviceaccounts:postgresql,system:authenticated
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: db-1
+  labels:
+    cnpg.io/cluster: db
+    cnpg.io/pvcRole: PG_DATA
+  namespace: orchard-policy-test
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 500Gi
+  storageClassName: longhorn
