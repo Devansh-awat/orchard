@@ -147,7 +147,9 @@ test('loading persists the accepted sequence and refuses a replay of an older in
   const saved = new Map<string, RegistryIndexState>();
   const store: RegistryIndexStateStore = {
     load: async (n) => saved.get(n) ?? null,
-    save: async (n, s) => void saved.set(n, s)
+    save: async (n, s) => {
+      saved.set(n, s);
+    }
   };
   const serve = (body: object, withSig = true) => {
     const s = signed(body);
@@ -185,7 +187,9 @@ test('fetchRevoked keeps the last accepted revocation list when the catalog stop
   const saved = new Map<string, RegistryIndexState>();
   const store: RegistryIndexStateStore = {
     load: async (n) => saved.get(n) ?? null,
-    save: async (n, s) => void saved.set(n, s)
+    save: async (n, s) => {
+      saved.set(n, s);
+    }
   };
   try {
     writeFileSync(join(dir, 'grafts/index.json'), JSON.stringify({ revoked: ['AA'] }));

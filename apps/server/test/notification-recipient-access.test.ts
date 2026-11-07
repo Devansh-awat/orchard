@@ -115,7 +115,11 @@ test('access lookups are cached across fan-outs', async () => {
 function deliveryWith(authz: any) {
   const marked: any[] = [];
   const prisma: any = {
-    notificationDelivery: { updateMany: async (a: any) => void marked.push(a) }
+    notificationDelivery: {
+      updateMany: async (a: any) => {
+        marked.push(a);
+      }
+    }
   };
   const svc: any = new NotificationDeliveryService(
     prisma,

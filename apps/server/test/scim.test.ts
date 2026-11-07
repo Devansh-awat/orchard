@@ -161,7 +161,11 @@ function makeDb() {
 function makeService() {
   const { db, members, tombstones, users } = makeDb();
   const revoked: Array<[string, string]> = [];
-  const membershipCache = { revoked: (o: string, u: string) => void revoked.push([o, u]) };
+  const membershipCache = {
+    revoked: (o: string, u: string) => {
+      revoked.push([o, u]);
+    }
+  };
   const audit = { log: async () => {} };
   const sent: string[] = [];
   const email = {

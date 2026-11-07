@@ -106,7 +106,11 @@ test('membership.changed for the user closes their stream and strangers do not s
 function bridgeWith(resolveOrg: string | null) {
   const membershipCache = new MembershipCacheService({} as any);
   const emitted: any[] = [];
-  const orgEvents: any = { emit: (e: any) => void emitted.push(e) };
+  const orgEvents: any = {
+    emit: (e: any) => {
+      emitted.push(e);
+    }
+  };
   const prisma: any = {
     $extends: () => ({}),
     project: { findUnique: async () => (resolveOrg ? { organizationId: resolveOrg } : null) }

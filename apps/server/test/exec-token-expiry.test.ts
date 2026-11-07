@@ -175,7 +175,7 @@ test('a live socket is hard-closed at token expiry', async () => {
     assert.ok(closed.at >= expiresAt - 50, 'must not close before expiry');
     assert.ok(closed.at < expiresAt + 3_000, 'must close promptly at expiry');
   } finally {
-    for (const s of sessions.values()) s.recheckTimer && clearInterval(s.recheckTimer);
+    for (const s of sessions.values()) if (s.recheckTimer) clearInterval(s.recheckTimer);
     sessions.clear();
     sessionsByUser.clear();
     server.close();

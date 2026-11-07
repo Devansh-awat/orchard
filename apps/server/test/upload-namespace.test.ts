@@ -43,7 +43,11 @@ function storageWithRecorder() {
   const sent: any[] = [];
   const svc: any = new StorageService();
   svc.uploads = () => ({
-    client: { send: async (cmd: any) => void sent.push(cmd.input) },
+    client: {
+      send: async (cmd: any) => {
+        sent.push(cmd.input);
+      }
+    },
     target: { bucket: 'prod-assets', keyPrefix: '', publicUrl: BASE }
   });
   return { svc: svc as StorageService, sent };
