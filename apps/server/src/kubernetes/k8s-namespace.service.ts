@@ -1,4 +1,10 @@
-import { Injectable, Logger, BadRequestException, OnModuleInit } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  BadRequestException,
+  OnModuleInit,
+  ServiceUnavailableException
+} from '@nestjs/common';
 import { REGISTRY_PREFIX_LABEL } from './registry-image-policy';
 import * as k8s from '@kubernetes/client-node';
 import { clusterPods, clusterServiceCounts, type SnapshotRead } from './cluster-snapshot';
@@ -240,6 +246,35 @@ export class K8sNamespaceService implements OnModuleInit {
   // Patch resources on a CNPG Cluster (rolling update of postgres pods).
   // Patch a deployment's pod-template container resources (triggers rolling restart).
 
+  protected policyRetryDelaysMs = [250, 1000, 3000];
+
+  private async applyDefaultDenyOrAbandon(api: k8s.CoreV1Api, namespace: string): Promise<void> {
+    let lastError: unknown;
+    for (let attempt = 0; attempt <= this.policyRetryDelaysMs.length; attempt += 1) {
+      try {
+        await this.createNetworkPolicy(namespace);
+        return;
+      } catch (err) {
+        lastError = err;
+        this.logger.warn(
+          `default-deny network policy for ${namespace} failed (attempt ${attempt + 1}): ${(err as Error)?.message ?? err}`
+        );
+        const delay = this.policyRetryDelaysMs[attempt];
+        if (delay !== undefined) await new Promise((resolve) => setTimeout(resolve, delay));
+      }
+    }
+    await api.deleteNamespace(namespace).catch((err) => {
+      this.logger.error(
+        `could not remove ${namespace} after its default-deny network policy failed; it carries no workloads but has no policy: ${(err as Error)?.message ?? err}`
+      );
+    });
+    throw new ServiceUnavailableException({
+      error: 'Failed to isolate the new namespace',
+      message: `The default-deny network policy for ${namespace} could not be applied, so the namespace was not kept.`,
+      cause: (lastError as Error)?.message
+    });
+  }
+
   async createNamespace(namespace: string, registryPrefix?: string) {
     this.ensureKubeConfig();
 
@@ -279,14 +314,7 @@ export class K8sNamespaceService implements OnModuleInit {
 
       await api.createNamespace(body);
 
-      try {
-        await this.createNetworkPolicy(cleanNamespace);
-      } catch (networkPolicyError) {
-        console.error(
-          `[K8s] Failed to create network policy for namespace ${cleanNamespace}:`,
-          networkPolicyError
-        );
-      }
+      await this.applyDefaultDenyOrAbandon(api, cleanNamespace);
 
       // Bootstrap the per-tenant Role+RoleBinding that lets the orchard-server
       // ServiceAccount manage secrets and configmaps inside this namespace. There is
@@ -307,6 +335,7 @@ export class K8sNamespaceService implements OnModuleInit {
         created: true
       };
     } catch (error) {
+      if (error instanceof ServiceUnavailableException) throw error;
       if (error.response?.statusCode === 409) {
         try {
           await this.bootstrapTenantSecretsRbac(cleanNamespace);
