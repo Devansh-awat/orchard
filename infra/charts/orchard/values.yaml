@@ -221,6 +221,11 @@ networkPolicy:
     # Namespaces to treat like tenants, on top of the managed tenant
     # namespaces and the builders, sandbox, fc-builder and trivy namespaces.
     untrustedNamespaces: []
+  # With Cilium, deny the builders, sandbox, fc-builder and trivy namespaces the
+  # host, remote-node and kube-apiserver entities (tenant.denyEntities changes
+  # the list). Tenant namespaces get the same policy from the server.
+  egressDeny:
+    enabled: true
 
 # Control-plane Redis. Backs the cross-replica SSE event bus (Redis Streams)
 # so live updates reach SSE clients on every server replica, and is available

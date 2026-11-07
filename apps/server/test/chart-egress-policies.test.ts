@@ -131,3 +131,46 @@ test(
     assert.equal(internet[0].to[0].ipBlock.except.includes('169.254.0.0/16'), true);
   }
 );
+
+test(
+  'with cilium, the platform namespaces deny host, remote nodes and the apiserver',
+  options,
+  () => {
+    const none = render(['builders.enabled=true']);
+    assert.equal(
+      none.filter(
+        (d) => d.kind === 'CiliumNetworkPolicy' && d.metadata.name === 'deny-platform-egress'
+      ).length,
+      0
+    );
+    const docs = render([
+      'cilium.enabled=true',
+      'builders.enabled=true',
+      'trivy.enabled=true',
+      'fcBuilder.enabled=true',
+      'sandbox.enabled=true'
+    ]);
+    const denies = docs.filter(
+      (d) => d.kind === 'CiliumNetworkPolicy' && d.metadata.name === 'deny-platform-egress'
+    );
+    assert.deepEqual(denies.map((d) => d.metadata.namespace).sort(), [
+      'orchard-builders',
+      'orchard-fc-builders',
+      'orchard-sandboxes',
+      'orchard-scans'
+    ]);
+    for (const deny of denies) {
+      assert.deepEqual(deny.spec.egressDeny[0].toEntities, [
+        'host',
+        'remote-node',
+        'kube-apiserver'
+      ]);
+    }
+    const off = render([
+      'cilium.enabled=true',
+      'builders.enabled=true',
+      'networkPolicy.egressDeny.enabled=false'
+    ]);
+    assert.equal(off.filter((d) => d.metadata?.name === 'deny-platform-egress').length, 0);
+  }
+);

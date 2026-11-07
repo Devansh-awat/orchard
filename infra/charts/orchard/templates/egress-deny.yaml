@@ -1,0 +1,32 @@
+{{- if and (include "orchard.ciliumPolicies" .) .Values.networkPolicy.egressDeny.enabled }}
+{{- $entities := list "host" "remote-node" "kube-apiserver" }}
+{{- if .Values.tenant.denyEntities }}
+{{- $entities = splitList "," (.Values.tenant.denyEntities | replace " " "") }}
+{{- end }}
+{{- if ne (first $entities) "none" }}
+{{- $namespaces := list }}
+{{- if .Values.builders.enabled }}{{- $namespaces = append $namespaces .Values.builders.namespace }}{{- end }}
+{{- if include "orchard.sandboxInstalled" . }}{{- $namespaces = append $namespaces .Values.sandbox.namespace }}{{- end }}
+{{- if .Values.fcBuilder.enabled }}{{- $namespaces = append $namespaces .Values.fcBuilder.namespace }}{{- end }}
+{{- if .Values.trivy.enabled }}{{- $namespaces = append $namespaces .Values.trivy.namespace }}{{- end }}
+{{- range $ns := uniq $namespaces }}
+---
+# The "public internet" egress rule matches addresses, so it can also match a
+# node's public address or a public apiserver on CNIs without Cilium's host and
+# remote-node entities. Cilium denies beat allows, so this holds even if an
+# allow rule is added later.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: deny-platform-egress
+  namespace: {{ $ns }}
+spec:
+  endpointSelector: {}
+  egressDeny:
+    - toEntities:
+        {{- range $entities }}
+        - {{ . }}
+        {{- end }}
+{{- end }}
+{{- end }}
+{{- end }}
