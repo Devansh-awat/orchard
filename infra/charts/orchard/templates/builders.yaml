@@ -59,6 +59,21 @@
         {{- end }}
       {{- end }}
 {{- end }}
+{{- if include "orchard.r2ProxyActive" . }}
+    # The S3 build cache goes through the r2-proxy with a key limited to the
+    # tenant's own prefix, so build pods may reach the proxy and nothing else
+    # in its namespace.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.r2Proxy.namespace }}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: r2-proxy
+      ports:
+        - port: 9000
+          protocol: TCP
+{{- end }}
 {{- end }}
 {{- if .Values.builders.enabled }}
 {{- $bns := .Values.builders.namespace -}}

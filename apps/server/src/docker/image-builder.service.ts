@@ -36,6 +36,16 @@ import {
   secretValuesToMask
 } from './build-log-redaction';
 import { BUILDER_NAMESPACE } from './builder-namespace';
+import {
+  BUILD_CACHE_KEY_TTL_MS,
+  BUILD_CACHE_PURPOSE,
+  mintBuildCacheKey,
+  S3_TOUCH_REFRESH,
+  s3CacheRoute,
+  tenantWritePrefix,
+  type S3CacheTarget
+} from './build-cache-s3';
+import { objectStorage, tenantBackupTarget } from '../instance-config/object-storage';
 import { parseImageRef, sameRegistryHost } from '../projects/image-ref';
 import {
   assertBuildRegistryConfigured,
@@ -88,7 +98,6 @@ import { daemonTenantLabel, TENANT_KEY_LABEL } from './buildkit-daemon-policy';
 import { depotOutputFlags, depotScriptTail, depotSessionAuths } from './depot-session';
 import { BuildJobInformerService } from './build-job-informer.service';
 import { isUnseenTerminalSignal, remainingIntervalMs } from './build-poll-pacing';
-import { objectStorage } from '../instance-config/object-storage';
 
 interface BuildJobOptions {
   repoUrl: string;
@@ -159,8 +168,18 @@ const BUILD_ENV_SECRET_KEYS = {
   cloneUrl: 'orchard.clone-url',
   contextUrl: 'orchard.context-url',
   depotToken: 'orchard.depot-token',
-  dockerAuthJson: 'orchard.docker-auth-json'
+  dockerAuthJson: 'orchard.docker-auth-json',
+  s3CacheKeyId: 'orchard.s3-cache-key-id',
+  s3CacheSecret: 'orchard.s3-cache-secret'
 } as const;
+
+type ScopedS3Cache = {
+  target: S3CacheTarget;
+  accessKey: string;
+  secret: string;
+};
+
+type S3CachePlan = { kind: 'direct' } | { kind: 'scoped'; scoped: ScopedS3Cache } | { kind: 'off' };
 const BUILD_ARG_ENV_PREFIX = 'ORCHARD_BUILD_ARG_';
 const BUILD_META_VOLUME = 'build-meta';
 const BUILD_META_PATH = '/orchard-build';
@@ -421,6 +440,7 @@ export class ImageBuilderService {
   ) {
     this.initKubeConfig();
     logBuildPosture(this.builderPosture, this.builderRuntimeClass);
+    this.logS3CacheRoute();
   }
 
   private async emitBuildChanged(deploymentId: string | undefined) {
@@ -1019,7 +1039,94 @@ ${registryConfigs}
     }
   }
 
-  private buildCacheArgs(imageName?: string): BuildctlArg[] {
+  private s3CacheRoute() {
+    return s3CacheRoute(process.env, tenantBackupTarget()?.bucket ?? null);
+  }
+
+  private async planS3Cache(
+    deploymentId: string | undefined,
+    cacheTenantKey: string | undefined
+  ): Promise<S3CachePlan> {
+    const route = this.s3CacheRoute();
+    if (route.via === 'direct') return { kind: 'direct' };
+    try {
+      const organizationId = deploymentId ? await this.organizationOf(deploymentId) : null;
+      const writePrefix = tenantWritePrefix(route.basePrefix, cacheTenantKey);
+      if (!organizationId || !writePrefix) {
+        console.warn(
+          '[ImageBuilder] S3 build cache skipped: no organization or tenant key to scope a cache key to'
+        );
+        return { kind: 'off' };
+      }
+      const minted = mintBuildCacheKey();
+      await this.prisma.storageAccessKey.create({
+        data: {
+          accessKey: minted.accessKey,
+          secret: minted.secret,
+          organizationId,
+          writePrefix,
+          readPrefixes: [],
+          purpose: BUILD_CACHE_PURPOSE,
+          operationId: null,
+          expiresAt: new Date(Date.now() + BUILD_CACHE_KEY_TTL_MS)
+        }
+      });
+      return {
+        kind: 'scoped',
+        scoped: {
+          target: {
+            endpoint: route.endpoint,
+            bucket: route.bucket,
+            region: 'auto',
+            basePrefix: writePrefix,
+            scoped: true
+          },
+          accessKey: minted.accessKey,
+          secret: minted.secret
+        }
+      };
+    } catch (error) {
+      console.warn(
+        `[ImageBuilder] S3 build cache skipped, could not mint a tenant-scoped key: ${k8sErrorMessage(error)}`
+      );
+      return { kind: 'off' };
+    }
+  }
+
+  private async organizationOf(deploymentId: string): Promise<string | null> {
+    const cached = this.deploymentOrgCache.get(deploymentId);
+    if (cached) return cached.orgId;
+    const dep = await this.prisma.deployment.findUnique({
+      where: { id: deploymentId },
+      select: { projectId: true, project: { select: { organizationId: true } } }
+    });
+    if (!dep) return null;
+    this.deploymentOrgCache.set(deploymentId, {
+      orgId: dep.project.organizationId,
+      projectId: dep.projectId
+    });
+    return dep.project.organizationId;
+  }
+
+  private async revokeBuildCacheKey(accessKey: string): Promise<void> {
+    await this.prisma.storageAccessKey.deleteMany({ where: { accessKey } }).catch(() => {});
+  }
+
+  private logS3CacheRoute(): void {
+    if (!this.s3CacheEnabled || this.localCacheEnabled) return;
+    const route = this.s3CacheRoute();
+    if (route.via === 'proxy') {
+      console.log(
+        `[ImageBuilder] S3 build cache: per-tenant keys scoped to ${route.basePrefix}<tenant>/ through the r2-proxy`
+      );
+    } else {
+      console.warn(
+        `[ImageBuilder] S3 build cache uses the instance-wide key, so any build that can read its environment reaches every tenant's cache: ${route.reason}`
+      );
+    }
+  }
+
+  private buildCacheArgs(imageName?: string, s3Plan?: S3CachePlan): BuildctlArg[] {
     if (this.localCacheEnabled) {
       const sub = imageName ? imageName.replace(/[^a-z0-9-]/gi, '-') : 'default';
       const cacheDir = `${this.localCachePath}/${sub}`;
@@ -1029,7 +1136,14 @@ ${registryConfigs}
       return ['--import-cache', importCache, '--export-cache', exportCache];
     }
 
-    if (!this.s3CacheEnabled || !this.s3Endpoint || !this.s3Bucket) {
+    if (s3Plan?.kind === 'off') return [];
+    const scoped = s3Plan?.kind === 'scoped' ? s3Plan.scoped.target : null;
+    const endpoint = scoped?.endpoint ?? this.s3Endpoint;
+    const bucket = scoped?.bucket ?? this.s3Bucket;
+    const region = scoped?.region ?? this.s3Region;
+    const basePrefix = scoped?.basePrefix ?? this.s3CachePrefix;
+
+    if (!this.s3CacheEnabled || !endpoint || !bucket) {
       console.log('[ImageBuilder] S3 cache disabled or not configured');
       return [];
     }
@@ -1039,11 +1153,11 @@ ${registryConfigs}
     // from cached layers of a different deployment sharing the same base image,
     // resulting in missing CMD/WORKDIR/ENTRYPOINT from the runner stage.
     const cachePrefix = imageName
-      ? `${this.s3CachePrefix}${imageName.replace(/[^a-z0-9-]/gi, '-')}/`
-      : this.s3CachePrefix;
+      ? `${basePrefix}${imageName.replace(/[^a-z0-9-]/gi, '-')}/`
+      : basePrefix;
 
     console.log(
-      `[ImageBuilder] S3 cache enabled - endpoint: ${this.s3Endpoint}, bucket: ${this.s3Bucket}, prefix: ${cachePrefix}`
+      `[ImageBuilder] S3 cache enabled - endpoint: ${endpoint}, bucket: ${bucket}, prefix: ${cachePrefix}`
     );
 
     // BuildKit S3 cache format for Cloudflare R2
@@ -1052,10 +1166,14 @@ ${registryConfigs}
     // - region should be 'auto' for R2
     // - use_path_style should be true for R2
     // Note: buildctl uses --import-cache and --export-cache (not --cache-from/--cache-to)
-    const importCache = `type=s3,endpoint_url=${this.s3Endpoint},bucket=${this.s3Bucket},region=${this.s3Region},prefix=${cachePrefix},use_path_style=true`;
-    const exportCache = `type=s3,endpoint_url=${this.s3Endpoint},bucket=${this.s3Bucket},region=${this.s3Region},prefix=${cachePrefix},mode=min,use_path_style=true`;
+    const touch = scoped ? `,touch_refresh=${S3_TOUCH_REFRESH}` : '';
+    const importCache = `type=s3,endpoint_url=${endpoint},bucket=${bucket},region=${region},prefix=${cachePrefix},use_path_style=true${touch}`;
+    const exportCache = `type=s3,endpoint_url=${endpoint},bucket=${bucket},region=${region},prefix=${cachePrefix},mode=min,use_path_style=true${touch}`;
 
-    if (!isSafeS3Credential(this.s3AccessKeyId) || !isSafeS3Credential(this.s3SecretAccessKey)) {
+    if (
+      !scoped &&
+      (!isSafeS3Credential(this.s3AccessKeyId) || !isSafeS3Credential(this.s3SecretAccessKey))
+    ) {
       console.warn('[ImageBuilder] S3 cache credentials contain unsupported characters, cache off');
       return [];
     }
@@ -1760,6 +1878,11 @@ ls -la /workspace
       }
     }
 
+    const s3Plan: S3CachePlan =
+      !daemonIp && !buildWithDepot && !this.localCacheEnabled && this.s3CacheEnabled
+        ? await this.planS3Cache(deploymentId, cacheTenantKey)
+        : { kind: 'direct' };
+
     const buildctlArgs = this.generateBuildctlArgs({
       dockerfilePath,
       fullImageName,
@@ -1771,7 +1894,8 @@ ls -la /workspace
       secretsHash,
       cacheKey,
       skipCache: !!daemonIp,
-      daemonClient: !!daemonIp
+      daemonClient: !!daemonIp,
+      s3Plan
     });
 
     // Runs first, and only when the cache volume is the real shared PVC: the
@@ -1897,29 +2021,42 @@ exit $rc`
               // reaches the build by value as a --build-arg, so losing the race
               // here costs it nothing, while losing it the other way points our
               // cache exporter at someone else's bucket.
-              ...(this.s3CacheEnabled && !this.localCacheEnabled
-                ? [
-                    {
-                      name: S3_CACHE_KEY_ENV,
-                      valueFrom: {
-                        secretKeyRef: {
-                          name: 'buildkit-s3-cache-creds',
-                          key: 'AWS_ACCESS_KEY_ID',
-                          optional: true
+              ...(this.s3CacheEnabled && !this.localCacheEnabled && s3Plan.kind !== 'off'
+                ? s3Plan.kind === 'scoped'
+                  ? [
+                      secretEnv(
+                        S3_CACHE_KEY_ENV,
+                        buildEnvSecret,
+                        BUILD_ENV_SECRET_KEYS.s3CacheKeyId
+                      ),
+                      secretEnv(
+                        S3_CACHE_SECRET_ENV,
+                        buildEnvSecret,
+                        BUILD_ENV_SECRET_KEYS.s3CacheSecret
+                      )
+                    ]
+                  : [
+                      {
+                        name: S3_CACHE_KEY_ENV,
+                        valueFrom: {
+                          secretKeyRef: {
+                            name: 'buildkit-s3-cache-creds',
+                            key: 'AWS_ACCESS_KEY_ID',
+                            optional: true
+                          }
+                        }
+                      },
+                      {
+                        name: S3_CACHE_SECRET_ENV,
+                        valueFrom: {
+                          secretKeyRef: {
+                            name: 'buildkit-s3-cache-creds',
+                            key: 'AWS_SECRET_ACCESS_KEY',
+                            optional: true
+                          }
                         }
                       }
-                    },
-                    {
-                      name: S3_CACHE_SECRET_ENV,
-                      valueFrom: {
-                        secretKeyRef: {
-                          name: 'buildkit-s3-cache-creds',
-                          key: 'AWS_SECRET_ACCESS_KEY',
-                          optional: true
-                        }
-                      }
-                    }
-                  ]
+                    ]
                 : [])
             ],
             volumeMounts: [
@@ -2319,6 +2456,12 @@ exit $rc`
 
     const buildEnvSecretData: Record<string, string> = {
       ...envVars,
+      ...(s3Plan.kind === 'scoped'
+        ? {
+            [BUILD_ENV_SECRET_KEYS.s3CacheKeyId]: s3Plan.scoped.accessKey,
+            [BUILD_ENV_SECRET_KEYS.s3CacheSecret]: s3Plan.scoped.secret
+          }
+        : {}),
       ...(localContextUrl
         ? { [BUILD_ENV_SECRET_KEYS.contextUrl]: localContextUrl }
         : { [BUILD_ENV_SECRET_KEYS.cloneUrl]: cloneUrl }),
@@ -2410,6 +2553,7 @@ exit $rc`
       return jobName;
     } catch (error) {
       await this.deleteBuildJobSecrets(jobName).catch(() => {});
+      if (s3Plan.kind === 'scoped') await this.revokeBuildCacheKey(s3Plan.scoped.accessKey);
       const errorDetails = error.body ? JSON.stringify(error.body, null, 2) : error.message;
       const errorMsg = `Failed to create build job: ${error.message}${error.body ? `\nDetails: ${errorDetails}` : ''}`;
 
@@ -2572,6 +2716,7 @@ fi
     secretEnvKeys?: string[];
     skipCache?: boolean;
     daemonClient?: boolean;
+    s3Plan?: S3CachePlan;
   }): BuildctlArg[] {
     const { dockerfilePath, fullImageName, target, buildFromRoot, envVars, secretEnvKeys } =
       options;
@@ -2632,7 +2777,7 @@ fi
     // gets a hit. Also strip the registry/project prefix since it's constant.
     if (!options.skipCache) {
       const cacheImageKey = fullImageName.replace(/:[^/]*$/, '').replace(/^[^/]*\/[^/]*\//, '');
-      const cacheArgs = this.buildCacheArgs(cacheImageKey);
+      const cacheArgs = this.buildCacheArgs(cacheImageKey, options.s3Plan);
       for (const cacheArg of cacheArgs) {
         args.push(cacheArg);
       }
@@ -2667,6 +2812,7 @@ fi
     cacheKey?: string;
     skipCache?: boolean;
     daemonClient?: boolean;
+    s3Plan?: S3CachePlan;
   }): BuildctlArg[] {
     const { fullImageName, envVars, secretsHash, cacheKey } = options;
 
@@ -2699,7 +2845,7 @@ fi
     // Skip cache when using persistent daemon: its content store IS the cache.
     if (!options.skipCache) {
       const cacheImageKey = fullImageName.replace(/:[^/]*$/, '').replace(/^[^/]*\/[^/]*\//, '');
-      const cacheArgs = this.buildCacheArgs(cacheImageKey);
+      const cacheArgs = this.buildCacheArgs(cacheImageKey, options.s3Plan);
       for (const cacheArg of cacheArgs) {
         args.push(cacheArg);
       }
@@ -2732,6 +2878,7 @@ fi
     cacheKey?: string;
     skipCache?: boolean;
     daemonClient?: boolean;
+    s3Plan?: S3CachePlan;
   }): BuildctlArg[] {
     const {
       buildType,
@@ -2742,6 +2889,7 @@ fi
       cacheKey,
       skipCache,
       daemonClient,
+      s3Plan,
       ...dockerfileOptions
     } = options;
 
@@ -2752,7 +2900,8 @@ fi
         secretsHash: secretsHash || '',
         cacheKey,
         skipCache,
-        daemonClient
+        daemonClient,
+        s3Plan
       });
     }
 
@@ -2762,7 +2911,8 @@ fi
       envVars,
       secretEnvKeys,
       skipCache,
-      daemonClient
+      daemonClient,
+      s3Plan
     });
   }
 
