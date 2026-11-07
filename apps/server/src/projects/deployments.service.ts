@@ -1,3 +1,4 @@
+import { assertVolumeQuantity } from '../kubernetes/pvc-limits';
 import { pickPreviousImage } from './rollback-target';
 import { findVolumeConflict, volumeClaim } from './volume-claims';
 import {
@@ -3817,7 +3818,6 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     // client library flattens into an opaque "HTTP request failed", so catching
     // them here is the only way the user gets an actionable message.
     const DNS1123 = /^[a-z0-9]([-a-z0-9]*[a-z0-9])?$/;
-    const K8S_QUANTITY = /^\d+(\.\d+)?(Ei|Pi|Ti|Gi|Mi|Ki|E|P|T|G|M|k)?$/;
     for (const vol of volumesList) {
       if (!DNS1123.test(vol.name) || vol.name.length > 63) {
         throw new BadRequestException(
@@ -3835,11 +3835,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
             `Volume name "${vol.pvcName}" must be 1-63 lowercase letters, numbers, or hyphens`
           );
         }
-        if (vol.storageSize && !K8S_QUANTITY.test(vol.storageSize)) {
-          throw new BadRequestException(
-            `Storage size "${vol.storageSize}" isn't valid. Use a size like 1Gi or 500Mi.`
-          );
-        }
+        if (vol.storageSize) assertVolumeQuantity(vol.storageSize);
       }
     }
 

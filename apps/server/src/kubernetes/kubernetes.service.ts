@@ -1,4 +1,4 @@
-import { Injectable, ServiceUnavailableException } from '@nestjs/common';
+import { BadRequestException, Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { parseMemory } from './quantity';
 import * as k8s from '@kubernetes/client-node';
 import { clusterPods, type SnapshotRead } from './cluster-snapshot';
@@ -11,6 +11,7 @@ import {
   serverHostAddresses
 } from './cluster-addresses';
 import type { PodSizing } from './resource-spec';
+import { assertValidClaimName, assertValidVolumeSize, isPlatformOwnedClaim } from './pvc-limits';
 
 export const ALLOWED_INGRESS_ANNOTATION_KEYS = new Set<string>([
   'cert-manager.io/cluster-issuer',
@@ -588,6 +589,7 @@ export class KubernetesService {
     const cleanName = String(name || '').trim();
 
     if (!cleanNamespace || !cleanName) return;
+    assertValidClaimName(cleanName);
 
     const coreApi = this.kc.makeApiClient(k8s.CoreV1Api);
 
@@ -596,8 +598,12 @@ export class KubernetesService {
         cleanName,
         cleanNamespace
       );
+      if (isPlatformOwnedClaim(existing.metadata?.labels)) {
+        throw new BadRequestException(`Volume "${cleanName}" belongs to a database`);
+      }
       const current = parseMemory(String(existing.spec?.resources?.requests?.storage ?? ''));
       if (parseMemory(storageSize) > current) {
+        assertValidVolumeSize(storageSize);
         await coreApi.patchNamespacedPersistentVolumeClaim(
           cleanName,
           cleanNamespace,
@@ -616,6 +622,8 @@ export class KubernetesService {
         throw error;
       }
     }
+
+    assertValidVolumeSize(storageSize);
 
     const pvc: k8s.V1PersistentVolumeClaim = {
       metadata: {

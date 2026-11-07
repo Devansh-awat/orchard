@@ -1,3 +1,4 @@
+import { assertValidVolumeSize } from '../kubernetes/pvc-limits';
 import {
   Injectable,
   NotFoundException,
@@ -694,6 +695,7 @@ export class DatabasesService {
 
     const sizeRaw = typeof data.storageSize === 'string' ? data.storageSize.trim() : '';
     const storageSize = /^\d+(Mi|Gi|Ti)$/.test(sizeRaw) ? sizeRaw : '1Gi';
+    assertValidVolumeSize(storageSize);
 
     let importFrom:
       | {
