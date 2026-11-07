@@ -99,7 +99,7 @@ recognised. Anything without a default is optional unless the description says o
 | `DOCKER_REGISTRY_PUSH` |  | Both are required to build images. With either unset, builds fail and say so. |
 | `DOCKER_REGISTRY_PULL` |  |  |
 | `REGISTRY_PROJECT` | `orchard` |  |
-| `REGISTRY_IMAGE_POLICY` |  | What the cluster does with a pod naming another project's image: warn, enforce or off. Default: warn. |
+| `REGISTRY_IMAGE_POLICY` |  | What the cluster does with a pod naming another project's image: enforce, warn or off. Unset enforces unless an existing image would be refused, in which case it warns. |
 | `REGISTRY_PULL_SECRET_NAME` |  |  |
 | `REGISTRY_HTTP_HOSTS` |  | Comma-separated registry hosts reached over plain HTTP. Anything not listed is HTTPS. |
 | `HARBOR_USERNAME` |  |  |

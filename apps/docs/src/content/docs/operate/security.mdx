@@ -53,11 +53,14 @@ Every node can pull from Orchard's registry, so a pod could otherwise run any im
 
 The `REGISTRY_IMAGE_POLICY` variable sets what the rule does:
 
-| Value     | Effect                                                               |
-| --------- | -------------------------------------------------------------------- |
-| `enforce` | Kubernetes refuses the pod. The installer sets this value.           |
-| `warn`    | The pod runs, and Kubernetes reports a warning. This is the default. |
-| `off`     | Orchard removes the rule.                                            |
+| Value           | Effect                                                                                                                                                                                               |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `enforce`       | Kubernetes refuses the pod. The installer sets this value.                                                                                                                                           |
+| unset or `auto` | The default. Orchard enforces the rule unless a current app image or a pinned `POSTGRES_IMAGE_<major>` on Orchard's registry would be refused. In that case it warns and logs which images block it. |
+| `warn`          | The pod runs, and Kubernetes reports a warning.                                                                                                                                                      |
+| `off`           | Orchard removes the rule.                                                                                                                                                                            |
+
+Any other value enforces the rule, so a typo cannot weaken it.
 
 Orchard labels namespaces and restores the rule every five minutes.
 

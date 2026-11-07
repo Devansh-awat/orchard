@@ -9,6 +9,7 @@ import {
   REGISTRY_POLICY_NAME,
   REGISTRY_PREFIX_LABEL,
   namespaceRegistryMeta,
+  registryPolicyBlockers,
   registryImagePolicy,
   registryImagePolicyBinding,
   registryPolicyMode,
@@ -61,41 +62,22 @@ export class RegistryImagePolicyService implements OnModuleInit, OnModuleDestroy
     }
   }
 
+  private lastAutoMode: string | null = null;
+
   async reconcile(): Promise<void> {
-    const mode = registryPolicyMode(process.env.REGISTRY_IMAGE_POLICY);
+    const setting = registryPolicyMode(process.env.REGISTRY_IMAGE_POLICY);
     const hosts = [process.env.DOCKER_REGISTRY_PULL, process.env.DOCKER_REGISTRY_PUSH]
       .filter((host): host is string => Boolean(host))
       .map((host) => host.toLowerCase().replace(/:443$/, ''));
     const { kc } = this.kubernetes;
     if (!kc) return;
     const custom = kc.makeApiClient(k8s.CustomObjectsApi);
-    if (mode === 'off' || hosts.length === 0) {
+    if (setting === 'off' || hosts.length === 0) {
       await this.remove(custom);
       return;
     }
-    await this.syncNamespaces(kc);
-    await this.upsert(
-      custom,
-      'validatingadmissionpolicies',
-      registryImagePolicy(hosts, process.env.REGISTRY_PROJECT || 'orchard')
-    );
-    await this.upsert(
-      custom,
-      'validatingadmissionpolicybindings',
-      registryImagePolicyBinding(mode)
-    );
-  }
-
-  private async syncNamespaces(kc: k8s.KubeConfig): Promise<void> {
-    const projects = await this.prisma.project.findMany({
-      select: {
-        namespace: true,
-        environments: { select: { namespace: true } },
-        deployments: {
-          select: { image: true, imageHistory: { select: { image: true } } }
-        }
-      }
-    });
+    const registryProject = process.env.REGISTRY_PROJECT || 'orchard';
+    const projects = await this.loadProjects();
     const wanted = namespaceRegistryMeta(
       projects.map((project) => ({
         namespace: project.namespace,
@@ -107,6 +89,72 @@ export class RegistryImagePolicyService implements OnModuleInit, OnModuleDestroy
         )
       }))
     );
+    await this.syncNamespaces(kc, wanted);
+    const mode =
+      setting === 'auto' ? this.resolveAuto(projects, wanted, hosts, registryProject) : setting;
+    await this.upsert(
+      custom,
+      'validatingadmissionpolicies',
+      registryImagePolicy(hosts, registryProject)
+    );
+    await this.upsert(
+      custom,
+      'validatingadmissionpolicybindings',
+      registryImagePolicyBinding(mode)
+    );
+  }
+
+  private async loadProjects() {
+    return this.prisma.project.findMany({
+      select: {
+        namespace: true,
+        environments: { select: { namespace: true } },
+        deployments: {
+          select: { image: true, imageHistory: { select: { image: true } } }
+        }
+      }
+    });
+  }
+
+  private resolveAuto(
+    projects: Awaited<ReturnType<RegistryImagePolicyService['loadProjects']>>,
+    wanted: ReturnType<typeof namespaceRegistryMeta>,
+    hosts: string[],
+    registryProject: string
+  ): 'enforce' | 'warn' {
+    const pinned = Object.entries(process.env)
+      .filter(([key, value]) => /^POSTGRES_IMAGE_\d+$/.test(key) && value)
+      .map(([, value]) => value as string);
+    const blockers = registryPolicyBlockers(
+      projects.map((project) => ({
+        namespace: project.namespace,
+        images: project.deployments
+          .map((deployment) => deployment.image)
+          .filter((image): image is string => Boolean(image))
+      })),
+      wanted,
+      hosts,
+      registryProject,
+      pinned
+    );
+    const mode = blockers.length === 0 ? 'enforce' : 'warn';
+    if (this.lastAutoMode !== mode) {
+      this.lastAutoMode = mode;
+      if (mode === 'enforce') {
+        this.logger.log('tenant image policy: enforcing (REGISTRY_IMAGE_POLICY unset)');
+      } else {
+        this.logger.warn(
+          `tenant image policy: staying in warn mode because ${blockers.length} existing image(s) would be refused (first: ${blockers.slice(0, 3).join('; ')}). Fix or retire them, or set REGISTRY_IMAGE_POLICY=enforce.`
+        );
+      }
+    }
+    return mode;
+  }
+
+  private async syncNamespaces(
+    kc: k8s.KubeConfig,
+    wanted: ReturnType<typeof namespaceRegistryMeta>
+  ): Promise<void> {
     const core = kc.makeApiClient(k8s.CoreV1Api);
     const live = await core.listNamespace();
     for (const ns of live.body.items) {

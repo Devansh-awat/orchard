@@ -1,14 +1,76 @@
+import {
+  isLoopbackHost,
+  parseImageRef,
+  repositoryName,
+  sameRegistryHost
+} from '../projects/image-ref';
+
 export const REGISTRY_PREFIX_LABEL = 'orchard.my/registry-prefix';
 export const REGISTRY_FOREIGN_ANNOTATION = 'orchard.my/registry-foreign';
 export const REGISTRY_OWN_ANNOTATION = 'orchard.my/registry-own';
 export const REGISTRY_POLICY_NAME = 'orchard-tenant-images';
 
 export type RegistryPolicyMode = 'enforce' | 'warn' | 'off';
+export type RegistryPolicySetting = RegistryPolicyMode | 'auto';
 
-export function registryPolicyMode(value: string | undefined): RegistryPolicyMode {
+export function registryPolicyMode(value: string | undefined): RegistryPolicySetting {
   const mode = (value || '').trim().toLowerCase();
-  if (mode === 'enforce' || mode === 'off') return mode;
-  return 'warn';
+  if (mode === '' || mode === 'auto') return 'auto';
+  if (mode === 'warn' || mode === 'off') return mode;
+  return 'enforce';
+}
+
+export function platformHostVariants(host: string): string[] {
+  const bare = host
+    .toLowerCase()
+    .replace(/:(443|80)$/, '')
+    .replace(/\.+$/, '');
+  return [...new Set([bare, `${bare}.`].flatMap((h) => [h, `${h}:443`, `${h}:80`]))];
+}
+
+export function imageAllowedInNamespace(
+  image: string,
+  meta: NamespaceRegistryMeta,
+  hosts: string[],
+  registryProject: string
+): boolean {
+  const ref = parseImageRef(image);
+  if (!ref?.host) return true;
+  if (isLoopbackHost(ref.host)) return false;
+  if (!hosts.some((host) => sameRegistryHost(ref.host!, host))) return true;
+  const parts = ref.repository.split('/');
+  if (parts.length !== 2 || parts[0] !== registryProject) return false;
+  const repo = parts[1];
+  if (!repo.startsWith(`${meta.prefix}-`)) return false;
+  const own = (meta.own ?? '').split(',').filter(Boolean);
+  const foreign = (meta.foreign ?? '').split(',').filter(Boolean);
+  return own.includes(repo) || !foreign.some((prefix) => repo.startsWith(`${prefix}-`));
+}
+
+export function registryPolicyBlockers(
+  projects: { namespace: string; images: string[] }[],
+  meta: Map<string, NamespaceRegistryMeta>,
+  hosts: string[],
+  registryProject: string,
+  pinnedImages: string[] = []
+): string[] {
+  const blockers: string[] = [];
+  for (const project of projects) {
+    const projectMeta = meta.get(project.namespace);
+    if (!projectMeta) continue;
+    for (const image of project.images) {
+      if (!imageAllowedInNamespace(image, projectMeta, hosts, registryProject)) {
+        blockers.push(`${project.namespace}: ${image}`);
+      }
+    }
+  }
+  for (const image of pinnedImages) {
+    const ref = parseImageRef(image);
+    if (ref?.host && hosts.some((host) => sameRegistryHost(ref.host!, host))) {
+      blockers.push(`pinned image: ${image}`);
+    }
+  }
+  return blockers;
 }
 
 function celString(value: string): string {
@@ -21,7 +83,7 @@ function annotationList(key: string): string {
 }
 
 export function registryImagePolicy(hosts: string[], registryProject: string): object {
-  const platformHosts = hosts.flatMap((host) => [host, `${host}:443`].map(celString)).join(', ');
+  const platformHosts = [...new Set(hosts.flatMap(platformHostVariants))].map(celString).join(', ');
   const repo = "i.lowerAscii().split('/')[2].split('@')[0].split(':')[0]";
   const ownRepo = [
     `${repo}.startsWith(variables.prefix + '-')`,
@@ -29,7 +91,7 @@ export function registryImagePolicy(hosts: string[], registryProject: string): o
   ].join(' && ');
   const onPlatform = "variables.hosts.exists(h, h == i.lowerAscii().split('/')[0])";
   const allowed = [
-    "!i.lowerAscii().split('/')[0].matches('^(localhost|127(\\\\.[0-9]+){3}|\\\\[::1\\\\]|0\\\\.0\\\\.0\\\\.0)(:[0-9]+)?$')",
+    "!i.lowerAscii().split('/')[0].matches('^(localhost\\\\.?|127(\\\\.[0-9]+){0,3}\\\\.?|0(\\\\.0){0,3}\\\\.?|\\\\[::1?\\\\]|\\\\[::ffff:[0-9a-f:.]+\\\\])(:[0-9]+)?$')",
     `(!${onPlatform} || (i.split('/').size() == 3 && i.lowerAscii().split('/')[1] == ${celString(registryProject)} && ${ownRepo}))`
   ].join(' && ');
   return {
@@ -128,5 +190,7 @@ export function namespaceRegistryMeta(
 }
 
 export function repoFromImage(image: string): string {
+  const ref = parseImageRef(image);
+  if (ref) return repositoryName(ref);
   return (image.split('/').pop() ?? image).split('@')[0].split(':')[0];
 }
