@@ -271,6 +271,7 @@ test('a recovered cluster archives to its own prefix with the plugin or in-tree 
   const drill = recoveryClusterSpec({ ...base, archive: null }) as any;
   assert.equal(drill.backup, undefined);
   assert.equal(drill.plugins, undefined);
+  assert.equal(drill.enableSuperuserAccess, false);
 });
 
 test('recovery progress reads ready, failed and still-working clusters', () => {

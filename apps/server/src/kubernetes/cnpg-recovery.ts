@@ -388,7 +388,7 @@ export function recoveryClusterSpec(input: RecoveryClusterInput): Record<string,
         ? { shared_preload_libraries: input.sharedPreloadLibraries }
         : {})
     },
-    enableSuperuserAccess: true
+    enableSuperuserAccess: false
   };
   if (input.resources) spec.resources = input.resources;
   if (input.affinity) spec.affinity = input.affinity;

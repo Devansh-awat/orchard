@@ -1793,7 +1793,7 @@ export class K8sCnpgService implements OnApplicationBootstrap {
           ? { shared_preload_libraries: options.sharedPreloadLibraries }
           : {})
       },
-      enableSuperuserAccess: true
+      enableSuperuserAccess: false
     };
 
     if (options.resources) {

@@ -157,6 +157,18 @@ Complete step 1 before step 4. If the runtime does not exist, new tenant pods fa
 no runtime for "runsc" is configured
 ```
 
+## Database and platform pods
+
+Project editors can open a shell in, or run commands in, their own app pods. They cannot do so in database pods, connection-pooler pods, Tailscale proxy pods, job pods or build pods. The request fails with a 403 that points to the database connection string. Pod logs stay readable. To work in a dedicated Postgres database, connect to it with the app role's connection string from your app, or enable public access and run `psql` from your own machine.
+
+Dedicated databases are created with the Postgres `postgres` superuser login disabled (`enableSuperuserAccess: false`). Orchard never used that login. Databases created before this change keep it until you run the migration script, because the script patches clusters one at a time and stops if any instance pod restarts:
+
+```bash
+apps/server/scripts/cnpg-disable-superuser.sh                  # dry run, lists clusters
+apps/server/scripts/cnpg-disable-superuser.sh --apply --limit 1 # canary one cluster first
+apps/server/scripts/cnpg-disable-superuser.sh --apply
+```
+
 ## Requirements for untrusted code
 
 Code is untrusted if someone can run a process that you did not write. This includes letting other people deploy from their own repositories. In that case, set up all of the following:
