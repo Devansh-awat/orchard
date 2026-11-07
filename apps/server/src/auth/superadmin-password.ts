@@ -88,6 +88,17 @@ export async function superadminHasPassword(
   return Boolean((user?.isSuperAdmin || anyAccount) && user?.passwordHash);
 }
 
+export async function instancePasswordSignIn(
+  prisma: PasswordPrisma,
+  anyAccount = false
+): Promise<boolean> {
+  const holder = await prisma.user.findFirst({
+    where: { passwordHash: { not: null }, ...(anyAccount ? {} : { isSuperAdmin: true }) },
+    select: { id: true }
+  });
+  return Boolean(holder);
+}
+
 export async function verifySuperadminPassword(
   prisma: PasswordPrisma,
   email: string,

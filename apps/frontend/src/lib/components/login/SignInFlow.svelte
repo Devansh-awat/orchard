@@ -214,21 +214,20 @@
 		fault = null;
 		try {
 			if (onSsoRedirect && (await onSsoRedirect(address))) return;
-			let methods = { passkey: false, password: false, superadmin: false };
+			let methods = { passkey: false, password: false };
 			try {
 				const response = await apiFetch(`/apiv1/auth/methods?email=${encodeURIComponent(address)}`);
 				const data = await response.json().catch(() => ({}));
 				methods = {
 					passkey: Boolean(data?.passkey),
-					password: Boolean(data?.password),
-					superadmin: Boolean(data?.superadmin)
+					password: Boolean(data?.password)
 				};
 			} catch {
-				methods = { passkey: false, password: false, superadmin: false };
+				methods = { passkey: false, password: false };
 			}
 			hasPassword = methods.password;
 			hasPasskey = methods.passkey && passkeySupported;
-			chooser = methods.superadmin && (hasPasskey || hasPassword);
+			chooser = hasPasskey || hasPassword;
 			busy = null;
 			if (chooser) go('choose');
 			else if (hasPasskey) {

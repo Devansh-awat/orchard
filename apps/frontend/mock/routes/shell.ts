@@ -143,7 +143,7 @@ export function shellRoutes(r: Router, { store, hub, log }: MockContext) {
 		return { ok: true };
 	});
 	r.get('/auth/config', () => ({ turnstileSiteKey: null, ssoEnforced: false, emailCodes: true }));
-	r.get('/auth/methods', () => ({ passkey: false, password: false, superadmin: false }));
+	r.get('/auth/methods', () => ({ passkey: true, password: false }));
 	r.post('/auth/otp/request', () => ({
 		message: 'Mock mode: any 6-digit code works except 000000.'
 	}));

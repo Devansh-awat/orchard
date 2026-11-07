@@ -19,7 +19,7 @@ import {
   PasswordRefused,
   setAccountPassword,
   setSuperadminPassword,
-  superadminHasPassword,
+  instancePasswordSignIn,
   verifySuperadminPassword
 } from './superadmin-password';
 import { PasskeyService } from './passkey.service';
@@ -258,23 +258,17 @@ export class PasswordlessController {
   }
 
   /**
-   * What this address can sign in with, so the form asks for the right thing
-   * rather than mailing a code to an instance with no SMTP.
-   * GET /auth/methods?email=user@example.com
+   * Which sign-in methods this instance offers. The answer never depends on
+   * the address asked about: a per-address answer would tell an anonymous
+   * caller which emails hold an account, a passkey or superadmin rights.
+   * GET /auth/methods
    */
   @Get('methods')
-  async authMethods(
-    @Req() req: Request
-  ): Promise<{ passkey: boolean; password: boolean; superadmin: boolean }> {
-    const email = ((req.query.email as string) || '').toLowerCase().trim();
-    if (!email) return { passkey: false, password: false, superadmin: false };
-
-    const [passkey, password, user] = await Promise.all([
-      this.passkeyService.userHasPasskeys(email),
-      superadminHasPassword(this.prisma, email, !this.otpService.sendsEmail()),
-      this.prisma.user.findUnique({ where: { email }, select: { isSuperAdmin: true } })
-    ]);
-    return { passkey, password, superadmin: Boolean(user?.isSuperAdmin) };
+  async authMethods(): Promise<{ passkey: boolean; password: boolean }> {
+    return {
+      passkey: true,
+      password: await instancePasswordSignIn(this.prisma, !this.otpService.sendsEmail())
+    };
   }
 
   /**
@@ -405,15 +399,8 @@ export class PasswordlessController {
    * GET /auth/passkey/check?email=user@example.com
    */
   @Get('passkey/check')
-  async checkPasskeys(@Req() req: Request): Promise<{ hasPasskeys: boolean }> {
-    const email = req.query.email as string;
-
-    if (!email) {
-      return { hasPasskeys: false };
-    }
-
-    const hasPasskeys = await this.passkeyService.userHasPasskeys(email);
-    return { hasPasskeys };
+  async checkPasskeys(): Promise<{ hasPasskeys: boolean }> {
+    return { hasPasskeys: true };
   }
 
   /**
