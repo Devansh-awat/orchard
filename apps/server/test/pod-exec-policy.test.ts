@@ -32,6 +32,10 @@ test('pooler pods are refused', () => {
   assert.equal(isExecableAppPod({ ...app, 'app.kubernetes.io/name': 'db-pgbouncer' }), false);
 });
 
+test('legacy postgres container pods are refused', () => {
+  assert.equal(isExecableAppPod({ ...app, 'app.kubernetes.io/component': 'postgres' }), false);
+});
+
 test('tailscale proxy pods are refused', () => {
   assert.equal(
     isExecableAppPod({

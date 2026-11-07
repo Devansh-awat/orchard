@@ -21,6 +21,7 @@ export function isExecableAppPod(labels: PodLabels): boolean {
   for (const key of PLATFORM_LABEL_KEYS) {
     if (key in labels) return false;
   }
+  if (labels['app.kubernetes.io/component'] === 'postgres') return false;
   if (name.includes('pgbouncer') || name.includes('pooler')) return false;
   return true;
 }
