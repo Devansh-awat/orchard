@@ -48,7 +48,7 @@ The policy blocks the following:
 - The ranges `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, and `100.64.0.0/10`, where control-plane services run.
 - Unpublished services of other tenants.
 
-Orchard restores this policy if someone changes it with `kubectl`. With Cilium it also adds a `deny-platform-egress` policy to each tenant namespace that denies the `host`, `remote-node` and `kube-apiserver` entities, which holds even when an allow rule would match. A new namespace is deleted again if its default-deny policy cannot be applied, and a missing default-deny is recreated within two minutes.
+Orchard restores this policy if someone changes it with `kubectl`. With Cilium it also adds a `deny-platform-egress` policy to each tenant namespace that denies the `host`, `remote-node` and `kube-apiserver` entities, which holds even when an allow rule would match. A new namespace is deleted again if its default-deny policy cannot be applied. A deleted default-deny is recreated at once, and a sweep every five minutes catches one that a watch event missed.
 
 ### Control-plane namespaces
 
