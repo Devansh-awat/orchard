@@ -491,6 +491,8 @@ export class KubernetesService {
   }
 
   async getDefaultNodeIp(coreApi: k8s.CoreV1Api): Promise<string | null> {
+    const configured = process.env.PUBLIC_EXPOSURE_IP?.trim();
+    if (configured) return configured;
     try {
       const nodes = await coreApi.listNode();
       for (const node of nodes.body.items) {

@@ -1,3 +1,4 @@
+import { assertOrgCanExposePublicPort } from './public-exposure-quota';
 import { assertValidVolumeSize } from '../kubernetes/pvc-limits';
 import {
   Injectable,
@@ -3030,6 +3031,8 @@ export class DatabasesService {
         connectionString: this.publicConnectionStringFor(database, MASKED_PASSWORD, existing)
       };
     }
+
+    await assertOrgCanExposePublicPort(this.prisma, database.project.organizationId);
 
     const port =
       database.publicIp === ip && database.publicPort

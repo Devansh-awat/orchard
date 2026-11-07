@@ -1,3 +1,4 @@
+import { assertOrgCanExposeNodePort, assertOrgCanExposePublicPort } from './public-exposure-quota';
 import { assertVolumeQuantity } from '../kubernetes/pvc-limits';
 import { pickPreviousImage } from './rollback-target';
 import { findVolumeConflict, volumeClaim } from './volume-claims';
@@ -4107,6 +4108,9 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     }
 
     const exposePublic = data.exposePublic === true;
+    if (exposePublic) {
+      await assertOrgCanExposeNodePort(this.prisma, deployment.project.organizationId);
+    }
     const requestedType = exposePublic ? 'NodePort' : 'ClusterIP';
     const serviceType = exposePublic ? ServiceType.external : ServiceType.internal;
 
@@ -4684,6 +4688,10 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     }
 
     await this.authz.requireProjectEdit(service.deployment.project.id, user.id, 'update services');
+
+    if (exposePublic && service.type !== 'external') {
+      await assertOrgCanExposeNodePort(this.prisma, service.deployment.project.organizationId);
+    }
 
     const desiredType = exposePublic ? 'NodePort' : 'ClusterIP';
 
@@ -5601,6 +5609,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       const host = this.k8sNetwork.publicDeploymentBaseDomain();
       return { enabled: true, host, ip, port: port.publicPort, protocol: port.protocol };
     }
+
+    await assertOrgCanExposePublicPort(this.prisma, deployment.project.organizationId);
 
     const publicPort = await this.pickFreePublicDeploymentPort(ip);
 
@@ -6770,6 +6780,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     const { resolved: resolvedEnv } = this.resolveOrReject(env, sharedVars, {});
 
     const exposePublic = Boolean(data.exposePublic);
+    if (exposePublic) await assertOrgCanExposeNodePort(this.prisma, project.organizationId);
 
     const rawPorts =
       Array.isArray(data.ports) && data.ports.length > 0
@@ -7305,6 +7316,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     const { resolved: resolvedEnv } = this.resolveOrReject(env, sharedVars, {});
 
     const exposePublic = Boolean(data.exposePublic);
+    if (exposePublic) await assertOrgCanExposeNodePort(this.prisma, project.organizationId);
 
     // Auto-detect port from Dockerfile EXPOSE directive if no port specified
     let detectedPort: number | null = null;

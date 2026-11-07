@@ -1695,13 +1695,7 @@ export class K8sNetworkService implements OnModuleInit {
       });
 
       const portsForService = normalizedPorts.map((port) => {
-        let nodePortValue =
-          typeof port.nodePort === 'number' &&
-          Number.isInteger(port.nodePort) &&
-          port.nodePort >= 30000 &&
-          port.nodePort <= 32767
-            ? port.nodePort
-            : undefined;
+        let nodePortValue: number | undefined;
 
         if (serviceType === 'NodePort' || serviceType === 'LoadBalancer') {
           const signature = `${port.servicePort}-${port.protocol}`.toLowerCase();
@@ -1995,12 +1989,6 @@ export class K8sNetworkService implements OnModuleInit {
               targetPort: port.containerPort,
               protocol: port.protocol
             };
-            if (
-              (requestedType === 'NodePort' || requestedType === 'LoadBalancer') &&
-              port.nodePort
-            ) {
-              entry.nodePort = port.nodePort;
-            }
             return entry;
           })
         }

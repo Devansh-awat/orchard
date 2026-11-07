@@ -126,6 +126,15 @@ tenant:
   # it does not know. Empty means every organization must set its own, which is
   # the old behaviour.
   publicIp: ""
+  # Raw NodePort exposure (an app port reachable on every node's IP, in the
+  # cluster's node-port range). Right for a single-node install, where the node
+  # IP is the public IP. On a shared multi-node cluster that publishes ports on
+  # a load-balancer IP (publicIp above or the organization's own), set false so
+  # tenants cannot open ports on every node.
+  nodePortExposure: true
+  # Most public ports (NodePorts, app public ports, public databases) one
+  # organization may hold. Empty keeps the server default of 20; 0 is unlimited.
+  maxPublicPortsPerOrg: ""
   # Namespaces a tenant pod may be reached from, and reach. Every tenant
   # namespace is default-deny, so the ingress controller has to be on this list
   # or it cannot reach the app at all.

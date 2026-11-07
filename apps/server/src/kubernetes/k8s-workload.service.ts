@@ -1056,9 +1056,6 @@ export class K8sWorkloadService {
               targetPort: port.containerPort,
               protocol: port.protocol
             };
-            if (requestedServiceType === 'NodePort' && port.nodePort && port.nodePort >= 30000) {
-              entry.nodePort = port.nodePort;
-            }
             return entry;
           })
         }

@@ -500,6 +500,12 @@ true
             {{- if .publicIp }}
             - { name: PUBLIC_EXPOSURE_IP, value: {{ .publicIp | quote }} }
             {{- end }}
+            {{- if eq (toString .nodePortExposure) "false" }}
+            - { name: TENANT_NODEPORT_EXPOSURE, value: "false" }
+            {{- end }}
+            {{- if .maxPublicPortsPerOrg }}
+            - { name: MAX_PUBLIC_PORTS_PER_ORG, value: {{ .maxPublicPortsPerOrg | quote }} }
+            {{- end }}
             {{- end }}
             {{- with (include "orchard.wildcardDomains" .) }}
             - { name: PLATFORM_WILDCARD_DOMAINS, value: {{ . | quote }} }

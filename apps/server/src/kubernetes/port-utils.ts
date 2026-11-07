@@ -141,10 +141,9 @@ export function sanitizePortEntries(portInputs: DeploymentPortInput[]): Sanitize
       return;
     }
 
-    const protocol =
-      typeof input.protocol === 'string' && input.protocol.trim().length > 0
-        ? input.protocol.trim().toUpperCase()
-        : 'TCP';
+    const requestedProtocol =
+      typeof input.protocol === 'string' ? input.protocol.trim().toUpperCase() : '';
+    const protocol = requestedProtocol === 'UDP' ? 'UDP' : 'TCP';
 
     const rawName = typeof input.name === 'string' ? input.name : '';
     let baseName = rawName

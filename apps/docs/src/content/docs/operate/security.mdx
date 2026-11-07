@@ -169,6 +169,23 @@ apps/server/scripts/cnpg-disable-superuser.sh --apply --limit 1 # canary one clu
 apps/server/scripts/cnpg-disable-superuser.sh --apply
 ```
 
+### Public TCP and UDP ports
+
+A tenant can publish a raw TCP or UDP port in two ways. The two have different exposure, so Orchard treats them differently.
+
+**Public ports on the organization IP.** An editor turns on a public port for an app or database. Orchard picks the port from 30000 to 32767, so a tenant never chooses it, and it creates a `LoadBalancer` Service on the organization's public IP (or `tenant.publicIp`). On a cluster that uses Cilium LB-IPAM, all organizations share that IP, and Orchard checks the database and the live Services so two tenants do not get the same port. Tenants cannot create Services themselves, so they cannot take a platform port such as 80 or 443. Each port gets its own `-allow-public` NetworkPolicy that opens only that port on that app's pods. The Service uses `externalTrafficPolicy: Cluster`, so the app sees a node address as the client address, not the real one. Treat these ports as untrusted internet-facing endpoints and rate-limit or authenticate inside the app.
+
+**NodePort (`exposePublic`).** A NodePort is reachable on every node address, including control-plane and builder nodes, on a port from the cluster's node-port range. This is the right mechanism for a single-node install, where the node is the public address. The installer narrows the range to `30000-30100` and opens only that range in `ufw`. On a shared multi-node cluster that already publishes ports on a load-balancer IP, NodePorts open a second path that skips the shared edge and any cloud firewall rules you rely on, so turn them off:
+
+```yaml
+tenant:
+  nodePortExposure: false
+```
+
+Orchard no longer lets a tenant ask for a specific node port. The cluster assigns one, and an update keeps the one the Service already has. The address Orchard shows for a NodePort is `PUBLIC_EXPOSURE_IP` (`tenant.publicIp`) when you set it, and the first node's address otherwise.
+
+One organization can hold at most 20 public ports in total, counting NodePorts, app public ports and public databases. Change the limit with `tenant.maxPublicPortsPerOrg` (`MAX_PUBLIC_PORTS_PER_ORG`; `0` is unlimited). On a self-hosted install, a firewall rule for the node-port range is still your job on anything other than `ufw`.
+
 ### Sandbox database pods
 
 CloudNativePG pods (Postgres instances and PgBouncer poolers) run on the host kernel, because the CloudNativePG `Cluster` resource has no `runtimeClassName` field. To run them under gVisor or Kata, set the following value:
