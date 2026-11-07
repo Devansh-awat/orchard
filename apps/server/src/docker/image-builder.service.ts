@@ -41,7 +41,21 @@ import {
   BUILD_PLATFORM,
   buildArchNodeSelector
 } from './build-platform';
-import { BUILDKIT_IMAGE } from './buildkit-image';
+import {
+  builderContainerSecurityContext,
+  buildkitImageFor,
+  effectiveSidecarPush,
+  logBuildPosture,
+  rootlessAppArmorAnnotations,
+  rootlessBuildkitdFlags,
+  rootlessDaemonlessWrapper,
+  rootlessDaemonStart,
+  rootlessPreflightScript,
+  resolveBuildPosture,
+  ROOTLESS_CONFIG_KEY,
+  ROOTLESS_DOCKER_CONFIG,
+  ROOTLESS_UID
+} from './build-posture';
 import { BUILDER_ROLE_RULES } from './builder-rbac';
 import { k8sErrorMessage } from '../kubernetes/k8s-error';
 import { isSandboxStartFault } from './build-faults';
@@ -266,7 +280,11 @@ export class ImageBuilderService {
   // path inside the build pod (optionally backed by a PVC for persistence).
   private readonly localCacheEnabled = process.env.BUILDKIT_LOCAL_CACHE_ENABLED === 'true';
 
-  private readonly buildkitImage = BUILDKIT_IMAGE;
+  private readonly builderPosture = resolveBuildPosture();
+
+  private readonly rootless = this.builderPosture === 'rootless';
+
+  private readonly buildkitImage = buildkitImageFor(this.builderPosture);
 
   // rawjson landed in BuildKit v0.15. The escape hatch is for anyone pinning
   // BUILDKIT_IMAGE to something older, where buildctl rejects the mode
@@ -340,7 +358,7 @@ export class ImageBuilderService {
   private readonly depotRuntimeClass =
     (process.env.BUILDER_DEPOT_RUNTIME_CLASS || '').trim() || undefined;
 
-  private readonly sidecarPushEnabled = process.env.BUILDER_SIDECAR_PUSH !== 'false';
+  private readonly sidecarPushEnabled = effectiveSidecarPush(this.builderPosture);
 
   private readonly sourceCpuLimit = (process.env.BUILDER_SOURCE_CPU_LIMIT || '').trim() || '2';
 
@@ -359,9 +377,8 @@ export class ImageBuilderService {
   //
   // BUILDER_SCRATCH_MODE still wins when set, so an operator (and prod, which
   // pins tmpfs explicitly) keeps whatever they chose.
-  private readonly scratchMode = resolveScratchMode(
-    process.env.BUILDER_SCRATCH_MODE,
-    this.builderRuntimeClass
+  private readonly scratchMode = ((mode) => (this.rootless && mode === 'block' ? 'disk' : mode))(
+    resolveScratchMode(process.env.BUILDER_SCRATCH_MODE, this.builderRuntimeClass)
   );
 
   private readonly scratchBlock = this.scratchMode === 'block';
@@ -402,6 +419,7 @@ export class ImageBuilderService {
     @Optional() private readonly registryCredentials?: RegistryCredentialsService
   ) {
     this.initKubeConfig();
+    logBuildPosture(this.builderPosture, this.builderRuntimeClass);
   }
 
   private async emitBuildChanged(deploymentId: string | undefined) {
@@ -919,7 +937,13 @@ export class ImageBuilderService {
       )
       .join('\n\n');
 
-    const buildkitConfig = `# BuildKit daemon configuration
+    const rlimits = `
+  [[worker.oci.rlimits]]
+    type = "RLIMIT_NOFILE"
+    soft = 1048576
+    hard = 1048576
+`;
+    const buildConfig = (withRlimits: boolean) => `# BuildKit daemon configuration
 debug = true
 
 [worker.oci]
@@ -937,12 +961,7 @@ debug = true
   [[worker.oci.gcpolicy]]
     all = true
     keepBytes = "${this.gcKeepBytes}"
-
-  [[worker.oci.rlimits]]
-    type = "RLIMIT_NOFILE"
-    soft = 1048576
-    hard = 1048576
-
+${withRlimits ? rlimits : ''}
 [worker.containerd]
   enabled = false
 
@@ -950,6 +969,11 @@ debug = true
 # The key must match exactly how the registry is referenced in the image name
 ${registryConfigs}
 `;
+    const buildkitConfig = buildConfig(true);
+    const configData = {
+      'buildkitd.toml': buildkitConfig,
+      [ROOTLESS_CONFIG_KEY]: buildConfig(false)
+    };
 
     try {
       await coreApi.readNamespacedConfigMap(configMapName, this.builderNamespace);
@@ -962,9 +986,7 @@ ${registryConfigs}
             'app.kubernetes.io/managed-by': 'orchard'
           }
         },
-        data: {
-          'buildkitd.toml': buildkitConfig
-        }
+        data: configData
       });
     } catch (error) {
       if (error.statusCode === 404) {
@@ -977,9 +999,7 @@ ${registryConfigs}
               'app.kubernetes.io/managed-by': 'orchard'
             }
           },
-          data: {
-            'buildkitd.toml': buildkitConfig
-          }
+          data: configData
         });
       } else {
         throw error;
@@ -1756,7 +1776,8 @@ ls -la /workspace
           maxAgeDays: this.cacheEvictMaxAgeDays,
           highPct: this.cacheEvictHighPct,
           targetPct: this.cacheEvictTargetPct,
-          idleMinutes: this.cacheEvictIdleMinutes
+          idleMinutes: this.cacheEvictIdleMinutes,
+          ...(this.rootless ? { chownUid: ROOTLESS_UID } : {})
         }) as k8s.V1Container
       );
     }
@@ -1834,17 +1855,26 @@ exit $rc`
             name: 'buildkit',
             image: this.buildkitImage,
             imagePullPolicy: 'IfNotPresent',
-            securityContext: { privileged: true },
+            securityContext: builderContainerSecurityContext(this.builderPosture),
             command: ['/bin/sh', '-c'],
             args: [
               this.generateBuildScriptWithCacheFallback(scriptArgs, injectGitSha, buildDirPreamble)
             ],
             workingDir: '/workspace',
             env: [
-              ...(buildkitAuthSecret ? [{ name: 'DOCKER_CONFIG', value: '/root/.docker' }] : []),
+              ...(buildkitAuthSecret
+                ? [
+                    {
+                      name: 'DOCKER_CONFIG',
+                      value: this.rootless ? ROOTLESS_DOCKER_CONFIG : '/root/.docker'
+                    }
+                  ]
+                : []),
               {
                 name: 'BUILDKITD_FLAGS',
-                value: `--config /etc/buildkit/buildkitd.toml${this.workspaceTmpfs || this.scratchBlock || this.scratchDisk || this.scratchTmpfs ? ' --root /buildkit-state' : ''}`
+                value: this.rootless
+                  ? rootlessBuildkitdFlags('/buildkit-state')
+                  : `--config /etc/buildkit/buildkitd.toml${this.workspaceTmpfs || this.scratchBlock || this.scratchDisk || this.scratchTmpfs ? ' --root /buildkit-state' : ''}`
               },
               ...builderContainerEnv(envVars, buildEnvSecret),
               ...dockerfileBuildArgEnv,
@@ -1885,7 +1915,7 @@ exit $rc`
                 ? [
                     {
                       name: 'buildkit-auth',
-                      mountPath: '/root/.docker',
+                      mountPath: this.rootless ? ROOTLESS_DOCKER_CONFIG : '/root/.docker',
                       readOnly: true
                     }
                   ]
@@ -2035,10 +2065,11 @@ exec skopeo copy --authfile /root/.docker/config.json --dest-tls-verify=false oc
       const hasDeferredCacheExport =
         !this.localCacheEnabled && buildctlArgs.includes('--export-cache');
 
-      buildkitContainer.args = [
-        `mkdir -p /output
-${this.scratchMountPreamble}
-# Start buildkitd ourselves and replace buildctl-daemonless.sh with a
+      const daemonStart = this.rootless
+        ? `${rootlessPreflightScript('touch /output/.failed')}
+${rootlessDaemonlessWrapper('')}
+${rootlessDaemonStart()}`
+        : `# Start buildkitd ourselves and replace buildctl-daemonless.sh with a
 # passthrough so the inner build script (with all its retry logic) reuses
 # our daemon instead of spawning its own.
 printf '#!/bin/sh\\nexec buildctl "$@"\\n' > /usr/bin/buildctl-daemonless.sh
@@ -2048,7 +2079,15 @@ DAEMON_PID=$!
 for i in $(seq 1 100); do
   buildctl debug workers >/dev/null 2>&1 && break
   sleep 0.1
-done
+done`;
+      const exportBuildctl = this.rootless
+        ? 'buildctl --addr "$ORCHARD_BUILDKIT_ADDR"'
+        : 'buildctl';
+
+      buildkitContainer.args = [
+        `mkdir -p /output
+${this.scratchMountPreamble}
+${daemonStart}
 
 ( ${innerScript} ); rc=$?
 
@@ -2058,7 +2097,7 @@ ${
   hasDeferredCacheExport
     ? `  echo "=== Exporting build cache ==="
   (
-${injectGitSha ? ImageBuilderService.GIT_SHA_PREAMBLE : ''}${buildDirPreamble}buildctl ${cacheExportArgs}${injectGitSha ? ImageBuilderService.GIT_SHA_BUILDCTL_OPT : ''}
+${injectGitSha ? ImageBuilderService.GIT_SHA_PREAMBLE : ''}${buildDirPreamble}${exportBuildctl} ${cacheExportArgs}${injectGitSha ? ImageBuilderService.GIT_SHA_BUILDCTL_OPT : ''}
   ) >/dev/null 2>&1 || echo "=== Cache export failed (non-critical) ==="`
     : ''
 }
@@ -2106,6 +2145,9 @@ exit $rc`
         activeDeadlineSeconds: 1800, // 30 minute timeout
         template: {
           metadata: {
+            ...(this.rootless && !daemonIp && !buildWithDepot
+              ? { annotations: rootlessAppArmorAnnotations(['buildkit']) }
+              : {}),
             labels: {
               'app.kubernetes.io/name': 'image-builder',
               'orchard.my/deployment-id': deploymentId || 'unknown',

@@ -5,12 +5,25 @@ import { truncateKeepingSuffix } from '../projects/projects.utils';
 import { loadKubeConfigFromPathOrBase64 } from '../kubernetes/kubeconfig';
 import { BUILDER_NAMESPACE } from './builder-namespace';
 import { buildArchNodeSelector } from './build-platform';
-import { BUILDKIT_IMAGE } from './buildkit-image';
+import {
+  buildkitImageFor,
+  effectiveSidecarPush,
+  logBuildPosture,
+  resolveBuildPosture,
+  ROOTLESS_CONFIG_PATH,
+  ROOTLESS_DOCKER_CONFIG,
+  ROOTLESS_STATE_PATH,
+  ROOTLESS_UID,
+  rootlessContainerSecurityContext,
+  type BuildPosture
+} from './build-posture';
 import {
   daemonTenantIngressPolicy,
   daemonTenantLabel,
   LEGACY_DAEMON_INGRESS_POLICY
 } from './buildkit-daemon-policy';
+
+const POSTURE_ANNOTATION = 'orchard.my/build-posture';
 
 interface DaemonInfo {
   podName: string;
@@ -40,7 +53,9 @@ export class BuildKitPoolService {
 
   private readonly builderRuntimeClass: string | undefined;
 
-  private readonly sidecarPushEnabled = process.env.BUILDER_SIDECAR_PUSH !== 'false';
+  private readonly posture: BuildPosture = resolveBuildPosture();
+
+  private readonly sidecarPushEnabled = effectiveSidecarPush(this.posture);
 
   constructor() {
     this.namespace = BUILDER_NAMESPACE;
@@ -48,6 +63,7 @@ export class BuildKitPoolService {
     this.dedicatedNodeEnabled = process.env.BUILDER_DEDICATED_NODE === 'true';
     const rc = (process.env.BUILDER_RUNTIME_CLASS || '').trim();
     this.builderRuntimeClass = rc || undefined;
+    logBuildPosture(this.posture, this.builderRuntimeClass);
     this.initKubeConfig();
   }
 
@@ -127,7 +143,12 @@ export class BuildKitPoolService {
       )
     ]);
 
+    const stale: string[] = [];
     for (const pod of existing.body.items) {
+      if (pod.metadata?.annotations?.[POSTURE_ANNOTATION] !== this.posture) {
+        if (pod.metadata?.name) stale.push(pod.metadata.name);
+        continue;
+      }
       const phase = pod.status?.phase;
       const ip = pod.status?.podIP;
       const name = pod.metadata?.name;
@@ -145,6 +166,7 @@ export class BuildKitPoolService {
     for (const pod of legacy.body.items) {
       if (pod.metadata?.name) await this.retireLegacyDaemon(pod.metadata.name);
     }
+    for (const name of stale) await this.retireLegacyDaemon(name);
 
     return this.createDaemon(tenantKey);
   }
@@ -206,14 +228,18 @@ export class BuildKitPoolService {
     }
   }
 
-  private async createDaemon(tenantKey: string): Promise<DaemonInfo> {
-    const coreApi = this.kc!.makeApiClient(k8s.CoreV1Api);
-    const name = this.podName(tenantKey);
-    const sanitizedKey = this.sanitizeLabel(tenantKey);
+  daemonPodSpec(name: string, sanitizedKey: string): k8s.V1Pod {
+    const rootless = this.posture === 'rootless';
+    const statePath = rootless ? ROOTLESS_STATE_PATH : '/var/lib/buildkit';
+    const dockerConfigPath = rootless ? ROOTLESS_DOCKER_CONFIG : '/root/.docker';
+    const stateVolume = {
+      name: 'buildkit-state',
+      ...(this.localCachePvc
+        ? { persistentVolumeClaim: { claimName: this.localCachePvc } }
+        : { emptyDir: {} })
+    };
 
-    console.log(`[BuildKitPool] Creating daemon pod ${name} for tenant ${tenantKey}`);
-
-    const pod: k8s.V1Pod = {
+    return {
       metadata: {
         name,
         namespace: this.namespace,
@@ -224,7 +250,11 @@ export class BuildKitPoolService {
           'app.kubernetes.io/managed-by': 'orchard'
         },
         annotations: {
-          'orchard.my/last-used': new Date().toISOString()
+          'orchard.my/last-used': new Date().toISOString(),
+          [POSTURE_ANNOTATION]: this.posture,
+          ...(rootless
+            ? { 'container.apparmor.security.beta.kubernetes.io/buildkitd': 'unconfined' }
+            : {})
         }
       },
       spec: {
@@ -246,25 +276,57 @@ export class BuildKitPoolService {
               ]
             }
           : {}),
+        ...(rootless
+          ? {
+              initContainers: [
+                {
+                  name: 'own-state',
+                  image: 'alpine:latest',
+                  command: ['/bin/sh', '-c'],
+                  args: [`chown -R ${ROOTLESS_UID}:${ROOTLESS_UID} /state`],
+                  securityContext: { runAsUser: 0, allowPrivilegeEscalation: false },
+                  volumeMounts: [
+                    { name: 'buildkit-state', mountPath: '/state', subPath: sanitizedKey }
+                  ],
+                  resources: {
+                    requests: { cpu: '50m', memory: '64Mi' },
+                    limits: { cpu: '500m', memory: '256Mi' }
+                  }
+                }
+              ]
+            }
+          : {}),
         containers: [
           {
             name: 'buildkitd',
-            image: BUILDKIT_IMAGE,
-            args: ['--addr', 'tcp://0.0.0.0:1234', '--addr', 'unix:///run/buildkit/buildkitd.sock'],
-            securityContext: { privileged: true },
+            image: buildkitImageFor(this.posture),
+            args: rootless
+              ? [
+                  '--addr',
+                  'tcp://0.0.0.0:1234',
+                  '--config',
+                  ROOTLESS_CONFIG_PATH,
+                  '--oci-worker-no-process-sandbox'
+                ]
+              : ['--addr', 'tcp://0.0.0.0:1234', '--addr', 'unix:///run/buildkit/buildkitd.sock'],
+            securityContext: rootless ? rootlessContainerSecurityContext() : { privileged: true },
             ports: [{ containerPort: 1234, name: 'buildkit', protocol: 'TCP' }],
             readinessProbe: {
-              exec: { command: ['buildctl', 'debug', 'workers'] },
+              exec: {
+                command: rootless
+                  ? ['buildctl', '--addr', 'tcp://127.0.0.1:1234', 'debug', 'workers']
+                  : ['buildctl', 'debug', 'workers']
+              },
               initialDelaySeconds: 3,
               periodSeconds: 10
             },
             ...(this.sidecarPushEnabled
               ? {}
-              : { env: [{ name: 'DOCKER_CONFIG', value: '/root/.docker' }] }),
+              : { env: [{ name: 'DOCKER_CONFIG', value: dockerConfigPath }] }),
             volumeMounts: [
               {
                 name: 'buildkit-state',
-                mountPath: '/var/lib/buildkit',
+                mountPath: statePath,
                 subPath: sanitizedKey
               },
               {
@@ -274,7 +336,7 @@ export class BuildKitPoolService {
               },
               ...(this.sidecarPushEnabled
                 ? []
-                : [{ name: 'docker-config', mountPath: '/root/.docker', readOnly: true }])
+                : [{ name: 'docker-config', mountPath: dockerConfigPath, readOnly: true }])
             ],
             resources: {
               requests: { cpu: '250m', memory: '1Gi' },
@@ -283,12 +345,7 @@ export class BuildKitPoolService {
           }
         ],
         volumes: [
-          {
-            name: 'buildkit-state',
-            ...(this.localCachePvc
-              ? { persistentVolumeClaim: { claimName: this.localCachePvc } }
-              : { emptyDir: {} })
-          },
+          stateVolume,
           {
             name: 'buildkit-config',
             configMap: { name: 'buildkit-config' }
@@ -307,6 +364,16 @@ export class BuildKitPoolService {
         ]
       }
     };
+  }
+
+  private async createDaemon(tenantKey: string): Promise<DaemonInfo> {
+    const coreApi = this.kc!.makeApiClient(k8s.CoreV1Api);
+    const name = this.podName(tenantKey);
+    const sanitizedKey = this.sanitizeLabel(tenantKey);
+
+    console.log(`[BuildKitPool] Creating daemon pod ${name} for tenant ${tenantKey}`);
+
+    const pod = this.daemonPodSpec(name, sanitizedKey);
 
     try {
       await coreApi.createNamespacedPod(this.namespace, pod);

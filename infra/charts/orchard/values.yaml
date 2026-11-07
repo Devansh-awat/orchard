@@ -327,6 +327,16 @@ builders:
   enabled: true
   namespace: orchard-builders
   buildkitImage: moby/buildkit:v0.34.2
+  # Image for rootless builds. Empty derives it from buildkitImage by adding the
+  # "-rootless" tag suffix (moby/buildkit:v0.34.2-rootless).
+  buildkitRootlessImage: ""
+  # Without builderSandbox, builds run in rootless BuildKit: no privileged
+  # container, uid 1000, user namespaces. It needs nodes that allow unprivileged
+  # user namespaces. Setting this true restores the old behaviour, a PRIVILEGED
+  # BuildKit container on the node's runc, where a Dockerfile RUN step is root on
+  # the node. Ignored when builderSandbox gives builds a runtime class. Never
+  # enable it on an instance that builds code from users you do not trust.
+  allowPrivilegedOnHost: false
   railpackVersion: v0.43.0
   # Credentials for the registry builds push to, written to every host listed
   # here. With any host listed, username and password are required.

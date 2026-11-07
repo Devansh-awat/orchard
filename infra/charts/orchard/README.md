@@ -410,6 +410,8 @@ is the single place the MCP's address is configured.
 | `builders.enabled` | `true` | Install the `orchard-builders` namespace + RBAC + secrets. |
 | `builders.namespace` | `orchard-builders` | Namespace where BuildKit pods will run. |
 | `builders.buildkitImage` | `moby/buildkit:v0.34.2` | BuildKit image for builds. `orchardctl update` moves it to the newest patch version. |
+| `builders.buildkitRootlessImage` | `""` | BuildKit image for rootless builds. Empty adds `-rootless` to the `buildkitImage` tag. |
+| `builders.allowPrivilegedOnHost` | `false` | Without `builderSandbox`, builds run in rootless BuildKit. `true` restores a PRIVILEGED BuildKit container on the node runtime, where a Dockerfile `RUN` step is root on the node. Do not enable it for untrusted builders. |
 | `builders.railpackVersion` | `v0.43.0` | Railpack version for builds without a Dockerfile. |
 | `builders.harbor.username` | `""` | Registry username (written to `harbor-registry-creds` dockerconfigjson). Required when `hosts` is set. |
 | `builders.harbor.password` | `""` | Registry password. Required when `hosts` is set. |

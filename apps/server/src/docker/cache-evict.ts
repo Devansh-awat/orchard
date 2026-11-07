@@ -24,6 +24,8 @@ export interface CacheEvictOptions {
   targetPct: number;
   /** Never evict a tenant touched this recently: assume a build is in flight. */
   idleMinutes: number;
+  /** Hand the tenant directory to this uid, for a build that does not run as root. */
+  chownUid?: number;
 }
 
 /**
@@ -98,6 +100,13 @@ if ! mkdir -p "$CACHE_ROOT/$SELF"; then
   exit 1
 fi
 
+${
+  opts.chownUid === undefined
+    ? ''
+    : `find "$CACHE_ROOT/$SELF" ! -uid ${opts.chownUid} -exec chown ${opts.chownUid}:${opts.chownUid} {} + 2>/dev/null || true
+chmod 0770 "$CACHE_ROOT/$SELF" 2>/dev/null || true
+`
+}
 echo "=== Shared build cache at $(usage)% after eviction ==="
 `;
 }

@@ -1,3 +1,12 @@
+import {
+  ENTITLEMENT_HINT,
+  ROOTLESS_UNSUPPORTED_HINT,
+  ROOTLESS_UNSUPPORTED_MARKER
+} from './build-posture';
+
+const ENTITLEMENT_RE =
+  /(security\.insecure|network\.host)[^\n]*not allowed|not allowed[^\n]*(security\.insecure|network\.host)|insecure entitlement/i;
+
 // Step ids are BuildKit's own `#12` counter on plain output, or the stable
 // digest-derived hex id the rawjson transcoder assigns.
 const STEP_ERROR_RE = /^#([0-9a-f]{8}|\d+) ERROR:/;
@@ -18,6 +27,9 @@ export function summarizeBuildFailure(logs?: string | null, pusherLogs?: string 
       `Dockerfile lint check failed (${rules}). Your Dockerfile sets "# check=error=true", which turns Dockerfile lint warnings into build failures. Remove that line, or change it to "# check=skip=${rules.replace(/,\s*/g, ',')}" to skip these rules.`
     );
   }
+
+  if ((logs ?? '').includes(ROOTLESS_UNSUPPORTED_MARKER)) parts.push(ROOTLESS_UNSUPPORTED_HINT);
+  if (ENTITLEMENT_RE.test(logs ?? '')) parts.push(ENTITLEMENT_HINT);
 
   const lines = (logs ?? '').split('\n');
   const solveError = lines.filter((l) => l.startsWith('error: failed to solve:')).pop();

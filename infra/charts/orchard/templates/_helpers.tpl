@@ -503,6 +503,12 @@ true
             {{- if not (include "orchard.serverEnvHas" (dict "root" . "key" "BUILDKIT_IMAGE")) }}
             - { name: BUILDKIT_IMAGE, value: {{ .Values.builders.buildkitImage | quote }} }
             {{- end }}
+            {{- if and .Values.builders.buildkitRootlessImage (not (include "orchard.serverEnvHas" (dict "root" . "key" "BUILDKIT_ROOTLESS_IMAGE"))) }}
+            - { name: BUILDKIT_ROOTLESS_IMAGE, value: {{ .Values.builders.buildkitRootlessImage | quote }} }
+            {{- end }}
+            {{- if and .Values.builders.allowPrivilegedOnHost (not (include "orchard.serverEnvHas" (dict "root" . "key" "BUILDER_ALLOW_PRIVILEGED_ON_HOST"))) }}
+            - { name: BUILDER_ALLOW_PRIVILEGED_ON_HOST, value: "true" }
+            {{- end }}
             {{- if not (include "orchard.serverEnvHas" (dict "root" . "key" "RAILPACK_VERSION")) }}
             - { name: RAILPACK_VERSION, value: {{ .Values.builders.railpackVersion | quote }} }
             {{- end }}

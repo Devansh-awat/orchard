@@ -94,9 +94,17 @@ Two optional runtimes change this. The one-command installer does not install ei
 
 BuildKit needs `privileged: true`, which gVisor does not allow. Builds therefore use Kata, where a privileged container stays inside the virtual machine.
 
+### Builds without a sandbox runtime
+
+Without `builderSandbox`, Orchard runs builds in rootless BuildKit (`moby/buildkit:<version>-rootless`). The container is not privileged, runs as uid 1000, and gets its root inside a user namespace. It uses `--oci-worker-no-process-sandbox`, with the seccomp and AppArmor profiles set to `Unconfined`, which is what rootless BuildKit needs on Kubernetes. A Dockerfile `RUN` step is not root on the node, but it still shares the node kernel and has a larger kernel attack surface than the default profile. Use `builderSandbox` when you can.
+
+Rootless builds need nodes that allow unprivileged user namespaces. On Ubuntu 24.04 that means `kernel.apparmor_restrict_unprivileged_userns=0`. When a node does not allow them, the build fails with a message that says so. They always push from the separate `pusher` container, whatever `BUILDER_SIDECAR_PUSH` says, and the persistent daemon keeps no registry login. `RUN --security=insecure` and `RUN --network=host` are refused with a clear error in every mode.
+
 :::caution
-Without `builderSandbox`, image builds run with host-level privileges.
+`builders.allowPrivilegedOnHost=true` restores the old behaviour: a privileged BuildKit container on the node's runtime, where a Dockerfile `RUN` step is root on the node. Orchard logs a warning at startup. Do not set it on an instance that builds code from users you do not trust. It has no effect when `builderSandbox` is enabled.
 :::
+
+At startup the server logs `build posture: vm-sandbox`, `rootless` or `privileged-host`.
 
 ### Build credential isolation
 

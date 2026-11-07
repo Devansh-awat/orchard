@@ -187,6 +187,43 @@ data:
     [registry.{{ . | quote }}]
       http = true
 {{- end }}
+  buildkitd.rootless.toml: |
+    debug = true
+
+    [worker.oci]
+      max-parallelism = 4
+      # Garbage-collect one tenant's slice of the shared cache. This bounds a
+      # single buildkitd root, NOT the PVC — each build gets its own worker in
+      # its own subPath, so the cross-tenant total is bounded by the
+      # cache-evict init container instead. Keep this under
+      # .Values.builders.localCache.size so no one tenant can fill the volume.
+      #
+      # NOTE: the server replaces this ConfigMap at runtime (see
+      # ensureBuildkitConfig in image-builder.service.ts) — the same values are
+      # passed to it as BUILDKIT_GC_* env, so keep the two in sync.
+      #
+      # Two policies, evaluated top-to-bottom:
+      #   1. Ephemeral entries (local source uploads, RUN --mount=cache
+      #      contents, transient git checkouts) — keep small. These churn
+      #      heavily and benefit from aggressive eviction.
+      #   2. Everything else — capped by the total ceiling.
+      gc = true
+
+      [[worker.oci.gcpolicy]]
+        keepBytes = "{{ .Values.builders.localCache.gcEphemeralKeepBytes | default "1GB" }}"
+        filters = ["type==source.local", "type==exec.cachemount", "type==source.git.checkout"]
+
+      [[worker.oci.gcpolicy]]
+        all = true
+        keepBytes = "{{ .Values.builders.localCache.gcKeepBytes | default "18GB" }}"
+
+    [worker.containerd]
+      enabled = false
+
+{{- range .Values.builders.httpRegistries }}
+    [registry.{{ . | quote }}]
+      http = true
+{{- end }}
 {{- if .Values.builders.localCache.enabled }}
 ---
 apiVersion: v1
