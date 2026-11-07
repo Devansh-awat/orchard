@@ -11,6 +11,7 @@ import { SecurityService } from './security.service';
 import { SecurityController } from './security.controller';
 import { TrivyScanService } from './trivy-scan.service';
 import { ImageScanningController } from './image-scanning.controller';
+import { ScanResultGuard } from './scan-result.guard';
 import { ImageScanResultController } from './image-scan-result.controller';
 
 @Module({
@@ -23,7 +24,7 @@ import { ImageScanResultController } from './image-scan-result.controller';
     RegistryCredentialsModule
   ],
   controllers: [SecurityController, ImageScanningController, ImageScanResultController],
-  providers: [HarborScanClient, TrivyScanService, SecurityService, AttacksService],
+  providers: [ScanResultGuard, HarborScanClient, TrivyScanService, SecurityService, AttacksService],
   exports: [SecurityService, AttacksService]
 })
 export class SecurityModule {}

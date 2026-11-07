@@ -36,7 +36,18 @@ const PUBLIC_ROUTES = [
 
 const SCIM_ROUTES = [/^\/scim\/v2(?:\/|$)/, /^\/scim(?:\/|$)/];
 
-const LARGE_ROUTES = [/^\/projects\/import(?:\/|$)/, /^\/templates(?:\/|$)/, /\/(?:import|restore)(?:\/|$)/];
+const LARGE_ROUTES = [
+  /^\/projects\/import(?:\/|$)/,
+  /^\/templates(?:\/|$)/,
+  /\/(?:import|restore)(?:\/|$)/,
+  /^\/deployments\/[^/]+\/(?:env|build-config)$/,
+  /^\/environments\/[^/]+\/shared-vars$/,
+  /^\/projects\/[^/]+\/deployments$/,
+  /^\/projects\/[^/]+\/template-instances$/,
+  /^\/jobs\/[^/]+\/steps$/,
+  /^\/projects\/[^/]+\/jobs$/,
+  /^\/internal\/image-scans\/[^/]+\/result$/
+];
 
 function routePath(url: string): string {
   const path = (url.split('?')[0] ?? '').replace(/\/+$/, '') || '/';

@@ -214,7 +214,7 @@ export class TrivyScanService {
     }
   }
 
-  async complete(id: string, token: string | undefined, body: unknown): Promise<void> {
+  async assertAcceptingResult(id: string, token: string | undefined): Promise<void> {
     const row = await this.prisma.imageScan.findUnique({ where: { id } });
     if (!row || row.scanner !== 'trivy') throw new NotFoundException('Scan not found');
     if (row.status !== 'running' || !row.tokenHash || !token) {
@@ -223,6 +223,10 @@ export class TrivyScanService {
     if (!sameHash(hashToken(token), row.tokenHash)) {
       throw new ForbiddenException("This scan isn't accepting results");
     }
+  }
+
+  async complete(id: string, token: string | undefined, body: unknown): Promise<void> {
+    await this.assertAcceptingResult(id, token);
     const error = (body as { error?: unknown } | null)?.error;
     if (typeof error === 'string') {
       await this.prisma.imageScan.updateMany({

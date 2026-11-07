@@ -84,6 +84,25 @@ test('pre-auth routes get the small tier, authenticated imports the large one', 
   assert.equal(bodyTierFor('/apiv1/projects/abc'), 'default');
 });
 
+test('routes whose real payloads exceed 1 MB are in the large tier', () => {
+  for (const url of [
+    '/apiv1/deployments/d1/env',
+    '/apiv1/deployments/d1/build-config',
+    '/apiv1/environments/e1/shared-vars',
+    '/apiv1/projects/p1/deployments',
+    '/apiv1/projects/p1/template-instances',
+    '/apiv1/jobs/j1/steps',
+    '/apiv1/projects/p1/jobs',
+    '/apiv1/templates',
+    '/apiv1/templates/t1',
+    '/apiv1/databases/d1/restore',
+    '/apiv1/internal/image-scans/6f1c7a3e-0000-4000-8000-000000000000/result'
+  ]) {
+    assert.equal(bodyTierFor(url), 'large', url);
+  }
+  assert.equal(bodyTierFor('/apiv1/deployments/d1/name'), 'default');
+});
+
 test('a 20 MB body to a pre-auth route is rejected with 413 before it is parsed', async () => {
   const app = buildApp();
   const big = Buffer.alloc(20 * 1024 * 1024, 0x61);
