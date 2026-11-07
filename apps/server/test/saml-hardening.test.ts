@@ -49,7 +49,8 @@ function harness(over: Record<string, Record<string, unknown>> = {}) {
   login.samlRequests = new SamlRequestStore();
   login.sso = {
     callbackUrl: (p: any) => (p.id === 'provA' ? ACS_A : ACS_B),
-    entityId: (p: any) => (p.id === 'provA' ? SP_A : SP_B)
+    entityId: (p: any) => (p.id === 'provA' ? SP_A : SP_B),
+    ensureIdpEntityId: async (p: any) => p
   };
   login.loadLoginProvider = async (id: string) => providers[id];
   login.completeLogin = async (_p: any, profile: any, returnTo: any, linked: any) => ({

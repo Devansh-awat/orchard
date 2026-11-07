@@ -3,7 +3,8 @@ import {
   NotFoundException,
   BadRequestException,
   ConflictException,
-  Logger
+  Logger,
+  OnApplicationBootstrap
 } from '@nestjs/common';
 import { X509Certificate } from 'crypto';
 import { IdentityProvider, OrganizationRole, SsoProtocol } from '@prisma/client';
@@ -96,8 +97,10 @@ export interface InstanceEnforcement {
 }
 
 @Injectable()
-export class SsoService {
+export class SsoService implements OnApplicationBootstrap {
   private readonly logger = new Logger(SsoService.name);
+
+  private readonly entityIdAttempts = new Map<string, number>();
 
   private readonly backendUrl: string;
 
@@ -525,7 +528,10 @@ export class SsoService {
       let idpEntityId = input.samlIdpEntityId ?? existing?.samlIdpEntityId ?? null;
       const metadataUrl = input.samlMetadataUrl ?? existing?.samlMetadataUrl ?? null;
 
-      if (metadataUrl && (!entryPoint || (!certificate && !existing?.samlCertificate))) {
+      if (
+        metadataUrl &&
+        (!entryPoint || (!certificate && !existing?.samlCertificate) || !idpEntityId?.trim())
+      ) {
         const parsed = await this.fetchIdpMetadata(metadataUrl);
         entryPoint = entryPoint || parsed.entryPoint;
         certificate = certificate || parsed.certificate;
@@ -989,6 +995,72 @@ export class SsoService {
     ) {
       throw new BadRequestException('SAML sign-in URL must be an https URL');
     }
+  }
+
+  async onApplicationBootstrap() {
+    void this.backfillIdpEntityIds().catch((err) =>
+      this.logger.error(
+        `SAML IdP entity ID backfill failed: ${err instanceof Error ? err.message : 'error'}`
+      )
+    );
+  }
+
+  async backfillIdpEntityIds() {
+    const providers = await this.prisma.identityProvider.findMany({
+      where: { protocol: SsoProtocol.saml, samlIdpEntityId: null }
+    });
+    for (const provider of providers) {
+      await this.ensureIdpEntityId(provider).catch(() => undefined);
+    }
+  }
+
+  async ensureIdpEntityId(provider: IdentityProvider): Promise<IdentityProvider> {
+    if (provider.protocol !== SsoProtocol.saml || provider.samlIdpEntityId?.trim()) {
+      return provider;
+    }
+    const fix = `Open the identity provider in SSO settings and set the IdP entity ID (Issuer), or save it with a metadata URL.`;
+    const last = this.entityIdAttempts.get(provider.id) ?? 0;
+    if (Date.now() - last < 60_000) {
+      throw new BadRequestException(`SAML provider ${provider.id} has no IdP entity ID. ${fix}`);
+    }
+    this.entityIdAttempts.set(provider.id, Date.now());
+
+    if (!provider.samlMetadataUrl) {
+      this.logger.error(
+        `SAML provider ${provider.id} (${provider.name}) has no IdP entity ID and no metadata URL, so logins are refused. ${fix}`
+      );
+      throw new BadRequestException(`SAML provider ${provider.id} has no IdP entity ID. ${fix}`);
+    }
+
+    let parsed: { entityId: string | null; certificate: string | null };
+    try {
+      parsed = await this.fetchIdpMetadata(provider.samlMetadataUrl);
+    } catch (err) {
+      this.logger.error(
+        `SAML provider ${provider.id} (${provider.name}): could not read IdP metadata to derive the entity ID (${err instanceof Error ? err.message : 'error'}). ${fix}`
+      );
+      throw new BadRequestException(`SAML provider ${provider.id} has no IdP entity ID. ${fix}`);
+    }
+
+    const entityId = parsed.entityId?.trim();
+    const pinned = (this.crypto.decryptOrNull(provider.samlCertificate) ?? '')
+      .split(',')
+      .filter(Boolean);
+    const offered = (parsed.certificate ?? '').split(',').filter(Boolean);
+    if (!entityId || entityId.length > 500 || !pinned.some((c) => offered.includes(c))) {
+      this.logger.error(
+        `SAML provider ${provider.id} (${provider.name}): the metadata at its URL does not name an entity ID or does not list the pinned signing certificate, so the entity ID was not derived. ${fix}`
+      );
+      throw new BadRequestException(`SAML provider ${provider.id} has no IdP entity ID. ${fix}`);
+    }
+
+    await this.prisma.identityProvider.updateMany({
+      where: { id: provider.id, samlIdpEntityId: null },
+      data: { samlIdpEntityId: entityId }
+    });
+    this.logger.log(`SAML provider ${provider.id} (${provider.name}): IdP entity ID set from metadata`);
+    this.entityIdAttempts.delete(provider.id);
+    return { ...provider, samlIdpEntityId: entityId };
   }
 
   private async assertSamlIssuerFree(issuer: string, ignoreId?: string) {

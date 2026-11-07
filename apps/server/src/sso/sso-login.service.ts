@@ -127,10 +127,12 @@ export class SsoLoginService {
     returnTo?: string,
     sessionToken?: string
   ): Promise<{ url: string; startToken: string }> {
-    const provider = await this.loadLoginProvider(providerId);
-    if (provider.protocol === SsoProtocol.saml) {
+    const loaded = await this.loadLoginProvider(providerId);
+    if (loaded.protocol === SsoProtocol.saml) {
+      const provider = await this.sso.ensureIdpEntityId(loaded);
       return this.startSaml(provider, returnTo, sessionToken);
     }
+    const provider = loaded;
     const url =
       provider.protocol === SsoProtocol.oauth2
         ? await this.startOAuth2(provider, returnTo)
@@ -421,8 +423,12 @@ export class SsoLoginService {
     const record = JSON.parse(raw) as SamlRelayRecord;
     if (record.providerId !== providerId) throw denied();
 
-    const provider = await this.loadLoginProvider(providerId);
-    if (provider.protocol !== SsoProtocol.saml || !provider.samlIdpEntityId) {
+    const loaded = await this.loadLoginProvider(providerId);
+    if (loaded.protocol !== SsoProtocol.saml) {
+      throw new UnauthorizedException('SSO authentication failed');
+    }
+    const provider = await this.sso.ensureIdpEntityId(loaded).catch(() => loaded);
+    if (!provider.samlIdpEntityId) {
       throw new UnauthorizedException('SSO authentication failed');
     }
 
