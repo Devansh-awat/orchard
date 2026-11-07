@@ -13,6 +13,7 @@ export const ROOTLESS_BIN_DIR = '/tmp/orchard-bin';
 export const ROOTLESS_UNSUPPORTED_MARKER = 'ORCHARD_ROOTLESS_UNSUPPORTED';
 
 export interface PostureEnv {
+  [key: string]: string | undefined;
   BUILDER_RUNTIME_CLASS?: string;
   BUILDER_ALLOW_PRIVILEGED_ON_HOST?: string;
   BUILDER_SIDECAR_PUSH?: string;

@@ -6,6 +6,7 @@ export const BUILD_CACHE_PURPOSE = 'build-cache';
 export const S3_TOUCH_REFRESH = '2000000h';
 
 export interface S3CacheEnv {
+  [key: string]: string | undefined;
   BUILDKIT_S3_VIA_PROXY?: string;
   BUILDKIT_S3_BUCKET?: string;
   BUILDKIT_S3_CACHE_PREFIX?: string;
