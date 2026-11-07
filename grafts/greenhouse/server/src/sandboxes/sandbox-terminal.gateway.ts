@@ -21,9 +21,8 @@ import {
 } from './sandbox-session-commands';
 import {
   SandboxGitActorService,
-  terminalEnvFile,
+  sharedTerminalShell,
   terminalEnvPath,
-  terminalTmuxEnvScript,
   writeTerminalEnvScript
 } from './sandbox-git-identity';
 
@@ -238,16 +237,17 @@ export function sandboxTerminalHooks(deps: SandboxTerminalDeps): SandboxExecRout
       let shellEnv: TerminalShellEnv | null = null;
       const guest = target.terminalUserId && target.terminalUserId !== row.userId;
       if (guest && target.mode === 'rw' && !isScriptedTerminal(target)) {
-        const actor = await gitActors.resolve(target.terminalUserId!);
+        const actor = await gitActors.resolveIdentity(target.terminalUserId!);
+        const shell = sharedTerminalShell(actor);
         const envFile = terminalEnvPath(sessionId);
         const written = await runner
           .exec(ref, ['su', '-l', 'dev', '-c', writeTerminalEnvScript(envFile)], {
-            stdin: Buffer.from(terminalEnvFile(actor), 'utf8'),
+            stdin: Buffer.from(shell.file, 'utf8'),
             timeoutMs: 20_000
           })
           .catch(() => null);
         if (!written?.ok) throw new Error('could not set up your git identity in the sandbox');
-        shellEnv = { envFile, tmuxEnv: terminalTmuxEnvScript(actor.identity, !!actor.token) };
+        shellEnv = { envFile, tmuxEnv: shell.tmuxEnv };
       }
       return runner.openPty(ref, {
         command: sandboxTerminalCommand(target, sessionId, shellEnv),

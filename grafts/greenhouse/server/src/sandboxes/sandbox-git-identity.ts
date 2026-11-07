@@ -159,6 +159,14 @@ export function terminalEnvFile(actor: GitActor): string {
   return `${exportLine(env)}\n`;
 }
 
+export function sharedTerminalShell(actor: GitActor): { file: string; tmuxEnv: string } {
+  const bare: GitActor = { ...actor, token: null };
+  return {
+    file: terminalEnvFile(bare),
+    tmuxEnv: terminalTmuxEnvScript(bare.identity, false)
+  };
+}
+
 export function terminalEnvPath(engineSessionId: string): string {
   if (!isUuid(engineSessionId)) throw new Error('invalid terminal session id');
   return `${TERMINAL_ENV_DIR}/.orchard-term-${engineSessionId.toLowerCase()}`;
@@ -220,6 +228,16 @@ export class SandboxGitActorService {
       identity: gitIdentity(row),
       githubLogin: row.githubUsername ?? null,
       token: await this.tokenOf(row)
+    };
+  }
+
+  async resolveIdentity(userId: string): Promise<GitActor> {
+    const row = await this.row(userId);
+    return {
+      userId: row.id,
+      identity: gitIdentity(row),
+      githubLogin: row.githubUsername ?? null,
+      token: null
     };
   }
 

@@ -18,7 +18,8 @@ import {
   terminalEnvFile,
   terminalEnvPath,
   terminalTmuxEnvScript,
-  writeTerminalEnvScript
+  writeTerminalEnvScript,
+  sharedTerminalShell
 } from '../server/src/sandboxes/sandbox-git-identity';
 import {
   PR_STATE_SCRIPT,
@@ -559,4 +560,20 @@ test('a guest terminal with no session can still be found when the guest is remo
     terminalTmuxName({ sessionId: null, index: '0', mode: 'rw', terminalUserId: null } as any, 'E'),
     'orchard-e'
   );
+});
+
+test('a collaborator terminal in a shared sandbox never carries their GitHub token', () => {
+  const actor = {
+    userId: GUEST,
+    identity: gitIdentity(USERS[GUEST]),
+    githubLogin: 'gus-gh',
+    token: GUEST_TOKEN
+  };
+  const shell = sharedTerminalShell(actor);
+  assert.ok(!shell.file.includes(GUEST_TOKEN));
+  assert.doesNotMatch(shell.file, /ORCHARD_GIT_TOKEN/);
+  assert.match(shell.file, /GIT_AUTHOR_EMAIL='2002\+gus-gh@users\.noreply\.github\.com'/);
+  assert.match(shell.file, /GIT_CONFIG_COUNT='2'/);
+  assert.ok(!shell.file.includes("credential.helper' GIT_CONFIG_VALUE_1='!"));
+  assert.ok(!shell.tmuxEnv.includes(GUEST_TOKEN));
 });
