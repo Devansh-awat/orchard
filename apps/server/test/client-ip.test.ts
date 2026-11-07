@@ -44,6 +44,21 @@ function req(headers: Record<string, string>, socket = INGRESS) {
 
 const xff = (...parts: string[]) => ({ 'x-forwarded-for': parts.join(', ') });
 
+test('Cloudflare then HAProxy with src-ip-header: the real client is found with only TRUST_PROXY=1', () => {
+  const haproxyPod = '10.0.3.7';
+  withEnv({}, () => {
+    assert.equal(getClientIp(req(xff(CLIENT, CLIENT), haproxyPod)), CLIENT);
+    assert.equal(getClientIp(req(xff(CLIENT), haproxyPod)), CLIENT);
+    assert.equal(getClientIp(req(xff('9.9.9.9, 8.8.8.8', CLIENT, CLIENT), haproxyPod)), CLIENT);
+    const lookalikes = {
+      ...xff(CLIENT),
+      'x-orchard-forwarded-for': '1.1.1.1',
+      'cf-connecting-ip': '2.2.2.2'
+    };
+    assert.equal(getClientIp(req(lookalikes, haproxyPod)), CLIENT);
+  });
+});
+
 test('unset TRUST_PROXY fails closed: only the socket peer is believed', () => {
   withEnv({ TRUST_PROXY: undefined }, () => {
     assert.equal(getRawClientIp(req(xff(CLIENT, '1.2.3.4'))), INGRESS);
