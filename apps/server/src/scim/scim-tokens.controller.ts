@@ -14,11 +14,11 @@ export class ScimTokensController {
 
   // The base URL an admin pastes into their IdP's SCIM connector. Tenant
   // endpoints are org-scoped via the bearer token, so the path is shared.
-  private scimBaseUrl(req: Request, _organizationId: string): string {
+  private scimBaseUrl(_req: Request, _organizationId: string): string {
     const configured = process.env.SCIM_BASE_URL;
-    if (configured) return `${configured.replace(/\/$/, '')}`;
-    const proto = (req.headers['x-forwarded-proto'] as string) || req.protocol;
-    return `${proto}://${req.get('host')}/apiv1/scim/v2`;
+    if (configured) return configured.replace(/\/+$/, '');
+    const base = (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/+$/, '');
+    return `${base}/apiv1/scim/v2`;
   }
 
   @Get(':id/scim/tokens')
