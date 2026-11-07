@@ -9,6 +9,7 @@ import {
   ServiceUnavailableException
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
+import { curlMethodArg } from './sandbox-curl-method';
 import type { SandboxConversation } from '../generated/prisma/client';
 import { OPENCODE_RESPONSE_HEADERS, opencodeContentType } from './sandbox-opencode-policy';
 import { cloneErrorMessage, githubRepoOf, parseRepoUrl } from './sandbox-repo-url';
@@ -852,7 +853,7 @@ export class SandboxWorkspaceService {
       return { status: res.status, body: parsed };
     }
     const seconds = Math.max(1, Math.ceil(timeoutMs / 1000));
-    let curl = `${OPENCODE_LOCAL_AUTH}; curl -s --globoff ${OPENCODE_LOCAL_CURL_AUTH} -m ${seconds} -o - -w '\\n@@status@@%{http_code}' -X ${method} ${shellQuote(`http://127.0.0.1:${OPENCODE_PORT}/${suffix}`)} -H 'accept: application/json'`;
+    let curl = `${OPENCODE_LOCAL_AUTH}; curl -s --globoff ${OPENCODE_LOCAL_CURL_AUTH} -m ${seconds} -o - -w '\\n@@status@@%{http_code}' ${curlMethodArg(method) ?? '-X GET'} ${shellQuote(`http://127.0.0.1:${OPENCODE_PORT}/${suffix}`)} -H 'accept: application/json'`;
     if (payload) curl += ` -H 'content-type: application/json' --data-binary @-`;
     const result = await this.registry.for(sandbox).exec(ref, ['su', '-l', 'dev', '-c', curl], {
       timeoutMs: timeoutMs + 5000,
@@ -1194,7 +1195,12 @@ export class SandboxWorkspaceService {
     const isSse =
       String(req.headers.accept || '').includes('text/event-stream') ||
       /^(global\/)?event\/?$/.test(suffix);
-    let curl = `${OPENCODE_LOCAL_AUTH}; curl -si -N --globoff ${OPENCODE_LOCAL_CURL_AUTH} -X ${req.method} ${shellQuote(`http://127.0.0.1:${OPENCODE_PORT}/${suffix}${query}`)} -H ${shellQuote(`accept: ${req.headers.accept || 'application/json'}`)}`;
+    const methodArg = curlMethodArg(req.method);
+    if (!methodArg) {
+      res.status(405).json({ message: 'That method is not allowed for opencode' });
+      return;
+    }
+    let curl = `${OPENCODE_LOCAL_AUTH}; curl -si -N --globoff ${OPENCODE_LOCAL_CURL_AUTH} ${methodArg} ${shellQuote(`http://127.0.0.1:${OPENCODE_PORT}/${suffix}${query}`)} -H ${shellQuote(`accept: ${req.headers.accept || 'application/json'}`)}`;
     if (payload) curl += ` -H 'content-type: application/json' --data-binary @-`;
     if (!isSse) curl += ' -m 110';
     const ref: SandboxRef = refOf(sandbox);
