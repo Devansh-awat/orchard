@@ -70,7 +70,7 @@ orchard deploy bindings add <app-id> --database appdb
 
 The private host is a cluster-internal address, such as `pg-<name>-rw.<namespace>.svc.cluster.local`. Traffic to it stays inside the cluster. Apps in the same project use this address.
 
-To print the connection details from the CLI, run `orchard db connection <id>`. To open a `psql` session, run `orchard db psql <id>`.
+To print the connection details from the CLI, run `orchard db connection <id>`. To open a `psql` session, run `orchard db psql <id>`, or use the console on the database page. The session runs in a sandboxed client pod in your namespace as the app role, and ends when you quit `psql`.
 
 ## Set CPU and memory
 

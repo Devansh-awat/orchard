@@ -12,7 +12,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/coder/websocket"
 	"github.com/hackclub/orchard/cli/internal/api"
 	"github.com/hackclub/orchard/cli/internal/exitcode"
 	"github.com/hackclub/orchard/cli/internal/output"
@@ -465,7 +464,7 @@ func dbLogsCmd() *cobra.Command {
 func dbPsqlCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "psql <id>",
-		Short: "Explain how to open a psql session (database pods no longer allow exec)",
+		Short: "Open an interactive psql session in a sandboxed client pod",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if !output.IsTTY() {
@@ -475,32 +474,23 @@ func dbPsqlCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			db, err := dbFetch(cmd.Context(), cl, args[0])
-			if err != nil {
+			base := "/databases/" + url.PathEscape(args[0]) + "/shell"
+			var session struct {
+				Namespace string `json:"namespace"`
+				Pod       string `json:"pod"`
+				Container string `json:"container"`
+			}
+			if err := cl.Send(cmd.Context(), http.MethodPost, base, nil, &session); err != nil {
 				return err
 			}
-			if m := str(db["mode"]); m == "cnpg" || m == "container" {
-				return errors.New("database pods are not accessible by exec; connect with the connection string from `orchard db connection " + args[0] + "` using psql from your app, or enable public access and run psql locally")
-			}
-			namespace := str(db["namespace"])
-			pod := dbFirstPod(db)
-			if namespace == "" || pod == "" {
-				return fmt.Errorf("database has no running pod yet (status: %s)", pick(db, "status"))
-			}
-			creds, err := dbConnectionFetch(cmd.Context(), cl, args[0])
+			defer func() {
+				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+				defer cancel()
+				_ = cl.Send(ctx, http.MethodDelete, base+"/"+url.PathEscape(session.Pod), nil, nil)
+			}()
+			conn, err := cl.DialExec(cmd.Context(), session.Pod, session.Namespace, session.Container)
 			if err != nil {
 				return err
-			}
-			conn, err := cl.DialExec(cmd.Context(), pod, namespace, "postgres")
-			if err != nil {
-				return err
-			}
-			// The exec gateway always spawns a shell; exec into psql so quitting
-			// psql ends the session.
-			if cs := str(creds["connectionString"]); cs != "" {
-				if err := conn.Write(cmd.Context(), websocket.MessageText, []byte("exec psql "+shellQuote(cs)+"\n")); err != nil {
-					return err
-				}
 			}
 			return termsession.Run(cmd.Context(), conn, os.Stdin, os.Stdout)
 		},
@@ -993,8 +983,4 @@ func dbKilledLogsCmd() *cobra.Command {
 			return nil
 		},
 	}
-}
-
-func shellQuote(s string) string {
-	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
