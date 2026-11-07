@@ -428,16 +428,16 @@ A guest runs the host's agent on the host's Claude subscription, with access to 
 
 ### Where tokens are stored
 
-| Token                                     | Stored                                                                                                                        | Reaches a machine as                                                                       |
-| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| Claude and OpenAI tokens                  | Encrypted in Postgres (AES-256-GCM)                                                                                           | The machine's Secret (Kubernetes) or bootstrap environment (Vercel)                        |
-| The host's GitHub token, for the agent    | Encrypted in Postgres                                                                                                         | The machine's Secret (Kubernetes), or an egress header (Vercel)                            |
-| A person's GitHub token, for their pushes | Encrypted in Postgres                                                                                                         | The environment of the one git command they run, or of their own terminal while it is open |
-| Agent server password, SSH bridge token   | Not stored. Derived with HMAC from `SECRETS_ENCRYPTION_KEY` and the machine's epoch                                           | Files in `/orchard-init`, mode 600                                                         |
-| Share link tokens                         | SHA-256 hash only                                                                                                             | Never                                                                                      |
-| Slack link tokens                         | SHA-256 hash only, single use, 10 minutes                                                                                     | Never                                                                                      |
-| Linear API keys                           | Encrypted in Postgres                                                                                                         | Never                                                                                      |
-| The agent's Orchard MCP token             | A 60-day token on a per-machine session of the host, confined to the machine's organization, and refused on superadmin routes | The agent's MCP configuration                                                              |
+| Token                                     | Stored                                                                                                                        | Reaches a machine as                                                                  |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| Claude and OpenAI tokens                  | Encrypted in Postgres (AES-256-GCM)                                                                                           | The machine's Secret (Kubernetes) or bootstrap environment (Vercel)                   |
+| The host's GitHub token, for the agent    | Encrypted in Postgres                                                                                                         | The machine's Secret (Kubernetes), or an egress header (Vercel)                       |
+| A person's GitHub token, for their pushes | Encrypted in Postgres                                                                                                         | The environment of the one git command they run. A guest's terminal never receives it |
+| Agent server password, SSH bridge token   | Not stored. Derived with HMAC from `SECRETS_ENCRYPTION_KEY` and the machine's epoch                                           | Files in `/orchard-init`, mode 600                                                    |
+| Share link tokens                         | SHA-256 hash only                                                                                                             | Never                                                                                 |
+| Slack link tokens                         | SHA-256 hash only, single use, 10 minutes                                                                                     | Never                                                                                 |
+| Linear API keys                           | Encrypted in Postgres                                                                                                         | Never                                                                                 |
+| The agent's Orchard MCP token             | A 60-day token on a per-machine session of the host, confined to the machine's organization, and refused on superadmin routes | The agent's MCP configuration                                                         |
 
 Tokens do not appear in these places:
 
@@ -452,7 +452,7 @@ Attached project env files skip names such as `GIT_*`, `LD_*`, `NODE_OPTIONS`, `
 ### Remaining risks
 
 - A guest with a terminal runs as the same user with `sudo`. A guest can read every credential on the machine, including the agent's MCP token and the agent server password.
-- The host, other guests, and the agent can read a guest's GitHub token from the guest's terminal environment while it is open. They could also intercept a push by reconfiguring git on the machine.
+- A guest's terminal gets the guest's commit name and email but not their GitHub token, so nobody else on the machine can read it from the terminal. A guest pushes from the app, where the token reaches only the one command. The host, other guests, and the agent could still intercept a push by reconfiguring the machine's git settings.
 - Vercel snapshots and drives, and therefore forks, contain the machine's secrets. On Kubernetes, the home volume holds the agent's GitHub credential.
 - Issue text reaches the agent marked as untrusted data, and outsider-written issues need the host to start them. Prompt injection is reduced, not eliminated.
 - Removing a guest does not undo what they did on the machine. Recreate the machine if you no longer trust someone who had access.
