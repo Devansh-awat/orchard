@@ -283,6 +283,19 @@ Changing `BASE_DOMAIN` does not move existing hosts. Each host keeps its Ingress
 2. Clear the subdomain in the organization's settings.
 3. Set the subdomain again.
 
+### Reserved hosts
+
+Vanity addresses, status page hosts and custom domains cannot take hostnames that the platform uses. Orchard reserves the hosts in `FRONTEND_URL`, `MCP_BASE_URL`, `BACKEND_URL`, `ORCHARD_API_URL`, `ORCHARD_DOCS_URL`, `SCIM_BASE_URL`, `EMAIL_ASSET_BASE_URL`, `TEMPLATE_REGISTRY_URL`, `ORCHARD_GRAFT_MARKETPLACE_URL` and `REGISTRY_HTTP_HOSTS`, plus common names such as `www`, `api`, `admin` and `status`.
+
+| Setting                  | Purpose                                                                                                                                                                             |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `RESERVED_HOSTS`         | A comma-separated list of extra hostnames that nobody can claim.                                                                                                                    |
+| `RESERVED_HOST_SUFFIXES` | A comma-separated list of domains. Custom domains cannot use the domain or anything under it. A vanity address or status page inside `BASE_DOMAIN` is still allowed when it is under that domain. |
+
+When `BASE_DOMAIN` is the same domain as `APP_DOMAIN`, a platform wildcard domain, `PUBLIC_DB_DOMAIN` or `SANDBOX_PREVIEW_DOMAIN`, Orchard also refuses vanity and status labels that could collide with generated hosts. In the app domain, this means labels that end in a dash and six hex characters, such as `shop-web-a1b2c3`. In the database and preview domains, every label is refused. Use a separate `BASE_DOMAIN` to avoid these limits.
+
+With the chart, set `RESERVED_HOSTS` and `RESERVED_HOST_SUFFIXES` in `server.env`.
+
 ## Resource limits
 
 `INSTANCE_RESOURCE_LIMITS` turns resource limits `on` or `off` for the whole instance, and locks the setting in **Instance admin**. Unset, the choice in **Instance admin** applies. If nobody has chosen, limits are on. If you unset the variable, Orchard keeps the value that it locked. For more information, refer to [Turn resource limits on or off](/operate/resource-limits/).

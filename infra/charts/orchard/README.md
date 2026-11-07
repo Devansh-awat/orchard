@@ -306,7 +306,7 @@ run a Datadog agent.
 | `server.workers.replicas` | `2` | Replica count. Ignored when `server.workers.autoscaling.enabled`. |
 | `server.workers.resources` | requests `100m/384Mi`, limits `2/2Gi` | Resource block. |
 | `server.workers.autoscaling.*` | `false`, `1`–`10`, `60%` | Same for the worker Deployment. Builds are the burstiest tier. |
-| `server.env` | `[]` | Extra env vars. `DATABASE_URL` is injected automatically from `orchard-db-app` when `postgres.enabled=true`. `APP_DOMAIN` and `PLATFORM_WILDCARD_DOMAINS` are derived from `gateway.http.appDomain`; list them here to override. |
+| `server.env` | `[]` | Extra env vars. `DATABASE_URL` is injected automatically from `orchard-db-app` when `postgres.enabled=true`. `APP_DOMAIN` and `PLATFORM_WILDCARD_DOMAINS` are derived from `gateway.http.appDomain`; list them here to override. `RESERVED_HOSTS` and `RESERVED_HOST_SUFFIXES` (comma-separated hostnames and domains that vanity addresses, status pages and custom domains cannot claim) pass through here too. |
 | `server.envFrom` | `[]` | `envFrom` list (configMapRef / secretRef). |
 
 The chart sets `TENANT_SECRETS_CLUSTER_ROLE` to `<release>-tenant-secrets`, the ClusterRole the server binds into each tenant namespace. The server's own ClusterRole may `bind` only that name and holds no `escalate`.
