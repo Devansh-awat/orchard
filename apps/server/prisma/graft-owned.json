@@ -1,0 +1,23 @@
+{
+  "tables": [
+    "forum_categories",
+    "forum_replies",
+    "forum_threads",
+    "forum_votes",
+    "sandbox_conversations",
+    "sandbox_credentials",
+    "sandbox_integration_deliveries",
+    "sandbox_members",
+    "sandbox_project_links",
+    "sandbox_prompt_authors",
+    "sandbox_session_messages",
+    "sandbox_share_links",
+    "sandboxes",
+    "slack_link_tokens",
+    "slack_thread_links",
+    "ssh_identities",
+    "user_context_items",
+    "user_integrations"
+  ],
+  "enums": ["SandboxDesiredState", "SandboxMemberRole", "SandboxRunnerKind", "SandboxStatus"]
+}

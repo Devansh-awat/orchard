@@ -494,6 +494,10 @@ jobs:
         run: |
           pnpm --filter server prisma:generate
           cd apps/server && pnpm exec prisma migrate deploy
+      - name: Migrations match schema.prisma
+        run: |
+          pnpm --filter server test:migration-drift
+          pnpm --filter server prisma:check-drift
       - name: Build server
         run: pnpm --filter server build
       # Engine SQL (batch upsert, natural-key replacement, array-bound

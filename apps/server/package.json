@@ -13,6 +13,8 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:seed": "tsx prisma/seed.ts",
+    "prisma:check-drift": "node scripts/check-migration-drift.mjs",
+    "test:migration-drift": "tsx --test test/migration-drift.test.ts",
     "prisma:studio": "prisma studio",
     "test:rbac": "tsx --test test/rbac.e2e.ts",
     "test:auth-coverage": "tsx --test test/auth-coverage.test.ts",
