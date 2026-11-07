@@ -193,12 +193,23 @@ spec:
       app.kubernetes.io/name: r2-proxy
   policyTypes: [Ingress]
   ingress:
-    # Allow ingress from anywhere on the proxy port. CNPG clusters live in
-    # tenant namespaces; restricting source namespaces here would require
-    # labelling every tenant namespace, which the server doesn't do today.
-    # Defense-in-depth: per-key prefix policy at the app layer is the real
-    # security boundary; this rule is just shape.
-    - ports:
+    # Barman sidecars run in tenant namespaces, which carry the managed label.
+    # The server and the CNPG operator are the other callers. Builds, sandboxes
+    # and image scans have no business here.
+    - from:
+        - namespaceSelector:
+            matchExpressions:
+              - { key: orchard.my/managed, operator: Exists }
+        - namespaceSelector:
+            matchExpressions:
+              - { key: orchard.dev/managed, operator: Exists }
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.namespace }}
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.tenant.cnpgOperatorNamespace | default "postgresql" }}
+      ports:
         - port: 9000
           protocol: TCP
 {{- end }}

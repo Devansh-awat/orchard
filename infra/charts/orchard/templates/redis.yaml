@@ -1,4 +1,17 @@
 {{- if .Values.redis.enabled }}
+{{- if and .Values.redis.auth.enabled (not .Values.redis.url) }}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: redis-auth
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "orchard.labels" (dict "root" . "name" "redis") | nindent 4 }}
+type: Opaque
+stringData:
+  password: {{ include "orchard.redisPassword" . | quote }}
+{{- end }}
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -36,6 +49,7 @@ spec:
       labels:
         {{- include "orchard.labels" (dict "root" . "name" "redis") | nindent 8 }}
     spec:
+      automountServiceAccountToken: false
       securityContext:
         runAsNonRoot: true
         runAsUser: 999
@@ -53,6 +67,18 @@ spec:
             - everysec
             - --maxmemory-policy
             - noeviction
+            {{- if and .Values.redis.auth.enabled (not .Values.redis.url) }}
+            - --requirepass
+            - $(REDISCLI_AUTH)
+            {{- end }}
+          {{- if and .Values.redis.auth.enabled (not .Values.redis.url) }}
+          env:
+            - name: REDISCLI_AUTH
+              valueFrom:
+                secretKeyRef:
+                  name: redis-auth
+                  key: password
+          {{- end }}
           ports:
             - name: redis
               containerPort: 6379
@@ -117,6 +143,9 @@ spec:
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: mcp
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: server-worker
       ports:
         - port: redis
           protocol: TCP

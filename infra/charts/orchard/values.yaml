@@ -203,6 +203,25 @@ cilium:
 protection:
   orchardLogin: false
 
+# Ingress policies for the control-plane namespaces: the release namespace
+# (server, mcp, frontend, Postgres, pooler), the metrics namespace
+# (VictoriaMetrics, VictoriaLogs, vmagent, kube-state-metrics) and r2-proxy.
+#
+# Tenant egress policies already keep tenant pods out. These close the other
+# direction for everything that is not a tenant: builds, sandboxes, image scans
+# and tenant namespaces cannot reach platform pods, whatever their own egress
+# policy says. Any other namespace (the ingress controller, the CNPG operator,
+# monitoring agents, cert-manager) keeps its access, so nothing has to be listed.
+#
+# Needs a CNI that enforces NetworkPolicy. Turn it off only if one of your own
+# tools in an untrusted namespace has to call the control plane.
+networkPolicy:
+  platform:
+    enabled: true
+    # Namespaces to treat like tenants, on top of the managed tenant
+    # namespaces and the builders, sandbox, fc-builder and trivy namespaces.
+    untrustedNamespaces: []
+
 # Control-plane Redis. Backs the cross-replica SSE event bus (Redis Streams)
 # so live updates reach SSE clients on every server replica, and is available
 # as a general cache. REDIS_URL is injected into the server automatically when
@@ -215,6 +234,14 @@ redis:
   # Override to point at an external/managed Redis; otherwise the in-cluster
   # service is used.
   url: ""
+  # Requires a password. The chart keeps one in the redis-auth Secret, minting a
+  # random one on first install and reusing it on every upgrade (it reads the
+  # existing Secret with lookup, so a GitOps tool that only runs `helm template`
+  # should set password below instead). Ignored when url points at an external
+  # Redis.
+  auth:
+    enabled: true
+    password: ""
   networkPolicy:
     enabled: true
   resources:

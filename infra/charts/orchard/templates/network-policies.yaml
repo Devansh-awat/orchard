@@ -1,0 +1,86 @@
+{{- if .Values.networkPolicy.platform.enabled }}
+{{- $ciliumPolicies := include "orchard.ciliumPolicies" . }}
+{{- $namespaces := list .Values.namespace }}
+{{- if .Values.metrics.enabled }}{{- $namespaces = append $namespaces .Values.metrics.namespace }}{{- end }}
+{{- range $ns := $namespaces }}
+{{- $release := eq $ns $.Values.namespace }}
+---
+# Nothing outside the platform may open a connection to a control-plane pod:
+# not a tenant namespace, a build, a sandbox, a fc-builder VM host or an image
+# scan, whatever its own egress policy allows. Every other namespace keeps its
+# access, so the ingress controller, the CNPG operator, vmagent and monitoring
+# agents need no entry. Redis has its own, narrower policy.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: platform-ingress
+  namespace: {{ $ns }}
+  labels:
+    {{- include "orchard.labels" (dict "root" $ "name" "platform-ingress") | nindent 4 }}
+spec:
+  podSelector:
+    {{- if $release }}
+    matchExpressions:
+      - { key: app.kubernetes.io/name, operator: NotIn, values: [redis] }
+    {{- else }}
+    {}
+    {{- end }}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector: {}
+        - namespaceSelector:
+            matchExpressions:
+              {{- include "orchard.trustedNamespaceExpressions" $ | nindent 14 }}
+{{- if $ciliumPolicies }}
+---
+# Cilium sends traffic from its Gateway and from other nodes with the host,
+# remote-node and ingress identities, which no namespaceSelector matches.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: platform-allow-cilium-entities
+  namespace: {{ $ns }}
+spec:
+  endpointSelector:
+    {{- if $release }}
+    matchExpressions:
+      - { key: app.kubernetes.io/name, operator: NotIn, values: [redis] }
+    {{- else }}
+    {}
+    {{- end }}
+  ingress:
+    - fromEntities: [host, remote-node, ingress]
+{{- end }}
+{{- end }}
+{{- if .Values.trivy.enabled }}
+---
+# Image scan jobs post their report back to the server. Nothing else in the
+# release namespace is open to them.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: platform-allow-image-scan-results
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "orchard.labels" (dict "root" . "name" "platform-ingress") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: server
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.trivy.namespace }}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: image-scan
+      ports:
+        - { port: 3001, protocol: TCP }
+        {{- if ne (int .Values.server.service.port) 3001 }}
+        - { port: {{ .Values.server.service.port }}, protocol: TCP }
+        {{- end }}
+{{- end }}
+{{- end }}

@@ -342,6 +342,13 @@ The chart sets `TENANT_SECRETS_CLUSTER_ROLE` to `<release>-tenant-secrets`, the 
 | `postgres.backup.schedule` | `0 30 1 * * *` | Six-field cron. |
 | `postgres.backup.walMaxParallel` | `4` | WAL upload parallelism. |
 
+### Platform network policies (`networkPolicy.*`)
+
+| Key | Default | What it does |
+| --- | --- | --- |
+| `networkPolicy.platform.enabled` | `true` | Ingress policies for the release namespace and the metrics namespace. Tenant namespaces (the managed label), the builders, sandbox, fc-builder and trivy namespaces cannot connect to a control-plane pod. Every other namespace keeps its access. Redis keeps its own, narrower policy. Needs a CNI that enforces NetworkPolicy. |
+| `networkPolicy.platform.untrustedNamespaces` | `[]` | More namespaces to treat like tenants. |
+
 ### Redis (`redis.*`)
 
 Backs the cross-replica SSE event bus and is available as a cache. Without it the server
@@ -353,6 +360,8 @@ degrades to local-only delivery plus polling.
 | `redis.image` | `redis:7.4.11-alpine` | Image. |
 | `redis.storage` / `storageClass` | `1Gi` / cluster default | The data PVC. |
 | `redis.url` | `""` | Use this URL for `REDIS_URL` instead of the in-cluster Service. |
+| `redis.auth.enabled` | `true` | Require a password. The chart mints one into the `redis-auth` Secret on first install and keeps it on upgrades. Not used with `redis.url`. |
+| `redis.auth.password` | `""` | Use this password instead. Set it when a GitOps tool only runs `helm template`, which cannot read the existing Secret. |
 | `redis.networkPolicy.enabled` | `true` | Restrict who can reach it. |
 | `redis.resources` | requests `50m/64Mi`, limits `500m/512Mi` | Resource block. |
 

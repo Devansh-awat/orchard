@@ -194,8 +194,18 @@ true
             {{- include "orchard.poolerEnv" . }}
             {{- end }}
             {{- if .Values.redis.enabled }}
+            {{- if and .Values.redis.auth.enabled (not .Values.redis.url) }}
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: redis-auth
+                  key: password
+            - name: REDIS_URL
+              value: {{ printf "redis://:$(REDIS_PASSWORD)@redis.%s.svc.cluster.local:6379" .Values.namespace | quote }}
+            {{- else }}
             - name: REDIS_URL
               value: {{ default (printf "redis://redis.%s.svc.cluster.local:6379" .Values.namespace) .Values.redis.url | quote }}
+            {{- end }}
             {{- end }}
             - name: POD_IP
               valueFrom:
@@ -816,4 +826,38 @@ otherwise the CRD being installed at render time is enough.
 */}}
 {{- define "orchard.ciliumPolicies" -}}
 {{- if or .Values.cilium.enabled (.Capabilities.APIVersions.Has "cilium.io/v2/CiliumNetworkPolicy") -}}true{{- end -}}
+{{- end -}}
+
+{{- define "orchard.redisPassword" -}}
+{{- if .Values.redis.auth.password -}}
+{{- .Values.redis.auth.password -}}
+{{- else -}}
+{{- $existing := (lookup "v1" "Secret" .Values.namespace "redis-auth") -}}
+{{- if and $existing $existing.data $existing.data.password -}}
+{{- $existing.data.password | b64dec -}}
+{{- else -}}
+{{- if not (index .Values.redis "generatedPassword") -}}
+{{- $_ := set .Values.redis "generatedPassword" (randAlphaNum 40) -}}
+{{- end -}}
+{{- index .Values.redis "generatedPassword" -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Namespaces whose pods are not trusted with the control plane: the builders,
+sandbox, fc-builder and image-scan namespaces, plus tenant.untrustedNamespaces.
+Managed tenant namespaces are matched by label instead.
+*/}}
+{{- define "orchard.untrustedNamespaces" -}}
+{{- $names := list .Values.builders.namespace .Values.sandbox.namespace .Values.fcBuilder.namespace .Values.trivy.namespace -}}
+{{- $names = concat $names (.Values.networkPolicy.platform.untrustedNamespaces | default list) -}}
+{{- toJson (uniq (compact $names)) -}}
+{{- end -}}
+
+{{/* namespaceSelector expressions that select every namespace except the untrusted ones. */}}
+{{- define "orchard.trustedNamespaceExpressions" -}}
+- { key: orchard.my/managed, operator: DoesNotExist }
+- { key: orchard.dev/managed, operator: DoesNotExist }
+- { key: kubernetes.io/metadata.name, operator: NotIn, values: {{ include "orchard.untrustedNamespaces" . }} }
 {{- end -}}
