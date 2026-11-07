@@ -76,6 +76,15 @@ export class NamespaceTeardownService {
       })
       .catch((err: unknown) => fail('retire the namespace', err));
 
+    const imageOwner = scope.environmentId
+      ? ((
+          await this.prisma.project.findUnique({
+            where: { id: scope.projectId },
+            select: { namespace: true }
+          })
+        )?.namespace ?? null)
+      : scope.namespace;
+
     const deployments = await this.prisma.deployment.findMany({
       where,
       select: {
@@ -97,12 +106,13 @@ export class NamespaceTeardownService {
         }
       }
       const images = scope.keepData ? [] : deployment.imageHistory.map((entry) => entry.image);
-      if (images.length > 0) {
+      if (images.length > 0 && imageOwner) {
         try {
           const { repositories, tags } = await splitRegistryCleanup(
             this.prisma,
             deployment.id,
-            images
+            images,
+            imageOwner
           );
           await this.docker.deleteRepositoriesFromRegistry(repositories);
           await this.docker.deleteArtifactsFromRegistry(tags);

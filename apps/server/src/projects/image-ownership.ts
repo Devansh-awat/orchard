@@ -1,18 +1,30 @@
 import { ConflictException, ForbiddenException } from '@nestjs/common';
 import { randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
-
-function normalizeHost(host: string): string {
-  return host.toLowerCase().replace(/:443$/, '');
-}
+import {
+  imageRepoFilters,
+  isLoopbackHost,
+  parseImageRef,
+  repositoryName,
+  sameRegistryHost,
+  type ImageRef
+} from './image-ref';
 
 function platformRegistryHosts(): string[] {
-  return [process.env.DOCKER_REGISTRY_PULL, process.env.DOCKER_REGISTRY_PUSH]
-    .filter((h): h is string => Boolean(h))
-    .map(normalizeHost);
+  return [process.env.DOCKER_REGISTRY_PULL, process.env.DOCKER_REGISTRY_PUSH].filter(
+    (h): h is string => Boolean(h)
+  );
 }
 
-const LOOPBACK_HOST = /^(localhost|127(\.\d+){3}|\[::1\]|0\.0\.0\.0)(:\d+)?$/;
+function onPlatformHost(ref: ImageRef): boolean {
+  return (
+    ref.host !== null && platformRegistryHosts().some((host) => sameRegistryHost(ref.host!, host))
+  );
+}
+
+function registryProject(): string {
+  return process.env.REGISTRY_PROJECT || 'orchard';
+}
 
 export function newImageTag(): string {
   const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\..+/, '').slice(0, 14);
@@ -20,19 +32,21 @@ export function newImageTag(): string {
 }
 
 function assertRegistryAllowed(image: string): void {
-  const [host, ...rest] = image.toLowerCase().split('/');
   const refuse = () => new ForbiddenException('That image belongs to another project');
-  if (LOOPBACK_HOST.test(host)) throw refuse();
-  if (!platformRegistryHosts().includes(normalizeHost(host))) return;
-  if (rest.length !== 2 || rest[0] !== (process.env.REGISTRY_PROJECT || 'orchard')) throw refuse();
+  const ref = parseImageRef(image);
+  if (!ref) throw refuse();
+  if (ref.host && isLoopbackHost(ref.host)) throw refuse();
+  if (!onPlatformHost(ref)) return;
+  const parts = ref.repository.split('/');
+  if (parts.length !== 2 || parts[0] !== registryProject()) throw refuse();
 }
 
 export function platformImageRepo(image: string): string | null {
-  const [host, ...rest] = image.toLowerCase().split('/');
-  if (!platformRegistryHosts().includes(normalizeHost(host))) return null;
-  const [registryProject, repo] = rest;
-  if (registryProject !== (process.env.REGISTRY_PROJECT || 'orchard')) return null;
-  return (repo ?? '').split(/[:@]/)[0];
+  const ref = parseImageRef(image);
+  if (!ref || !onPlatformHost(ref)) return null;
+  const [project, repo] = ref.repository.split('/');
+  if (project !== registryProject()) return null;
+  return repo ?? '';
 }
 
 export async function assertImageOwnedByProject(
@@ -57,7 +71,10 @@ export async function assertImageOwnedByProject(
       select: { namespace: true }
     }),
     prisma.deployment.findFirst({
-      where: { projectId: { not: project.id }, image: { contains: `/${repo}:` } },
+      where: {
+        projectId: { not: project.id },
+        OR: imageRepoFilters(repo).map((image) => ({ image }))
+      },
       select: { id: true }
     })
   ]);
@@ -91,7 +108,7 @@ export async function assertRepoNameFree(
           name: split.name,
           project: { namespace: split.namespace }
         })),
-        { image: { contains: `/${namespace}-${name}:` } }
+        ...imageRepoFilters(`${namespace}-${name}`).map((image) => ({ image }))
       ]
     },
     select: { id: true }
@@ -134,26 +151,33 @@ export async function assertIngressNameFree(
   }
 }
 
-function repoOf(image: string): string {
-  return (image.split('/').pop() ?? image).split(/[:@]/)[0];
+function repoOf(image: string): string | null {
+  const ref = parseImageRef(image);
+  return ref ? repositoryName(ref) : null;
 }
 
 export async function splitRegistryCleanup(
   prisma: Pick<PrismaService, 'deployment'>,
   deploymentId: string,
-  images: string[]
+  images: string[],
+  ownerNamespace?: string
 ): Promise<{ repositories: string[]; tags: string[] }> {
   const repositories: string[] = [];
   const tags: string[] = [];
   const shared = new Map<string, boolean>();
   for (const image of images) {
     const repo = repoOf(image);
+    if (!repo) continue;
+    if (ownerNamespace !== undefined && !repo.startsWith(`${ownerNamespace}-`)) continue;
     if (!shared.has(repo)) {
-      const contains = `/${repo}:`;
+      const filters = imageRepoFilters(repo);
       const other = await prisma.deployment.findFirst({
         where: {
           id: { not: deploymentId },
-          OR: [{ image: { contains } }, { imageHistory: { some: { image: { contains } } } }]
+          OR: [
+            ...filters.map((image) => ({ image })),
+            { imageHistory: { some: { OR: filters.map((image) => ({ image })) } } }
+          ]
         },
         select: { id: true }
       });

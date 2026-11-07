@@ -36,6 +36,7 @@ import {
   secretValuesToMask
 } from './build-log-redaction';
 import { BUILDER_NAMESPACE } from './builder-namespace';
+import { parseImageRef, sameRegistryHost } from '../projects/image-ref';
 import {
   assertBuildRegistryConfigured,
   BUILD_PLATFORM,
@@ -4578,15 +4579,13 @@ fi
    * and return the repo name (without project prefix) and tag.
    */
   private parseImageRef(image: string): { repoName: string; tag: string | null } | null {
-    const [host, project, ref, ...rest] = image.split('/');
+    const parsed = parseImageRef(image);
+    if (!parsed?.host) return null;
     const hosts = [this.harborRegistryPush, this.harborRegistryPull, this.pusherRegistryHost];
-    if (rest.length > 0 || !ref || project !== this.harborProject || !hosts.includes(host)) {
-      return null;
-    }
-    const tagIndex = ref.lastIndexOf(':');
-    return tagIndex === -1
-      ? { repoName: ref, tag: null }
-      : { repoName: ref.substring(0, tagIndex), tag: ref.substring(tagIndex + 1) };
+    if (!hosts.some((host) => host && sameRegistryHost(parsed.host!, host))) return null;
+    const [project, repoName, ...rest] = parsed.repository.split('/');
+    if (rest.length > 0 || !repoName || project !== this.harborProject) return null;
+    return { repoName, tag: parsed.tag };
   }
 
   private getHarborAuth(): { authHeader: string; registryUrl: string } | null {

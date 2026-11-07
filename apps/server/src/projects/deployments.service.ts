@@ -2071,7 +2071,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     // Delete all associated repositories from Harbor in the background
     if (imageHistoryEntries.length > 0) {
       const imageRefs = imageHistoryEntries.map((entry) => entry.image);
-      splitRegistryCleanup(this.prisma, deploymentId, imageRefs)
+      splitRegistryCleanup(this.prisma, deploymentId, imageRefs, deployment.project.namespace)
         .then(async ({ repositories, tags }) => {
           await this.dockerService.deleteRepositoriesFromRegistry(repositories);
           await this.dockerService.deleteArtifactsFromRegistry(tags);

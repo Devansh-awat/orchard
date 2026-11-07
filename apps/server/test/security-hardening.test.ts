@@ -151,7 +151,9 @@ function ownership(others: string[] = [], builtElsewhere: string[] = []) {
     environment: { findMany: async () => [] },
     deployment: {
       findFirst: async ({ where }: any) =>
-        builtElsewhere.some((repo) => where.image.contains === `/${repo}:`) ? { id: 'other' } : null
+        builtElsewhere.some((repo) => where.OR.some((c: any) => c.image.contains === `/${repo}:`))
+          ? { id: 'other' }
+          : null
     }
   } as any;
 }
