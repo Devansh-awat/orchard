@@ -1,6 +1,7 @@
 import { RegistryCredentialsService } from '../projects/registry-credentials.service';
 import { Injectable, BadRequestException, Optional } from '@nestjs/common';
 import { spawn, exec } from 'child_process';
+import { AsyncLocalStorage } from 'async_hooks';
 import { promisify } from 'util';
 import * as path from 'path';
 import * as fs from 'fs/promises';
@@ -32,6 +33,7 @@ import {
   isPullAuthEnvKey,
   PullAuthError,
   pullAuthsFromEnv,
+  registryLoginHostError,
   type RegistryAuths
 } from './registry-pull-auth';
 
@@ -236,6 +238,13 @@ export class DockerService {
     );
   }
 
+  private readonly dockerConfigScope = new AsyncLocalStorage<{ dir: string }>();
+
+  private dockerConfigEnv(): Record<string, string> {
+    const scope = this.dockerConfigScope.getStore();
+    return scope ? { DOCKER_CONFIG: scope.dir } : {};
+  }
+
   private async loginPullRegistries(
     envVars: Record<string, string>,
     deploymentId?: string
@@ -254,15 +263,23 @@ export class DockerService {
     if (!hasRegistryAuths(auths)) return;
 
     await this.appendLog(deploymentId, 'Using registry credentials to pull base images');
+    for (const host of Object.keys(auths)) {
+      const hostError = registryLoginHostError(host);
+      if (hostError) {
+        await this.appendLog(deploymentId, hostError, 'ERROR');
+        throw new BadRequestException(hostError);
+      }
+    }
     for (const [host, auth] of Object.entries(auths)) {
       await new Promise<void>((resolve, reject) => {
         const loginProcess = spawn(
           'docker',
-          ['login', host, '-u', auth.username, '--password-stdin'],
+          ['login', '-u', auth.username, '--password-stdin', '--', host],
           {
             stdio: ['pipe', 'pipe', 'pipe'],
             env: {
               ...process.env,
+              ...this.dockerConfigEnv(),
               DOCKER_HOST: process.env.DOCKER_HOST || 'unix:///var/run/docker.sock',
               PATH:
                 process.env.PATH || '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
@@ -631,6 +648,7 @@ export class DockerService {
         env: {
           ...process.env,
           ...argSet.env,
+          ...this.dockerConfigEnv(),
           DOCKER_HOST: process.env.DOCKER_HOST || 'unix:///var/run/docker.sock',
           NO_PROXY: `${process.env.NO_PROXY || ''},${this.registryNoProxy}`.replace(/^,/, ''),
           no_proxy: `${process.env.no_proxy || ''},${this.registryNoProxy}`.replace(/^,/, ''),
@@ -894,6 +912,7 @@ export class DockerService {
         env: {
           ...process.env,
           ...argSet.env,
+          ...this.dockerConfigEnv(),
           DEPOT_TOKEN: process.env.DEPOT_TOKEN || '',
           DEPOT_PROJECT_ID: process.env.DEPOT_PROJECT_ID || '',
           PATH: process.env.PATH || '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
@@ -1081,6 +1100,7 @@ export class DockerService {
         ...process.env,
         ...envVars,
         DOCKER_BUILDKIT: '1',
+        ...this.dockerConfigEnv(),
         DOCKER_HOST: process.env.DOCKER_HOST || 'unix:///var/run/docker.sock',
         NO_PROXY: `${process.env.NO_PROXY || ''},${this.registryNoProxy},ghcr.io`.replace(/^,/, ''),
         no_proxy: `${process.env.no_proxy || ''},${this.registryNoProxy},ghcr.io`.replace(/^,/, ''),
@@ -1236,11 +1256,12 @@ export class DockerService {
         await new Promise<void>((resolve, reject) => {
           const loginProcess = spawn(
             'docker',
-            ['login', this.harborRegistryPush, '-u', harborUsername, '--password-stdin'],
+            ['login', '-u', harborUsername, '--password-stdin', '--', this.harborRegistryPush],
             {
               stdio: ['pipe', 'pipe', 'pipe'],
               env: {
                 ...process.env,
+                ...this.dockerConfigEnv(),
                 DOCKER_HOST: process.env.DOCKER_HOST || 'unix:///var/run/docker.sock',
                 PATH:
                   process.env.PATH || '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
@@ -1289,6 +1310,7 @@ export class DockerService {
             stdio: ['ignore', 'pipe', 'pipe'],
             env: {
               ...process.env,
+              ...this.dockerConfigEnv(),
               DOCKER_HOST: process.env.DOCKER_HOST || 'unix:///var/run/docker.sock',
               NO_PROXY: `${process.env.NO_PROXY || ''},${this.registryNoProxy}`.replace(/^,/, ''),
               no_proxy: `${process.env.no_proxy || ''},${this.registryNoProxy}`.replace(/^,/, ''),
@@ -1568,6 +1590,19 @@ export class DockerService {
    * Build using local Docker daemon (legacy mode)
    */
   private async buildWithLocalDocker(options: BuildOptions): Promise<string> {
+    const configDir = await fs.mkdtemp(path.join(os.tmpdir(), 'orchard-docker-config-'));
+    try {
+      return await this.dockerConfigScope.run({ dir: configDir }, () =>
+        this.runLocalDockerBuild(options)
+      );
+    } finally {
+      await fs.rm(configDir, { recursive: true, force: true }).catch((err) => {
+        console.error('[Docker Service] Failed to remove docker config directory:', err);
+      });
+    }
+  }
+
+  private async runLocalDockerBuild(options: BuildOptions): Promise<string> {
     const {
       repoUrl,
       branch,

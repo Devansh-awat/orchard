@@ -1,3 +1,5 @@
+import { canonicalRegistryHost, isLoopbackHost } from '../projects/image-ref';
+
 export type RegistryAuth = {
   username: string;
   password: string;
@@ -95,4 +97,16 @@ export function mergeRegistryAuths(...sets: RegistryAuths[]): RegistryAuths {
 
 export function hasRegistryAuths(auths: RegistryAuths): boolean {
   return Object.keys(auths).length > 0;
+}
+
+export function registryLoginHostError(host: string): string | null {
+  const trimmed = host.trim();
+  const bare = trimmed.replace(/^https?:\/\//i, '').split('/')[0];
+  if (!bare || trimmed.startsWith('-') || canonicalRegistryHost(bare) === null) {
+    return `Refusing to log in to ${JSON.stringify(trimmed.slice(0, 80))}: not a registry host`;
+  }
+  if (isLoopbackHost(bare)) {
+    return `Refusing to log in to ${trimmed.slice(0, 80)}: loopback registries are not allowed`;
+  }
+  return null;
 }
