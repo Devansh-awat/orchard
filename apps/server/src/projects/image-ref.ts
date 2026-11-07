@@ -10,10 +10,15 @@ const REPO_COMPONENT_RE = /^[a-z0-9]+(?:(?:[._]|__|-+)[a-z0-9]+)*$/;
 const TAG_RE = /^[\w][\w.-]{0,127}$/;
 const DIGEST_RE = /^[a-z][a-z0-9]*(?:[+._-][a-z][a-z0-9]*)*:[0-9a-fA-F]{32,}$/;
 
+function hasControlChar(value: string): boolean {
+  for (let i = 0; i < value.length; i++) if (value.charCodeAt(i) < 0x20) return true;
+  return false;
+}
+
 export function parseImageRef(raw: string): ImageRef | null {
   if (typeof raw !== 'string') return null;
   let rest = raw.trim();
-  if (!rest || rest.length > 1024 || /[\s\\\u0000-\u001f]/.test(rest)) return null;
+  if (!rest || rest.length > 1024 || /[\s\\]/.test(rest) || hasControlChar(rest)) return null;
 
   let digest: string | null = null;
   const at = rest.indexOf('@');
