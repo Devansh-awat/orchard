@@ -20,6 +20,11 @@ import {
   defaultBridgeBinaryUrl
 } from '../sandbox-bootstrap';
 import { BridgeChecksumResolver } from './bridge-checksum';
+import {
+  PRIVATE_EGRESS_EXCEPT,
+  nodeAndApiserverAddresses,
+  publicIpv4Excepts
+} from './cluster-excepts';
 import { SANDBOX_RUNNERS } from '../../core/instance-config.sections';
 import { PREVIEW_PORTS } from '../preview/preview-auth';
 import { configuredPreviewDomain } from '../preview/preview-domain';
@@ -567,7 +572,38 @@ export class KubernetesSandboxRunner implements SandboxRunner {
     };
   }
 
-  networkPolicyManifest(): k8s.KubernetesObject {
+  private clusterExceptCache: { at: number; result: string[] } | null = null;
+
+  async clusterExceptCidrs(): Promise<string[]> {
+    const cached = this.clusterExceptCache;
+    if (cached && Date.now() - cached.at < 5 * 60_000) return cached.result;
+    try {
+      const core = this.core();
+      const [nodes, endpoints] = await Promise.all([
+        core.listNode(),
+        core.readNamespacedEndpoints('kubernetes', 'default')
+      ]);
+      const apiserver = (endpoints.body.subsets ?? []).flatMap((subset) =>
+        (subset.addresses ?? []).map((address) => address.ip)
+      );
+      const result = publicIpv4Excepts(
+        nodeAndApiserverAddresses(
+          nodes.body.items as any[],
+          apiserver,
+          process.env.PLATFORM_EXTRA_DENY_CIDRS
+        )
+      );
+      this.clusterExceptCache = { at: Date.now(), result };
+      return result;
+    } catch (err) {
+      this.logger.warn(
+        `could not read cluster addresses for the sandbox policy: ${(err as Error).message}`
+      );
+      return cached?.result ?? [];
+    }
+  }
+
+  networkPolicyManifest(clusterExcepts: string[] = []): k8s.KubernetesObject {
     const serverNamespace = process.env.ORCHARD_SERVER_NAMESPACE || 'orchard';
     const policy: k8s.V1NetworkPolicy = {
       apiVersion: 'networking.k8s.io/v1',
@@ -617,13 +653,7 @@ export class KubernetesSandboxRunner implements SandboxRunner {
               {
                 ipBlock: {
                   cidr: '0.0.0.0/0',
-                  except: [
-                    '10.0.0.0/8',
-                    '172.16.0.0/12',
-                    '192.168.0.0/16',
-                    '169.254.0.0/16',
-                    '100.64.0.0/10'
-                  ]
+                  except: [...PRIVATE_EGRESS_EXCEPT, ...clusterExcepts]
                 }
               }
             ]
@@ -689,7 +719,7 @@ export class KubernetesSandboxRunner implements SandboxRunner {
     await this.queue.enqueue({
       dedupeKey: SANDBOX_NETPOL_KEY,
       opType: 'ssa',
-      manifest: this.networkPolicyManifest()
+      manifest: this.networkPolicyManifest(await this.clusterExceptCidrs())
     });
   }
 

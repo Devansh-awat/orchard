@@ -764,3 +764,56 @@ true
 {{- end -}}
 {{- join "," $parts -}}
 {{- end -}}
+
+{{/*
+IPv4 addresses a pod must not reach through the "public internet" egress rule:
+every node address, the apiserver endpoints, node pod CIDRs and
+tenant.extraDenyCidrs. Private ranges are already excepted, so only public
+addresses are kept. lookup returns nothing under `helm template`, so a render
+without a cluster yields an empty list. The server computes the same list for
+the policies it owns and keeps them current when nodes change; this snapshot is
+refreshed on every helm upgrade.
+*/}}
+{{- define "orchard.clusterExcepts" -}}
+{{- $found := list -}}
+{{- $nodes := lookup "v1" "Node" "" "" -}}
+{{- if $nodes -}}
+{{- range ($nodes.items | default list) -}}
+{{- range (.status.addresses | default list) -}}
+{{- if or (eq .type "InternalIP") (eq .type "ExternalIP") -}}{{- $found = append $found .address -}}{{- end -}}
+{{- end -}}
+{{- range (.spec.podCIDRs | default list) -}}{{- $found = append $found . -}}{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- $eps := lookup "v1" "Endpoints" "default" "kubernetes" -}}
+{{- if $eps -}}
+{{- range ($eps.subsets | default list) -}}
+{{- range (.addresses | default list) -}}{{- $found = append $found .ip -}}{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- range (splitList "," (.Values.tenant.extraDenyCidrs | default "")) -}}
+{{- with (trim .) -}}{{- $found = append $found . -}}{{- end -}}
+{{- end -}}
+{{- $out := list -}}
+{{- range (uniq $found) -}}
+{{- if and (regexMatch "^[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+(/[0-9]+)?$" .) (not (regexMatch "/([0-7])$" .)) (not (regexMatch "^(10\\.|192\\.168\\.|169\\.254\\.|172\\.(1[6-9]|2[0-9]|3[01])\\.|100\\.(6[4-9]|[7-9][0-9]|1[01][0-9]|12[0-7])\\.)" .)) -}}
+{{- $out = append $out (ternary . (printf "%s/32" .) (contains "/" .)) -}}
+{{- end -}}
+{{- end -}}
+{{- toJson (uniq (sortAlpha $out)) -}}
+{{- end -}}
+
+{{/* The except list of an "internet minus the cluster" ipBlock, as YAML list items. */}}
+{{- define "orchard.egressExceptList" -}}
+{{- range (concat (list "10.0.0.0/8" "172.16.0.0/12" "192.168.0.0/16" "169.254.0.0/16" "100.64.0.0/10") (include "orchard.clusterExcepts" . | fromJsonArray)) }}
+- {{ . }}
+{{- end }}
+{{- end -}}
+
+{{/*
+Whether to render CiliumNetworkPolicies. cilium.enabled is the explicit switch;
+otherwise the CRD being installed at render time is enough.
+*/}}
+{{- define "orchard.ciliumPolicies" -}}
+{{- if or .Values.cilium.enabled (.Capabilities.APIVersions.Has "cilium.io/v2/CiliumNetworkPolicy") -}}true{{- end -}}
+{{- end -}}

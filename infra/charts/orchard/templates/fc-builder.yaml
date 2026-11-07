@@ -176,7 +176,8 @@ spec:
     - to:
         - ipBlock:
             cidr: 0.0.0.0/0
-            except: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16, 100.64.0.0/10]
+            except:
+{{ include "orchard.egressExceptList" . | trim | indent 14 }}
       ports:
         - { port: 443, protocol: TCP }
         - { port: 80, protocol: TCP }

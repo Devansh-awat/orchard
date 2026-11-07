@@ -15,11 +15,7 @@
         - ipBlock:
             cidr: 0.0.0.0/0
             except:
-              - 10.0.0.0/8
-              - 172.16.0.0/12
-              - 192.168.0.0/16
-              - 169.254.0.0/16
-              - 100.64.0.0/10
+{{ include "orchard.egressExceptList" . | trim | indent 14 }}
     # HTTP for the handful of package mirrors that still need it.
     - ports:
         - port: 80
@@ -28,11 +24,7 @@
         - ipBlock:
             cidr: 0.0.0.0/0
             except:
-              - 10.0.0.0/8
-              - 172.16.0.0/12
-              - 192.168.0.0/16
-              - 169.254.0.0/16
-              - 100.64.0.0/10
+{{ include "orchard.egressExceptList" . | trim | indent 14 }}
     # Where the image push is allowed to go. Pod-level policy ⇒ these rules
     # cover both buildkit and the push sidecar in the same pod.
     #
