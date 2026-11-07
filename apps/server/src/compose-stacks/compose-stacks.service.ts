@@ -629,7 +629,9 @@ export class ComposeStacksService {
 
     const preservedEnv = new Map<string, PreservedEnv[]>();
     for (const child of replaced) {
-      if (child.composeServiceName) preservedEnv.set(child.composeServiceName, child.envVars);
+      if (child.composeServiceName) {
+        preservedEnv.set(child.composeServiceName, await this.deployments.readOwnEnvVars(child.id));
+      }
     }
 
     try {

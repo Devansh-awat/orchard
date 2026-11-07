@@ -5722,7 +5722,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
    * response reaches a client, and a secret that reaches a client is one that
    * was never write-only in the first place.
    */
-  private async readOwnEnvVars(
+  async readOwnEnvVars(
     deploymentId: string
   ): Promise<{ key: string; value: string; secret: boolean }[]> {
     const own = await this.prisma.deploymentEnvVar.findMany({

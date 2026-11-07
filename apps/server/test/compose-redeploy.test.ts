@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+process.env.SECRETS_ENCRYPTION_KEY ||= 'compose-redeploy-test-key';
+
 import { ComposeStacksService } from '../src/compose-stacks/compose-stacks.service';
+import { SecretCryptoService } from '../src/crypto/secret-crypto.service';
+import { assertEnvSetStorable } from '../src/projects/environment-shared-vars.service';
+
+const secretCrypto = new SecretCryptoService();
 
 function child(overrides: Record<string, unknown>) {
   return {
@@ -62,6 +68,10 @@ function harness(composeYaml: string, children: any[], volumeTaken?: string) {
       calls.push(['preflight', ...args]);
       if (volumeTaken) throw new Error(volumeTaken);
     },
+    readOwnEnvVars: async (id: string) =>
+      (children.find((c) => c.id === id)?.envVars ?? []).map((v: any) =>
+        secretCrypto.maybeDecrypt(v)
+      ),
     deleteDeployment: record('delete'),
     createDeployment: record('create'),
     createDeploymentFromGitHub: record('createFromGitHub'),
@@ -312,4 +322,42 @@ services:
   await service.redeployFromGithub('stack', 'clerk');
   const preflight = calls.find((c) => c[0] === 'preflight')!;
   assert.deepEqual(preflight[4], ['web']);
+});
+
+test('a build/image flip carries secret env over as plaintext, not ciphertext', async () => {
+  const yaml = `
+services:
+  web:
+    build: .
+`;
+  const sealed = secretCrypto.seal('s3cret');
+  assert.ok(sealed.startsWith('enc:v1:'));
+  const { service, calls } = harness(yaml, [
+    child({
+      id: 'web',
+      name: 'app-web',
+      composeServiceName: 'web',
+      image: 'nginx:1',
+      envVars: [
+        { key: 'TOKEN', value: sealed, secret: true },
+        { key: 'MODE', value: 'prod', secret: false }
+      ]
+    })
+  ]);
+  await service.redeployFromGithub('stack', 'clerk');
+  const created = calls.find((c) => c[0] === 'createFromGitHub')!;
+  const env = (created[2] as any).env as { key: string; value: string; secret: boolean }[];
+  assert.deepEqual(
+    env.find((e) => e.key === 'TOKEN'),
+    { key: 'TOKEN', value: 's3cret', secret: true }
+  );
+  assert.doesNotThrow(() => assertEnvSetStorable(env));
+});
+
+test('env keys that are not identifiers are rejected on create paths', () => {
+  assert.throws(
+    () => assertEnvSetStorable([{ key: 'A\nRUN x', value: '1' }]),
+    /Invalid environment variable key/
+  );
+  assert.doesNotThrow(() => assertEnvSetStorable([{ key: 'GOOD_KEY1', value: '1' }]));
 });

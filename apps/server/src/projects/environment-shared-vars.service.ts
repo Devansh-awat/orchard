@@ -32,7 +32,12 @@ export function assertEnvSetStorable(env: { key: string; value: string }[]): voi
   if (env.length > MAX_ENV_VARS) {
     throw new BadRequestException(`Too many variables (max ${MAX_ENV_VARS})`);
   }
-  for (const entry of env) assertEnvValueStorable(entry.key, entry.value);
+  for (const entry of env) {
+    if (!ENV_KEY_RE.test(entry.key)) {
+      throw new BadRequestException(`Invalid environment variable key: ${entry.key}`);
+    }
+    assertEnvValueStorable(entry.key, entry.value);
+  }
 }
 
 export interface SharedVarInput {
