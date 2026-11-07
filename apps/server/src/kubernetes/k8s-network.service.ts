@@ -17,7 +17,12 @@ import {
   ALLOWED_INGRESS_ANNOTATION_KEYS
 } from './kubernetes.service';
 import { mapServicePorts, ensureUniqueServicePorts, sanitizePortEntries } from './port-utils';
-import { truncateK8sName, platformWildcardDomains } from '../projects/projects.utils';
+import {
+  truncateK8sName,
+  platformWildcardDomains,
+  CERT_CLUSTER_ISSUER
+} from '../projects/projects.utils';
+import { isSanctionedIssuerValue } from './ingress-annotations';
 import { k8sErrorMessage } from './k8s-error';
 import { syncTlsSecret } from './tls-secret-sync';
 import { LeaderElectionService } from '../events/leader-election.service';
@@ -1181,6 +1186,7 @@ export class K8sNetworkService implements OnModuleInit {
         }
         const k = String(key);
         if (!ALLOWED_INGRESS_ANNOTATION_KEYS.has(k)) continue;
+        if (!isSanctionedIssuerValue(k, String(value), CERT_CLUSTER_ISSUER)) continue;
         annotations[k] = String(value);
       }
     }
@@ -1347,6 +1353,7 @@ export class K8sNetworkService implements OnModuleInit {
         }
         const k = String(key);
         if (!ALLOWED_INGRESS_ANNOTATION_KEYS.has(k)) continue;
+        if (!isSanctionedIssuerValue(k, String(value), CERT_CLUSTER_ISSUER)) continue;
         annotations[k] = String(value);
       }
     }

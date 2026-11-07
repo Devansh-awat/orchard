@@ -1,3 +1,4 @@
+import { tenantIngressAnnotations } from '../kubernetes/ingress-annotations';
 import {
   Injectable,
   NotFoundException,
@@ -523,21 +524,7 @@ export class IngressService implements OnModuleInit {
     const annotationsInput =
       data.annotations && typeof data.annotations === 'object' ? data.annotations : {};
 
-    const sanitizedAnnotations: Record<string, string> = {};
-
-    for (const [key, value] of Object.entries(annotationsInput)) {
-      if (value === undefined || value === null) {
-        continue;
-      }
-
-      const trimmedKey = String(key || '').trim();
-      if (!trimmedKey) {
-        continue;
-      }
-
-      const stringValue = String(value);
-      sanitizedAnnotations[trimmedKey] = stringValue;
-    }
+    const sanitizedAnnotations: Record<string, string> = tenantIngressAnnotations(annotationsInput);
 
     if (tlsEnabled) {
       sanitizedAnnotations['acme.cert-manager.io/http01-edit-in-place'] = 'true';
@@ -1058,14 +1045,7 @@ export class IngressService implements OnModuleInit {
     const clusterIssuer = tlsEnabled && !wildcardSecret ? CERT_CLUSTER_ISSUER : null;
     const entrypoints = tlsEnabled ? ['websecure'] : ['web'];
 
-    const sanitizedAnnotations: Record<string, string> = {};
-    if (data.annotations && typeof data.annotations === 'object') {
-      for (const [key, value] of Object.entries(data.annotations)) {
-        if (value != null) {
-          sanitizedAnnotations[String(key).trim()] = String(value);
-        }
-      }
-    }
+    const sanitizedAnnotations: Record<string, string> = tenantIngressAnnotations(data.annotations);
     if (tlsEnabled) {
       sanitizedAnnotations['acme.cert-manager.io/http01-edit-in-place'] = 'true';
     }
@@ -2680,21 +2660,7 @@ export class IngressService implements OnModuleInit {
     const annotationsInput =
       data.annotations && typeof data.annotations === 'object' ? data.annotations : {};
 
-    const sanitizedAnnotations: Record<string, string> = {};
-
-    for (const [key, value] of Object.entries(annotationsInput)) {
-      if (value === undefined || value === null) {
-        continue;
-      }
-
-      const trimmedKey = String(key || '').trim();
-      if (!trimmedKey) {
-        continue;
-      }
-
-      const stringValue = String(value);
-      sanitizedAnnotations[trimmedKey] = stringValue;
-    }
+    const sanitizedAnnotations: Record<string, string> = tenantIngressAnnotations(annotationsInput);
 
     if (tlsEnabled) {
       sanitizedAnnotations['acme.cert-manager.io/http01-edit-in-place'] = 'true';
