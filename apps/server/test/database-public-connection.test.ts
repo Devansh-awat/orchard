@@ -31,7 +31,10 @@ function service(
     access: { assertDatabaseEditor: async () => ({ database: row }) },
     prisma: {
       organization: { findUnique: async () => ({ databasePublicIp: null }) },
+      service: { count: async () => 0 },
+      servicePort: { count: async () => 0 },
       database: {
+        count: async () => 0,
         findUnique: async () => row,
         findMany: async () => [],
         update: async ({ data }: any) => Object.assign(row, data)
