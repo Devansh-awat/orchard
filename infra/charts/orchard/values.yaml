@@ -135,6 +135,12 @@ tenant:
   # Most public ports (NodePorts, app public ports, public databases) one
   # organization may hold. Empty keeps the server default of 20; 0 is unlimited.
   maxPublicPortsPerOrg: ""
+  # Caps each tenant pod's outbound bandwidth through the standard
+  # kubernetes.io/egress-bandwidth annotation, as TENANT_EGRESS_BANDWIDTH (for
+  # example "50M"). Empty sets nothing. It only takes effect where the CNI runs a
+  # bandwidth manager, such as Cilium with bandwidthManager.enabled=true; other
+  # CNIs ignore the annotation. Pods pick it up on their next rollout.
+  egressBandwidth: ""
   # Caps written into NEW organizations when they are created, as NEW_ORG_CPU
   # and NEW_ORG_MEMORY. Empty keeps the server defaults (16 cores, 32Gi); "0" or
   # "unlimited" creates uncapped organizations. Existing organizations are never

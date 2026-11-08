@@ -334,6 +334,10 @@ When `SIGNUP_MODE` is `open`, adding a custom domain needs a TXT record that pro
 
 The chart creates a `PriorityClass` named `orchard-platform` (value 100000) and sets it on the platform pods: the server, worker, frontend, MCP, Redis, the platform Postgres and its pooler, the logs and metrics stores, Vector, and the other monitoring pods. Tenant workloads keep the default priority, so on a busy cluster the scheduler places the platform first and the kubelet evicts it last. Tenants cannot choose a class. Orchard sets none on tenant pods, and the tenant admission policy refuses names that start with `system-` or `orchard-`. Set `priorityClasses.enabled: false` to turn this off. The first upgrade that enables it restarts the platform pods once.
 
+## Egress bandwidth
+
+`TENANT_EGRESS_BANDWIDTH` (`tenant.egressBandwidth` in the chart), for example `50M`, makes Orchard set the standard `kubernetes.io/egress-bandwidth` annotation on app and job pods. It is off by default. The annotation limits the pod's outbound traffic only on a cluster whose CNI runs a bandwidth manager, such as Cilium with `bandwidthManager.enabled=true`. On other clusters it has no effect, so the cluster side is yours to set up. Running pods pick the annotation up on their next rollout.
+
 ## Log rate limit
 
 Vector ships every tenant's logs to one VictoriaLogs store, which drops the oldest days for everyone once it is full. To stop one app from filling it, Vector limits each tenant namespace to 2000 log lines per second. Lines above the rate are dropped for that namespace only, and Vector counts them in `component_discarded_events_total`. Change the rate with `logs.vector.throttle.eventsPerSecond`; `0` turns the limit off.

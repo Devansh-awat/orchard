@@ -506,6 +506,9 @@ true
             {{- if .maxPublicPortsPerOrg }}
             - { name: MAX_PUBLIC_PORTS_PER_ORG, value: {{ .maxPublicPortsPerOrg | quote }} }
             {{- end }}
+            {{- if .egressBandwidth }}
+            - { name: TENANT_EGRESS_BANDWIDTH, value: {{ .egressBandwidth | quote }} }
+            {{- end }}
             {{- if .newOrgCpu }}
             - { name: NEW_ORG_CPU, value: {{ .newOrgCpu | quote }} }
             {{- end }}

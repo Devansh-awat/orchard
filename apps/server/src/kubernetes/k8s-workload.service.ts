@@ -35,7 +35,11 @@ import {
   noLimitsMetadataPatch,
   type PodSizing
 } from './resource-spec';
-import { hardenedSecurityContext, tenantRuntimeClassName } from './trusted-images';
+import {
+  hardenedSecurityContext,
+  tenantPodAnnotations,
+  tenantRuntimeClassName
+} from './trusted-images';
 import { TAILSCALE_EGRESS_EXCEPT, tailscaleImage, tailscaleSecurityContext } from './tailscale-pod';
 import {
   buildEnvReplacePatch,
@@ -1020,7 +1024,8 @@ export class K8sWorkloadService {
           },
           template: {
             metadata: {
-              labels
+              labels,
+              annotations: tenantPodAnnotations()
             },
             spec: {
               // Tenant pods do not need to talk to the kube-apiserver. The
@@ -2690,6 +2695,9 @@ export class K8sWorkloadService {
           minReadySeconds: ROLLOUT_MIN_READY_SECONDS,
           progressDeadlineSeconds: ROLLOUT_PROGRESS_DEADLINE_SECONDS,
           template: {
+            ...(tenantPodAnnotations()
+              ? { metadata: { annotations: tenantPodAnnotations() } }
+              : {}),
             spec: {
               runtimeClassName: tenantRuntimeClassName() ?? null,
               containers: [containerPatch]

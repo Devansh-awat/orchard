@@ -8,7 +8,11 @@ import {
   buildPlacement,
   ResolvedPlacement
 } from '../kubernetes/kubernetes.service';
-import { hardenedSecurityContext, tenantRuntimeClassName } from '../kubernetes/trusted-images';
+import {
+  hardenedSecurityContext,
+  tenantPodAnnotations,
+  tenantRuntimeClassName
+} from '../kubernetes/trusted-images';
 import { containerResources, type PodSizing } from '../kubernetes/resource-spec';
 import { QuotasService } from '../quotas/quotas.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -338,7 +342,7 @@ export class JobsOrchestratorService {
         activeDeadlineSeconds: step.timeoutSeconds,
         ttlSecondsAfterFinished: STEP_JOB_TTL_SECONDS,
         template: {
-          metadata: { labels },
+          metadata: { labels, annotations: tenantPodAnnotations() },
           spec: {
             restartPolicy: 'Never',
             automountServiceAccountToken: false,

@@ -75,3 +75,19 @@ export const hardenedSecurityContext = () => ({
 
 export const tenantRuntimeClassName = (): string | undefined =>
   process.env.TENANT_RUNTIME_CLASS || undefined;
+
+export const EGRESS_BANDWIDTH_ANNOTATION = 'kubernetes.io/egress-bandwidth';
+
+const BANDWIDTH_QUANTITY = /^[1-9]\d*(?:[kKMGT]i?)?$/;
+
+export const tenantEgressBandwidth = (env: NodeJS.ProcessEnv = process.env): string | undefined => {
+  const raw = env.TENANT_EGRESS_BANDWIDTH?.trim();
+  return raw && BANDWIDTH_QUANTITY.test(raw) ? raw : undefined;
+};
+
+export const tenantPodAnnotations = (
+  env: NodeJS.ProcessEnv = process.env
+): Record<string, string> | undefined => {
+  const bandwidth = tenantEgressBandwidth(env);
+  return bandwidth ? { [EGRESS_BANDWIDTH_ANNOTATION]: bandwidth } : undefined;
+};
