@@ -530,7 +530,14 @@ jobs:
         with:
           go-version-file: apps/cli/go.mod
           cache-dependency-path: apps/cli/go.sum
-      - run: cd apps/cli && go vet ./... && go test ./... -count=1
+      - shell: bash
+        run: |
+          cd apps/cli
+          set +e
+          { go vet ./... && go test ./... -count=1; } 2>&1 | tee /tmp/go-cli.log
+          status=${PIPESTATUS[0]}
+          grep -E -- '--- FAIL|^FAIL|panic:|_test\.go:[0-9]+|\.go:[0-9]+:[0-9]+:' /tmp/go-cli.log | head -40 | while IFS= read -r line; do echo "::error::${line}"; done
+          exit $status
 
   go-gateway:
     needs: changes
