@@ -19,6 +19,7 @@ export interface User {
 	sessionOrganizationId?: string;
 	passkeyOnly?: boolean;
 	emailDomainOwner?: { domain: string; organization: string };
+	ssoGrants?: Array<{ organizationId: string; name: string; slug: string; expiresAt: string }>;
 }
 
 function createAuthStore() {

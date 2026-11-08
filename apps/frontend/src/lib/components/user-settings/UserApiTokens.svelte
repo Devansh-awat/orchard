@@ -6,6 +6,7 @@
 	import { KeyRound, Pencil, Plus, Trash2 } from 'lucide-svelte';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import RenameModal from '$lib/components/RenameModal.svelte';
+	import TokenOrgScope from './TokenOrgScope.svelte';
 	import {
 		Alert,
 		Button,
@@ -43,6 +44,7 @@
 	let showCreate = $state(false);
 	let newTokenName = $state('');
 	let newTokenScope = $state<'read' | 'deploy' | 'exec'>('read');
+	let newTokenOrg = $state('');
 	const SCOPE_LADDER = ['read', 'deploy', 'exec'] as const;
 	const scopeOptions = [
 		{ value: 'read', label: 'Read' },
@@ -122,7 +124,8 @@
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
 					name: newTokenName.trim(),
-					scopes: SCOPE_LADDER.slice(0, SCOPE_LADDER.indexOf(newTokenScope) + 1)
+					scopes: SCOPE_LADDER.slice(0, SCOPE_LADDER.indexOf(newTokenScope) + 1),
+					...(newTokenOrg ? { organizationId: newTokenOrg } : {})
 				})
 			});
 			if (!response.ok) {
@@ -334,6 +337,7 @@
 					grow
 				/>
 			</Field>
+			<TokenOrgScope id="{uid}-org" bind:value={newTokenOrg} />
 		</form>
 	{/if}
 	{#snippet footer()}

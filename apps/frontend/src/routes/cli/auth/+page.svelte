@@ -5,6 +5,8 @@
 	import { Terminal } from 'lucide-svelte';
 	import { Button } from '$lib/components/ui';
 	import ConsentSignIn from '$lib/components/login/ConsentSignIn.svelte';
+	import TokenOrgScope from '$lib/components/user-settings/TokenOrgScope.svelte';
+	import SsoFirstPrompt from '$lib/components/user-settings/SsoFirstPrompt.svelte';
 	import { motionStagger } from '$lib/utils/motion.svelte';
 
 	let port = $derived($page.url.searchParams.get('port') || '');
@@ -14,6 +16,7 @@
 	let error = $state<string | null>(null);
 	let authorizing = $state(false);
 	let done = $state(false);
+	let organizationId = $state('');
 
 	// The callback host is hard-coded to loopback; only the port comes from the
 	// query string. This prevents a crafted link from redirecting a freshly
@@ -50,7 +53,11 @@
 			const res = await apiFetch('/apiv1/auth/tokens', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ name: label, scopes: ['read', 'deploy', 'exec'] })
+				body: JSON.stringify({
+					name: label,
+					scopes: ['read', 'deploy', 'exec'],
+					...(organizationId ? { organizationId } : {})
+				})
 			});
 			if (!res.ok) {
 				const data = await res.json().catch(() => ({}));
@@ -117,6 +124,13 @@
 			<div class="consent-action" {@attach motionStagger({ index: 4 })}>
 				{#if $isSignedIn}
 					<p class="consent-identity">Signed in as <strong>{$user?.email}</strong></p>
+					<div class="cli-scope">
+						<SsoFirstPrompt
+							returnTo={$page.url.pathname + $page.url.search}
+							purpose="use the CLI"
+						/>
+						<TokenOrgScope id="cli-token-org" bind:value={organizationId} />
+					</div>
 					<Button variant="primary" class="w-full" onclick={authorize} loading={authorizing}>
 						{authorizing ? 'Authorizing...' : 'Authorize'}
 					</Button>
@@ -130,6 +144,18 @@
 </div>
 
 <style>
+	.cli-scope {
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
+		width: 100%;
+		text-align: left;
+	}
+
+	.cli-scope:empty {
+		display: none;
+	}
+
 	.consent-page {
 		min-height: 100vh;
 		display: flex;
