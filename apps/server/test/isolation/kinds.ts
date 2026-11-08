@@ -54,7 +54,8 @@ export const USER_KINDS = [
   'passkey',
   'gitConnection',
   'notificationDestination',
-  'invitationToken'
+  'invitationToken',
+  'accountLink'
 ] as const;
 
 export const LITERAL_KINDS = [

@@ -7,27 +7,63 @@ import { orgSsoRefusal } from '../src/auth/org-sso-refusal';
 import { requestAuthStorage } from '../src/auth/request-context';
 import { execRequestContext } from '../src/kubernetes/exec-session-engine';
 import { OrganizationsService } from '../src/organizations/organizations.service';
-import { SsoLoginService } from '../src/sso/sso-login.service';
 
 const ENFORCING = 'org-enforcing';
 const OTHER = 'org-other';
 
-function buildAuthz(roles: Record<string, string>) {
+function buildAuthz(
+  roles: Record<string, string>,
+  opts: {
+    grants?: Array<[string, string]>;
+    guestsUseOwnLogin?: boolean;
+    disabled?: string[];
+  } = {}
+) {
+  const member = (organizationId: string) => {
+    const role = roles[organizationId];
+    if (!role) return null;
+    return { role, status: opts.disabled?.includes(organizationId) ? 'disabled' : 'active' };
+  };
   const prisma = {
     user: { findUnique: async () => ({ isSuperAdmin: false }) },
     organization: { findUnique: async () => ({ id: ENFORCING }) },
     organizationMember: {
-      findUnique: async ({ where }: any) => {
-        const role = roles[where.organizationId_userId.organizationId];
-        return role ? { role } : null;
+      findUnique: async ({ where }: any) => member(where.organizationId_userId.organizationId),
+      findFirst: async ({ where }: any) => {
+        const row = member(where.organizationId);
+        return row && (!where.status || row.status === where.status) ? row : null;
       },
       findMany: async () =>
-        roles[ENFORCING] && roles[ENFORCING] !== 'owner' ? [{ organizationId: ENFORCING }] : []
+        roles[ENFORCING] && roles[ENFORCING] !== 'owner'
+          ? [
+              {
+                organizationId: ENFORCING,
+                role: roles[ENFORCING],
+                organization: {
+                  ssoSettings: { guestsUseOwnLogin: opts.guestsUseOwnLogin ?? true }
+                }
+              }
+            ]
+          : []
     },
     projectMember: { findFirst: async () => null },
     orgSsoSettings: {
       findFirst: async ({ where }: any) =>
-        where.organizationId === ENFORCING ? { organizationId: ENFORCING } : null
+        where.organizationId === ENFORCING
+          ? { organizationId: ENFORCING, guestsUseOwnLogin: opts.guestsUseOwnLogin ?? true }
+          : null
+    },
+    sessionOrgGrant: {
+      findUnique: async ({ where }: any) => {
+        const { sessionId, organizationId } = where.sessionId_organizationId;
+        return opts.grants?.some(([s, o]) => s === sessionId && o === organizationId)
+          ? { expiresAt: new Date(Date.now() + 60_000) }
+          : null;
+      },
+      findMany: async ({ where }: any) =>
+        (opts.grants ?? [])
+          .filter(([s, o]) => s === where.sessionId && where.organizationId.in.includes(o))
+          .map(([, organizationId]) => ({ organizationId }))
     }
   };
   return new AuthorizationService(prisma as any, { isSsoEnforced: async () => false } as any);
@@ -45,6 +81,42 @@ test('a normal session stays out of an enforcing org and keeps every other org',
     assert.equal(await authz.orgRequiresSso(ENFORCING, 'pepito'), true);
     assert.equal(await authz.orgRequiresSso(OTHER, 'pepito'), false);
     assert.deepEqual(await authz.ssoBlockedOrgIds('pepito'), [ENFORCING]);
+  });
+});
+
+test("a person's own session that just passed the org IdP gets in without being confined", async () => {
+  const authz = buildAuthz(
+    { [ENFORCING]: 'member', [OTHER]: 'owner' },
+    { grants: [['s1', ENFORCING]] }
+  );
+  await requestAuthStorage.run(session({ sessionId: 's1' }), async () => {
+    assert.equal((await authz.getOrgAccess(ENFORCING, 'pepito'))?.role, 'member');
+    assert.equal((await authz.getOrgAccess(OTHER, 'pepito'))?.role, 'owner');
+    assert.deepEqual(await authz.ssoBlockedOrgIds('pepito'), []);
+  });
+  await requestAuthStorage.run(session({ sessionId: 's2' }), async () => {
+    assert.equal(await authz.getOrgAccess(ENFORCING, 'pepito'), null, 'grants are per session');
+  });
+});
+
+test('guests use their own login unless the org turns that off', async () => {
+  const lenient = buildAuthz({ [ENFORCING]: 'guest' });
+  await requestAuthStorage.run(session(), async () => {
+    assert.equal((await lenient.getOrgAccess(ENFORCING, 'pepito'))?.role, 'guest');
+    assert.deepEqual(await lenient.ssoBlockedOrgIds('pepito'), []);
+  });
+  const strict = buildAuthz({ [ENFORCING]: 'guest' }, { guestsUseOwnLogin: false });
+  await requestAuthStorage.run(session(), async () => {
+    assert.equal(await strict.getOrgAccess(ENFORCING, 'pepito'), null);
+    assert.deepEqual(await strict.ssoBlockedOrgIds('pepito'), [ENFORCING]);
+  });
+});
+
+test('a disabled membership grants nothing, even to that org own session', async () => {
+  const authz = buildAuthz({ [ENFORCING]: 'admin' }, { disabled: [ENFORCING] });
+  await requestAuthStorage.run(session({ sessionOrgId: ENFORCING }), async () => {
+    assert.equal(await authz.getOrgAccess(ENFORCING, 'pepito'), null);
+    assert.equal(await authz.resolveProjectAccess('p', ENFORCING, 'pepito'), null);
   });
 });
 
@@ -143,54 +215,6 @@ test('a terminal keeps the org limit of the token that opened it', () => {
     sessionOrgId: ENFORCING,
     browserSession: true
   });
-});
-
-function buildLogin(user: any, role: string, verifiedDomain: boolean) {
-  const login = Object.create(SsoLoginService.prototype) as any;
-  login.logger = { warn() {} };
-  login.domains = { isVerifiedFor: async () => verifiedDomain };
-  login.prisma = {
-    user: { findUnique: async () => user },
-    organizationMember: { findUnique: async () => ({ role }) },
-    organization: { findUnique: async () => ({ slug: 'acme' }) }
-  };
-  return (linked?: string) =>
-    login.resolveOrgUser(
-      { id: 'p', organizationId: 'org', createdBy: 'someone' },
-      user.email,
-      'Name',
-      linked
-    );
-}
-
-const pepito = { id: 'pepito', email: 'pepito@gmail.example', emailVerified: true };
-
-test('an org IdP cannot sign in as an account it does not own', async () => {
-  const resolve = buildLogin(pepito, 'member', false);
-  await assert.rejects(() => resolve(), UnauthorizedException);
-  await assert.rejects(() => resolve('someone-else'), UnauthorizedException);
-});
-
-test('the person can start that sign-in from their own session', async () => {
-  const resolve = buildLogin(pepito, 'member', false);
-  assert.equal((await resolve('pepito')).id, 'pepito');
-});
-
-test('a verified domain lets the org sign in its own people', async () => {
-  const resolve = buildLogin(pepito, 'member', true);
-  assert.equal((await resolve()).id, 'pepito');
-});
-
-test('an account Orchard has not verified is never handed to an org IdP outside its domain', async () => {
-  const resolve = buildLogin({ ...pepito, emailVerified: false }, 'member', false);
-  await assert.rejects(() => resolve(), UnauthorizedException);
-  await assert.rejects(() => resolve('pepito'), UnauthorizedException);
-  await assert.rejects(() => resolve('someone-else'), UnauthorizedException);
-});
-
-test('an unverified account in the org verified domain can still sign in', async () => {
-  const resolve = buildLogin({ ...pepito, emailVerified: false }, 'member', true);
-  assert.equal((await resolve()).id, 'pepito');
 });
 
 function buildOrgs(member: any, verifiedDomain = false) {

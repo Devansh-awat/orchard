@@ -45,6 +45,13 @@ export class SessionsService {
     }
   }
 
+  async cleanupExpiredOrgGrants(): Promise<number> {
+    const { count } = await this.prisma.sessionOrgGrant.deleteMany({
+      where: { expiresAt: { lt: new Date() } }
+    });
+    return count;
+  }
+
   async createSession(params: {
     userId: string;
     ipAddress?: string;

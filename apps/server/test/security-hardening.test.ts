@@ -135,13 +135,13 @@ test('starting SSO from a Hack Club session links the local user, not the Hack C
   login.oauthService = { verifySessionToken: async () => payload };
 
   payload = { sub: 'hc-1', externalAuthId: 'hc-1', email: 'a@example.com', sessionId: 's' };
-  assert.equal(await login.signedInUser('t'), 'local-1');
+  assert.deepEqual(await login.signedInUser('t'), { userId: 'local-1', sessionId: 's' });
   payload = { sub: 'hc-2', externalAuthId: 'hc-2', email: 'moved@example.com', sessionId: 's' };
-  assert.equal(await login.signedInUser('t'), 'local-2');
+  assert.deepEqual(await login.signedInUser('t'), { userId: 'local-2', sessionId: 's' });
   payload = { sub: 'hc-3', externalAuthId: 'hc-3', email: 'nobody@example.com', sessionId: 's' };
   assert.equal(await login.signedInUser('t'), undefined);
   payload = { sub: 'local-3', email: 'b@example.com', sessionId: 's' };
-  assert.equal(await login.signedInUser('t'), 'local-3');
+  assert.deepEqual(await login.signedInUser('t'), { userId: 'local-3', sessionId: 's' });
   payload = { sub: 'hc-1', externalAuthId: 'hc-1', orgScope: 'o', sessionId: 's' };
   assert.equal(await login.signedInUser('t'), undefined);
 });
@@ -729,7 +729,10 @@ test('an SSO callback has to come back to the browser that started it', async ()
   const login = loginService();
   const url = 'https://idp.example/authorize?state=abc';
   const token = await login.issueStartToken('p1', url);
-  assert.deepEqual(await login.readStartToken('p1', token, 'abc'), { linkedUserId: undefined });
+  assert.deepEqual(await login.readStartToken('p1', token, 'abc'), {
+    linkedUserId: undefined,
+    linkedSessionId: undefined
+  });
   await assert.rejects(() => login.readStartToken('p1', undefined, 'abc'), UnauthorizedException);
   await assert.rejects(() => login.readStartToken('p1', token, 'other'), UnauthorizedException);
   await assert.rejects(() => login.readStartToken('p2', token, 'abc'), UnauthorizedException);

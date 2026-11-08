@@ -113,13 +113,15 @@ export class SsoController {
               providerId,
               req.query.code as string,
               state,
-              start.linkedUserId
+              start.linkedUserId,
+              start.linkedSessionId
             )
           : await this.login.handleOidcCallback(
               providerId,
               this.requestUrl(req),
               state,
-              start.linkedUserId
+              start.linkedUserId,
+              start.linkedSessionId
             );
 
       return this.finish(res, result);
@@ -188,7 +190,8 @@ export class SsoController {
         provider.id,
         this.requestUrl(req),
         state,
-        start.linkedUserId
+        start.linkedUserId,
+        start.linkedSessionId
       );
       return this.finish(res, result);
     } catch (err) {
@@ -225,7 +228,7 @@ export class SsoController {
 
   private finish(res: Response, result: SsoLoginResult) {
     clearSsoStartCookie(res);
-    setSessionCookie(res, result.token);
+    if (result.token) setSessionCookie(res, result.token);
     return res.redirect(result.redirectTo);
   }
 
@@ -233,7 +236,9 @@ export class SsoController {
     this.logger.warn(`SSO callback failed: ${err instanceof Error ? err.message : String(err)}`);
     const reason =
       err instanceof Error &&
-      /private_beta|signups_disabled|sso_link_required|sso_not_mapped/.test(err.message)
+      /private_beta|signups_disabled|sso_link_required|sso_not_mapped|sso_sign_in_first|sso_access_disabled|sso_member_limit/.test(
+        err.message
+      )
         ? err.message
         : 'sso_failed';
     const orgSlug = err instanceof HttpException && (err.getResponse() as any)?.orgSlug;

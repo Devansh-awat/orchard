@@ -118,7 +118,7 @@ export class OrganizationsService {
     // other organizations by name, even while unable to open them.
     const sessionOrgId = requestAuthStorage.getStore()?.sessionOrgId;
 
-    const memberOf = { members: { some: { userId: user.id } } };
+    const memberOf = { members: { some: { userId: user.id, status: 'active' as const } } };
     let orgFilter: Record<string, unknown> | undefined = memberOf;
     if (sessionOrgId) orgFilter = { id: sessionOrgId, ...memberOf };
     else if (isSuperAdmin) orgFilter = undefined;
@@ -342,7 +342,9 @@ export class OrganizationsService {
             firstName: true,
             lastName: true,
             imageUrl: true,
-            externalAuthId: true
+            externalAuthId: true,
+            homeOrganizationId: true,
+            linkedAccount: { select: { createdAt: true } }
           }
         }
       },

@@ -21,6 +21,12 @@ export function matches(row: Row, where: Row = {}): boolean {
     if (key === 'providerId_subject') {
       return row.providerId === value.providerId && row.subject === value.subject;
     }
+    if (key.includes('_') && value && typeof value === 'object' && !(key in row)) {
+      const parts = key.split('_');
+      if (parts.every((part) => part in value)) {
+        return parts.every((part) => row[part] === value[part]);
+      }
+    }
     return matchValue(row[key], value);
   });
 }
@@ -35,6 +41,11 @@ export function collection(
   return {
     findFirst: async ({ where }: any = {}) => hydrate(rows.find((r) => matches(r, where))),
     findUnique: async ({ where }: any) => hydrate(rows.find((r) => matches(r, where))),
+    findUniqueOrThrow: async ({ where }: any) => {
+      const row = rows.find((r) => matches(r, where));
+      if (!row) throw new Error(`${name} not found`);
+      return hydrate(row);
+    },
     findMany: async ({ where }: any = {}) => rows.filter((r) => matches(r, where)).map(hydrate),
     count: async ({ where }: any = {}) => rows.filter((r) => matches(r, where)).length,
     create: async ({ data }: any) => {

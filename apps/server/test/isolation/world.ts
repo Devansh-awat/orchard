@@ -275,7 +275,7 @@ export async function seedWorld(
 
   await seedProjectResources(prisma, tag, projects, orgs, users, templateId);
   await seedOrgResources(prisma, tag, orgs, projects, users);
-  await seedUserResources(prisma, tag, users);
+  await seedUserResources(prisma, tag, users, orgs);
   return { tag, secret, orgs, projects, users, templateId };
 }
 
@@ -723,8 +723,11 @@ async function seedOrgResources(
 async function seedUserResources(
   prisma: PrismaClient,
   tag: string,
-  users: Record<UserKey, UserCtx>
+  users: Record<UserKey, UserCtx>,
+  orgs: Record<OrgKey, OrgCtx>
 ) {
+  const identities: any[] = [];
+  const links: any[] = [];
   const tokens: any[] = [];
   const passkeys: any[] = [];
   const connections: any[] = [];
@@ -734,8 +737,24 @@ async function seedUserResources(
       apiToken: randomUUID(),
       passkey: randomUUID(),
       gitConnection: randomUUID(),
-      notificationDestination: randomUUID()
+      notificationDestination: randomUUID(),
+      accountLink: randomUUID()
     };
+    const identityId = randomUUID();
+    const homeOrg = orgs[user.key.slice(0, 2) as OrgKey] ?? orgs.o1;
+    identities.push({
+      id: identityId,
+      email: `canary-identity-${tag}-${user.key}@victim.invalid`,
+      emailScope: homeOrg.id,
+      homeOrganizationId: homeOrg.id,
+      username: `canary-identity-${tag}-${user.key}`
+    });
+    links.push({
+      id: ids.accountLink,
+      identityUserId: identityId,
+      accountUserId: user.id,
+      organizationId: homeOrg.id
+    });
     const credential = `cred-${tag}-${user.key}`;
     const tokenPlain = `orch_${tag}${user.key}${randomBytes(8).toString('hex')}`;
     tokens.push({
@@ -783,6 +802,8 @@ async function seedUserResources(
   await prisma.passkey.createMany({ data: passkeys });
   await prisma.gitConnection.createMany({ data: connections });
   await prisma.userNotificationDestination.createMany({ data: destinations });
+  await prisma.user.createMany({ data: identities });
+  await prisma.accountLink.createMany({ data: links });
 }
 
 export async function teardownWorld(prisma: PrismaClient, world: World): Promise<void> {

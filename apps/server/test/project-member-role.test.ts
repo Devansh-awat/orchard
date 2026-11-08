@@ -26,7 +26,10 @@ function build(roleName: string, adminCount = 2) {
         roles.find((role) => role.id === where.id || role.name === where.name) ?? null
     },
     project: { findUnique: async () => ({ id: 'project', organizationId: 'org' }) },
-    organizationMember: { findUnique: async () => ({ role: 'guest' }) },
+    organizationMember: {
+      findUnique: async () => ({ role: 'guest' }),
+      findFirst: async () => ({ role: 'guest' })
+    },
     projectMember: {
       findUnique: async () => ({ ...member }),
       findFirst: async () => ({ ...member, role: roles.find((role) => role.id === member.roleId) }),

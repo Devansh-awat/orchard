@@ -118,6 +118,7 @@ const SEGMENT_KIND: Record<string, string> = {
   'template-instances': 'templateInstance',
   templates: 'template',
   passkeys: 'passkey',
+  links: 'accountLink',
   tokens: 'apiToken',
   checkpoints: 'databaseCheckpoint',
   'registry-credentials': 'registryCredential',

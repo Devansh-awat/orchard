@@ -1032,6 +1032,79 @@
         ]
       }
     },
+    "/admin/instance-settings/new-org-defaults": {
+      "get": {
+        "description": "Auth: superadmin",
+        "operationId": "admin_instance_settings_new_org_defaults_list",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {},
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "GET /admin/instance-settings/new-org-defaults",
+        "tags": [
+          "admin"
+        ]
+      },
+      "patch": {
+        "description": "Auth: superadmin",
+        "operationId": "admin_instance_settings_new_org_defaults_update",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": {},
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {},
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "PATCH /admin/instance-settings/new-org-defaults",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
     "/admin/instance-settings/resource-limits": {
       "get": {
         "description": "Auth: superadmin",
@@ -3725,6 +3798,80 @@
           }
         },
         "summary": "GET /auth/config",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/links": {
+      "get": {
+        "description": "Auth: authenticated",
+        "operationId": "auth_links_list",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {},
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "GET /auth/links",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/links/{id}": {
+      "delete": {
+        "description": "Auth: authenticated",
+        "operationId": "auth_links_delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {},
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "DELETE /auth/links/:id",
         "tags": [
           "auth"
         ]

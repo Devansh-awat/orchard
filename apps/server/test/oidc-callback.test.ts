@@ -7,6 +7,7 @@ import { IdentityMappingService } from '../src/sso/identity-mapping.service';
 import { OidcStateStore } from '../src/sso/oidc-state.store';
 import { SsoLoginService } from '../src/sso/sso-login.service';
 import { collection as memoryCollection, type Row } from './support/memory-db';
+import { OrgIdentityService } from '../src/sso/org-identity.service';
 
 const ISSUER = 'https://idp.test';
 const REDIRECT = 'https://orchard.test/apiv1/sso/prov/callback';
@@ -116,7 +117,10 @@ function makeWorld() {
     federatedIdentity: [],
     scimGroupMember: [],
     scimGroup: [],
-    identityProvider: []
+    identityProvider: [],
+    organization: [{ id: ORG, slug: 'corp', name: 'Corp' }],
+    accountLink: [],
+    sessionOrgGrant: []
   };
   const audits: Row[] = [];
   const sessionWipes: Row[] = [];
@@ -151,12 +155,19 @@ function makeWorld() {
       id: randomUUID(),
       isSuperAdmin: false,
       emailVerified: false,
-      setupCompleted: false
+      setupCompleted: false,
+      emailScope: 'account',
+      homeOrganizationId: null,
+      disabledAt: null
     })),
     organizationMember: col('organizationMember', () => ({
       id: randomUUID(),
-      managedByProviderId: null
+      managedByProviderId: null,
+      status: 'active'
     })),
+    organization: col('organization'),
+    accountLink: col('accountLink', () => ({ id: randomUUID() })),
+    sessionOrgGrant: col('sessionOrgGrant'),
     idpGroupRule: col('idpGroupRule', () => ({ id: randomUUID() })),
     idpAutoCreateRule: col('idpAutoCreateRule'),
     federatedIdentity: col('federatedIdentity', () => ({ id: randomUUID() }), hydrateIdentity),
@@ -216,6 +227,7 @@ function makeWorld() {
       return fetch(`${base}${target.pathname}${target.search}`, init);
     }
   };
+  login.identities = new OrgIdentityService(prisma, audit as any);
   login.createUser = async (email: string, name: string) => {
     created.push(email);
     const user = await prisma.user.create({
@@ -272,6 +284,7 @@ async function rejected(promise: Promise<unknown>, pattern?: RegExp) {
 }
 
 const memberOf = (w: World) => w.tables.organizationMember.find((m) => m.organizationId === ORG);
+const identities = (w: World) => w.tables.user.filter((u) => u.homeOrganizationId === ORG);
 
 test('a validated ID token provisions a new member with the mapped role', async () => {
   const w = makeWorld();
@@ -283,6 +296,8 @@ test('a validated ID token provisions a new member with the mapped role', async 
 
   const user = w.tables.user.find((u) => u.email === 'ada@corp.example')!;
   assert.ok(user);
+  assert.equal(user.homeOrganizationId, ORG, 'the org IdP provisions an org identity');
+  assert.equal(user.emailScope, ORG);
   assert.equal(memberOf(w)?.userId, user.id);
   assert.equal(memberOf(w)?.role, 'admin');
   assert.equal(memberOf(w)?.managedByProviderId, PROVIDER_ID);
@@ -306,7 +321,7 @@ test('a user in no mapped group is denied before an account exists', async () =>
     () => complete(w, { groups: ['sales'] }),
     (err: any) => err.message === 'sso_not_mapped'
   );
-  assert.deepEqual(w.created, []);
+  assert.deepEqual(identities(w), []);
   assert.equal(w.tables.organizationMember.length, 0);
   assert.ok(
     w.audits.some(
@@ -332,7 +347,7 @@ test('an overage marker means unknown groups and never grants', async () => {
     (err: any) => err.message === 'sso_not_mapped'
   );
   assert.ok(w.audits.some((a) => a.metadata?.reason === 'groups_overage'));
-  assert.deepEqual(w.created, []);
+  assert.deepEqual(identities(w), []);
 });
 
 test('the next login re-syncs: a demotion applies and removal revokes access', async () => {
@@ -356,7 +371,7 @@ test('the next login re-syncs: a demotion applies and removal revokes access', a
   assert.ok(w.audits.some((a) => a.action === 'sso.member.removed'));
 });
 
-test('an owner keeps their role whatever the token says', async () => {
+test("an org IdP asserting an owner's email gets its own identity, never the owner's account", async () => {
   const w = makeWorld();
   rule(w, 'everyone', 'member');
   const owner = await w.prisma.user.create({
@@ -368,11 +383,16 @@ test('an owner keeps their role whatever the token says', async () => {
     organizationId: ORG,
     userId: owner.id,
     role: 'owner',
-    managedByProviderId: null
+    managedByProviderId: null,
+    status: 'active'
   });
 
-  await complete(w, { groups: ['everyone'] });
+  const result = await complete(w, { groups: ['everyone'] });
+  assert.notEqual(result.userId, 'boss');
   assert.equal(memberOf(w)?.role, 'owner');
+  assert.equal(identities(w).length, 1);
+  assert.equal(identities(w)[0].email, 'ada@corp.example');
+  assert.ok(!w.tables.federatedIdentity.some((f) => f.userId === 'boss'));
 });
 
 test('a token signed by another key is rejected and nothing is provisioned', async () => {
@@ -382,7 +402,7 @@ test('a token signed by another key is rejected and nothing is provisioned', asy
     complete(w, { signWith: 'other', groups: ['orchard-admins'] }),
     /SSO authentication failed/
   );
-  assert.deepEqual(w.created, []);
+  assert.deepEqual(identities(w), []);
   assert.equal(w.tables.organizationMember.length, 0);
   assert.equal(w.tables.federatedIdentity.length, 0);
 });
@@ -394,7 +414,7 @@ test('a token from a different issuer is rejected', async () => {
     complete(w, { issuer: 'https://evil.test', groups: ['orchard-admins'] }),
     /unexpected JWT claim value/
   );
-  assert.deepEqual(w.created, []);
+  assert.deepEqual(identities(w), []);
 });
 
 test('a token minted for another client is rejected', async () => {
@@ -404,7 +424,7 @@ test('a token minted for another client is rejected', async () => {
     complete(w, { audience: 'someone-else', groups: ['orchard-admins'] }),
     /unexpected JWT claim value/
   );
-  assert.deepEqual(w.created, []);
+  assert.deepEqual(identities(w), []);
 });
 
 test('a token with the wrong or missing nonce is rejected', async () => {
@@ -415,14 +435,14 @@ test('a token with the wrong or missing nonce is rejected', async () => {
     /unexpected JWT claim value/
   );
   await rejected(complete(w, { nonce: null, groups: ['orchard-admins'] }), /invalid response/);
-  assert.deepEqual(w.created, []);
+  assert.deepEqual(identities(w), []);
 });
 
 test('an expired token is rejected', async () => {
   const w = makeWorld();
   rule(w, 'orchard-admins', 'admin');
   await rejected(complete(w, { expired: true, groups: ['orchard-admins'] }), /timestamp claim/);
-  assert.deepEqual(w.created, []);
+  assert.deepEqual(identities(w), []);
 });
 
 test('an unverified email is refused even with the right groups', async () => {
@@ -432,7 +452,7 @@ test('an unverified email is refused even with the right groups', async () => {
     () => complete(w, { emailVerified: false, groups: ['orchard-admins'] }),
     /email not verified/
   );
-  assert.deepEqual(w.created, []);
+  assert.deepEqual(identities(w), []);
 });
 
 test('SSO state is single use and bound to its provider', async () => {

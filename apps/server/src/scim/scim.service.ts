@@ -7,11 +7,12 @@ import { EmailService } from '../email/email.service';
 import { RateLimitService } from '../auth/rate-limit.service';
 import { MembershipCacheService } from '../auth/membership-cache.service';
 import { OrgDomainsService } from '../sso/org-domains.service';
+import { OrgIdentityService } from '../sso/org-identity.service';
 import { IdentityMappingService } from '../sso/identity-mapping.service';
 import { ScimError } from './scim-error';
 import { ScimGroupsService } from './scim-groups.service';
 import { ScimQuery, SCIM_MAX_RESULTS } from './scim-query';
-import { accountEmail } from '../users/account-scope';
+import { accountEmail, identityEmail } from '../users/account-scope';
 
 interface Ctx {
   organizationId: string;
@@ -144,7 +145,8 @@ export class ScimService implements OnModuleInit {
     @Optional() private readonly membershipCache?: MembershipCacheService,
     @Optional() private readonly groups?: ScimGroupsService,
     @Optional() private readonly mapping?: IdentityMappingService,
-    @Optional() private readonly domains?: OrgDomainsService
+    @Optional() private readonly domains?: OrgDomainsService,
+    @Optional() private readonly identities?: OrgIdentityService
   ) {}
 
   onModuleInit() {
@@ -606,12 +608,16 @@ export class ScimService implements OnModuleInit {
       ...profileFromInstance(instance, email)
     };
     const role = roleFromInstance(instance) ?? DEFAULT_ROLE;
-    const existingUser = await this.prisma.user.findUnique({ where: accountEmail(email) });
+    const account = await this.prisma.user.findUnique({ where: accountEmail(email) });
+    const identity = await this.prisma.user.findUnique({
+      where: identityEmail(ctx.organizationId, email)
+    });
 
-    if (existingUser) {
+    for (const existing of [account, identity]) {
+      if (!existing) continue;
       const member = await this.prisma.organizationMember.findUnique({
         where: {
-          organizationId_userId: { organizationId: ctx.organizationId, userId: existingUser.id }
+          organizationId_userId: { organizationId: ctx.organizationId, userId: existing.id }
         }
       });
       // RFC 7644 §3.3: creating a resource that already exists is a conflict,
@@ -624,7 +630,7 @@ export class ScimService implements OnModuleInit {
       // so the SCIM id the IdP already knows keeps working.
       const tombstone = await this.prisma.scimDeprovisionedMember.findUnique({
         where: {
-          organizationId_userId: { organizationId: ctx.organizationId, userId: existingUser.id }
+          organizationId_userId: { organizationId: ctx.organizationId, userId: existing.id }
         },
         include: { user: true }
       });
@@ -637,49 +643,57 @@ export class ScimService implements OnModuleInit {
         );
         return this.toScimUser(revived);
       }
-
-      const domain = existingUser.email.split('@')[1] || '';
-      if (!(await this.domains?.isVerifiedFor(ctx.organizationId, domain))) {
-        throw ScimError(
-          409,
-          'uniqueness',
-          `An Orchard account already uses ${email} and ${domain} is not a verified domain of this organization. Verify the domain or invite them instead.`
-        );
-      }
     }
 
-    const result = await this.prisma.$transaction(async (tx) => {
-      // Creating the account is the one and only time SCIM writes to `users`.
-      // An account that already exists is linked as-is: this org's IdP has no
-      // business editing a profile that other orgs also see.
-      const user =
-        existingUser ??
-        (await tx.user.create({
-          data: {
-            email,
-            username: await this.ensureUniqueUsername(email),
-            firstName: write.givenName,
-            lastName: write.familyName,
-            emailVerified: false,
-            emailVerifiedAt: null
-          }
-        }));
-
-      return tx.organizationMember.create({
+    // SCIM provisions the organization's own people. It never attaches an
+    // account someone else holds, whatever address the IdP sends: that person
+    // joins by invitation, or links their account themselves.
+    const scimFields = {
+      scimManaged: true,
+      scimExternalId: write.externalId,
+      scimEnterprise: write.enterprise ?? undefined,
+      scimUserName: write.userName,
+      scimGivenName: write.givenName,
+      scimFamilyName: write.familyName,
+      scimDisplayName: write.displayName
+    };
+    let userId: string;
+    if (identity) {
+      await this.prisma.organizationMember.create({
         data: {
+          ...scimFields,
           organizationId: ctx.organizationId,
-          userId: user.id,
+          userId: identity.id,
           role: role as any,
-          scimManaged: true,
-          scimExternalId: write.externalId,
-          scimEnterprise: write.enterprise,
-          scimUserName: write.userName,
-          scimGivenName: write.givenName,
-          scimFamilyName: write.familyName,
-          scimDisplayName: write.displayName
-        },
-        include: { user: true }
+          source: 'scim'
+        }
       });
+      userId = identity.id;
+    } else {
+      if (!this.identities) {
+        throw ScimError(500, null, 'SCIM provisioning is not available');
+      }
+      const created = await this.identities
+        .create(
+          ctx.organizationId,
+          {
+            email,
+            name: [write.givenName, write.familyName].filter(Boolean).join(' '),
+            role: role as any,
+            source: 'scim'
+          },
+          'scim',
+          scimFields
+        )
+        .catch((err) => {
+          if (err?.status === 403) throw ScimError(403, null, err.message);
+          throw err;
+        });
+      userId = created.id;
+    }
+    const result = await this.prisma.organizationMember.findUniqueOrThrow({
+      where: { organizationId_userId: { organizationId: ctx.organizationId, userId } },
+      include: { user: true }
     });
 
     void this.audit.log({
@@ -690,11 +704,15 @@ export class ScimService implements OnModuleInit {
       targetLabel: `${result.user.email} as ${role}`
     });
 
-    await this.notifyAdded(
-      result.user.email,
-      result.user.firstName || result.user.username || result.user.email,
-      ctx.organizationId
-    );
+    if (
+      await this.domains?.isVerifiedFor(ctx.organizationId, result.user.email.split('@')[1] || '')
+    ) {
+      await this.notifyAdded(
+        result.user.email,
+        result.user.firstName || result.user.username || result.user.email,
+        ctx.organizationId
+      );
+    }
 
     return this.toScimUser(this.viewFromMember(result));
   }

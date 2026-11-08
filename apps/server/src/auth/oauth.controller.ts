@@ -280,7 +280,9 @@ export class OAuthController {
       externalAuthId: req.user.externalAuthId || user.externalAuthId,
       hackClubId: req.user.externalAuthId || user.externalAuthId,
       setupCompleted: user.setupCompleted,
-      seenUpdates: user.seenUpdates ?? []
+      seenUpdates: user.seenUpdates ?? [],
+      ...(user.homeOrganizationId ? { homeOrganizationId: user.homeOrganizationId } : {}),
+      ...(req.user.orgScope ? { sessionOrganizationId: req.user.orgScope } : {})
     };
     return user.isSuperAdmin ? { ...base, isSuperAdmin: true } : base;
   }

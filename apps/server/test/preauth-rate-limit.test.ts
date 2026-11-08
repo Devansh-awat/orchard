@@ -209,13 +209,14 @@ test('the scheduled cleanup only runs on the lease holder', async () => {
       } as any,
       { cleanupExpiredRecords: mk('rate') } as any,
       { cleanupExpiredCodes: mk('otp') } as any,
-      { cleanupExpiredChallenges: mk('challenge') } as any
+      { cleanupExpiredChallenges: mk('challenge') } as any,
+      { cleanupExpiredOrgGrants: mk('grants') } as any
     );
   await make(false, true).tick();
   await make(true, false).tick();
   assert.deepEqual(ran, []);
   await make(true, true).tick();
-  assert.deepEqual(ran.sort(), ['challenge', 'otp', 'rate']);
+  assert.deepEqual(ran.sort(), ['challenge', 'grants', 'otp', 'rate']);
 });
 
 test('one failing cleanup does not stop the others', async () => {
@@ -238,7 +239,8 @@ test('one failing cleanup does not stop the others', async () => {
         ran.push('challenge');
         return 0;
       }
-    } as any
+    } as any,
+    { cleanupExpiredOrgGrants: async () => 0 } as any
   );
   await svc.tick();
   assert.deepEqual(ran.sort(), ['challenge', 'otp']);

@@ -72,10 +72,6 @@ function actsForPerson(ctx: RequestAuthContext | undefined): boolean {
   return Boolean(ctx?.browserSession || ctx?.apiTokenId || ctx?.mcpGateway);
 }
 
-function emailDomain(email: string | null | undefined): string {
-  return (email ?? '').split('@')[1]?.toLowerCase() ?? '';
-}
-
 @Injectable()
 export class AuthorizationService {
   // userId → { value, expiresAt }. TTL'd because superadmin status is sticky
@@ -122,6 +118,12 @@ export class AuthorizationService {
    * enforces its own IdP is not asking to also trust the instance's Google
    * button.
    */
+  /**
+   * Instance-wide enforcement is the operator's call and applies to every
+   * sign-in method but SSO. An organization's enforcement never reaches the
+   * account: it gates entry into that organization (blockedByOrgSso), so an
+   * org can lock its own door but never lock someone out of their account.
+   */
   async assertSsoNotEnforced(
     user: { id: string; email?: string | null; isSuperAdmin?: boolean | null } | null,
     authMethod: AuthMethod
@@ -129,23 +131,6 @@ export class AuthorizationService {
     if (authMethod === 'sso') return;
     if (user?.isSuperAdmin) return;
     await this.assertInstanceSsoNotEnforced(authMethod);
-    if (user) {
-      const enforced = await this.prisma.organizationMember.findFirst({
-        where: {
-          userId: user.id,
-          organization: {
-            ssoSettings: { is: ENFORCING_SSO },
-            domains: { some: { domain: emailDomain(user.email), verifiedAt: { not: null } } }
-          }
-        },
-        select: { organizationId: true }
-      });
-      if (enforced) {
-        throw new ForbiddenException(
-          "Your organization requires single sign-on. Use your organization's sign-in link."
-        );
-      }
-    }
   }
 
   async orgRequiresSso(organizationId: string, userId: string): Promise<boolean> {
@@ -166,9 +151,28 @@ export class AuthorizationService {
         role: { not: 'owner' },
         organization: { ssoSettings: { is: ENFORCING_SSO } }
       },
+      select: {
+        organizationId: true,
+        role: true,
+        organization: { select: { ssoSettings: { select: { guestsUseOwnLogin: true } } } }
+      }
+    });
+    const blocked = rows.filter(
+      (row) => !(row.role === 'guest' && row.organization.ssoSettings?.guestsUseOwnLogin)
+    );
+    if (!blocked.length || !ctx?.browserSession || !ctx.sessionId) {
+      return blocked.map((row) => row.organizationId);
+    }
+    const grants = await this.prisma.sessionOrgGrant.findMany({
+      where: {
+        sessionId: ctx.sessionId,
+        organizationId: { in: blocked.map((row) => row.organizationId) },
+        expiresAt: { gt: new Date() }
+      },
       select: { organizationId: true }
     });
-    return rows.map((row) => row.organizationId);
+    const granted = new Set(grants.map((g) => g.organizationId));
+    return blocked.map((row) => row.organizationId).filter((id) => !granted.has(id));
   }
 
   private sessionNeedsOrgSso(organizationId: string): boolean {
@@ -180,11 +184,33 @@ export class AuthorizationService {
     if (role === 'owner' || !this.sessionNeedsOrgSso(organizationId)) return false;
     const settings = await this.prisma.orgSsoSettings.findFirst({
       where: { organizationId, ...ENFORCING_SSO },
-      select: { organizationId: true }
+      select: { organizationId: true, guestsUseOwnLogin: true }
     });
+    if (!settings) return false;
+    if (role === 'guest' && settings.guestsUseOwnLogin) return false;
     const ctx = requestAuthStorage.getStore();
-    if (settings && ctx && !ctx.sessionOrgId) ctx.orgSsoRefused = true;
-    return Boolean(settings);
+    if (
+      ctx?.browserSession &&
+      ctx.sessionId &&
+      (await this.hasOrgGrant(ctx.sessionId, organizationId))
+    ) {
+      return false;
+    }
+    if (ctx && !ctx.sessionOrgId) ctx.orgSsoRefused = true;
+    return true;
+  }
+
+  /**
+   * A person's own session that has just passed this organization's IdP. The
+   * IdP vouched for that session, it didn't mint one: the account stays the
+   * person's, and the grant lapses on the org's own session lifetime.
+   */
+  private async hasOrgGrant(sessionId: string, organizationId: string): Promise<boolean> {
+    const grant = await this.prisma.sessionOrgGrant.findUnique({
+      where: { sessionId_organizationId: { sessionId, organizationId } },
+      select: { expiresAt: true }
+    });
+    return Boolean(grant && grant.expiresAt > new Date());
   }
 
   /**
@@ -199,27 +225,9 @@ export class AuthorizationService {
    * Call this BEFORE user creation/JIT in the OAuth, OTP, and passkey
    * registration flows. SSO callback itself is exempt (authMethod='sso').
    */
-  async assertSsoNotEnforcedForEmail(email: string, authMethod: AuthMethod): Promise<void> {
+  async assertSsoNotEnforcedForEmail(_email: string, authMethod: AuthMethod): Promise<void> {
     if (authMethod === 'sso') return;
     await this.assertInstanceSsoNotEnforced(authMethod);
-    const normalized = email.toLowerCase().trim();
-    if (!normalized) return;
-    const invitation = await this.prisma.organizationInvitation.findFirst({
-      where: {
-        email: normalized,
-        expiresAt: { gt: new Date() },
-        organization: {
-          ssoSettings: { is: ENFORCING_SSO },
-          domains: { some: { domain: emailDomain(normalized), verifiedAt: { not: null } } }
-        }
-      },
-      select: { organizationId: true }
-    });
-    if (invitation) {
-      throw new ForbiddenException(
-        "Your organization requires single sign-on. Use your organization's sign-in link."
-      );
-    }
   }
 
   async assertInstanceSsoNotEnforced(authMethod: AuthMethod): Promise<void> {
@@ -260,9 +268,9 @@ export class AuthorizationService {
     }
     const member = await this.prisma.organizationMember.findUnique({
       where: { organizationId_userId: { organizationId, userId } },
-      select: { role: true }
+      select: { role: true, status: true }
     });
-    if (!member) return null;
+    if (!member || member.status === 'disabled') return null;
     if (await this.blockedByOrgSso(organizationId, member.role)) return null;
     return {
       organizationId,
@@ -389,8 +397,8 @@ export class AuthorizationService {
     }
 
     const [orgMember, projectMember] = await Promise.all([
-      this.prisma.organizationMember.findUnique({
-        where: { organizationId_userId: { organizationId, userId } },
+      this.prisma.organizationMember.findFirst({
+        where: { organizationId, userId, status: 'active' },
         select: { role: true }
       }),
       this.prisma.projectMember.findFirst({
@@ -567,9 +575,13 @@ export class AuthorizationService {
 
     const member = await this.prisma.organizationMember.findUnique({
       where: { organizationId_userId: { organizationId, userId } },
-      select: { role: true }
+      select: { role: true, status: true }
     });
-    if (!member || (await this.blockedByOrgSso(organizationId, member.role))) {
+    if (
+      !member ||
+      member.status === 'disabled' ||
+      (await this.blockedByOrgSso(organizationId, member.role))
+    ) {
       throw new NotFoundException('Organization not found');
     }
     if (member.role === 'owner' || member.role === 'admin') {

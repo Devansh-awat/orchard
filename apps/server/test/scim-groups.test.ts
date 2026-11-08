@@ -5,6 +5,7 @@ import { IdentityMappingService } from '../src/sso/identity-mapping.service';
 import { ScimService } from '../src/scim/scim.service';
 import { ScimGroupsService } from '../src/scim/scim-groups.service';
 import { collection as memoryCollection, type Row } from './support/memory-db';
+import { OrgIdentityService } from '../src/sso/org-identity.service';
 
 const ORG_A = '11111111-1111-4111-8111-111111111111';
 const ORG_B = '22222222-2222-4222-8222-222222222222';
@@ -38,8 +39,16 @@ function makeWorld() {
     memoryCollection(tables, name, defaults, hydrate);
 
   const prisma: any = {
-    user: collection('user', () => ({ id: randomUUID(), isSuperAdmin: false })),
-    organization: { findUnique: async () => ({ name: 'Acme', createdAt: new Date() }) },
+    user: collection('user', () => ({
+      id: randomUUID(),
+      isSuperAdmin: false,
+      emailScope: 'account',
+      homeOrganizationId: null
+    })),
+    organization: {
+      findUnique: async () => ({ name: 'Acme', slug: 'acme', createdAt: new Date() }),
+      findUniqueOrThrow: async () => ({ name: 'Acme', slug: 'acme', createdAt: new Date() })
+    },
     organizationMember: collection('organizationMember', () => ({
       id: randomUUID(),
       role: 'member',
@@ -110,7 +119,8 @@ function makeWorld() {
     membershipCache as any,
     groups,
     mapping,
-    { isVerifiedFor: async () => true } as any
+    { isVerifiedFor: async () => true } as any,
+    new OrgIdentityService(prisma, audit as any)
   );
   scim.onModuleInit();
 

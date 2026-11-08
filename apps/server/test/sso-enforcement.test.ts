@@ -63,35 +63,12 @@ test('superadmins keep their break-glass sign-in', async () => {
   await authz.assertSsoNotEnforced(superadmin, 'otp');
 });
 
-test('org enforcement still blocks the platform providers that instance enforcement allows', async () => {
+test('an organization enforcing SSO never blocks sign-in to the account itself', async () => {
   const { prisma, authz } = build(false);
   prisma.enforcedOrgMembers.add(member.id);
-  await assert.rejects(
-    () => authz.assertSsoNotEnforced(member, 'instance_sso'),
-    ForbiddenException
-  );
-  await assert.rejects(() => authz.assertSsoNotEnforced(member, 'oauth'), ForbiddenException);
-  await authz.assertSsoNotEnforced(member, 'sso');
-  await authz.assertSsoNotEnforced({ id: 'other', isSuperAdmin: false }, 'otp');
-});
-
-test('a pending invitation from an enforcing org gates a brand-new identity', async () => {
-  const { prisma, authz } = build(false);
   prisma.enforcedOrgInvites.add('invited@corp.example');
-  await assert.rejects(
-    () => authz.assertSsoNotEnforcedForEmail('Invited@Corp.Example', 'otp'),
-    ForbiddenException
-  );
-  await authz.assertSsoNotEnforcedForEmail('nobody@corp.example', 'otp');
-});
-
-test('an org only blocks account-wide sign-in for emails on its verified domains', async () => {
-  const { prisma, authz } = build(false);
-  prisma.enforcedOrgMembers.add('pepito');
-  prisma.enforcedOrgInvites.add('pepito@gmail.example');
-  const pepito = { id: 'pepito', email: 'pepito@gmail.example', isSuperAdmin: false };
   for (const method of ['otp', 'passkey', 'password', 'oauth', 'instance_sso'] as const) {
-    await authz.assertSsoNotEnforced(pepito, method);
+    await authz.assertSsoNotEnforced(member, method);
   }
-  await authz.assertSsoNotEnforcedForEmail('pepito@gmail.example', 'otp');
+  await authz.assertSsoNotEnforcedForEmail('Invited@Corp.Example', 'otp');
 });

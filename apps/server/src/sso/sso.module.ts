@@ -4,7 +4,9 @@ import { SsoLoginService } from './sso-login.service';
 import { SsoCryptoService } from './sso-crypto.service';
 import { OrgDomainsService } from './org-domains.service';
 import { OrgDomainRecheckService } from './org-domain-recheck.service';
+import { OrgIdentityService } from './org-identity.service';
 import { SsoController } from './sso.controller';
+import { AccountLinksController } from './account-links.controller';
 import { SsoAdminController } from './sso-admin.controller';
 import { SsoInstanceController } from './sso-instance.controller';
 import { VanityDomainService } from './vanity-domain.service';
@@ -21,19 +23,26 @@ import { KubernetesModule } from '../kubernetes/kubernetes.module';
 
 @Module({
   imports: [PrismaModule, AuthModule, UsersModule, OrganizationsModule, KubernetesModule],
-  controllers: [SsoController, SsoAdminController, SsoInstanceController, VanityDomainController],
+  controllers: [
+    SsoController,
+    SsoAdminController,
+    SsoInstanceController,
+    VanityDomainController,
+    AccountLinksController
+  ],
   providers: [
     SsoService,
     SsoLoginService,
     SsoCryptoService,
     OrgDomainsService,
     OrgDomainRecheckService,
+    OrgIdentityService,
     IdentityMappingService,
     InstanceIdentityService,
     VanityDomainService,
     OidcStateStore,
     SamlRequestStore
   ],
-  exports: [SsoService, OrgDomainsService, IdentityMappingService]
+  exports: [SsoService, OrgDomainsService, IdentityMappingService, OrgIdentityService]
 })
 export class SsoModule {}

@@ -6,6 +6,7 @@ import express from 'express';
 import SCIMMY from 'scimmy';
 import { parseScimQuery } from '../src/scim/scim-query';
 import { ScimService } from '../src/scim/scim.service';
+import { OrgIdentityService } from '../src/sso/org-identity.service';
 
 const ORG = '11111111-1111-4111-8111-111111111111';
 const ctx = { organizationId: ORG };
@@ -117,17 +118,31 @@ function makeDb() {
   });
 
   const db: any = {
-    organization: { findUnique: async () => ({ name: 'Acme' }) },
+    organization: {
+      findUnique: async () => ({ name: 'Acme', slug: 'acme' }),
+      findUniqueOrThrow: async () => ({ name: 'Acme', slug: 'acme' })
+    },
     user: {
-      ...collection(users, () => ({ id: randomUUID(), firstName: null, lastName: null })),
+      ...collection(users, () => ({
+        id: randomUUID(),
+        firstName: null,
+        lastName: null,
+        emailScope: 'account',
+        homeOrganizationId: null
+      })),
+      count: async ({ where }: any) => users.filter((u) => matches(u, where)).length,
       findUnique: async ({ where }: any) =>
-        users.find(
-          (u) =>
-            ((where.email ?? where.emailScope_email?.email)
-              ? u.email === (where.email ?? where.emailScope_email?.email)
-              : u.id === where.id) ||
-            (where.username && u.username === where.username)
-        ) ?? null
+        users.find((u) => {
+          if (where.emailScope_email) {
+            return (
+              u.email === where.emailScope_email.email &&
+              (u.emailScope ?? 'account') === where.emailScope_email.emailScope
+            );
+          }
+          if (where.email) return u.email === where.email;
+          if (where.username) return u.username === where.username;
+          return u.id === where.id;
+        }) ?? null
     },
     organizationMember: {
       ...collection(members, () => ({
@@ -142,7 +157,12 @@ function makeDb() {
         scimDisplayName: null,
         scimManaged: false
       })),
-      count: async ({ where }: any) => members.filter((m) => matches(m, where)).length
+      count: async ({ where }: any) => members.filter((m) => matches(m, where)).length,
+      findUniqueOrThrow: async ({ where }: any) => {
+        const row = members.find((r) => matches(r, where));
+        if (!row) throw new Error('member not found');
+        return hydrate(row);
+      }
     },
     scimDeprovisionedMember: collection(tombstones, () => ({
       id: randomUUID(),
@@ -188,7 +208,8 @@ function makeService(verified: Array<[string, string]> = []) {
     {
       isVerifiedFor: async (organizationId: string, domain: string) =>
         verified.some(([o, d]) => o === organizationId && d === domain)
-    } as any
+    } as any,
+    new OrgIdentityService(db, audit as any)
   );
   service.onModuleInit();
   return { service, members, tombstones, users, sent, revoked };
@@ -336,7 +357,8 @@ test('an identity provider cannot provision an owner', async () => {
 test('a provisioned account is not verified until its owner signs in', async () => {
   const { service, users } = makeService();
   await service.createUser({ userName: 'new@example.com' }, ctx);
-  assert.equal(users[0].emailVerified, false);
+  assert.ok(!users[0].emailVerified);
+  assert.equal(users[0].homeOrganizationId, ORG, 'SCIM provisions an org identity');
 });
 
 test('an unknown role is rejected rather than silently downgraded', async () => {
@@ -493,43 +515,41 @@ test('PUT clears the attributes it omits', async () => {
   assert.equal(replaced[ENTERPRISE], undefined);
   // displayName has no empty state to replace it with, so it re-derives down
   // the fallback chain: name -> orchard handle -> userName.
-  assert.equal(replaced.displayName, 'ada');
+  assert.equal(replaced.displayName, 'ada-acme');
 });
 
-test('an existing account outside a verified domain is never linked by another org', async () => {
+test('an existing account is never attached by an org SCIM, which gets its own identity instead', async () => {
   const { service, users, members } = makeService();
-  await service.createUser({ userName: 'victim@example.com', name: { givenName: 'Real' } }, ctx);
+  users.push({
+    id: 'victim',
+    email: 'victim@example.com',
+    username: 'victim',
+    emailScope: 'account'
+  });
+  const before = JSON.stringify(users[0]);
   const evilOrg = { organizationId: '33333333-3333-4333-8333-333333333333' };
-  await assert.rejects(
-    service.createUser({ userName: 'victim@example.com' }, evilOrg),
-    (err: any) => Number(err.status) === 409
+  const created: any = await service.createUser(
+    { userName: 'victim@example.com', name: { givenName: 'Hostile' } },
+    evilOrg
   );
-  assert.equal(users.length, 1);
-  assert.equal(
-    members.filter((m: any) => m.organizationId === evilOrg.organizationId).length,
-    0,
-    'the evil org must not gain a membership for the account'
-  );
+  assert.equal(JSON.stringify(users[0]), before, 'the account is untouched');
+  assert.ok(!members.some((m: any) => m.userId === 'victim'), 'and gains no membership');
+  const identity = users.find((u: any) => u.homeOrganizationId === evilOrg.organizationId);
+  assert.ok(identity);
+  assert.equal(identity.emailScope, evilOrg.organizationId);
+  assert.equal(created.name.givenName, 'Hostile');
 });
 
-test('an existing account joining a second org is linked, not rewritten', async () => {
-  const { service, users } = makeService([['22222222-2222-4222-8222-222222222222', 'example.com']]);
-  await service.createUser(
-    { userName: 'shared@example.com', name: { givenName: 'Real', familyName: 'Name' } },
-    ctx
-  );
-  const account = { ...users[0] };
-
-  // Same person, different org, IdP calls them something else entirely.
+test('the same address in two orgs is two separate org identities', async () => {
+  const { service, users } = makeService();
+  await service.createUser({ userName: 'shared@example.com' }, ctx);
   const otherOrg = { organizationId: '22222222-2222-4222-8222-222222222222' };
-  const linked: any = await service.createUser(
-    { userName: 'shared@example.com', name: { givenName: 'Contractor' } },
-    otherOrg
+  await service.createUser({ userName: 'shared@example.com' }, otherOrg);
+  assert.equal(users.length, 2);
+  assert.deepEqual(
+    users.map((u: any) => u.homeOrganizationId).sort(),
+    [ORG, otherOrg.organizationId].sort()
   );
-
-  assert.equal(users.length, 1, 'the same account must be reused');
-  assert.deepEqual(users[0], account, 'the second org must not rewrite the account');
-  assert.equal(linked.name.givenName, 'Contractor', 'but it does get its own view');
 });
 
 test('a brand-new account is seeded from the provisioning payload', async () => {
@@ -657,30 +677,14 @@ test('the SCIM catch-all registers behind every real endpoint', async () => {
   }
 });
 
-test('SCIM refuses an outside address that already has an account and never touches it', async () => {
-  const { service, users, members, sent } = makeService();
-  users.push({
-    id: 'pepito',
-    email: 'pepito@gmail.example',
-    username: 'pepito',
-    firstName: 'Pepe'
-  });
-  const before = JSON.stringify(users);
+test('SCIM never emails an address on a domain the org has not verified', async () => {
+  const unverified = makeService();
+  await unverified.service.createUser({ userName: 'pepito@gmail.example' }, ctx);
+  assert.deepEqual(unverified.sent, []);
 
-  await assert.rejects(
-    service.createUser(
-      {
-        schemas: ['urn:ietf:params:scim:schemas:core:2.0:User'],
-        userName: 'pepito@gmail.example',
-        name: { givenName: 'Hostile', familyName: 'Rename' }
-      },
-      ctx
-    ),
-    (err: any) => Number(err.status) === 409
-  );
-  assert.equal(members.length, 0);
-  assert.deepEqual(sent, []);
-  assert.equal(JSON.stringify(users), before);
+  const verified = makeService([[ORG, 'acme.example']]);
+  await verified.service.createUser({ userName: 'new@acme.example' }, ctx);
+  assert.deepEqual(verified.sent, ['new@acme.example']);
 });
 
 test('reactivating a stale owner tombstone never promotes a re-added member to owner', async () => {

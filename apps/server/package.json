@@ -79,7 +79,7 @@
     "test:instance-settings": "tsx --test test/instance-settings.test.ts",
     "test:sso-enforcement": "tsx --test test/sso-enforcement.test.ts",
     "test:sso-crypto": "tsx --test test/sso-crypto.test.ts",
-    "test:identity": "tsx --test test/unverified-adoption.test.ts test/identity-mapping.test.ts test/oidc-callback.test.ts test/org-isolation.test.ts test/saml-hardening.test.ts test/saml-trust-config.test.ts test/sso-enforcement.test.ts test/instance-identity.test.ts test/sso-provider-trust.test.ts test/domain-ownership.test.ts test/guarded-fetch.test.ts test/scim.test.ts test/scim-groups.test.ts test/preauth-rate-limit.test.ts",
+    "test:identity": "tsx --test test/unverified-adoption.test.ts test/identity-mapping.test.ts test/oidc-callback.test.ts test/org-isolation.test.ts test/saml-hardening.test.ts test/saml-trust-config.test.ts test/sso-enforcement.test.ts test/instance-identity.test.ts test/sso-provider-trust.test.ts test/domain-ownership.test.ts test/org-identities.test.ts test/guarded-fetch.test.ts test/scim.test.ts test/scim-groups.test.ts test/preauth-rate-limit.test.ts",
     "test:pvc-status": "tsx --test test/pvc-status.test.ts",
     "test:instance-network": "tsx --test test/instance-network.test.ts",
     "test:deployment-drift": "tsx --test test/deployment-drift.test.ts",

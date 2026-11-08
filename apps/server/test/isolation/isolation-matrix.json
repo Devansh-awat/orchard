@@ -109,6 +109,15 @@
     "unseeded": [],
     "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
+  "DELETE /auth/links/:id": {
+    "class": "resource-scoped",
+    "auth": "authenticated",
+    "handler": "AccountLinksController.remove",
+    "params": ["id:accountLink"],
+    "queryIds": [],
+    "bodyIds": [],
+    "unseeded": []
+  },
   "DELETE /auth/me/avatar": {
     "class": "own-scope-only",
     "auth": "authenticated",
@@ -1149,6 +1158,15 @@
     "class": "public",
     "auth": "public",
     "handler": "PasswordlessController.authConfig",
+    "params": [],
+    "queryIds": [],
+    "bodyIds": [],
+    "unseeded": []
+  },
+  "GET /auth/links": {
+    "class": "own-scope-only",
+    "auth": "authenticated",
+    "handler": "AccountLinksController.list",
     "params": [],
     "queryIds": [],
     "bodyIds": [],

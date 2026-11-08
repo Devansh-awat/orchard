@@ -4,6 +4,7 @@ import { GLOBAL_LEADER_LEASE, LeaseService } from '../coordination/lease.service
 import { OtpService } from './otp.service';
 import { PasskeyService } from './passkey.service';
 import { RateLimitService } from './rate-limit.service';
+import { SessionsService } from './sessions.service';
 
 export const AUTH_CLEANUP_MS = 10 * 60 * 1000;
 
@@ -17,7 +18,8 @@ export class AuthCleanupService {
     private readonly lease: LeaseService,
     private readonly rateLimits: RateLimitService,
     private readonly otp: OtpService,
-    private readonly passkeys: PasskeyService
+    private readonly passkeys: PasskeyService,
+    private readonly sessions: SessionsService
   ) {}
 
   @Interval(AUTH_CLEANUP_MS)
@@ -30,7 +32,8 @@ export class AuthCleanupService {
       const results = await Promise.allSettled([
         this.rateLimits.cleanupExpiredRecords(),
         this.otp.cleanupExpiredCodes(),
-        this.passkeys.cleanupExpiredChallenges()
+        this.passkeys.cleanupExpiredChallenges(),
+        this.sessions.cleanupExpiredOrgGrants()
       ]);
       for (const result of results) {
         if (result.status === 'rejected') {
