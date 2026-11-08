@@ -332,6 +332,16 @@ export class PasskeyService {
       throw new NotFoundException('Passkey not found');
     }
 
+    const owner = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { passkeyOnly: true }
+    });
+    if (owner?.passkeyOnly && (await this.prisma.passkey.count({ where: { userId } })) <= 1) {
+      throw new BadRequestException(
+        'This is your last passkey and email codes are turned off. Turn email codes back on first.'
+      );
+    }
+
     await this.prisma.passkey.delete({
       where: { id: passkeyId }
     });

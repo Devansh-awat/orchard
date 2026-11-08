@@ -282,9 +282,28 @@ export class OAuthController {
       setupCompleted: user.setupCompleted,
       seenUpdates: user.seenUpdates ?? [],
       ...(user.homeOrganizationId ? { homeOrganizationId: user.homeOrganizationId } : {}),
-      ...(req.user.orgScope ? { sessionOrganizationId: req.user.orgScope } : {})
+      ...(req.user.orgScope ? { sessionOrganizationId: req.user.orgScope } : {}),
+      ...(user.passkeyOnly ? { passkeyOnly: true } : {}),
+      ...(!user.homeOrganizationId && !req.user.orgScope
+        ? await this.emailDomainOwner(user.email)
+        : {})
     };
     return user.isSuperAdmin ? { ...base, isSuperAdmin: true } : base;
+  }
+
+  /**
+   * An organization that verified the domain of this account's address
+   * controls that mailbox, so it can always sign in with an email code. Say so
+   * on the account, rather than letting someone find out the hard way.
+   */
+  private async emailDomainOwner(email: string) {
+    const domain = email.split('@')[1]?.toLowerCase();
+    if (!domain) return {};
+    const owner = await this.prisma.orgDomain.findFirst({
+      where: { domain, verifiedAt: { not: null } },
+      select: { organization: { select: { name: true } } }
+    });
+    return owner ? { emailDomainOwner: { domain, organization: owner.organization.name } } : {};
   }
 
   @Auth()
@@ -306,6 +325,7 @@ export class OAuthController {
       lastName?: string | null;
       username?: string;
       setupCompleted?: boolean;
+      passkeyOnly?: boolean;
     }
   ) {
     const userId = req.user.sub;
@@ -332,7 +352,8 @@ export class OAuthController {
         firstName: body.firstName,
         lastName: body.lastName,
         username: body.username,
-        setupCompleted: body.setupCompleted
+        setupCompleted: body.setupCompleted,
+        ...(typeof body.passkeyOnly === 'boolean' ? { passkeyOnly: body.passkeyOnly } : {})
       });
 
       return updatedUser;

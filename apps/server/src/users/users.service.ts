@@ -327,8 +327,15 @@ export class UsersService {
       setupCompleted?: boolean;
       imageUrl?: string | null;
       imageSource?: string | null;
+      passkeyOnly?: boolean;
     }
   ) {
+    if (data.passkeyOnly === true) {
+      const passkeys = await this.prisma.passkey.count({ where: { userId } });
+      if (passkeys === 0) {
+        throw new BadRequestException('Add a passkey before you turn off email codes');
+      }
+    }
     // If username is being updated, check format and uniqueness
     if (data.username !== undefined) {
       if (!/^[a-zA-Z0-9_-]{1,39}$/.test(data.username)) {
@@ -352,7 +359,8 @@ export class UsersService {
         ...(data.username !== undefined && { username: data.username }),
         ...(data.setupCompleted !== undefined && { setupCompleted: data.setupCompleted }),
         ...(data.imageUrl !== undefined && { imageUrl: data.imageUrl }),
-        ...(data.imageSource !== undefined && { imageSource: data.imageSource })
+        ...(data.imageSource !== undefined && { imageSource: data.imageSource }),
+        ...(data.passkeyOnly !== undefined && { passkeyOnly: data.passkeyOnly })
       },
       select: {
         id: true,

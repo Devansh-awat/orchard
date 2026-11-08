@@ -282,3 +282,33 @@ test('a superadmin turns accounts off and on, never their own and never the last
   await svc.setUserDisabled('u1', 'root', false);
   assert.equal(users[1].disabledAt, null);
 });
+
+test('passkey-only needs a passkey to turn on, and the last passkey cannot be removed while it is on', async () => {
+  const { UsersService } = await import('../src/users/users.service');
+  const { PasskeyService } = await import('../src/auth/passkey.service');
+  let passkeys = 0;
+  const users = Object.create(UsersService.prototype) as any;
+  users.prisma = {
+    passkey: { count: async () => passkeys },
+    user: { update: async ({ data }: any) => ({ id: 'u1', ...data }) }
+  };
+  users.invalidateUserCache = () => {};
+  await assert.rejects(() => users.updateProfile('u1', { passkeyOnly: true }), BadRequestException);
+  passkeys = 1;
+  await users.updateProfile('u1', { passkeyOnly: true });
+
+  const deleted: string[] = [];
+  const service = Object.create(PasskeyService.prototype) as any;
+  service.prisma = {
+    passkey: {
+      findUnique: async () => ({ id: 'pk1', userId: 'u1' }),
+      count: async () => passkeys,
+      delete: async ({ where }: any) => deleted.push(where.id)
+    },
+    user: { findUnique: async () => ({ passkeyOnly: true }) }
+  };
+  await assert.rejects(() => service.deletePasskey('u1', 'pk1'), BadRequestException);
+  passkeys = 2;
+  await service.deletePasskey('u1', 'pk1');
+  assert.deepEqual(deleted, ['pk1']);
+});

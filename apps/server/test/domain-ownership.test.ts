@@ -7,7 +7,7 @@ import {
   registrationFromRdap
 } from '../src/auth/domain-registration';
 import { MISSING_GRACE_MS, OrgDomainsService } from '../src/sso/org-domains.service';
-import { DOMAIN_CHANGED_HANDS, OtpService } from '../src/auth/otp.service';
+import { DOMAIN_CHANGED_HANDS, OtpService, PASSKEY_ONLY } from '../src/auth/otp.service';
 import { hashOtpCode } from '../src/auth/otp-code';
 
 process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-secret';
@@ -192,4 +192,21 @@ test('an email code still works when the domain is older than the account or RDA
   assert.equal((await silent.verifyOtp('a@acme.example', '123456', '1.1.1.1')).valid, true);
   const fresh = otpWorld(null, new Date());
   assert.equal((await fresh.verifyOtp('new@acme.example', '123456', '1.1.1.1')).valid, true);
+});
+
+test('a passkey-only account refuses every email code, even a correct one', async () => {
+  const otp = otpWorld(
+    {
+      id: 'u1',
+      emailVerified: true,
+      emailVerifiedAt: new Date('2023-05-01T00:00:00Z'),
+      createdAt: new Date('2023-05-01T00:00:00Z'),
+      passkeyOnly: true
+    },
+    undefined
+  );
+  await assert.rejects(
+    otp.verifyOtp('me@acme.example', '123456', '1.1.1.1'),
+    (err: any) => err instanceof ForbiddenException && err.message === PASSKEY_ONLY
+  );
 });

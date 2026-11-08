@@ -21,6 +21,7 @@ import { accountEmail } from '../users/account-scope';
 const MAX_VERIFICATION_ATTEMPTS = 5;
 
 export const DOMAIN_CHANGED_HANDS = 'email_domain_changed_hands';
+export const PASSKEY_ONLY = 'passkey_only';
 
 @Injectable()
 export class OtpService {
@@ -184,7 +185,7 @@ export class OtpService {
       data: { used: true }
     });
 
-    await this.refuseResurrectedDomain(normalizedEmail);
+    await this.refuseBlockedEmailSignIn(normalizedEmail);
 
     // H-6: a successful OTP verification proves ownership of the email
     // address. Flip the User.emailVerified flag if a row already exists for
@@ -215,13 +216,24 @@ export class OtpService {
    * registered after this account's address was verified, the domain lapsed
    * and was bought by someone else, and the code is theirs, not the owner's.
    */
-  private async refuseResurrectedDomain(email: string): Promise<void> {
-    if (!this.domainRegistry) return;
+  private async refuseBlockedEmailSignIn(email: string): Promise<void> {
     const user = await this.prisma.user.findUnique({
       where: accountEmail(email),
-      select: { id: true, emailVerified: true, emailVerifiedAt: true, createdAt: true }
+      select: {
+        id: true,
+        emailVerified: true,
+        emailVerifiedAt: true,
+        createdAt: true,
+        passkeyOnly: true
+      }
     });
-    if (!user?.emailVerified) return;
+    if (user?.passkeyOnly) {
+      throw new ForbiddenException({
+        message: PASSKEY_ONLY,
+        detail: 'This account only signs in with a passkey.'
+      });
+    }
+    if (!this.domainRegistry || !user?.emailVerified) return;
     const domain = email.split('@')[1] || '';
     const since = user.emailVerifiedAt ?? user.createdAt;
     if (await this.domainRegistry.changedHandsSince(domain, since)) {
