@@ -315,7 +315,11 @@ export class K8sNamespaceService implements OnModuleInit {
     });
   }
 
-  async createNamespace(namespace: string, registryPrefix?: string) {
+  async createNamespace(
+    namespace: string,
+    registryPrefix?: string,
+    extraLabels: Record<string, string> = {}
+  ) {
     this.ensureKubeConfig();
 
     const cleanNamespace = String(namespace || '').trim();
@@ -330,6 +334,7 @@ export class K8sNamespaceService implements OnModuleInit {
         metadata: {
           name: cleanNamespace,
           labels: {
+            ...extraLabels,
             'orchard.my/managed': 'true',
             ...(registryPrefix ? { [REGISTRY_PREFIX_LABEL]: registryPrefix } : {}),
             name: cleanNamespace,
