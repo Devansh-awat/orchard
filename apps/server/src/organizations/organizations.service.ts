@@ -367,8 +367,15 @@ export class OrganizationsService {
     // Admins/owners get each member's project access inlined so the members
     // table can show and revoke it without N per-row round trips.
     if (access.role === 'owner' || access.role === 'admin') {
+      // A project-restricted token only sees the projects it is scoped to.
+      const visibleProjectIds = await this.authz.listVisibleProjectIds(organizationId, userId);
       const projectMembers = await this.prisma.projectMember.findMany({
-        where: { project: { organizationId } },
+        where: {
+          project: {
+            organizationId,
+            ...(visibleProjectIds ? { id: { in: visibleProjectIds } } : {})
+          }
+        },
         select: {
           id: true,
           userId: true,

@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { AuthorizationService } from '../auth/authorization.service';
 import { NotificationTransport } from './notification-transport';
 import { NotificationRulesService } from './notification-rules.service';
 import { assertSafeWebhookUrl } from './webhook-guard';
@@ -37,8 +38,29 @@ export class UserNotificationsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly transport: NotificationTransport,
-    private readonly rules: NotificationRulesService
+    private readonly rules: NotificationRulesService,
+    private readonly authz: AuthorizationService
   ) {}
+
+  // A project, app, database or job that exists in the org but that this member
+  // cannot see answers exactly like one that does not exist: otherwise the
+  // scope label (its name) and a 200/404 split would reveal it.
+  private async resolveVisibleScope(
+    userId: string,
+    organizationId: string,
+    scopeType: string,
+    scopeId: string | null
+  ) {
+    const scope = await this.rules.resolveScope(organizationId, scopeType, scopeId);
+    if (scope.projectId) {
+      const access = await this.authz.resolveProjectAccess(scope.projectId, organizationId, userId);
+      if (!access?.canView) {
+        const noun = scope.scopeType.charAt(0).toUpperCase() + scope.scopeType.slice(1);
+        throw new NotFoundException(`${noun} not found`);
+      }
+    }
+    return scope;
+  }
 
   async getSettings(userId: string) {
     const rows = await this.prisma.userNotificationSetting.findMany({
@@ -85,7 +107,7 @@ export class UserNotificationsService {
     scopeType: string,
     scopeId: string
   ) {
-    const scope = await this.rules.resolveScope(organizationId, scopeType, scopeId);
+    const scope = await this.resolveVisibleScope(userId, organizationId, scopeType, scopeId);
     const chain: { scopeType: string; scopeId: string }[] = [
       { scopeType: 'global', scopeId: GLOBAL_SCOPE_ID },
       { scopeType: 'org', scopeId: organizationId }
@@ -135,11 +157,7 @@ export class UserNotificationsService {
     if (scopeType !== 'global') {
       if (!organizationId)
         throw new BadRequestException('An organization is required for scoped settings');
-      await this.rules.resolveScope(
-        organizationId,
-        scopeType === 'org' ? 'org' : scopeType,
-        scopeId
-      );
+      await this.resolveVisibleScope(userId, organizationId, scopeType, scopeId);
     }
     const values = input.values ?? {};
     const writes: { category: NotificationCategory; value: SettingValue | null }[] = [];
