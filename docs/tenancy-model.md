@@ -8,7 +8,7 @@ Principals: instance superadmin; org owner / admin / member / guest; project adm
 
 Grafts are trusted by design. Graft code authority is out of scope; only signature, revocation and labeling signals matter.
 
-Related files: `docs/isolation-invariants.json` (machine-readable index), `docs/vercel-comparison.md`, operator page `apps/docs/src/content/docs/operate/tenancy-and-isolation.md`, network and kernel details in `apps/docs/src/content/docs/operate/security.mdx`.
+Related files: `docs/isolation-testing.md` (how the cross-tenant control-plane harness works and how to classify a new route), `docs/isolation-invariants.json` (machine-readable index), `docs/vercel-comparison.md`, operator page `apps/docs/src/content/docs/operate/tenancy-and-isolation.md`, network and kernel details in `apps/docs/src/content/docs/operate/security.mdx`.
 
 Rule for this document: where something is still unfixed it is described as hardening guidance, not as a procedure.
 
@@ -44,7 +44,7 @@ Rule for this document: where something is still unfixed it is described as hard
 
 **Residual risk.** A missing scope check in one route. Response-shape parity between "not found" and "forbidden" is by convention outside the routes listed above (`UNVERIFIED` for routes that do their own lookups). Timing was not measured.
 
-**Test.** Partial. `apps/server/test/org-isolation.test.ts`, `auth-coverage.test.ts`, `kubernetes-namespace-oracle.test.ts`, `auth-methods-uniform.test.ts`, `transfer-recipient-oracle.test.ts`, `rbac-coverage.test.ts` (needs `helm`). A cross-tenant sweep that sends every authenticated route another org's resource id: none.
+**Test.** Partial. `apps/server/test/org-isolation.test.ts`, `auth-coverage.test.ts`, `kubernetes-namespace-oracle.test.ts`, `auth-methods-uniform.test.ts`, `transfer-recipient-oracle.test.ts`, `rbac-coverage.test.ts` (needs `helm`). The cross-tenant sweep (every authenticated route replayed with another org's ids): `apps/server/test/isolation/`, see `docs/isolation-testing.md`.
 
 ---
 
@@ -69,7 +69,7 @@ Rule for this document: where something is still unfixed it is described as hard
 
 **Residual risk.** A role x token scope x MCP grant x route matrix is not tested. Greenhouse sandbox terminals are a separate surface (see `docs/ai-sandbox.md`).
 
-**Test.** `api-token-lineage.test.ts`, `exec-token-expiry.test.ts`, `mcp-gateway-scope.test.ts`, `mcp-token-type.test.ts`, `project-member-role.test.ts`, `namespace-scope.test.ts`, `security-hardening.test.ts`, `pod-exec-policy.test.ts`, `org-scoped-personal-credentials.test.ts`. Full role x route matrix: none.
+**Test.** `api-token-lineage.test.ts`, `exec-token-expiry.test.ts`, `mcp-gateway-scope.test.ts`, `mcp-token-type.test.ts`, `project-member-role.test.ts`, `namespace-scope.test.ts`, `security-hardening.test.ts`, `pod-exec-policy.test.ts`, `org-scoped-personal-credentials.test.ts`. Role x token scope x MCP grant replay: `apps/server/test/isolation/` (`docs/isolation-testing.md`).
 
 ---
 
