@@ -10,6 +10,7 @@ export const COLLAPSED_IP_MAX_BLOCK_MS = 5 * 60 * 1000;
 export const CLEANUP_BATCH = 1000;
 export const CLEANUP_MAX_BATCHES = 20;
 export const MAX_BUCKET_IDENTIFIER_LENGTH = 128;
+export const ESTABLISHED_ORG_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 export const PRESSURE_DELAY_MS = 1000;
 export const PRESSURE_MAX_SLEEPERS = 500;
 
@@ -98,7 +99,12 @@ export const RATE_LIMIT_CONFIGS: Record<string, RateLimitConfig> = {
     windowMs: 60 * 60 * 1000,
     blockDurationMs: 60 * 60 * 1000
   },
-  invite_global: {
+  invite_new_global: {
+    maxAttempts: 300,
+    windowMs: 60 * 60 * 1000,
+    blockDurationMs: 15 * 60 * 1000
+  },
+  invite_established_global: {
     maxAttempts: 2000,
     windowMs: 60 * 60 * 1000,
     blockDurationMs: 15 * 60 * 1000
@@ -229,6 +235,10 @@ export class RateLimitService {
     for (const [identifier, type] of subjects.identities ?? []) {
       await this.checkRateLimit(identifier, type, action);
     }
+    return this.chargeGlobal(action);
+  }
+
+  private async chargeGlobal(action: string): Promise<{ pressured: boolean }> {
     const ceiling = RATE_LIMIT_CONFIGS[`${action}_global`];
     if (!ceiling) return { pressured: false };
     try {
@@ -246,12 +256,19 @@ export class RateLimitService {
     email?: string;
     organizationId?: string;
     userId?: string;
+    organizationCreatedAt?: Date | null;
   }): Promise<void> {
     if (subjects.email) await this.checkRateLimit(subjects.email, 'email', 'invite');
     if (subjects.organizationId)
       await this.checkRateLimit(subjects.organizationId, 'org', 'invite');
     if (subjects.userId) await this.checkRateLimit(subjects.userId, 'user', 'invite');
-    await this.checkRateLimit('all', 'global', 'invite');
+    const established =
+      !!subjects.organizationCreatedAt &&
+      Date.now() - subjects.organizationCreatedAt.getTime() >= ESTABLISHED_ORG_AGE_MS;
+    const { pressured } = await this.chargeGlobal(
+      established ? 'invite_established' : 'invite_new'
+    );
+    if (pressured) await this.slowDown();
   }
 
   async slowDown(): Promise<void> {

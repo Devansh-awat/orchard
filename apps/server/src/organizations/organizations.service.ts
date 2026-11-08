@@ -897,7 +897,8 @@ export class OrganizationsService {
     await this.rateLimit.checkInviteMail({
       email: normalizedEmail,
       organizationId,
-      userId: inviter.id
+      userId: inviter.id,
+      organizationCreatedAt: (organization as { createdAt?: Date }).createdAt
     });
 
     const existingUser = await this.prisma.user.findUnique({
@@ -1033,14 +1034,15 @@ export class OrganizationsService {
 
     const organization = await this.prisma.organization.findUnique({
       where: { id: organizationId },
-      select: { name: true }
+      select: { name: true, createdAt: true }
     });
     if (!organization) throw new NotFoundException('Organization not found');
 
     await this.rateLimit.checkInviteMail({
       email: normalizedEmail,
       organizationId,
-      userId: inviter.id
+      userId: inviter.id,
+      organizationCreatedAt: (organization as { createdAt?: Date }).createdAt
     });
 
     // One pending invitation per org+email (DB unique). Re-inviting to the
@@ -1747,7 +1749,8 @@ export class OrganizationsService {
     await this.rateLimit.checkInviteMail({
       email: invitation.email,
       organizationId: invitation.organizationId,
-      userId: user.id
+      userId: user.id,
+      organizationCreatedAt: invitation.organization.createdAt
     });
 
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';

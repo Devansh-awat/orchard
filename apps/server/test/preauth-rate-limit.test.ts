@@ -4,6 +4,7 @@ import { HttpException } from '@nestjs/common';
 import {
   RateLimitService,
   RATE_LIMIT_CONFIGS,
+  ESTABLISHED_ORG_AGE_MS,
   COLLAPSED_IP_MULTIPLIER,
   COLLAPSED_IP_MAX_BLOCK_MS,
   CLEANUP_BATCH,
@@ -414,11 +415,38 @@ test('rejected invites do not spend the global invite budget', async () => {
   for (let i = 0; i < email; i++) {
     await svc.checkInviteMail({ email: 'bomb@example.com', organizationId: 'o', userId: `u${i}` });
   }
-  const before = throttle.buckets.get('invite:global:all')!.count;
+  const before = throttle.buckets.get('invite_new:global:all')!.count;
   for (let i = 0; i < 100; i++) {
     await svc
       .checkInviteMail({ email: 'bomb@example.com', organizationId: 'o2', userId: `x${i}` })
       .catch(() => undefined);
   }
-  assert.equal(throttle.buckets.get('invite:global:all')!.count, before);
+  assert.equal(throttle.buckets.get('invite_new:global:all')!.count, before);
+});
+
+test('throwaway orgs exhaust only the new-org invite budget and established orgs keep sending', async () => {
+  const throttle = memoryThrottle();
+  const svc = new RateLimitService({} as any, throttle as any);
+  (svc as any).sleepers = PRESSURE_MAX_SLEEPERS;
+  const fresh = new Date();
+  const old = new Date(Date.now() - ESTABLISHED_ORG_AGE_MS - 1000);
+  const newCap = RATE_LIMIT_CONFIGS.invite_new_global.maxAttempts;
+  for (let i = 0; i < newCap + 200; i++) {
+    await svc.checkInviteMail({
+      email: `victim${i}@example.com`,
+      organizationId: `throwaway${i}`,
+      userId: `attacker${i}`,
+      organizationCreatedAt: fresh
+    });
+  }
+  assert.ok(throttle.buckets.get('invite_new:global:all')!.count > newCap);
+  for (let i = 0; i < 50; i++) {
+    await svc.checkInviteMail({
+      email: `colleague${i}@example.com`,
+      organizationId: 'established',
+      userId: `member${i % 5}`,
+      organizationCreatedAt: old
+    });
+  }
+  assert.equal(throttle.buckets.get('invite_established:global:all')!.count, 50);
 });
