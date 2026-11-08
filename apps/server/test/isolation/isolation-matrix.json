@@ -965,6 +965,26 @@
     "bodyIds": [],
     "unseeded": []
   },
+  "GET /admin/doctor": {
+    "class": "superadmin",
+    "auth": "superadmin",
+    "handler": "DoctorController.report",
+    "params": [],
+    "queryIds": [],
+    "bodyIds": [],
+    "unseeded": []
+  },
+  "GET /admin/doctor/selftest/:id": {
+    "class": "superadmin",
+    "auth": "superadmin",
+    "handler": "DoctorController.getSelfTest",
+    "params": [
+      "id:unknown"
+    ],
+    "queryIds": [],
+    "bodyIds": [],
+    "unseeded": []
+  },
   "GET /admin/grafts": {
     "class": "superadmin",
     "auth": "superadmin",
@@ -1144,6 +1164,15 @@
     "bodyIds": [],
     "unseeded": []
   },
+  "GET /admin/sso/identity-policy": {
+    "class": "superadmin",
+    "auth": "superadmin",
+    "handler": "SsoInstanceController.identityPolicy",
+    "params": [],
+    "queryIds": [],
+    "bodyIds": [],
+    "unseeded": []
+  },
   "GET /admin/sso/organizations": {
     "class": "superadmin",
     "auth": "superadmin",
@@ -1166,6 +1195,17 @@
     "class": "superadmin",
     "auth": "superadmin",
     "handler": "SsoInstanceController.getProvider",
+    "params": [
+      "providerId:ssoProvider"
+    ],
+    "queryIds": [],
+    "bodyIds": [],
+    "unseeded": []
+  },
+  "GET /admin/sso/providers/:providerId/auto-create-rules": {
+    "class": "superadmin",
+    "auth": "superadmin",
+    "handler": "SsoInstanceController.listAutoCreateRules",
     "params": [
       "providerId:ssoProvider"
     ],
@@ -4407,6 +4447,15 @@
     "bodyIds": [],
     "unseeded": []
   },
+  "PATCH /admin/sso/identity-policy": {
+    "class": "superadmin",
+    "auth": "superadmin",
+    "handler": "SsoInstanceController.setIdentityPolicy",
+    "params": [],
+    "queryIds": [],
+    "bodyIds": [],
+    "unseeded": []
+  },
   "PATCH /admin/sso/organizations/:organizationId": {
     "class": "superadmin",
     "auth": "superadmin",
@@ -5046,6 +5095,15 @@
     "class": "superadmin",
     "auth": "superadmin",
     "handler": "DatabaseAdminController.resume",
+    "params": [],
+    "queryIds": [],
+    "bodyIds": [],
+    "unseeded": []
+  },
+  "POST /admin/doctor/selftest": {
+    "class": "superadmin",
+    "auth": "superadmin",
+    "handler": "DoctorController.startSelfTest",
     "params": [],
     "queryIds": [],
     "bodyIds": [],
@@ -7297,6 +7355,17 @@
     "handler": "InstanceConfigController.save",
     "params": [
       "id:unknown"
+    ],
+    "queryIds": [],
+    "bodyIds": [],
+    "unseeded": []
+  },
+  "PUT /admin/sso/providers/:providerId/auto-create-rules": {
+    "class": "superadmin",
+    "auth": "superadmin",
+    "handler": "SsoInstanceController.replaceAutoCreateRules",
+    "params": [
+      "providerId:ssoProvider"
     ],
     "queryIds": [],
     "bodyIds": [],
