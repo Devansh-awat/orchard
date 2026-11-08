@@ -26,7 +26,7 @@ import { SsoCryptoService } from './sso-crypto.service';
 import { SsoService } from './sso.service';
 import { OrgDomainsService } from './org-domains.service';
 import { IdentityMappingService, MappingContext, cleanSubject } from './identity-mapping.service';
-import { SignJWT, jwtVerify } from 'jose';
+import { SignJWT, createLocalJWKSet, decodeProtectedHeader, jwtVerify } from 'jose';
 import {
   SamlRejected,
   extractIdentity,
@@ -359,6 +359,8 @@ export class SsoLoginService {
       expectedNonce: stateData.nonce
     });
 
+    if (!tokens.id_token) throw new UnauthorizedException('SSO authentication failed');
+    await this.verifyIdTokenSignature(provider, config, tokens.id_token);
     const claims = tokens.claims() as Record<string, unknown>;
     const email = typeof claims.email === 'string' ? claims.email : '';
     if (!email) throw new BadRequestException("SSO provider didn't return an email address");
@@ -375,6 +377,45 @@ export class SsoLoginService {
       stateData.returnTo,
       linkedUserId
     );
+  }
+
+  private async verifyIdTokenSignature(
+    provider: IdentityProvider,
+    config: Awaited<ReturnType<SsoLoginService['discoverOidc']>>,
+    idToken: string
+  ): Promise<void> {
+    const header = decodeProtectedHeader(idToken);
+    if (typeof header.alg !== 'string' || header.alg.startsWith('HS')) return;
+    const metadata = config.serverMetadata();
+    if (!metadata.jwks_uri) throw new UnauthorizedException('SSO authentication failed');
+    try {
+      const res = await this.sso.fetchIdp(metadata.jwks_uri, {
+        signal: AbortSignal.timeout(15_000)
+      });
+      if (!res.ok) throw new Error(`jwks ${res.status}`);
+      const jwks = createLocalJWKSet((await res.json()) as Parameters<typeof createLocalJWKSet>[0]);
+      await jwtVerify(idToken, jwks, {
+        issuer: metadata.issuer,
+        audience: provider.clientId,
+        algorithms: [
+          'RS256',
+          'RS384',
+          'RS512',
+          'PS256',
+          'PS384',
+          'PS512',
+          'ES256',
+          'ES384',
+          'ES512',
+          'EdDSA'
+        ]
+      });
+    } catch (err) {
+      this.logger.warn(
+        `ID token from provider ${provider.id} failed verification: ${err instanceof Error ? err.message : 'error'}`
+      );
+      throw new UnauthorizedException('SSO authentication failed');
+    }
   }
 
   async handleOAuth2Callback(

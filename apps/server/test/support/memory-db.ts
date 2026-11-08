@@ -29,7 +29,7 @@ export function collection(
   tables: Tables,
   name: string,
   defaults: () => Row = () => ({}),
-  hydrate: (row: Row | undefined) => Row | null = (row) => row ?? null
+  hydrate: (row: Row | undefined) => Row | null = (row) => (row ? { ...row } : null)
 ) {
   const rows = tables[name];
   return {
