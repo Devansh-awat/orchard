@@ -576,10 +576,7 @@ export class ProjectsController {
     @Body() body: { destinationOrgId?: string; slug?: string },
     @Request() req
   ) {
-    if (!body?.destinationOrgId) {
-      throw new BadRequestException('destinationOrgId is required');
-    }
-    return this.orgTransfer.transfer(id, body.destinationOrgId, body.slug, req.user.sub, {
+    return this.orgTransfer.transfer(id, body?.destinationOrgId ?? '', body?.slug, req.user.sub, {
       email: req.user.email,
       username: req.user.username,
       firstName: req.user.firstName,

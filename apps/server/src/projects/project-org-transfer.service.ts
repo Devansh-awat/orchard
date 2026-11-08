@@ -82,14 +82,19 @@ export class ProjectOrgTransferService {
     });
     if (!project) throw new NotFoundException('Project not found');
 
-    if (destinationOrgId === project.organizationId) {
-      throw new BadRequestException('The project is already in this organization');
-    }
-
     // Source: moving a project takes it away from the org, so it's the org's
     // call. Destination: you must be able to create projects there (member, not
     // guest): the same gate as spawning a brand-new project in that org.
+    await this.authz.requireProjectView(project.id, user.id);
     await this.authz.requireOrgAdmin(project.organizationId, user.id);
+    // Input checks come after the access check so a project the caller cannot
+    // see answers like one that does not exist.
+    if (!destinationOrgId) {
+      throw new BadRequestException('destinationOrgId is required');
+    }
+    if (destinationOrgId === project.organizationId) {
+      throw new BadRequestException('The project is already in this organization');
+    }
     await this.authz.requireOrgCanCreateProjects(destinationOrgId, user.id);
 
     const destOrg = (await this.prisma.organization.findUnique({

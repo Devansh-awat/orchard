@@ -3236,11 +3236,11 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       throw new NotFoundException(`Deployment ${deploymentId} not found`);
     }
 
+    await this.authz.requireProjectEdit(deployment.project.id, user.id, 'update deployments');
+
     if (!deployment.githubRepo) {
       throw new BadRequestException("This app wasn't created from GitHub");
     }
-
-    await this.authz.requireProjectEdit(deployment.project.id, user.id, 'update deployments');
 
     let repoUrl = String(data.repoUrl || '').trim();
     if (repoUrl && !repoUrl.startsWith('http')) {
@@ -4545,11 +4545,11 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       throw new NotFoundException(`Port ${serviceId} not found`);
     }
 
+    await this.authz.requireProjectEdit(service.deployment.project.id, user.id, 'update services');
+
     if (service.ingresses.length > 0) {
       throw new BadRequestException('Remove its domains before you remove this port');
     }
-
-    await this.authz.requireProjectEdit(service.deployment.project.id, user.id, 'update services');
 
     const otherServices = service.deployment.services.filter((entry) => entry.id !== service.id);
 
@@ -4855,11 +4855,11 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       throw new NotFoundException(`Deployment ${deploymentId} not found`);
     }
 
+    await this.authz.requireProjectEdit(deployment.project.id, user.id, 'configure auto-deploy');
+
     if (!deployment.githubRepo) {
       throw new BadRequestException("This app wasn't created from GitHub");
     }
-
-    await this.authz.requireProjectEdit(deployment.project.id, user.id, 'configure auto-deploy');
 
     // A connection-sourced app is matched by its connection on the webhook
     // path, so it needs no GitHub App installation. The hook itself is put on
@@ -9244,6 +9244,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       throw new NotFoundException(`Deployment ${deploymentId} not found`);
     }
 
+    await this.authz.requireProjectEdit(deployment.project.id, user.id, 'rebuild deployments');
+
     if (!deployment.githubRepo || !deployment.githubBranch) {
       throw new BadRequestException("This app wasn't created from GitHub");
     }
@@ -9252,8 +9254,6 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     if (deployment.buildType === 'dockerfile' && !deployment.dockerfilePath) {
       throw new BadRequestException('This app has no Dockerfile path');
     }
-
-    await this.authz.requireProjectEdit(deployment.project.id, user.id, 'rebuild deployments');
 
     if (!fromQueueRunId && deployment.stopped) {
       await this.prisma.deployment.update({

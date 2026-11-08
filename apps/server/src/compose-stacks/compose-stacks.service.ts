@@ -570,11 +570,11 @@ export class ComposeStacksService {
   async redeployFromGithub(stackId: string, clerkId: string, userData?: UserData) {
     const stack = await this.prisma.composeStack.findUnique({ where: { id: stackId } });
     if (!stack) throw new NotFoundException('Compose stack not found');
+    const userId = await this.resolveUserId(clerkId, userData);
+    await this.authz.requireProjectEdit(stack.projectId, userId, 'redeploy a compose stack');
     if (!stack.githubRepo) {
       throw new BadRequestException("This stack isn't linked to a GitHub source");
     }
-    const userId = await this.resolveUserId(clerkId, userData);
-    await this.authz.requireProjectEdit(stack.projectId, userId, 'redeploy a compose stack');
 
     await this.prisma.composeStack.update({
       where: { id: stackId },

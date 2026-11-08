@@ -547,6 +547,12 @@ export class DatabaseRecoveryService {
         throw new NotFoundException('Checkpoint group not found');
       });
     }
+    // Restoring needs edit rights on every database in the group. Refuse the
+    // whole request up front (403) instead of returning a per-database refusal
+    // list with a 201 to a viewer.
+    for (const id of new Set(rows.map((r) => r.databaseId))) {
+      await this.access.assertDatabaseEditor(id, clerkId, userData);
+    }
     const ops = [];
     for (const cp of rows) {
       ops.push(

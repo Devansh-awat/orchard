@@ -326,12 +326,9 @@ export class PasskeyService {
       where: { id: passkeyId }
     });
 
-    if (!passkey) {
+    // A passkey that belongs to someone else answers exactly like one that does not exist.
+    if (!passkey || passkey.userId !== userId) {
       throw new NotFoundException('Passkey not found');
-    }
-
-    if (passkey.userId !== userId) {
-      throw new BadRequestException('You can only delete your own passkeys');
     }
 
     await this.prisma.passkey.delete({
@@ -344,12 +341,9 @@ export class PasskeyService {
       where: { id: passkeyId }
     });
 
-    if (!passkey) {
+    // A passkey that belongs to someone else answers exactly like one that does not exist.
+    if (!passkey || passkey.userId !== userId) {
       throw new NotFoundException('Passkey not found');
-    }
-
-    if (passkey.userId !== userId) {
-      throw new BadRequestException('You can only update your own passkeys');
     }
 
     await this.prisma.passkey.update({
