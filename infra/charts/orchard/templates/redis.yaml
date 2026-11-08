@@ -65,8 +65,10 @@ spec:
             - "yes"
             - --appendfsync
             - everysec
+            - --maxmemory
+            - {{ include "orchard.redisMaxmemory" . | quote }}
             - --maxmemory-policy
-            - noeviction
+            - {{ .Values.redis.maxmemoryPolicy | quote }}
             {{- if and .Values.redis.auth.enabled (not .Values.redis.url) }}
             - --requirepass
             - $(REDISCLI_AUTH)

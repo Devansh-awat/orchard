@@ -1,12 +1,15 @@
 import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
+import { createHash } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisThrottleService } from './redis-throttle.service';
+import { normalizeEmail } from './email-normalize';
 import { ipBucketKey, isCollapsedAddress } from './client-ip';
 
 export const COLLAPSED_IP_MULTIPLIER = 10;
 export const COLLAPSED_IP_MAX_BLOCK_MS = 5 * 60 * 1000;
 export const CLEANUP_BATCH = 1000;
 export const CLEANUP_MAX_BATCHES = 20;
+export const MAX_BUCKET_IDENTIFIER_LENGTH = 128;
 export const PRESSURE_DELAY_MS = 1000;
 export const PRESSURE_MAX_SLEEPERS = 500;
 
@@ -129,6 +132,14 @@ export class RateLimitService {
     return `${action}:${type}:${identifier}`;
   }
 
+  static bucketIdentifier(identifier: string, type: RateLimitIdentifierType): string {
+    let value = String(identifier);
+    if (type === 'ip') value = ipBucketKey(value.slice(0, 256));
+    else if (type === 'email') value = normalizeEmail(value);
+    if (value.length <= MAX_BUCKET_IDENTIFIER_LENGTH) return value;
+    return `sha256:${createHash('sha256').update(value).digest('hex')}`;
+  }
+
   private static tooMany(retryAfterSeconds: number): HttpException {
     return new HttpException(
       {
@@ -165,7 +176,7 @@ export class RateLimitService {
       };
     }
 
-    await this.consume(type === 'ip' ? ipBucketKey(identifier) : identifier, type, action, config);
+    await this.consume(RateLimitService.bucketIdentifier(identifier, type), type, action, config);
   }
 
   /**
@@ -276,7 +287,7 @@ export class RateLimitService {
     type: RateLimitIdentifierType,
     action: string
   ): Promise<void> {
-    const identifier = type === 'ip' ? ipBucketKey(rawIdentifier) : rawIdentifier;
+    const identifier = RateLimitService.bucketIdentifier(rawIdentifier, type);
     if (await this.throttle.clear(RateLimitService.throttleKey(identifier, type, action))) {
       return;
     }

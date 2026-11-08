@@ -258,6 +258,15 @@ redis:
     password: ""
   networkPolicy:
     enabled: true
+  # Caps the dataset so a flood of keys makes Redis shed expiring entries
+  # (rate-limit windows, caches, idempotency and SSO state, all of which carry a
+  # TTL) instead of growing until the kernel OOM-kills it. volatile-ttl never
+  # evicts a key without a TTL, so durable data is refused rather than lost.
+  # maxmemory is derived from the memory limit below (maxmemoryPercent of it);
+  # set maxmemory (e.g. "384mb") to pin it.
+  maxmemory: ""
+  maxmemoryPercent: 75
+  maxmemoryPolicy: volatile-ttl
   resources:
     requests: { cpu: "50m", memory: "64Mi" }
     limits: { cpu: "500m", memory: "512Mi" }

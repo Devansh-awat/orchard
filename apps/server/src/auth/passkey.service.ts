@@ -12,6 +12,7 @@ import {
   PublicKeyCredentialCreationOptionsJSON,
   PublicKeyCredentialRequestOptionsJSON
 } from '@simplewebauthn/server';
+import { normalizeBoundedEmail } from './email-normalize';
 import { PrismaService } from '../prisma/prisma.service';
 import type { Prisma } from '@prisma/client';
 import { RateLimitService, CLEANUP_BATCH, CLEANUP_MAX_BATCHES } from './rate-limit.service';
@@ -167,7 +168,7 @@ export class PasskeyService {
     if (email != null && typeof email !== 'string') {
       throw new BadRequestException('Invalid email');
     }
-    const normalizedEmail = email?.trim().toLowerCase();
+    const normalizedEmail = email ? normalizeBoundedEmail(email) : undefined;
     const { pressured } = await this.rateLimitService.checkRateLimits('passkey_auth', {
       ip: ipAddress || undefined,
       identities: normalizedEmail ? [[normalizedEmail, 'email']] : []

@@ -33,6 +33,7 @@ import { InstanceSettingsService } from '../instance-settings/instance-settings.
 import { setSessionCookie } from './cookies';
 import { Public, Auth } from './decorators';
 import { getClientIp } from './client-ip';
+import { MAX_EMAIL_LENGTH, normalizeBoundedEmail } from './email-normalize';
 import { signupMode, signupDeniedError } from './signup-mode';
 import { signedInUser } from './signed-in-user';
 
@@ -151,7 +152,7 @@ export class PasswordlessController {
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
+    if (email.length > MAX_EMAIL_LENGTH * 2 || !emailRegex.test(email)) {
       throw new HttpException('Enter a valid email address', HttpStatus.BAD_REQUEST);
     }
 
@@ -160,7 +161,7 @@ export class PasswordlessController {
     await this.turnstile.verifyRequest(req, 'signin', ipAddress);
 
     const existing = await this.prisma.user.findUnique({
-      where: { email: email.toLowerCase().trim() },
+      where: { email: normalizeBoundedEmail(email) },
       select: { isSuperAdmin: true }
     });
     if (!existing?.isSuperAdmin) await this.authz.assertInstanceSsoNotEnforced('otp');
@@ -291,7 +292,7 @@ export class PasswordlessController {
       throw new HttpException('Enter your password', HttpStatus.BAD_REQUEST);
     }
 
-    const normalizedEmail = email.toLowerCase().trim();
+    const normalizedEmail = normalizeBoundedEmail(email);
     const ipAddress = this.getClientIp(req);
 
     const { pressured } = await this.rateLimit.checkRateLimits('password_signin', {

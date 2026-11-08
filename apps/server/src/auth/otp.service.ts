@@ -2,6 +2,7 @@ import { Injectable, BadRequestException, ServiceUnavailableException } from '@n
 import { PrismaService } from '../prisma/prisma.service';
 import { EmailService } from '../email/email.service';
 import { RateLimitService, CLEANUP_BATCH, CLEANUP_MAX_BATCHES } from './rate-limit.service';
+import { normalizeBoundedEmail } from './email-normalize';
 import { discardUnverifiedCredentials } from './unverified-adoption';
 // Shared with the host scripts, which mint a code without an email to send it
 // in. Two implementations of the same hash would drift into a login link the
@@ -40,7 +41,7 @@ export class OtpService {
       );
     }
 
-    const normalizedEmail = email.toLowerCase().trim();
+    const normalizedEmail = normalizeBoundedEmail(email);
 
     const { pressured } = await this.rateLimitService.checkRateLimits('otp_request', {
       ip: ipAddress,
@@ -106,7 +107,7 @@ export class OtpService {
     code: string,
     ipAddress: string
   ): Promise<{ valid: boolean; email?: string }> {
-    const normalizedEmail = email.toLowerCase().trim();
+    const normalizedEmail = normalizeBoundedEmail(email);
     const normalizedCode = code.trim();
 
     if (!/^\d{6}$/.test(normalizedCode)) {

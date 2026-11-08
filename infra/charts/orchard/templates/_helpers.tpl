@@ -877,3 +877,19 @@ v1beta1
 v1
 {{- end -}}
 {{- end }}
+
+{{/* Redis maxmemory in MiB: redis.maxmemory when set, else redis.maxmemoryPercent of the container memory limit (default 75, headroom for AOF rewrite and client buffers). */}}
+{{- define "orchard.redisMaxmemory" -}}
+{{- if .Values.redis.maxmemory -}}
+{{- .Values.redis.maxmemory -}}
+{{- else -}}
+{{- $limit := toString (dig "limits" "memory" "512Mi" (.Values.redis.resources | default dict)) -}}
+{{- $pct := int (.Values.redis.maxmemoryPercent | default 75) -}}
+{{- $num := int64 (regexFind "^[0-9]+" $limit) -}}
+{{- $mib := 384 -}}
+{{- if hasSuffix "Gi" $limit -}}{{- $mib = div (mul $num 1024 $pct) 100 -}}
+{{- else if hasSuffix "Mi" $limit -}}{{- $mib = div (mul $num $pct) 100 -}}
+{{- end -}}
+{{- printf "%dmb" (int $mib) -}}
+{{- end -}}
+{{- end }}

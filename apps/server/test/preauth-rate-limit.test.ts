@@ -265,3 +265,46 @@ test('an IPv4-mapped IPv6 address shares the bucket of its IPv4', async () => {
   for (let i = 0; i < cap; i++) await svc.checkRateLimit('203.0.113.9', 'ip', 'otp_request');
   assert.equal(await blocked(svc.checkRateLimit('::ffff:203.0.113.9', 'ip', 'otp_request')), true);
 });
+
+test('oversize identifiers are hashed into bounded keys', async () => {
+  const throttle = memoryThrottle();
+  const svc = new RateLimitService({} as any, throttle as any);
+  await svc.checkRateLimit(`${'a'.repeat(500_000)}@example.com`, 'email', 'otp_request');
+  const keys = [...throttle.buckets.keys()];
+  assert.equal(keys.length, 1);
+  assert.ok(keys[0].length < 200);
+  assert.ok(keys[0].includes('sha256:'));
+});
+
+test('email buckets fold case and unicode normalisation', async () => {
+  const throttle = memoryThrottle();
+  const svc = new RateLimitService({} as any, throttle as any);
+  await svc.checkRateLimit('Caf\u00e9@Example.com', 'email', 'otp_request');
+  await svc.checkRateLimit('cafe\u0301@example.com ', 'email', 'otp_request');
+  assert.equal(throttle.buckets.size, 1);
+});
+
+test('oversize email is rejected before any limiter or database work', async () => {
+  const throttle = memoryThrottle();
+  const rate = new RateLimitService({} as any, throttle as any);
+  const otp = new OtpService(
+    {
+      otpCode: {
+        updateMany: async () => {
+          throw new Error('db touched');
+        }
+      }
+    } as any,
+    { isConfigured: () => true, sendOtpEmail: async () => true } as any,
+    rate
+  );
+  await assert.rejects(
+    otp.requestOtp(`${'a'.repeat(300)}@example.com`, '203.0.113.5'),
+    (e: any) => e.getStatus?.() === 400
+  );
+  await assert.rejects(
+    otp.verifyOtp(`${'a'.repeat(300)}@example.com`, '123456', '203.0.113.5'),
+    (e: any) => e.getStatus?.() === 400
+  );
+  assert.equal(throttle.buckets.size, 0);
+});
