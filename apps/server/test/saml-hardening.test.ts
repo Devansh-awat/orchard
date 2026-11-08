@@ -526,3 +526,30 @@ test('IdP metadata only yields signing certificates', () => {
   const onlyEnc = xml.replace('use="signing"', 'use="encryption"');
   assert.equal(svc.parseIdpMetadata(onlyEnc).certificate, null);
 });
+
+test('node-saml alone accepts a foreign Destination or Recipient, so our own checks must stay', async () => {
+  const login = harness();
+  for (const o of [{ destination: ACS_B }, { recipient: ACS_B }]) {
+    const s = await begin(login, 'provA');
+    const saml = login.buildSamlClient(provider('provA'));
+    const { profile } = await saml.validatePostResponseAsync({
+      SAMLResponse: response({ requestId: s.requestId, ...o })
+    });
+    assert.equal(profile?.nameID, 'ana@acme.test');
+  }
+});
+
+test('node-saml itself rejects a foreign issuer and a foreign audience', async () => {
+  const login = harness();
+  for (const o of [
+    { assertionIssuer: 'https://evil.example' },
+    { issuer: 'https://evil.example' },
+    { audience: SP_B }
+  ]) {
+    const s = await begin(login, 'provA');
+    const saml = login.buildSamlClient(provider('provA'));
+    await assert.rejects(
+      saml.validatePostResponseAsync({ SAMLResponse: response({ requestId: s.requestId, ...o }) })
+    );
+  }
+});
