@@ -79,7 +79,8 @@ export class IdentityMappingService {
 
   async prepare(
     provider: IdentityProvider,
-    claims: Record<string, unknown> | null
+    claims: Record<string, unknown> | null,
+    userId?: string | null
   ): Promise<MappingContext> {
     const all: GroupRule[] = await this.prisma.idpGroupRule.findMany({
       where: { providerId: provider.id },
@@ -95,9 +96,93 @@ export class IdentityMappingService {
       : { kind: 'unknown', reason: 'unsupported' };
     const decisions =
       groups.kind === 'groups'
-        ? resolveRoles(rules, groups.groups)
+        ? await this.decide(rules, groups.groups, userId ?? null)
         : new Map<string, OrgDecision>();
     return { hasRules: true, rules, groups, decisions, allowed: decisions.size > 0 };
+  }
+
+  private async decide(
+    rules: GroupRule[],
+    claimGroups: ReadonlySet<string>,
+    userId: string | null
+  ): Promise<Map<string, OrgDecision>> {
+    const orgIds = [...new Set(rules.map((r) => r.organizationId))];
+    const directory = userId
+      ? await this.directoryGroups(userId, orgIds)
+      : new Map<string, Set<string>>();
+    const decisions = new Map<string, OrgDecision>();
+    for (const organizationId of orgIds) {
+      const names = new Set<string>(claimGroups);
+      for (const name of directory.get(organizationId) ?? []) names.add(name);
+      const decision = resolveRoles(
+        rules.filter((r) => r.organizationId === organizationId),
+        names
+      ).get(organizationId);
+      if (decision) decisions.set(organizationId, decision);
+    }
+    return decisions;
+  }
+
+  async directoryGroups(userId: string, organizationIds: string[]) {
+    const out = new Map<string, Set<string>>();
+    if (organizationIds.length === 0) return out;
+    const links: Array<{ groupId: string; organizationId: string }> =
+      await this.prisma.scimGroupMember.findMany({
+        where: { userId, organizationId: { in: organizationIds } },
+        select: { groupId: true, organizationId: true }
+      });
+    if (links.length === 0) return out;
+    const groups: Array<{ id: string; displayName: string }> = await this.prisma.scimGroup.findMany(
+      {
+        where: { id: { in: links.map((l) => l.groupId) } },
+        select: { id: true, displayName: true }
+      }
+    );
+    const names = new Map(groups.map((g) => [g.id, g.displayName]));
+    for (const link of links) {
+      const name = normalizeGroup(names.get(link.groupId));
+      if (!name) continue;
+      const set = out.get(link.organizationId) ?? new Set<string>();
+      set.add(name);
+      out.set(link.organizationId, set);
+    }
+    return out;
+  }
+
+  async syncDirectoryChanges(
+    organizationId: string,
+    changes: Array<{ userId: string; before: ReadonlySet<string>; after: ReadonlySet<string> }>
+  ): Promise<number> {
+    if (changes.length === 0) return 0;
+    const anchor = await this.prisma.idpGroupRule.findFirst({
+      where: { organizationId },
+      select: { providerId: true }
+    });
+    if (!anchor) return 0;
+    const provider = await this.prisma.identityProvider.findUnique({
+      where: { id: anchor.providerId }
+    });
+    if (!provider || (provider.organizationId && provider.organizationId !== organizationId)) {
+      return 0;
+    }
+    const rules: GroupRule[] = await this.prisma.idpGroupRule.findMany({
+      where: { providerId: provider.id, organizationId },
+      select: { id: true, organizationId: true, value: true, role: true }
+    });
+    let touched = 0;
+    for (const change of changes) {
+      const before = resolveRoles(rules, change.before).get(organizationId);
+      const after = resolveRoles(rules, change.after).get(organizationId);
+      if (!before && !after) continue;
+      const user = await this.prisma.user.findUnique({
+        where: { id: change.userId },
+        select: { id: true, email: true, isSuperAdmin: true }
+      });
+      if (!user || user.isSuperAdmin) continue;
+      await this.syncOne(provider, user, organizationId, after, false);
+      touched += 1;
+    }
+    return touched;
   }
 
   async deny(
@@ -141,7 +226,7 @@ export class IdentityMappingService {
       for (const id of [...orgIds]) if (id !== provider.organizationId) orgIds.delete(id);
     }
     for (const organizationId of orgIds) {
-      await this.syncOne(provider, user, organizationId, ctx.decisions.get(organizationId));
+      await this.syncOne(provider, user, organizationId, ctx.decisions.get(organizationId), true);
     }
   }
 
@@ -149,7 +234,8 @@ export class IdentityMappingService {
     provider: IdentityProvider,
     user: { id: string; email: string },
     organizationId: string,
-    decision: OrgDecision | undefined
+    decision: OrgDecision | undefined,
+    mayCreate: boolean
   ): Promise<void> {
     const member = await this.prisma.organizationMember.findUnique({
       where: { organizationId_userId: { organizationId, userId: user.id } }
@@ -164,7 +250,7 @@ export class IdentityMappingService {
     };
 
     if (!member) {
-      if (!decision) return;
+      if (!decision || !mayCreate) return;
       await this.prisma.organizationMember.create({
         data: {
           organizationId,

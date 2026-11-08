@@ -6,7 +6,9 @@ import { AuditService } from '../audit/audit.service';
 import { EmailService } from '../email/email.service';
 import { RateLimitService } from '../auth/rate-limit.service';
 import { MembershipCacheService } from '../auth/membership-cache.service';
+import { IdentityMappingService } from '../sso/identity-mapping.service';
 import { ScimError } from './scim-error';
+import { ScimGroupsService } from './scim-groups.service';
 import { ScimQuery, SCIM_MAX_RESULTS } from './scim-query';
 
 interface Ctx {
@@ -137,7 +139,9 @@ export class ScimService implements OnModuleInit {
     private readonly audit: AuditService,
     private readonly email: EmailService,
     private readonly rateLimit: RateLimitService,
-    @Optional() private readonly membershipCache?: MembershipCacheService
+    @Optional() private readonly membershipCache?: MembershipCacheService,
+    @Optional() private readonly groups?: ScimGroupsService,
+    @Optional() private readonly mapping?: IdentityMappingService
   ) {}
 
   onModuleInit() {
@@ -186,16 +190,26 @@ export class ScimService implements OnModuleInit {
       .egress((resource, ctx: Ctx) => this.egressUsers(resource, ctx))
       .degress((resource, ctx: Ctx) => this.degressUser(resource, ctx));
 
-    SCIMMY.Resources.Group.ingress(() => {
-      throw ScimError(501, null, 'Group provisioning is read-only; manage roles in-app');
-    })
-      .egress((resource, ctx: Ctx) => this.egressGroups(resource, ctx))
-      .degress(() => {
-        throw ScimError(501, null, 'Group provisioning is read-only; manage roles in-app');
-      });
+    SCIMMY.Resources.Group.ingress((resource, instance, ctx: Ctx) =>
+      this.groupsOrFail().ingress(resource, instance, ctx)
+    )
+      .egress((resource, ctx: Ctx) =>
+        this.groups ? this.groups.egress(resource, ctx) : this.egressGroups(resource, ctx)
+      )
+      .degress((resource, ctx: Ctx) => this.groupsOrFail().degress(resource, ctx));
 
     SCIMMY.Resources.declare(SCIMMY.Resources.User);
     SCIMMY.Resources.declare(SCIMMY.Resources.Group);
+  }
+
+  private groupsOrFail(): ScimGroupsService {
+    if (!this.groups) throw ScimError(501, null, 'Group provisioning is not available');
+    return this.groups;
+  }
+
+  private async revokeAccess(organizationId: string, userId: string) {
+    this.membershipCache?.revoked(organizationId, userId);
+    await this.mapping?.revoke(organizationId, userId);
   }
 
   private primaryEmail(instance: any): string | null {
@@ -434,7 +448,7 @@ export class ScimService implements OnModuleInit {
         update: fields
       });
     });
-    this.membershipCache?.revoked(ctx.organizationId, view.userId);
+    await this.revokeAccess(ctx.organizationId, view.userId);
 
     void this.audit.log({
       action: 'scim.user.deactivated',
@@ -486,7 +500,14 @@ export class ScimService implements OnModuleInit {
       targetLabel: member.user.email
     });
 
-    return this.viewFromMember(member);
+    await this.groups?.regrant(ctx.organizationId, member.userId);
+    const refreshed = await this.prisma.organizationMember.findUnique({
+      where: {
+        organizationId_userId: { organizationId: ctx.organizationId, userId: member.userId }
+      },
+      include: { user: true }
+    });
+    return this.viewFromMember(refreshed ?? member);
   }
 
   private async ingressUser(resource: any, instance: any, ctx: Ctx) {
@@ -687,7 +708,8 @@ export class ScimService implements OnModuleInit {
         where: { organizationId: ctx.organizationId, userId: view.userId }
       });
     });
-    this.membershipCache?.revoked(ctx.organizationId, view.userId);
+    await this.groups?.dropUser(ctx.organizationId, view.userId);
+    await this.revokeAccess(ctx.organizationId, view.userId);
 
     void this.audit.log({
       action: 'scim.user.deprovisioned',
@@ -755,6 +777,22 @@ export class ScimService implements OnModuleInit {
 
   async getGroup(id: string, query: ScimQuery, ctx: Ctx) {
     return new SCIMMY.Resources.Group(id, query).read(ctx);
+  }
+
+  async createGroup(body: any, ctx: Ctx) {
+    return new SCIMMY.Resources.Group().write(body, ctx);
+  }
+
+  async replaceGroup(id: string, body: any, ctx: Ctx) {
+    return new SCIMMY.Resources.Group(id).write(body, ctx);
+  }
+
+  async patchGroup(id: string, body: any, ctx: Ctx) {
+    return new SCIMMY.Resources.Group(id).patch(body, ctx);
+  }
+
+  async deleteGroup(id: string, ctx: Ctx) {
+    return new SCIMMY.Resources.Group(id).dispose(ctx);
   }
 
   async serviceProviderConfig() {

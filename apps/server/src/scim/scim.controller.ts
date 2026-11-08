@@ -25,14 +25,6 @@ import { parseScimQuery as parseQuery, parseScimSearchBody as parseSearchBody } 
 
 const SCIM_CONTENT_TYPE = 'application/scim+json';
 
-function groupsAreReadOnly(): never {
-  throw ScimError(
-    501,
-    null,
-    'Groups are a read-only projection of organization roles; manage roles in-app'
-  );
-}
-
 @Public()
 @UseGuards(ScimAuthGuard)
 @UseFilters(ScimExceptionFilter)
@@ -127,27 +119,40 @@ export class ScimController {
     this.send(res, await this.scim.getGroup(id, parseQuery(q), this.ctx(req)));
   }
 
-  // Without these, group writes fell through to the global 404 handler and IdPs
-  // got a non-SCIM body they couldn't parse. 501 is the RFC 7644 §3.12 code for
-  // an operation the service provider doesn't implement.
   @Post('Groups')
-  createGroup() {
-    groupsAreReadOnly();
+  async createGroup(@Body() body: any, @Req() req: Request, @Res() res: Response) {
+    const created: any = await this.scim.createGroup(body, this.ctx(req));
+    if (created?.meta?.location) res.setHeader('Location', created.meta.location);
+    this.send(res, created, 201);
   }
 
   @Put('Groups/:id')
-  replaceGroup() {
-    groupsAreReadOnly();
+  async replaceGroup(
+    @Param('id') id: string,
+    @Body() body: any,
+    @Req() req: Request,
+    @Res() res: Response
+  ) {
+    this.send(res, await this.scim.replaceGroup(id, body, this.ctx(req)));
   }
 
   @Patch('Groups/:id')
-  patchGroup() {
-    groupsAreReadOnly();
+  async patchGroup(
+    @Param('id') id: string,
+    @Body() body: any,
+    @Req() req: Request,
+    @Res() res: Response
+  ) {
+    const result = await this.scim.patchGroup(id, body, this.ctx(req));
+    if (!result) return res.status(204).end();
+    this.send(res, result);
   }
 
   @Delete('Groups/:id')
-  deleteGroup() {
-    groupsAreReadOnly();
+  @HttpCode(204)
+  async deleteGroup(@Param('id') id: string, @Req() req: Request, @Res() res: Response) {
+    await this.scim.deleteGroup(id, this.ctx(req));
+    res.status(204).end();
   }
 
   @Get('ServiceProviderConfig')

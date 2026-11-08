@@ -581,7 +581,9 @@ export class SsoLoginService {
 
     const subject = cleanSubject(profile.subject);
     const bound = await this.mapping.findBound(provider, subject);
-    const mapping = await this.mapping.prepare(provider, profile.claims ?? null);
+    const candidate =
+      bound ?? (await this.prisma.user.findUnique({ where: { email }, select: { id: true } }));
+    const mapping = await this.mapping.prepare(provider, profile.claims ?? null, candidate?.id);
 
     const user = provider.organizationId
       ? await this.resolveOrgUser(provider, email, profile.name, linkedUserId, bound, mapping)

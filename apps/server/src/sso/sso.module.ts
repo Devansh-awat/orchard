@@ -30,6 +30,6 @@ import { KubernetesModule } from '../kubernetes/kubernetes.module';
     OidcStateStore,
     SamlRequestStore
   ],
-  exports: [SsoService, OrgDomainsService]
+  exports: [SsoService, OrgDomainsService, IdentityMappingService]
 })
 export class SsoModule {}

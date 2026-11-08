@@ -49,6 +49,7 @@ model User {
   createdOrganizations       Organization[]                @relation("OrganizationCreator")
   organizationMembers        OrganizationMember[]
   scimDeprovisionedMembers   ScimDeprovisionedMember[]
+  scimGroupMemberships       ScimGroupMember[]
   orgInvitationsSent         OrganizationInvitation[]      @relation("OrgInvitationInviter")
   passkeys                   Passkey[]
   sessions                   Session[]
@@ -314,6 +315,8 @@ model Organization {
   nodeAssignments      OrgNodeAssignment[]
   scimTokens           ScimToken[]
   scimDeprovisioned    ScimDeprovisionedMember[]
+  scimGroups           ScimGroup[]
+  scimGroupMembers     ScimGroupMember[]
   notificationChannels NotificationChannel[]
   notificationRules    NotificationRule[]
   notificationEvents   NotificationEvent[]
@@ -2408,6 +2411,36 @@ model ScimDeprovisionedMember {
   @@unique([organizationId, userId])
   @@index([organizationId], map: "idx_scim_deprovisioned_org")
   @@map("scim_deprovisioned_members")
+}
+
+model ScimGroup {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  displayName    String   @map("display_name") @db.VarChar(256)
+  externalId     String?  @map("external_id") @db.VarChar(255)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  members      ScimGroupMember[]
+
+  @@unique([organizationId, displayName])
+  @@index([organizationId], map: "idx_scim_groups_org")
+  @@map("scim_groups")
+}
+
+model ScimGroupMember {
+  groupId        String @map("group_id") @db.Uuid
+  userId         String @map("user_id") @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  group        ScimGroup    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@id([groupId, userId])
+  @@index([organizationId, userId], map: "idx_scim_group_members_org_user")
+  @@map("scim_group_members")
 }
 
 // Append-only audit ledger. Pruned at 180 days by AuditService.
