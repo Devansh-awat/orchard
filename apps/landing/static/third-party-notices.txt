@@ -15583,6 +15583,26 @@ Copyright (c) 2024 Madeline Gurriarán
 The rest of LICENSE is word for word the text printed under @astrojs/starlight 0.41.9.
 
 ================================================================================
+tldts 7.4.19
+Ships in: API server
+Project: https://github.com/remusao/tldts
+Source for this version: https://registry.npmjs.org/tldts/-/tldts-7.4.19.tgz
+License: MIT
+
+Copyright (c) 2017 Thomas Parisot, 2018 Rémi Berson
+The rest of LICENSE is word for word the text printed under @jridgewell/gen-mapping 0.3.13.
+
+================================================================================
+tldts-core 7.4.20
+Ships in: API server
+Project: https://github.com/remusao/tldts
+Source for this version: https://registry.npmjs.org/tldts-core/-/tldts-core-7.4.20.tgz
+License: MIT
+
+Copyright (c) 2017 Thomas Parisot, 2018 Rémi Berson
+The rest of LICENSE is word for word the text printed under @jridgewell/gen-mapping 0.3.13.
+
+================================================================================
 toidentifier 1.0.1
 Ships in: API server
 Project: https://github.com/component/toidentifier

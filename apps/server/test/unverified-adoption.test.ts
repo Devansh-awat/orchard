@@ -29,7 +29,8 @@ function makeDb(email: string, emailVerified: boolean) {
     passkeys: [{ id: 'p1', userId: 'u1' }],
     apiTokens: [{ id: 't1', userId: 'u1' }],
     gitConnections: [{ id: 'g1', userId: 'u1' }],
-    installs: [{ id: 'i1', userId: 'u1' }]
+    installs: [{ id: 'i1', userId: 'u1' }],
+    identities: [{ id: 'f1', userId: 'u1', providerId: 'idp-1', subject: 'planted-subject' }]
   };
   const drop =
     (rows: any[]) =>
@@ -54,6 +55,7 @@ function makeDb(email: string, emailVerified: boolean) {
     apiToken: { deleteMany: drop(state.apiTokens) },
     gitConnection: { deleteMany: drop(state.gitConnections) },
     gitHubAppInstallation: { deleteMany: drop(state.installs) },
+    federatedIdentity: { deleteMany: drop(state.identities) },
     otpCode: {
       findFirst: async () => ({ id: 'o1', code: hashOtpCode('123456') }),
       updateMany: async () => ({ count: 1 }),
@@ -73,6 +75,7 @@ function assertWiped(state: ReturnType<typeof makeDb>['state']) {
   assert.equal(state.apiTokens.length, 0);
   assert.equal(state.gitConnections.length, 0);
   assert.equal(state.installs.length, 0);
+  assert.equal(state.identities.length, 0);
   assert.equal(state.user.emailVerified, true);
 }
 
@@ -102,6 +105,7 @@ test('OAuth sign-in on an already verified row keeps its credentials', async () 
   await users.findOrCreateByExternalAuthId({ id: 'ext-1', email: 'victim@example.com', name: 'V' });
   assert.equal(state.user.passwordHash, 'admin-chosen-hash');
   assert.equal(state.passkeys.length, 1);
+  assert.equal(state.identities.length, 1);
   assert.ok(state.sessions.every((s) => s.revokedAt === null));
 });
 

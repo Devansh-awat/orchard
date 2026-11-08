@@ -129,9 +129,9 @@ test('every identity provider fetch is capped at IDP_MAX_BODY_BYTES', async () =
         );
       },
       async (url) => {
-        const ok = await sso.fetchIdp(url);
+        const ok = await sso.fetchIdp(url, {}, null);
         assert.deepEqual(await ok.json(), { keys: [] });
-        const big = await sso.fetchIdp(`${url}big`);
+        const big = await sso.fetchIdp(`${url}big`, {}, null);
         await assert.rejects(big.json(), ResponseTooLargeError);
       }
     );

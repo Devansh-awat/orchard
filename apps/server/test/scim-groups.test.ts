@@ -109,7 +109,8 @@ function makeWorld() {
     { checkRateLimit: async () => {}, checkInviteMail: async () => {} } as any,
     membershipCache as any,
     groups,
-    mapping
+    mapping,
+    { isVerifiedFor: async () => true } as any
   );
   scim.onModuleInit();
 

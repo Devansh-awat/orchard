@@ -949,7 +949,9 @@ Secrets (client secrets, signing certificates) are encrypted at rest with
 IdP URLs pointing at internal addresses (loopback, RFC1918, `.svc`,
 `.cluster.local`, cloud metadata) are rejected at save time, since they drive
 server-side fetches. If your IdP genuinely runs on internal DNS, set
-`SSO_ALLOW_INTERNAL_IDP=true`.
+`SSO_ALLOW_INTERNAL_IDP=true`. It only applies to instance identity providers:
+an organization's provider is controlled by that organization, so it can never
+reach internal addresses.
 
 Two rules keep an organization's provider from being turned against the
 organization. **Provider management is owner-only**: creating, editing,

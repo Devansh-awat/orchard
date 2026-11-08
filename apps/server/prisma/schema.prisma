@@ -1972,6 +1972,7 @@ model IdentityProvider {
   defaultRole          OrganizationRole @default(member) @map("default_role")
   allowedDomains       String[]         @default([]) @map("allowed_domains")
   requireVerifiedEmail Boolean          @default(true) @map("require_verified_email")
+  trustEmail           Boolean          @default(true) @map("trust_email")
 
   // Where the IdP puts group names: an OIDC ID-token claim (dotted path allowed)
   // or a SAML attribute name. Only read when the provider has IdpGroupRules.
@@ -2114,6 +2115,8 @@ model OrgDomain {
   verifiedAt        DateTime? @map("verified_at") @db.Timestamp(6)
   lastCheckedAt     DateTime? @map("last_checked_at") @db.Timestamp(6)
   lastError         String?   @map("last_error") @db.VarChar(500)
+  registeredAt      DateTime? @map("registered_at") @db.Timestamp(6)
+  missingSince      DateTime? @map("missing_since") @db.Timestamp(6)
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamp(6)

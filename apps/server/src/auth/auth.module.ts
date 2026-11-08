@@ -22,6 +22,7 @@ import { StorageService } from '../organizations/storage.service';
 import { UsersModule } from '../users/users.module';
 import { EmailModule } from '../email/email.module';
 import { PrismaModule } from '../prisma/prisma.module';
+import { DomainRegistrationService } from './domain-registration';
 
 @Module({
   imports: [UsersModule, EmailModule, PrismaModule],
@@ -42,6 +43,7 @@ import { PrismaModule } from '../prisma/prisma.module';
     MembershipCacheService,
     AuthorizationService,
     StorageService,
+    DomainRegistrationService,
     {
       provide: APP_GUARD,
       useClass: SuperAdminGuard
@@ -66,7 +68,8 @@ import { PrismaModule } from '../prisma/prisma.module';
     ProtectionService,
     SessionsService,
     MembershipCacheService,
-    AuthorizationService
+    AuthorizationService,
+    DomainRegistrationService
   ]
 })
 export class AuthModule {}

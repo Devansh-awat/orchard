@@ -93,7 +93,7 @@ Dex is a small OIDC provider that signs people in against LDAP. Run it where Orc
 
 Dex emits group names in the `groups` claim. Use LDAPS or StartTLS between Dex and the directory, and a read-only service account.
 
-If Dex runs inside the cluster, Orchard's request guard blocks the private address. Set `SSO_ALLOW_INTERNAL_IDP=true` on the server to allow it. Refer to [Where settings live](/operate/configuration/).
+If Dex runs inside the cluster, Orchard's request guard blocks the private address. Set `SSO_ALLOW_INTERNAL_IDP=true` on the server to allow it for instance identity providers. Organization providers can never reach internal addresses, so each tenant's IdP has to be on the public internet. Refer to [Where settings live](/operate/configuration/).
 
 Keycloak works the same way. Add an LDAP user federation provider and a group mapper in Keycloak, then add Keycloak to Orchard as an OIDC or SAML provider.
 

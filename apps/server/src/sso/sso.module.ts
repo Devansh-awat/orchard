@@ -3,6 +3,7 @@ import { SsoService } from './sso.service';
 import { SsoLoginService } from './sso-login.service';
 import { SsoCryptoService } from './sso-crypto.service';
 import { OrgDomainsService } from './org-domains.service';
+import { OrgDomainRecheckService } from './org-domain-recheck.service';
 import { SsoController } from './sso.controller';
 import { SsoAdminController } from './sso-admin.controller';
 import { SsoInstanceController } from './sso-instance.controller';
@@ -26,6 +27,7 @@ import { KubernetesModule } from '../kubernetes/kubernetes.module';
     SsoLoginService,
     SsoCryptoService,
     OrgDomainsService,
+    OrgDomainRecheckService,
     IdentityMappingService,
     InstanceIdentityService,
     VanityDomainService,

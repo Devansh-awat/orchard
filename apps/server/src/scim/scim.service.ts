@@ -6,6 +6,7 @@ import { AuditService } from '../audit/audit.service';
 import { EmailService } from '../email/email.service';
 import { RateLimitService } from '../auth/rate-limit.service';
 import { MembershipCacheService } from '../auth/membership-cache.service';
+import { OrgDomainsService } from '../sso/org-domains.service';
 import { IdentityMappingService } from '../sso/identity-mapping.service';
 import { ScimError } from './scim-error';
 import { ScimGroupsService } from './scim-groups.service';
@@ -141,7 +142,8 @@ export class ScimService implements OnModuleInit {
     private readonly rateLimit: RateLimitService,
     @Optional() private readonly membershipCache?: MembershipCacheService,
     @Optional() private readonly groups?: ScimGroupsService,
-    @Optional() private readonly mapping?: IdentityMappingService
+    @Optional() private readonly mapping?: IdentityMappingService,
+    @Optional() private readonly domains?: OrgDomainsService
   ) {}
 
   onModuleInit() {
@@ -633,6 +635,15 @@ export class ScimService implements OnModuleInit {
           ctx
         );
         return this.toScimUser(revived);
+      }
+
+      const domain = existingUser.email.split('@')[1] || '';
+      if (!(await this.domains?.isVerifiedFor(ctx.organizationId, domain))) {
+        throw ScimError(
+          409,
+          'uniqueness',
+          `An Orchard account already uses ${email} and ${domain} is not a verified domain of this organization. Verify the domain or invite them instead.`
+        );
       }
     }
 

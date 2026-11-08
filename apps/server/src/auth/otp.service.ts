@@ -1,9 +1,17 @@
-import { Injectable, BadRequestException, ServiceUnavailableException } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  ForbiddenException,
+  Logger,
+  Optional,
+  ServiceUnavailableException
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { EmailService } from '../email/email.service';
 import { RateLimitService, CLEANUP_BATCH, CLEANUP_MAX_BATCHES } from './rate-limit.service';
 import { normalizeBoundedEmail } from './email-normalize';
 import { discardUnverifiedCredentials } from './unverified-adoption';
+import { DomainRegistrationService } from './domain-registration';
 // Shared with the host scripts, which mint a code without an email to send it
 // in. Two implementations of the same hash would drift into a login link the
 // server cannot verify.
@@ -11,12 +19,17 @@ import { OTP_EXPIRY_MINUTES, generateOtpCode, hashOtpCode } from './otp-code';
 
 const MAX_VERIFICATION_ATTEMPTS = 5;
 
+export const DOMAIN_CHANGED_HANDS = 'email_domain_changed_hands';
+
 @Injectable()
 export class OtpService {
+  private readonly logger = new Logger(OtpService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly emailService: EmailService,
-    private readonly rateLimitService: RateLimitService
+    private readonly rateLimitService: RateLimitService,
+    @Optional() private readonly domainRegistry?: DomainRegistrationService
   ) {}
 
   private static readonly REQUEST_RESPONSE = {
@@ -170,6 +183,8 @@ export class OtpService {
       data: { used: true }
     });
 
+    await this.refuseResurrectedDomain(normalizedEmail);
+
     // H-6: a successful OTP verification proves ownership of the email
     // address. Flip the User.emailVerified flag if a row already exists for
     // this address. updateMany is a no-op when the user has not yet been
@@ -192,6 +207,32 @@ export class OtpService {
     await this.rateLimitService.resetRateLimit(ipAddress, 'ip', 'otp_verify');
 
     return { valid: true, email: normalizedEmail };
+  }
+
+  /**
+   * A code only proves who holds the mailbox today. If the domain was
+   * registered after this account's address was verified, the domain lapsed
+   * and was bought by someone else, and the code is theirs, not the owner's.
+   */
+  private async refuseResurrectedDomain(email: string): Promise<void> {
+    if (!this.domainRegistry) return;
+    const user = await this.prisma.user.findUnique({
+      where: { email },
+      select: { id: true, emailVerified: true, emailVerifiedAt: true, createdAt: true }
+    });
+    if (!user?.emailVerified) return;
+    const domain = email.split('@')[1] || '';
+    const since = user.emailVerifiedAt ?? user.createdAt;
+    if (await this.domainRegistry.changedHandsSince(domain, since)) {
+      this.logger.warn(
+        `Refused email-code sign-in for ${user.id}: ${domain} was re-registered after the address was verified`
+      );
+      throw new ForbiddenException({
+        message: DOMAIN_CHANGED_HANDS,
+        detail:
+          "This email's domain changed owners after the account was set up. Sign in with a passkey, or ask your Orchard admin to recover the account."
+      });
+    }
   }
 
   /**

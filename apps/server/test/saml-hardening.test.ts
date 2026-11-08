@@ -186,6 +186,23 @@ test('a valid SP-initiated response logs the user in', async () => {
   );
 });
 
+test('an instance SAML provider only vouches for email when the operator trusts it', async () => {
+  for (const [trustEmail, expected] of [
+    [false, undefined],
+    [true, true]
+  ] as const) {
+    const login = harness({ provA: { organizationId: null, trustEmail } });
+    const s = await begin(login, 'provA');
+    const out = await login.handleSamlCallback(
+      'provA',
+      response({ requestId: s.requestId }),
+      s.relay,
+      s.startToken
+    );
+    assert.equal(out.profile.emailVerified, expected);
+  }
+});
+
 test('groups reach the mapper only from the signed assertion', async () => {
   const login = harness();
   const s = await begin(login, 'provA');

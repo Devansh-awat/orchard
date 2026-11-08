@@ -739,7 +739,8 @@ test('an instance login matching no rule is denied, but superadmins are exempt',
           'u1@corp.example',
           'U',
           null,
-          m1
+          m1,
+          true
         ),
       (e: any) => e.message === 'sso_not_mapped'
     );
@@ -753,9 +754,52 @@ test('an instance login matching no rule is denied, but superadmins are exempt',
       'root@corp.example',
       'R',
       null,
-      m2
+      m2,
+      true
     );
     assert.equal(user.id, 'root');
+  } finally {
+    if (prev === undefined) delete process.env.SIGNUP_MODE;
+    else process.env.SIGNUP_MODE = prev;
+  }
+});
+
+test('an instance IdP with an unverified email never lands on an existing account without consent', async () => {
+  const prev = process.env.SIGNUP_MODE;
+  process.env.SIGNUP_MODE = 'open';
+  try {
+    const victim = { id: 'victim', email: 'victim@corp.example', isSuperAdmin: true };
+    const { f, login } = instanceLogin(victim);
+    f.instanceProvider();
+    const provider = { id: 'pI', jitProvisioning: true };
+    await assert.rejects(
+      () => login.resolveInstanceUser(provider, victim.email, 'V', null, undefined, false),
+      (e: any) => e.message === 'sso_link_required'
+    );
+    await assert.rejects(
+      () =>
+        login.resolveInstanceUser(provider, victim.email, 'V', null, undefined, false, 'attacker'),
+      (e: any) => e.message === 'sso_link_required'
+    );
+    const consented = await login.resolveInstanceUser(
+      provider,
+      victim.email,
+      'V',
+      null,
+      undefined,
+      false,
+      'victim'
+    );
+    assert.equal(consented.id, 'victim');
+    const alreadyBound = await login.resolveInstanceUser(
+      provider,
+      victim.email,
+      'V',
+      victim,
+      undefined,
+      false
+    );
+    assert.equal(alreadyBound.id, 'victim');
   } finally {
     if (prev === undefined) delete process.env.SIGNUP_MODE;
     else process.env.SIGNUP_MODE = prev;

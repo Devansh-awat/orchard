@@ -158,7 +158,7 @@ function makeDb() {
   return { db, members, tombstones, users };
 }
 
-function makeService() {
+function makeService(verified: Array<[string, string]> = []) {
   const { db, members, tombstones, users } = makeDb();
   const revoked: Array<[string, string]> = [];
   const membershipCache = {
@@ -180,7 +180,13 @@ function makeService() {
     audit as any,
     email as any,
     rateLimit as any,
-    membershipCache as any
+    membershipCache as any,
+    undefined,
+    undefined,
+    {
+      isVerifiedFor: async (organizationId: string, domain: string) =>
+        verified.some(([o, d]) => o === organizationId && d === domain)
+    } as any
   );
   service.onModuleInit();
   return { service, members, tombstones, users, sent, revoked };
@@ -488,8 +494,24 @@ test('PUT clears the attributes it omits', async () => {
   assert.equal(replaced.displayName, 'ada');
 });
 
+test('an existing account outside a verified domain is never linked by another org', async () => {
+  const { service, users, members } = makeService();
+  await service.createUser({ userName: 'victim@example.com', name: { givenName: 'Real' } }, ctx);
+  const evilOrg = { organizationId: '33333333-3333-4333-8333-333333333333' };
+  await assert.rejects(
+    service.createUser({ userName: 'victim@example.com' }, evilOrg),
+    (err: any) => Number(err.status) === 409
+  );
+  assert.equal(users.length, 1);
+  assert.equal(
+    members.filter((m: any) => m.organizationId === evilOrg.organizationId).length,
+    0,
+    'the evil org must not gain a membership for the account'
+  );
+});
+
 test('an existing account joining a second org is linked, not rewritten', async () => {
-  const { service, users } = makeService();
+  const { service, users } = makeService([['22222222-2222-4222-8222-222222222222', 'example.com']]);
   await service.createUser(
     { userName: 'shared@example.com', name: { givenName: 'Real', familyName: 'Name' } },
     ctx
@@ -633,7 +655,7 @@ test('the SCIM catch-all registers behind every real endpoint', async () => {
   }
 });
 
-test('SCIM can add an outside address and never touches the account', async () => {
+test('SCIM refuses an outside address that already has an account and never touches it', async () => {
   const { service, users, members, sent } = makeService();
   users.push({
     id: 'pepito',
@@ -643,19 +665,19 @@ test('SCIM can add an outside address and never touches the account', async () =
   });
   const before = JSON.stringify(users);
 
-  const created: any = await service.createUser(
-    {
-      schemas: ['urn:ietf:params:scim:schemas:core:2.0:User'],
-      userName: 'pepito@gmail.example',
-      name: { givenName: 'Hostile', familyName: 'Rename' }
-    },
-    ctx
+  await assert.rejects(
+    service.createUser(
+      {
+        schemas: ['urn:ietf:params:scim:schemas:core:2.0:User'],
+        userName: 'pepito@gmail.example',
+        name: { givenName: 'Hostile', familyName: 'Rename' }
+      },
+      ctx
+    ),
+    (err: any) => Number(err.status) === 409
   );
-  assert.equal(members.length, 1);
-  assert.deepEqual(sent, ['pepito@gmail.example']);
-
-  await service.deleteUser(created.id, ctx);
   assert.equal(members.length, 0);
+  assert.deepEqual(sent, []);
   assert.equal(JSON.stringify(users), before);
 });
 

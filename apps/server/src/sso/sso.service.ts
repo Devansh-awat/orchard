@@ -53,6 +53,7 @@ export interface ProviderInput {
   defaultRole?: OrganizationRole;
   allowedDomains?: string[];
   requireVerifiedEmail?: boolean;
+  trustEmail?: boolean;
 }
 
 export interface SettingsInput {
@@ -348,6 +349,7 @@ export class SsoService implements OnApplicationBootstrap {
       defaultRole: p.defaultRole,
       allowedDomains: p.allowedDomains,
       requireVerifiedEmail: p.requireVerifiedEmail,
+      trustEmail: p.organizationId ? false : p.trustEmail,
       usable: this.isUsable(p),
       lastUsedAt: p.lastUsedAt,
       createdAt: p.createdAt,
@@ -402,9 +404,13 @@ export class SsoService implements OnApplicationBootstrap {
    * DNS names. Self-hosters whose IdP genuinely lives on internal DNS
    * (in-cluster Keycloak/Dex) can opt out with SSO_ALLOW_INTERNAL_IDP=true.
    */
-  private async assertIdpUrl(raw: string | null | undefined, label: string): Promise<void> {
+  private async assertIdpUrl(
+    raw: string | null | undefined,
+    label: string,
+    organizationId: string | null
+  ): Promise<void> {
     if (!raw) return;
-    if (this.allowInternalIdp()) {
+    if (this.allowInternalIdp(organizationId)) {
       parseHttpUrl(raw, label);
       return;
     }
@@ -413,14 +419,17 @@ export class SsoService implements OnApplicationBootstrap {
     } catch (err) {
       if (err instanceof BlockedDestinationError) {
         throw new BadRequestException(
-          `${label} points at an internal address. If your identity provider is on an internal address, set SSO_ALLOW_INTERNAL_IDP=true.`
+          organizationId
+            ? `${label} points at an internal address. Organization identity providers must be reachable on the public internet.`
+            : `${label} points at an internal address. If your identity provider is on an internal address, set SSO_ALLOW_INTERNAL_IDP=true.`
         );
       }
       throw err;
     }
   }
 
-  private allowInternalIdp(): boolean {
+  private allowInternalIdp(organizationId: string | null): boolean {
+    if (organizationId) return false;
     return (process.env.SSO_ALLOW_INTERNAL_IDP || '').toLowerCase() === 'true';
   }
 
@@ -429,11 +438,15 @@ export class SsoService implements OnApplicationBootstrap {
    * address policy applies at fetch time as at save time, redirects included,
    * and the response body is capped at IDP_MAX_BODY_BYTES (aborted mid-stream).
    */
-  fetchIdp(url: string | URL, init: GuardedFetchInit = {}): Promise<Response> {
+  fetchIdp(
+    url: string | URL,
+    init: GuardedFetchInit,
+    organizationId: string | null
+  ): Promise<Response> {
     return guardedFetch(url, {
       ...init,
       label: 'Identity provider URL',
-      allowPrivate: this.allowInternalIdp(),
+      allowPrivate: this.allowInternalIdp(organizationId),
       maxBodyBytes: IDP_MAX_BODY_BYTES
     });
   }
@@ -524,7 +537,12 @@ export class SsoService implements OnApplicationBootstrap {
       allowedDomains: (input.allowedDomains ?? existing?.allowedDomains ?? [])
         .map((d) => d.toLowerCase().trim().replace(/^@/, ''))
         .filter(Boolean),
-      requireVerifiedEmail: input.requireVerifiedEmail ?? existing?.requireVerifiedEmail ?? true
+      requireVerifiedEmail: input.requireVerifiedEmail ?? existing?.requireVerifiedEmail ?? true,
+      trustEmail: organizationId
+        ? false
+        : typeof input.trustEmail === 'boolean'
+          ? input.trustEmail
+          : (existing?.trustEmail ?? false)
     };
 
     if (protocol === SsoProtocol.saml) {
@@ -537,7 +555,7 @@ export class SsoService implements OnApplicationBootstrap {
         metadataUrl &&
         (!entryPoint || (!certificate && !existing?.samlCertificate) || !idpEntityId?.trim())
       ) {
-        const parsed = await this.fetchIdpMetadata(metadataUrl);
+        const parsed = await this.fetchIdpMetadata(metadataUrl, organizationId);
         entryPoint = entryPoint || parsed.entryPoint;
         certificate = certificate || parsed.certificate;
         idpEntityId = idpEntityId || parsed.entityId;
@@ -546,7 +564,7 @@ export class SsoService implements OnApplicationBootstrap {
       if (!entryPoint) {
         throw new BadRequestException('SAML needs a sign-in URL or a metadata URL');
       }
-      this.assertSamlEntryPoint(entryPoint);
+      this.assertSamlEntryPoint(entryPoint, organizationId);
       if (!idpEntityId?.trim()) {
         throw new BadRequestException(
           'SAML needs the IdP entity ID (Issuer). Provide it or a metadata URL that includes it'
@@ -604,10 +622,14 @@ export class SsoService implements OnApplicationBootstrap {
       // Every one of these is fetched server-side (discovery, token exchange,
       // userinfo, connection test), so each is an SSRF primitive if it can
       // point inside the cluster. Checked at write time, where only admins are.
-      await this.assertIdpUrl(issuerUrl, 'Issuer URL');
-      await this.assertIdpUrl(data.authorizationUrl as string | null, 'Authorization URL');
-      await this.assertIdpUrl(data.tokenUrl as string | null, 'Token URL');
-      await this.assertIdpUrl(data.userinfoUrl as string | null, 'Userinfo URL');
+      await this.assertIdpUrl(issuerUrl, 'Issuer URL', organizationId);
+      await this.assertIdpUrl(
+        data.authorizationUrl as string | null,
+        'Authorization URL',
+        organizationId
+      );
+      await this.assertIdpUrl(data.tokenUrl as string | null, 'Token URL', organizationId);
+      await this.assertIdpUrl(data.userinfoUrl as string | null, 'Userinfo URL', organizationId);
 
       if (input.clientSecret && !isMask(input.clientSecret)) {
         data.clientSecret = this.crypto.encrypt(input.clientSecret);
@@ -667,10 +689,28 @@ export class SsoService implements OnApplicationBootstrap {
       slug = await this.uniqueSlug(organizationId, input.slug, id);
     }
 
+    const trustChanged = this.trustChanged(existing, data);
     const updated = await this.prisma.identityProvider.update({
       where: { id },
-      data: { ...(data as any), slug }
+      data: { ...(data as any), slug, ...(trustChanged ? { createdBy: actor.userId } : {}) }
     });
+
+    let unbound = 0;
+    if (trustChanged) {
+      ({ count: unbound } = await this.prisma.federatedIdentity.deleteMany({
+        where: { providerId: id }
+      }));
+      void this.audit.log({
+        action: 'org.sso.provider.trust_changed',
+        actorUserId: actor.userId,
+        actorEmail: actor.email,
+        organizationId: organizationId ?? undefined,
+        targetType: 'sso_provider',
+        targetId: updated.id,
+        targetLabel: updated.name,
+        metadata: { unbound_identities: unbound, previous_creator: existing.createdBy }
+      });
+    }
 
     void this.audit.log({
       action: 'org.sso.provider.updated',
@@ -684,6 +724,35 @@ export class SsoService implements OnApplicationBootstrap {
     });
 
     return this.adminProvider(updated);
+  }
+
+  /**
+   * Whoever can change these decides which signed assertions the provider
+   * accepts, so a change hands the provider to a new party: earlier bindings
+   * and the creator's sign-in exemption must not carry over to it.
+   */
+  trustChanged(existing: IdentityProvider, data: Record<string, unknown>): boolean {
+    const fields = [
+      'protocol',
+      'issuerUrl',
+      'clientId',
+      'authorizationUrl',
+      'tokenUrl',
+      'userinfoUrl',
+      'samlEntryPoint',
+      'samlMetadataUrl',
+      'samlIdpEntityId'
+    ] as const;
+    for (const field of fields) {
+      if (field in data && (data[field] ?? null) !== ((existing as any)[field] ?? null))
+        return true;
+    }
+    if (typeof data.samlCertificate === 'string') {
+      const before = this.crypto.decryptOrNull(existing.samlCertificate);
+      const after = this.crypto.decryptOrNull(data.samlCertificate);
+      if (before !== after) return true;
+    }
+    return false;
   }
 
   async deleteProvider(
@@ -987,7 +1056,7 @@ export class SsoService implements OnApplicationBootstrap {
     }));
   }
 
-  private assertSamlEntryPoint(raw: string) {
+  private assertSamlEntryPoint(raw: string, organizationId: string | null) {
     let url: URL;
     try {
       url = new URL(raw);
@@ -995,7 +1064,7 @@ export class SsoService implements OnApplicationBootstrap {
       throw new BadRequestException('SAML sign-in URL must be a valid URL');
     }
     const local = url.hostname === 'localhost' || url.hostname === '127.0.0.1';
-    const plainOk = local || this.allowInternalIdp();
+    const plainOk = local || this.allowInternalIdp(organizationId);
     if (
       raw.length > 500 ||
       url.username ||
@@ -1043,7 +1112,7 @@ export class SsoService implements OnApplicationBootstrap {
 
     let parsed: { entityId: string | null; certificate: string | null };
     try {
-      parsed = await this.fetchIdpMetadata(provider.samlMetadataUrl);
+      parsed = await this.fetchIdpMetadata(provider.samlMetadataUrl, provider.organizationId);
     } catch (err) {
       this.logger.error(
         `SAML provider ${provider.id} (${provider.name}): could not read IdP metadata to derive the entity ID (${err instanceof Error ? err.message : 'error'}). ${fix}`
@@ -1134,11 +1203,11 @@ export class SsoService implements OnApplicationBootstrap {
    * values it produces are shown back to them before anything authenticates
    * against them. Signature validation of live assertions is node-saml's job.
    */
-  private async fetchIdpMetadata(url: string) {
-    await this.assertIdpUrl(url, 'Metadata URL');
+  private async fetchIdpMetadata(url: string, organizationId: string | null) {
+    await this.assertIdpUrl(url, 'Metadata URL', organizationId);
     let xml: string;
     try {
-      const res = await this.fetchIdp(url, { signal: AbortSignal.timeout(10_000) });
+      const res = await this.fetchIdp(url, { signal: AbortSignal.timeout(10_000) }, organizationId);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const length = Number(res.headers.get('content-length') ?? 0);
       if (length > METADATA_MAX_BYTES) throw new Error('metadata too large');

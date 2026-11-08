@@ -299,7 +299,10 @@ export class SsoLoginService {
       provider.clientId,
       clientSecret ? { client_secret: clientSecret } : undefined,
       undefined,
-      { [openid.customFetch]: (url, init) => this.sso.fetchIdp(url, init as RequestInit) }
+      {
+        [openid.customFetch]: (url, init) =>
+          this.sso.fetchIdp(url, init as RequestInit, provider.organizationId)
+      }
     );
   }
 
@@ -389,9 +392,11 @@ export class SsoLoginService {
     const metadata = config.serverMetadata();
     if (!metadata.jwks_uri) throw new UnauthorizedException('SSO authentication failed');
     try {
-      const res = await this.sso.fetchIdp(metadata.jwks_uri, {
-        signal: AbortSignal.timeout(15_000)
-      });
+      const res = await this.sso.fetchIdp(
+        metadata.jwks_uri,
+        { signal: AbortSignal.timeout(15_000) },
+        provider.organizationId
+      );
       if (!res.ok) throw new Error(`jwks ${res.status}`);
       const jwks = createLocalJWKSet((await res.json()) as Parameters<typeof createLocalJWKSet>[0]);
       await jwtVerify(idToken, jwks, {
@@ -433,18 +438,25 @@ export class SsoLoginService {
     const provider = await this.loadLoginProvider(providerId);
     const clientSecret = this.crypto.decryptOrNull(provider.clientSecret);
 
-    const tokenRes = await this.sso.fetchIdp(provider.tokenUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
-      body: new URLSearchParams({
-        client_id: provider.clientId,
-        ...(clientSecret ? { client_secret: clientSecret } : {}),
-        code,
-        redirect_uri: this.sso.callbackUrl(provider),
-        grant_type: 'authorization_code'
-      }),
-      signal: AbortSignal.timeout(15_000)
-    });
+    const tokenRes = await this.sso.fetchIdp(
+      provider.tokenUrl,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          Accept: 'application/json'
+        },
+        body: new URLSearchParams({
+          client_id: provider.clientId,
+          ...(clientSecret ? { client_secret: clientSecret } : {}),
+          code,
+          redirect_uri: this.sso.callbackUrl(provider),
+          grant_type: 'authorization_code'
+        }),
+        signal: AbortSignal.timeout(15_000)
+      },
+      provider.organizationId
+    );
     if (!tokenRes.ok) throw new UnauthorizedException('SSO token exchange failed');
     const tokenBody = (await tokenRes.json()) as { access_token?: string; error?: string };
     if (!tokenBody.access_token) throw new UnauthorizedException('SSO token exchange failed');
@@ -527,7 +539,7 @@ export class SsoLoginService {
       {
         email: identity.email,
         name: identity.name,
-        emailVerified: true,
+        emailVerified: provider.organizationId || provider.trustEmail ? true : undefined,
         subject: identity.subject,
         claims: attributes
       },
@@ -552,10 +564,11 @@ export class SsoLoginService {
       'User-Agent': 'Orchard'
     };
 
-    const res = await this.sso.fetchIdp(provider.userinfoUrl, {
-      headers,
-      signal: AbortSignal.timeout(15_000)
-    });
+    const res = await this.sso.fetchIdp(
+      provider.userinfoUrl,
+      { headers, signal: AbortSignal.timeout(15_000) },
+      provider.organizationId
+    );
     if (!res.ok) throw new UnauthorizedException('Could not read profile from SSO provider');
     const body = (await res.json()) as Record<string, unknown>;
 
@@ -628,7 +641,15 @@ export class SsoLoginService {
 
     const user = provider.organizationId
       ? await this.resolveOrgUser(provider, email, profile.name, linkedUserId, bound, mapping)
-      : await this.resolveInstanceUser(provider, email, profile.name, bound, mapping);
+      : await this.resolveInstanceUser(
+          provider,
+          email,
+          profile.name,
+          bound,
+          mapping,
+          profile.emailVerified === true,
+          linkedUserId
+        );
 
     await this.mapping.bind(provider, subject, user);
     const elevated = await this.mapping.syncSuperadmin(
@@ -915,9 +936,15 @@ export class SsoLoginService {
     email: string,
     name: string,
     bound?: { id: string; email: string; isSuperAdmin: boolean; [key: string]: any } | null,
-    mapping?: MappingContext
+    mapping?: MappingContext,
+    emailVerified = false,
+    linkedUserId?: string
   ) {
     const existing = bound ?? (await this.prisma.user.findUnique({ where: { email } }));
+
+    if (existing && !bound && !emailVerified && linkedUserId !== existing.id) {
+      throw new UnauthorizedException({ message: 'sso_link_required' });
+    }
 
     if (existing) {
       await this.authz.assertSsoNotEnforced(existing, 'instance_sso');
@@ -995,10 +1022,11 @@ export class SsoLoginService {
         const openid = await this.loadOpenIdClient();
         await this.discoverOidc(provider, openid);
       } else {
-        const res = await this.sso.fetchIdp(provider.authorizationUrl, {
-          method: 'HEAD',
-          signal: AbortSignal.timeout(10_000)
-        });
+        const res = await this.sso.fetchIdp(
+          provider.authorizationUrl,
+          { method: 'HEAD', signal: AbortSignal.timeout(10_000) },
+          provider.organizationId
+        );
         if (res.status >= 500) throw new Error(`Authorization endpoint returned ${res.status}`);
       }
 
