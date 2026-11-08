@@ -3,6 +3,7 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
+  Optional,
   UnauthorizedException
 } from '@nestjs/common';
 import { IdentityProvider, OrganizationRole, SsoProtocol } from '@prisma/client';
@@ -11,6 +12,7 @@ import { AuditService } from '../audit/audit.service';
 import { SessionsService } from '../auth/sessions.service';
 import { MembershipCacheService } from '../auth/membership-cache.service';
 import { OrganizationsService } from '../organizations/organizations.service';
+import { AutoCreateRule, InstanceIdentityService } from './instance-identity.service';
 import {
   GroupRule,
   GroupsResult,
@@ -39,6 +41,7 @@ export interface MappingContext {
   groups: GroupsResult | null;
   decisions: Map<string, OrgDecision>;
   allowed: boolean;
+  pending: AutoCreateRule[];
 }
 
 export interface RuleInput {
@@ -59,7 +62,8 @@ const NO_RULES: MappingContext = {
   rules: [],
   groups: null,
   decisions: new Map(),
-  allowed: true
+  allowed: true,
+  pending: []
 };
 
 export function cleanSubject(subject: unknown): string | null {
@@ -74,7 +78,8 @@ export class IdentityMappingService {
     private readonly audit: AuditService,
     private readonly sessions: SessionsService,
     private readonly membershipCache: MembershipCacheService,
-    private readonly orgs: OrganizationsService
+    private readonly orgs: OrganizationsService,
+    @Optional() private readonly instanceIdentity?: InstanceIdentityService
   ) {}
 
   async prepare(
@@ -86,7 +91,10 @@ export class IdentityMappingService {
       where: { providerId: provider.id },
       select: { id: true, organizationId: true, value: true, role: true }
     });
-    if (all.length === 0) return NO_RULES;
+    const auto = (await this.instanceIdentity?.activeRules(provider)) ?? [];
+    const superadmin = this.instanceIdentity ? await this.instanceIdentity.superadminRule() : null;
+    const wantsSuperadmin = !provider.organizationId && superadmin?.providerId === provider.id;
+    if (all.length === 0 && auto.length === 0 && !wantsSuperadmin) return NO_RULES;
 
     const rules = provider.organizationId
       ? all.filter((r) => r.organizationId === provider.organizationId)
@@ -98,7 +106,53 @@ export class IdentityMappingService {
       groups.kind === 'groups'
         ? await this.decide(rules, groups.groups, userId ?? null)
         : new Map<string, OrgDecision>();
-    return { hasRules: true, rules, groups, decisions, allowed: decisions.size > 0 };
+    const pending =
+      groups.kind === 'groups'
+        ? auto.filter((r) => !r.organizationId && groups.groups.has(r.value))
+        : [];
+    const hasRules = all.length > 0 || auto.length > 0;
+    const elevated =
+      wantsSuperadmin && groups.kind === 'groups' && groups.groups.has(superadmin!.value);
+    return {
+      hasRules,
+      rules,
+      groups,
+      decisions,
+      allowed: !hasRules || decisions.size > 0 || pending.length > 0 || elevated,
+      pending
+    };
+  }
+
+  async materialize(provider: IdentityProvider, ctx: MappingContext): Promise<void> {
+    if (!this.instanceIdentity || ctx.pending.length === 0) return;
+    const created = await this.instanceIdentity.materialize(provider, ctx.pending);
+    for (const c of created) {
+      const rule: GroupRule = {
+        id: c.ruleId,
+        organizationId: c.organizationId,
+        value: c.value,
+        role: c.role
+      };
+      ctx.rules.push(rule);
+      const decision = resolveRoles([rule], new Set([c.value])).get(c.organizationId);
+      if (decision) ctx.decisions.set(c.organizationId, decision);
+    }
+    ctx.pending = [];
+  }
+
+  async syncSuperadmin(
+    provider: IdentityProvider,
+    user: { id: string; email: string; isSuperAdmin: boolean },
+    ctx: MappingContext,
+    emailVerified: boolean
+  ): Promise<boolean> {
+    if (!this.instanceIdentity) return user.isSuperAdmin;
+    return this.instanceIdentity.syncSuperadmin(
+      provider,
+      user,
+      ctx.groups?.kind === 'groups' ? ctx.groups.groups : null,
+      emailVerified
+    );
   }
 
   private async decide(

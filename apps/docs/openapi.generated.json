@@ -2241,6 +2241,79 @@
         ]
       }
     },
+    "/admin/sso/identity-policy": {
+      "get": {
+        "description": "Auth: superadmin",
+        "operationId": "admin_sso_identity_policy_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {},
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "GET /admin/sso/identity-policy",
+        "tags": [
+          "admin"
+        ]
+      },
+      "patch": {
+        "description": "Auth: superadmin",
+        "operationId": "admin_sso_identity_policy_update",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": {},
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {},
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "PATCH /admin/sso/identity-policy",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
     "/admin/sso/organizations": {
       "get": {
         "description": "Auth: superadmin",
@@ -2527,6 +2600,99 @@
           }
         ],
         "summary": "PATCH /admin/sso/providers/:providerId",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/sso/providers/{providerId}/auto-create-rules": {
+      "get": {
+        "description": "Auth: superadmin",
+        "operationId": "admin_sso_providers_auto_create_rules_list",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "providerId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {},
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "GET /admin/sso/providers/:providerId/auto-create-rules",
+        "tags": [
+          "admin"
+        ]
+      },
+      "put": {
+        "description": "Auth: superadmin",
+        "operationId": "admin_sso_providers_auto_create_rules_set",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "providerId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": {},
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {},
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "PUT /admin/sso/providers/:providerId/auto-create-rules",
         "tags": [
           "admin"
         ]

@@ -590,7 +590,16 @@ export class SsoLoginService {
       : await this.resolveInstanceUser(provider, email, profile.name, bound, mapping);
 
     await this.mapping.bind(provider, subject, user);
-    if (!user.isSuperAdmin) await this.mapping.apply(provider, user, mapping);
+    const elevated = await this.mapping.syncSuperadmin(
+      provider,
+      { id: user.id, email: user.email, isSuperAdmin: Boolean(user.isSuperAdmin) },
+      mapping,
+      profile.emailVerified === true
+    );
+    if (!elevated) {
+      await this.mapping.materialize(provider, mapping);
+      await this.mapping.apply(provider, user, mapping);
+    }
 
     if (!user.setupCompleted) {
       await this.prisma.user.update({ where: { id: user.id }, data: { setupCompleted: true } });

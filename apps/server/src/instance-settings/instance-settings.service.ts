@@ -14,6 +14,11 @@ export const CUSTOM_DOMAIN_VERIFICATION_ENV = 'CUSTOM_DOMAIN_VERIFICATION';
 export const SSO_ENFORCED_KEY = 'sso_enforced';
 export const SSO_ENFORCED_ENV = 'SSO_ENFORCED';
 
+export const IDP_AUTO_CREATE_ORGS_KEY = 'idp_auto_create_orgs';
+export const IDP_AUTO_CREATE_ORGS_ENV = 'IDP_AUTO_CREATE_ORGS';
+export const IDP_SUPERADMIN_PROVIDER_KEY = 'idp_superadmin_provider_id';
+export const IDP_SUPERADMIN_GROUP_KEY = 'idp_superadmin_group';
+
 export const POSTGRES_AUTO_UPDATE_KEY = 'postgres_auto_update';
 export const POSTGRES_AUTO_UPDATE_ENV = 'POSTGRES_AUTO_UPDATE';
 
@@ -251,6 +256,19 @@ export class InstanceSettingsService implements OnModuleInit {
   async setSsoEnforced(value: boolean): Promise<void> {
     this.assertUnlocked(SSO_ENFORCED_ENV);
     await this.setBool(SSO_ENFORCED_KEY, value);
+  }
+
+  isIdpAutoCreateOrgsEnabled(): Promise<boolean> {
+    return this.resolveBool(IDP_AUTO_CREATE_ORGS_KEY, IDP_AUTO_CREATE_ORGS_ENV, false);
+  }
+
+  getIdpAutoCreateOrgsState(): Promise<ToggleState> {
+    return this.toggleState(IDP_AUTO_CREATE_ORGS_KEY, IDP_AUTO_CREATE_ORGS_ENV, false);
+  }
+
+  async setIdpAutoCreateOrgs(value: boolean): Promise<void> {
+    this.assertUnlocked(IDP_AUTO_CREATE_ORGS_ENV);
+    await this.setBool(IDP_AUTO_CREATE_ORGS_KEY, value);
   }
 
   isDatabaseToggleOn(name: DatabaseToggle): Promise<boolean> {

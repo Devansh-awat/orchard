@@ -15,6 +15,11 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { SsoService, ProviderInput } from './sso.service';
 import { SsoLoginService } from './sso-login.service';
 import { IdentityMappingService, RulesInput } from './identity-mapping.service';
+import {
+  AutoCreateInput,
+  InstanceIdentityService,
+  SuperadminRule
+} from './instance-identity.service';
 import { publicPresets } from './presets';
 import { assertProviderIcon, PROVIDER_ICON_UPLOAD } from './provider-icon';
 import { ImageUploadSlots } from '../http/upload-limits';
@@ -32,7 +37,8 @@ export class SsoInstanceController {
   constructor(
     private readonly sso: SsoService,
     private readonly login: SsoLoginService,
-    private readonly mapping: IdentityMappingService
+    private readonly mapping: IdentityMappingService,
+    private readonly identity: InstanceIdentityService
   ) {}
 
   private actor(req: any) {
@@ -65,6 +71,41 @@ export class SsoInstanceController {
     return this.sso.setInstanceEnforced(Boolean(enabled), this.actor(req));
   }
 
+  @Get('identity-policy')
+  identityPolicy() {
+    return this.identity.getPolicy();
+  }
+
+  @Patch('identity-policy')
+  async setIdentityPolicy(
+    @Body() body: { autoCreateOrgs?: boolean; superadminRule?: SuperadminRule | null },
+    @Request() req
+  ) {
+    const actor = this.actor(req);
+    if (body?.autoCreateOrgs !== undefined) {
+      await this.identity.setAutoCreateOrgs(Boolean(body.autoCreateOrgs), actor);
+    }
+    if (body?.superadminRule !== undefined) {
+      await this.identity.setSuperadminRule(body.superadminRule, actor);
+    }
+    return this.identity.getPolicy();
+  }
+
+  @Get('providers/:providerId/auto-create-rules')
+  async listAutoCreateRules(@Param('providerId') providerId: string) {
+    return this.identity.listAutoCreateRules(await this.mapping.requireProvider(providerId, null));
+  }
+
+  @Put('providers/:providerId/auto-create-rules')
+  async replaceAutoCreateRules(
+    @Param('providerId') providerId: string,
+    @Body() body: { rules: AutoCreateInput[] },
+    @Request() req
+  ) {
+    const provider = await this.mapping.requireProvider(providerId, null);
+    return this.identity.replaceAutoCreateRules(provider, body, this.actor(req));
+  }
+
   @Get('providers')
   listProviders() {
     return this.sso.listProviders(null);
@@ -90,8 +131,11 @@ export class SsoInstanceController {
   }
 
   @Delete('providers/:providerId')
-  deleteProvider(@Param('providerId') providerId: string, @Request() req) {
-    return this.sso.deleteProvider(providerId, null, this.actor(req));
+  async deleteProvider(@Param('providerId') providerId: string, @Request() req) {
+    const actor = this.actor(req);
+    const rule = await this.identity.superadminRule();
+    if (rule?.providerId === providerId) await this.identity.setSuperadminRule(null, actor);
+    return this.sso.deleteProvider(providerId, null, actor);
   }
 
   @Post('providers/:providerId/icon')

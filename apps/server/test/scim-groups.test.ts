@@ -4,8 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { IdentityMappingService } from '../src/sso/identity-mapping.service';
 import { ScimService } from '../src/scim/scim.service';
 import { ScimGroupsService } from '../src/scim/scim-groups.service';
-
-type Row = Record<string, any>;
+import { collection as memoryCollection, type Row } from './support/memory-db';
 
 const ORG_A = '11111111-1111-4111-8111-111111111111';
 const ORG_B = '22222222-2222-4222-8222-222222222222';
@@ -33,67 +32,10 @@ function makeWorld() {
   const cacheRevoked: Array<[string, string]> = [];
   const detached: string[] = [];
 
-  const matchValue = (actual: any, expected: any): boolean => {
-    if (expected && typeof expected === 'object' && !(expected instanceof Date)) {
-      if ('in' in expected) return expected.in.includes(actual);
-      if ('not' in expected) return actual !== expected.not;
-    }
-    return actual === expected;
-  };
-  const matches = (row: Row, where: Row = {}) =>
-    Object.entries(where).every(([k, v]) => {
-      if (k === 'organizationId_userId') {
-        return row.organizationId === (v as any).organizationId && row.userId === (v as any).userId;
-      }
-      return matchValue(row[k], v);
-    });
-
   const hydrate = (row: Row | undefined) =>
     row ? { ...row, user: tables.user.find((u) => u.id === row.userId) } : null;
-
-  const collection = (name: string, defaults: () => Row = () => ({})) => {
-    const rows = tables[name];
-    return {
-      findFirst: async ({ where }: any = {}) => hydrate(rows.find((r) => matches(r, where))),
-      findUnique: async ({ where }: any) => hydrate(rows.find((r) => matches(r, where))),
-      findMany: async ({ where }: any = {}) => rows.filter((r) => matches(r, where)).map(hydrate),
-      count: async ({ where }: any = {}) => rows.filter((r) => matches(r, where)).length,
-      create: async ({ data }: any) => {
-        const row = { ...defaults(), ...data };
-        rows.push(row);
-        return hydrate(row);
-      },
-      update: async ({ where, data }: any) => {
-        const row = rows.find((r) => matches(r, where))!;
-        Object.assign(row, data);
-        return hydrate(row);
-      },
-      upsert: async ({ where, create, update }: any) => {
-        const row = rows.find((r) => matches(r, where));
-        if (row) {
-          Object.assign(row, update);
-          return hydrate(row);
-        }
-        const created = { ...defaults(), ...create };
-        rows.push(created);
-        return hydrate(created);
-      },
-      delete: async ({ where }: any) => {
-        const i = rows.findIndex((r) => matches(r, where));
-        return rows.splice(i, 1)[0];
-      },
-      deleteMany: async ({ where }: any) => {
-        let count = 0;
-        for (let i = rows.length - 1; i >= 0; i -= 1) {
-          if (matches(rows[i], where)) {
-            rows.splice(i, 1);
-            count += 1;
-          }
-        }
-        return { count };
-      }
-    };
-  };
+  const collection = (name: string, defaults: () => Row = () => ({})) =>
+    memoryCollection(tables, name, defaults, hydrate);
 
   const prisma: any = {
     user: collection('user', () => ({ id: randomUUID(), isSuperAdmin: false })),

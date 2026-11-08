@@ -311,6 +311,7 @@ model Organization {
   ssoSettings          OrgSsoSettings?
   identityProviders    IdentityProvider[]
   idpGroupRules        IdpGroupRule[]
+  idpAutoCreateRule    IdpAutoCreateRule?
   domains              OrgDomain[]
   nodeAssignments      OrgNodeAssignment[]
   scimTokens           ScimToken[]
@@ -1979,6 +1980,7 @@ model IdentityProvider {
 
   organization        Organization?        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   groupRules          IdpGroupRule[]
+  autoCreateRules     IdpAutoCreateRule[]
   federatedIdentities FederatedIdentity[]
   managedMembers      OrganizationMember[]
 
@@ -1991,12 +1993,13 @@ model IdentityProvider {
 // match on (provider, subject) and never on email, so an IdP-side email change
 // or reassignment cannot move an identity onto another account.
 model FederatedIdentity {
-  id          String   @id @default(uuid()) @db.Uuid
-  providerId  String   @map("provider_id") @db.Uuid
-  subject     String   @db.VarChar(255)
-  userId      String   @map("user_id") @db.Uuid
-  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamp(6)
-  lastLoginAt DateTime @default(now()) @map("last_login_at") @db.Timestamp(6)
+  id                String   @id @default(uuid()) @db.Uuid
+  providerId        String   @map("provider_id") @db.Uuid
+  subject           String   @db.VarChar(255)
+  userId            String   @map("user_id") @db.Uuid
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  lastLoginAt       DateTime @default(now()) @map("last_login_at") @db.Timestamp(6)
+  grantedSuperadmin Boolean  @default(false) @map("granted_superadmin")
 
   provider IdentityProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
   user     User             @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -2025,6 +2028,26 @@ model IdpGroupRule {
   @@unique([providerId, organizationId, value])
   @@index([organizationId], map: "idx_idp_group_rules_org")
   @@map("idp_group_rules")
+}
+
+// Instance providers only. A login whose groups include `value` makes Orchard
+// create one organization for it, once, and turns this into an ordinary
+// IdpGroupRule for that organization. Inert unless the instance admin has
+// switched auto-creation on.
+model IdpAutoCreateRule {
+  id             String           @id @default(uuid()) @db.Uuid
+  providerId     String           @map("provider_id") @db.Uuid
+  value          String           @db.VarChar(256)
+  role           OrganizationRole
+  organizationId String?          @unique @map("organization_id") @db.Uuid
+  createdBy      String?          @map("created_by") @db.Uuid
+  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamp(6)
+
+  provider     IdentityProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  organization Organization?    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([providerId, value])
+  @@map("idp_auto_create_rules")
 }
 
 // Org-level SSO posture, separate from any single provider so that adding a
