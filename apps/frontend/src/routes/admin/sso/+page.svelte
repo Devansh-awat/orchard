@@ -29,6 +29,7 @@
 	import GroupRulesEditor from '$lib/components/org-settings/GroupRulesEditor.svelte';
 	import InstanceIdentityPolicy from '$lib/components/org-settings/InstanceIdentityPolicy.svelte';
 	import SsoProviderModal from '$lib/components/org-settings/SsoProviderModal.svelte';
+	import ProjectRulesEditor from '$lib/components/org-settings/ProjectRulesEditor.svelte';
 	import { ProviderIcon } from '$lib/components/login';
 	import { draftToPayload } from '$lib/components/org-settings/sso-types';
 	import { removeProviderIcon, uploadProviderIcon } from '$lib/components/org-settings/sso-icon';
@@ -100,6 +101,24 @@
 		mappable.find((p) => p.id === rulesProviderId) ?? mappable[0] ?? null
 	);
 	const orgChoices = $derived(organizations.map((o) => ({ id: o.organizationId, name: o.name })));
+	let instanceProjects = $state<Array<{ id: string; name: string; group: string }>>([]);
+	let projectsFor = '';
+	$effect(() => {
+		const orgs = orgChoices.slice(0, 100);
+		const key = orgs.map((o) => o.id).join(',');
+		if (!key || key === projectsFor) return;
+		projectsFor = key;
+		void Promise.all(
+			orgs.map(async (org) => {
+				const res = await apiFetch(`/apiv1/projects?orgId=${org.id}`).catch(() => null);
+				if (!res?.ok) return [];
+				const list = (await res.json()) as Array<{ id: string; name: string }>;
+				return list.map((p) => ({ id: p.id, name: p.name, group: org.name }));
+			})
+		).then((lists) => {
+			instanceProjects = lists.flat();
+		});
+	});
 
 	onMount(load);
 
@@ -498,6 +517,11 @@
 					baseUrl={providerUrl(rulesProvider.id)}
 					providerName={rulesProvider.name}
 					organizations={orgChoices}
+				/>
+				<ProjectRulesEditor
+					baseUrl={providerUrl(rulesProvider.id)}
+					providerName={rulesProvider.name}
+					projects={instanceProjects}
 				/>
 				<InstanceIdentityPolicy {providers} />
 			{/if}

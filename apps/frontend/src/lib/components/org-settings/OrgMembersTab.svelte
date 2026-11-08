@@ -1,5 +1,14 @@
 <script lang="ts">
-	import { ChevronDown, ChevronsUpDown, Link2, Mail, Trash2, UserPlus, X } from 'lucide-svelte';
+	import {
+		ChevronDown,
+		ChevronsUpDown,
+		Link2,
+		Mail,
+		UserCheck,
+		UserPlus,
+		UserX,
+		X
+	} from 'lucide-svelte';
 	import {
 		Avatar,
 		ItemLabel,
@@ -394,8 +403,10 @@
 				<Button
 					variant="ghost"
 					size="sm"
-					icon={Trash2}
-					label="Remove {memberName(member) || member.user.email}"
+					icon={member.status === 'disabled' ? UserCheck : UserX}
+					label="{member.status === 'disabled' ? 'Turn on' : 'Turn off'} access for {memberName(
+						member
+					) || member.user.email}"
 					loading={removingMemberId === member.id}
 					disabled={removingMemberId !== null}
 					onclick={() => onRemoveMember(member.id)}

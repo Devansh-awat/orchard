@@ -28,6 +28,7 @@
 	import { ProviderIcon } from '$lib/components/login';
 	import { apiFetch, toasts } from '$lib/stores';
 	import GroupRulesEditor from './GroupRulesEditor.svelte';
+	import ProjectRulesEditor from './ProjectRulesEditor.svelte';
 	import SsoProviderModal from './SsoProviderModal.svelte';
 	import { removeProviderIcon, uploadProviderIcon } from './sso-icon';
 	import type {
@@ -50,6 +51,21 @@
 		baseDomain: string;
 		onOrganizationChanged?: () => void;
 	} = $props();
+
+	let orgProjects = $state<Array<{ id: string; name: string }>>([]);
+
+	$effect(() => {
+		const id = organization?.id;
+		if (!id) return;
+		void apiFetch(`/apiv1/projects?orgId=${id}`)
+			.then((res) => (res.ok ? res.json() : []))
+			.then((list: Array<{ id: string; name: string }>) => {
+				orgProjects = list.map((p) => ({ id: p.id, name: p.name }));
+			})
+			.catch(() => {
+				orgProjects = [];
+			});
+	});
 
 	let loading = $state(true);
 	let overview = $state<SsoOverview | null>(null);
@@ -570,6 +586,12 @@
 			baseUrl={providerUrl(rulesProvider.id)}
 			providerName={rulesProvider.name}
 			fixedOrganizationId={organization.id}
+			readonly={locked}
+		/>
+		<ProjectRulesEditor
+			baseUrl={providerUrl(rulesProvider.id)}
+			providerName={rulesProvider.name}
+			projects={orgProjects}
 			readonly={locked}
 		/>
 	{/if}

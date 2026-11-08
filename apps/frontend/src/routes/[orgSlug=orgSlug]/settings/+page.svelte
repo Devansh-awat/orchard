@@ -31,6 +31,7 @@
 	interface Member {
 		id: string;
 		role: 'owner' | 'admin' | 'member' | 'guest';
+		status?: 'active' | 'disabled';
 		user: {
 			id: string;
 			firstName?: string;
@@ -596,8 +597,37 @@
 		if (removingMemberId) return;
 		const member = members.find((m) => m.id === memberId);
 		if (!member) return;
+		if (member.status === 'disabled') {
+			void enableMember(memberId);
+			return;
+		}
 		memberToRemove = member;
 		showRemoveMemberModal = true;
+	}
+
+	async function enableMember(memberId: string) {
+		if (!organization || removingMemberId) return;
+		removingMemberId = memberId;
+		try {
+			const r = await apiFetch(
+				`/apiv1/organizations/${organization.id}/members/${memberId}/enable`,
+				{ method: 'POST' }
+			);
+			if (!r.ok) {
+				const d = await r.json().catch(() => ({}));
+				throw new Error(d.message || "Couldn't turn access back on");
+			}
+			toasts.add({ title: 'Access turned back on', color: 'success' });
+			fetchOrganization();
+		} catch (e) {
+			toasts.add({
+				title: "Couldn't turn access back on",
+				description: e instanceof Error ? e.message : "Couldn't turn access back on",
+				color: 'error'
+			});
+		} finally {
+			removingMemberId = null;
+		}
 	}
 
 	async function removeMember(memberId: string) {
@@ -609,14 +639,14 @@
 			});
 			if (!r.ok) {
 				const d = await r.json().catch(() => ({}));
-				throw new Error(d.message || "Couldn't remove member");
+				throw new Error(d.message || "Couldn't turn off access");
 			}
-			toasts.add({ title: 'Member removed', color: 'success' });
+			toasts.add({ title: 'Access turned off', color: 'success' });
 			fetchOrganization();
 		} catch (e) {
 			toasts.add({
-				title: "Couldn't remove member",
-				description: e instanceof Error ? e.message : "Couldn't remove member",
+				title: "Couldn't turn off access",
+				description: e instanceof Error ? e.message : "Couldn't turn off access",
 				color: 'error'
 			});
 		} finally {
@@ -1122,11 +1152,11 @@
 
 <ConfirmModal
 	bind:open={showRemoveMemberModal}
-	title="Remove member"
+	title="Turn off access"
 	description={memberToRemove
-		? `Remove ${memberDisplayName(memberToRemove)} from the organization?`
+		? `${memberDisplayName(memberToRemove)} loses access to this organization and every project in it, and is signed out of it. They stay on the member list so you can turn them back on, and nothing they built is deleted.`
 		: ''}
-	confirmLabel="Remove"
+	confirmLabel="Turn off"
 	onconfirm={() => {
 		if (memberToRemove) removeMember(memberToRemove.id);
 	}}

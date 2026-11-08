@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { apiFetch, toasts } from '$lib/stores';
-	import { ChevronLeft, ChevronRight, Pencil, Trash2 } from 'lucide-svelte';
+	import { ChevronLeft, ChevronRight, Pencil, UserCheck, UserX } from 'lucide-svelte';
 	import {
 		Alert,
 		Avatar,
@@ -34,6 +34,8 @@
 		imageUrl?: string | null;
 		isSuperAdmin: boolean;
 		createdAt: string;
+		disabledAt?: string | null;
+		homeOrganizationId?: string | null;
 		_count: {
 			organizationMembers: number;
 			projectMembers: number;
@@ -81,7 +83,9 @@
 		if (!deletingUser) return '';
 		const name = displayName(deletingUser);
 		const who = name ? `${name} (${deletingUser.email})` : deletingUser.email;
-		return `This permanently deletes ${who} and all their data. You can't undo this.`;
+		return deletingUser.disabledAt
+			? `${who} can sign in again with any method they had. Their memberships come back as they were.`
+			: `${who} is signed out everywhere, every token stops working, and no sign-in method lets them back in until you turn the account on again. Nothing they own is deleted.`;
 	});
 
 	function displayName(user: UserItem) {
@@ -176,19 +180,23 @@
 		const target = deletingUser;
 		deletingId = target.id;
 		try {
-			const response = await apiFetch(`/apiv1/admin/users/${target.id}`, {
-				method: 'DELETE'
+			const action = target.disabledAt ? 'enable' : 'disable';
+			const response = await apiFetch(`/apiv1/admin/users/${target.id}/${action}`, {
+				method: 'POST'
 			});
 			if (!response.ok) {
 				const data = await response.json();
-				throw new Error(data.message || "Couldn't delete user");
+				throw new Error(data.message || "Couldn't change the account");
 			}
-			toasts.add({ title: 'User deleted', color: 'success' });
+			toasts.add({
+				title: target.disabledAt ? 'Account turned on' : 'Account turned off',
+				color: 'success'
+			});
 			await fetchUsers(currentPage);
 		} catch (e) {
 			toasts.add({
-				title: "Couldn't delete user",
-				description: e instanceof Error ? e.message : "Couldn't delete user",
+				title: "Couldn't change the account",
+				description: e instanceof Error ? e.message : "Couldn't change the account",
 				color: 'error'
 			});
 		} finally {
@@ -264,13 +272,20 @@
 			<Table columns={COLUMNS} rows={users} rowKey={(user) => user.id} inset={false} label="Users">
 				{#snippet cell(user, col)}
 					{#if col.id === 'user'}
-						<ItemLabel title={displayName(user) || 'No name'} detail={user.email}>
+						<ItemLabel
+							title={displayName(user) || 'No name'}
+							detail={user.homeOrganizationId
+								? `${user.email} · Organization identity`
+								: user.email}
+						>
 							{#snippet leading()}<Avatar {user} size={32} />{/snippet}
 						</ItemLabel>
 					{:else if col.id === 'username'}
 						<span class="username" title={user.username}>{user.username}</span>
 					{:else if col.id === 'role'}
-						{#if user.isSuperAdmin}
+						{#if user.disabledAt}
+							<Badge tone="warning">Turned off</Badge>
+						{:else if user.isSuperAdmin}
 							<Badge tone="accent">Admin</Badge>
 						{:else}
 							<Badge>User</Badge>
@@ -293,8 +308,8 @@
 							<Button
 								variant="ghost"
 								size="sm"
-								icon={Trash2}
-								label="Delete {displayName(user) || user.email}"
+								icon={user.disabledAt ? UserCheck : UserX}
+								label="{user.disabledAt ? 'Turn on' : 'Turn off'} {displayName(user) || user.email}"
 								loading={deletingId === user.id}
 								onclick={() => openDelete(user)}
 							/>
@@ -338,7 +353,7 @@
 
 <ConfirmModal
 	bind:open={deleteOpen}
-	title="Delete user?"
+	title={deletingUser?.disabledAt ? 'Turn this account on?' : 'Turn this account off?'}
 	description={deleteDescription}
 	onconfirm={confirmDelete}
 	oncancel={() => {}}
