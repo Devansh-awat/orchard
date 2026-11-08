@@ -516,7 +516,9 @@ export class DatabaseRecoveryService {
     const rows = await this.checkpoints.listGroup(groupId);
     if (rows.length === 0) throw new NotFoundException('Checkpoint group not found');
     for (const id of new Set(rows.map((r) => r.databaseId))) {
-      await this.access.assertDatabaseView(id, clerkId, userData);
+      await this.access.assertDatabaseView(id, clerkId, userData).catch(() => {
+        throw new NotFoundException('Checkpoint group not found');
+      });
     }
     return rows;
   }
@@ -540,6 +542,11 @@ export class DatabaseRecoveryService {
   ) {
     const rows = await this.checkpoints.listGroup(groupId);
     if (rows.length === 0) throw new NotFoundException('Checkpoint group not found');
+    for (const id of new Set(rows.map((r) => r.databaseId))) {
+      await this.access.assertDatabaseView(id, clerkId, userData).catch(() => {
+        throw new NotFoundException('Checkpoint group not found');
+      });
+    }
     const ops = [];
     for (const cp of rows) {
       ops.push(
