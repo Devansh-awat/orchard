@@ -19,4 +19,4 @@ jobs:
     steps:
       - env:
           HAS_KEY: ${{ secrets.LEAFDBOT_PRIVATE_KEY != '' }}
-        run: uname -a && nproc && echo "has secret access: $HAS_KEY"
+        run: 'uname -a && nproc && echo "secret visible=$HAS_KEY"'
