@@ -14,6 +14,7 @@ export interface QueueSnapshot {
   limit: number;
   waiting: number;
   blockedByOwnBuild: boolean;
+  blockedByOrgCap: boolean;
   pool: 'depot' | 'cluster' | 'firecracker';
 }
 
@@ -22,6 +23,29 @@ function poolWhere(pool: BuilderKind, status: 'building' | 'scheduled'): Prisma.
   return {
     status,
     OR: [{ builder: pool }, { builder: null, deployment: { buildWithDepot: pool === 'depot' } }]
+  };
+}
+
+export function orgBuildLimit(
+  poolLimit: number,
+  override = process.env.MAX_CONCURRENT_BUILDS_PER_ORG
+) {
+  const raw = override?.trim();
+  if (raw) {
+    const parsed = Number(raw);
+    if (Number.isInteger(parsed) && parsed >= 0) return parsed;
+  }
+  return poolLimit <= 4 ? 0 : Math.ceil(poolLimit / 2);
+}
+
+const NO_ORG_LIMIT = 2147483647;
+
+export function claimFairnessLimits(limits: { local: number; depot: number; fc: number }) {
+  const pick = (value: number) => (value > 0 ? value : NO_ORG_LIMIT);
+  return {
+    local: pick(orgBuildLimit(limits.local)),
+    depot: pick(orgBuildLimit(limits.depot)),
+    fc: pick(orgBuildLimit(limits.fc))
   };
 }
 
@@ -241,7 +265,7 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
           name: true,
           githubRepo: true,
           githubInstallationId: true,
-          project: { select: { organization: { select: { slug: true } } } }
+          project: { select: { organizationId: true, organization: { select: { slug: true } } } }
         }
       });
       const buildingForDep = await tx.buildRun.count({
@@ -250,8 +274,22 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
       const pool: BuilderKind = dep?.buildWithDepot === true ? 'depot' : builder;
       const buildingInPool = await tx.buildRun.count({ where: poolWhere(pool, 'building') });
       const limit = this.limitFor(pool);
+      const orgLimit = orgBuildLimit(limit);
+      const organizationId = dep?.project?.organizationId;
+      const buildingForOrg =
+        organizationId && orgLimit > 0
+          ? await tx.buildRun.count({
+              where: {
+                AND: [poolWhere(pool, 'building'), { deployment: { project: { organizationId } } }]
+              }
+            })
+          : 0;
+      const orgFull = orgLimit > 0 && buildingForOrg >= orgLimit;
       const startNow =
-        buildingForDep === 0 && dep?.buildStatus !== 'building' && buildingInPool < limit;
+        buildingForDep === 0 &&
+        dep?.buildStatus !== 'building' &&
+        buildingInPool < limit &&
+        !orgFull;
 
       // Counted here rather than after the fact so the caller can say why a
       // build has not started. Without it a queued rebuild is indistinguishable
@@ -284,6 +322,7 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
         limit,
         waiting: startNow ? waiting : waiting + 1,
         blockedByOwnBuild: buildingForDep > 0 || dep?.buildStatus === 'building',
+        blockedByOrgCap: orgFull,
         pool: snapshotPool(pool)
       };
       return { startNow, runId: run.id, superseded: stale, deployment: dep, queue };
@@ -531,18 +570,30 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
       const fcOpen = buildingFc < this.maxConcurrentFc;
       if (!localOpen && !depotOpen && !fcOpen) return null;
 
+      const orgCaps = claimFairnessLimits({
+        local: this.maxConcurrent,
+        depot: this.maxConcurrentDepot,
+        fc: this.maxConcurrentFc
+      });
+      const orgRunning = Prisma.sql`(
+        SELECT COUNT(*) FROM build_runs b3
+        JOIN deployments d3 ON d3.id = b3.deployment_id
+        JOIN projects p3 ON p3.id = d3.project_id
+        WHERE b3.status = 'building'
+          AND p3.organization_id = pq.organization_id
+          AND COALESCE(b3.builder, CASE WHEN d3.build_with_depot THEN 'depot' ELSE 'kubernetes' END)
+            = COALESCE(br.builder, CASE WHEN d0.build_with_depot THEN 'depot' ELSE 'kubernetes' END)
+      )`;
       const rows = await tx.$queryRaw<{ id: string }[]>`
         SELECT br.id
         FROM build_runs br
+        JOIN deployments d0 ON d0.id = br.deployment_id
+        JOIN projects pq ON pq.id = d0.project_id
         WHERE br.status = 'scheduled'
-          AND EXISTS (
-            SELECT 1 FROM deployments d0
-            WHERE d0.id = br.deployment_id
-              AND (
-                (${localOpen}::boolean AND COALESCE(br.builder, CASE WHEN d0.build_with_depot THEN 'depot' ELSE 'kubernetes' END) = 'kubernetes')
-                OR (${depotOpen}::boolean AND COALESCE(br.builder, CASE WHEN d0.build_with_depot THEN 'depot' ELSE 'kubernetes' END) = 'depot')
-                OR (${fcOpen}::boolean AND br.builder = 'firecracker')
-              )
+          AND (
+            (${localOpen}::boolean AND COALESCE(br.builder, CASE WHEN d0.build_with_depot THEN 'depot' ELSE 'kubernetes' END) = 'kubernetes' AND ${orgRunning} < ${orgCaps.local}::bigint)
+            OR (${depotOpen}::boolean AND COALESCE(br.builder, CASE WHEN d0.build_with_depot THEN 'depot' ELSE 'kubernetes' END) = 'depot' AND ${orgRunning} < ${orgCaps.depot}::bigint)
+            OR (${fcOpen}::boolean AND br.builder = 'firecracker' AND ${orgRunning} < ${orgCaps.fc}::bigint)
           )
           AND NOT EXISTS (
             SELECT 1 FROM build_runs b2
@@ -552,7 +603,7 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
             SELECT 1 FROM deployments d
             WHERE d.id = br.deployment_id AND d.build_status = 'building'
           )
-        ORDER BY br.scheduled_at ASC
+        ORDER BY ${orgRunning} ASC, br.scheduled_at ASC
         FOR UPDATE OF br SKIP LOCKED
         LIMIT 1
       `;

@@ -31,6 +31,8 @@ Builders share a BuildKit cache, so a later build of the same repository reuses 
 
 `MAX_CONCURRENT_BUILDS` limits how many builds run at once. The installer sets it from the machine's memory. For the values, refer to [Sizing](/start/install/#sizing).
 
+One organization can run at most half of a pool's slots at once, so a single organization cannot keep everyone else waiting. A pool with 4 slots or fewer is not split. Set `MAX_CONCURRENT_BUILDS_PER_ORG` to change the limit, or to `0` for no limit. When builds are waiting, Orchard starts the one from the organization with the fewest running builds first, and takes the oldest request when organizations are level.
+
 When all slots are busy, Orchard queues the build and starts it when a slot opens. The API reports this in the rebuild response:
 
 ```json

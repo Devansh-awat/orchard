@@ -9186,7 +9186,9 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
   private static queuedBuild(runId: string, queue: QueueSnapshot) {
     const reason = queue.blockedByOwnBuild
       ? 'This app is already building. The queued build starts when that one finishes.'
-      : `All ${queue.limit} build ${queue.limit === 1 ? 'slot is' : 'slots are'} busy on this instance.`;
+      : queue.blockedByOrgCap
+        ? 'This organization is already using its share of the build slots. The queued build starts when one of its builds finishes.'
+        : `All ${queue.limit} build ${queue.limit === 1 ? 'slot is' : 'slots are'} busy on this instance.`;
     return {
       accepted: true,
       started: false,

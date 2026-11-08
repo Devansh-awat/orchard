@@ -22,6 +22,7 @@ const full: QueueSnapshot = {
   limit: 2,
   waiting: 1,
   blockedByOwnBuild: false,
+  blockedByOrgCap: false,
   pool: 'cluster'
 };
 
