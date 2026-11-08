@@ -129,6 +129,52 @@ export interface GuardedFetchInit extends RequestInit {
   maxRedirects?: number;
   allowPrivate?: boolean;
   label?: string;
+  /**
+   * Cap on the final response body. A declared content-length over the cap is
+   * refused before reading; a body that streams past it is aborted mid-read.
+   */
+  maxBodyBytes?: number;
+}
+
+export class ResponseTooLargeError extends Error {
+  constructor(label: string, maxBytes: number) {
+    super(`${label} response exceeds ${maxBytes} bytes`);
+    this.name = 'ResponseTooLargeError';
+  }
+}
+
+/** Wrap a response so reading more than `maxBytes` of its body errors and cancels the socket. */
+export function capResponseBody(res: Response, maxBytes: number, label = 'URL'): Response {
+  const declared = Number(res.headers.get('content-length'));
+  if (Number.isFinite(declared) && declared > maxBytes) {
+    void res.body?.cancel().catch(() => undefined);
+    throw new ResponseTooLargeError(label, maxBytes);
+  }
+  if (!res.body) return res;
+  let seen = 0;
+  const reader = res.body.getReader();
+  const body = new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      const { done, value } = await reader.read();
+      if (done) {
+        controller.close();
+        return;
+      }
+      seen += value.byteLength;
+      if (seen > maxBytes) {
+        await reader.cancel().catch(() => undefined);
+        controller.error(new ResponseTooLargeError(label, maxBytes));
+        return;
+      }
+      controller.enqueue(value);
+    },
+    cancel(reason) {
+      return reader.cancel(reason);
+    }
+  });
+  const headers = new Headers(res.headers);
+  headers.delete('content-length');
+  return new Response(body, { status: res.status, statusText: res.statusText, headers });
 }
 
 function isRedirect(status: number): boolean {
@@ -153,6 +199,7 @@ export async function guardedFetch(
     label = 'URL',
     redirect,
     signal,
+    maxBodyBytes,
     ...rest
   } = init;
   const check = (target: string | URL) =>
@@ -175,7 +222,9 @@ export async function guardedFetch(
             signal: timeout,
             dispatcher: pinned()
           })) as unknown as Response);
-    if (redirect === 'manual' || !isRedirect(res.status)) return res;
+    if (redirect === 'manual' || !isRedirect(res.status)) {
+      return maxBodyBytes ? capResponseBody(res, maxBodyBytes, label) : res;
+    }
     await res.body?.cancel();
     const location = res.headers.get('location');
     if (!location) throw new BadRequestException(`${label} redirected without a location`);

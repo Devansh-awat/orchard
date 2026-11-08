@@ -71,6 +71,9 @@ export interface SettingsInput {
 const SECRET_MASK = '••••••••';
 const SAML_CERT_MASK = '(configured)';
 const METADATA_MAX_BYTES = 512 * 1024;
+// Discovery documents, key sets, token and userinfo replies are a few KiB; a
+// hostile or broken IdP must not make us buffer more than this.
+export const IDP_MAX_BODY_BYTES = 1024 * 1024;
 const MAX_IDP_CERTIFICATES = 4;
 
 function isMask(value: string | null | undefined): boolean {
@@ -423,13 +426,15 @@ export class SsoService implements OnApplicationBootstrap {
 
   /**
    * Every request to an identity provider goes through here so the same
-   * address policy applies at fetch time as at save time, redirects included.
+   * address policy applies at fetch time as at save time, redirects included,
+   * and the response body is capped at IDP_MAX_BODY_BYTES (aborted mid-stream).
    */
   fetchIdp(url: string | URL, init: GuardedFetchInit = {}): Promise<Response> {
     return guardedFetch(url, {
       ...init,
       label: 'Identity provider URL',
-      allowPrivate: this.allowInternalIdp()
+      allowPrivate: this.allowInternalIdp(),
+      maxBodyBytes: IDP_MAX_BODY_BYTES
     });
   }
 
