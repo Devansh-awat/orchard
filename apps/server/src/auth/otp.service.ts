@@ -16,6 +16,7 @@ import { DomainRegistrationService } from './domain-registration';
 // in. Two implementations of the same hash would drift into a login link the
 // server cannot verify.
 import { OTP_EXPIRY_MINUTES, generateOtpCode, hashOtpCode } from './otp-code';
+import { accountEmail } from '../users/account-scope';
 
 const MAX_VERIFICATION_ATTEMPTS = 5;
 
@@ -192,7 +193,7 @@ export class OtpService {
     // with emailVerified=true), so this is safe for both flows.
     await this.prisma.$transaction(async (tx) => {
       const unverified = await tx.user.findUnique({
-        where: { email: normalizedEmail },
+        where: accountEmail(normalizedEmail),
         select: { id: true, emailVerified: true }
       });
       if (!unverified || unverified.emailVerified) return;
@@ -217,7 +218,7 @@ export class OtpService {
   private async refuseResurrectedDomain(email: string): Promise<void> {
     if (!this.domainRegistry) return;
     const user = await this.prisma.user.findUnique({
-      where: { email },
+      where: accountEmail(email),
       select: { id: true, emailVerified: true, emailVerifiedAt: true, createdAt: true }
     });
     if (!user?.emailVerified) return;

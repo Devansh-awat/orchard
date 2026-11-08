@@ -126,7 +126,8 @@ test('starting SSO from a Hack Club session links the local user, not the Hack C
   };
   login.prisma = {
     user: {
-      findUnique: async ({ where }: any) => users[where.externalAuthId ?? where.email] ?? null
+      findUnique: async ({ where }: any) =>
+        users[where.externalAuthId ?? where.email ?? where.emailScope_email?.email] ?? null
     }
   };
   login.sessionsService = { validateSession: async () => true };

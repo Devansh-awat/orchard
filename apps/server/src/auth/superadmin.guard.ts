@@ -23,6 +23,7 @@ import { ORG_SCOPED_DENY, deviceOrgScope } from './org-scoped-devices';
 import { requestAuthStorage, RequestAuthContext } from './request-context';
 import { setTraceUser } from '../analytics/datadog';
 import { scopeFromHeader } from '../mcp/mcp-scopes';
+import { accountEmail } from '../users/account-scope';
 
 /**
  * Namespaces an organization-scoped session may never touch.
@@ -270,7 +271,7 @@ export class SuperAdminGuard implements CanActivate {
         });
         if (!dbUser && actingEmail) {
           dbUser = await this.prisma.user.findUnique({
-            where: { email: actingEmail },
+            where: accountEmail(actingEmail),
             select: { id: true }
           });
         }
@@ -368,7 +369,7 @@ export class SuperAdminGuard implements CanActivate {
         });
         if (!dbUser && payload.email) {
           dbUser = await this.prisma.user.findUnique({
-            where: { email: payload.email as string },
+            where: accountEmail(payload.email as string),
             select: { id: true }
           });
         }

@@ -11,6 +11,7 @@ import { IdentityMappingService } from '../sso/identity-mapping.service';
 import { ScimError } from './scim-error';
 import { ScimGroupsService } from './scim-groups.service';
 import { ScimQuery, SCIM_MAX_RESULTS } from './scim-query';
+import { accountEmail } from '../users/account-scope';
 
 interface Ctx {
   organizationId: string;
@@ -605,7 +606,7 @@ export class ScimService implements OnModuleInit {
       ...profileFromInstance(instance, email)
     };
     const role = roleFromInstance(instance) ?? DEFAULT_ROLE;
-    const existingUser = await this.prisma.user.findUnique({ where: { email } });
+    const existingUser = await this.prisma.user.findUnique({ where: accountEmail(email) });
 
     if (existingUser) {
       const member = await this.prisma.organizationMember.findUnique({

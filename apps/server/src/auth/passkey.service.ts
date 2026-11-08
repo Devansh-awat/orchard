@@ -16,6 +16,7 @@ import { normalizeBoundedEmail } from './email-normalize';
 import { PrismaService } from '../prisma/prisma.service';
 import type { Prisma } from '@prisma/client';
 import { RateLimitService, CLEANUP_BATCH, CLEANUP_MAX_BATCHES } from './rate-limit.service';
+import { accountEmail } from '../users/account-scope';
 
 const CHALLENGE_EXPIRY_MINUTES = 5;
 
@@ -180,7 +181,7 @@ export class PasskeyService {
     // If email is provided, only allow passkeys for that user
     if (normalizedEmail) {
       const user = await this.prisma.user.findUnique({
-        where: { email: normalizedEmail },
+        where: accountEmail(normalizedEmail),
         include: { passkeys: true }
       });
 
@@ -354,7 +355,7 @@ export class PasskeyService {
 
   async userHasPasskeys(email: string): Promise<boolean> {
     const user = await this.prisma.user.findUnique({
-      where: { email: email.toLowerCase() },
+      where: accountEmail(email.toLowerCase()),
       include: { passkeys: { select: { id: true } } }
     });
 

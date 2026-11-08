@@ -27,6 +27,7 @@ import { setSessionCookie, clearSessionCookie } from './cookies';
 import { Public, Auth } from './decorators';
 import { getClientIp } from './client-ip';
 import { signupMode, signupDeniedError } from './signup-mode';
+import { accountEmail } from '../users/account-scope';
 
 @Public()
 @Controller('auth')
@@ -145,7 +146,7 @@ export class OAuthController {
 
       if (!existingUser) {
         const emailOwner = await this.prisma.user.findUnique({
-          where: { email: hackClubUser.email }
+          where: accountEmail(hackClubUser.email)
         });
         if (emailOwner) {
           if (emailOwner.externalAuthId && emailOwner.externalAuthId !== hackClubUser.id) {

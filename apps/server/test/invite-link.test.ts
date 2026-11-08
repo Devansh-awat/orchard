@@ -102,7 +102,8 @@ function setup(
       findUnique: async ({ where }: any) =>
         state.accounts.find(
           (a) =>
-            (where.email && a.email === where.email) ||
+            ((where.email ?? where.emailScope_email?.email) &&
+              a.email === (where.email ?? where.emailScope_email?.email)) ||
             (where.username && a.username === where.username)
         ) ?? null,
       create: async ({ data }: any) => {

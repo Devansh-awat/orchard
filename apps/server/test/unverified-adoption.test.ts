@@ -41,7 +41,10 @@ function makeDb(email: string, emailVerified: boolean) {
   const db: any = {
     user: {
       findUnique: async ({ where }: any) =>
-        where.email === state.user.email || where.id === state.user.id ? state.user : null,
+        (where.email ?? where.emailScope_email?.email) === state.user.email ||
+        where.id === state.user.id
+          ? state.user
+          : null,
       update: async ({ data }: any) => Object.assign(state.user, data)
     },
     session: {

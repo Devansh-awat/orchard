@@ -24,6 +24,7 @@ import { signupMode, signupDeniedError } from '../auth/signup-mode';
 import { PasswordRefused, hashAccountPassword } from '../auth/superadmin-password';
 import { SecretCryptoService } from '../crypto/secret-crypto.service';
 import { assertPublicUrl, guardedS3Options } from '../notifications/webhook-guard';
+import { accountEmail } from '../users/account-scope';
 
 export function normalizeBackupEndpoint(input: string | null): string | null {
   const raw = (input ?? '').trim().replace(/\/+$/, '');
@@ -909,7 +910,7 @@ export class OrganizationsService {
     });
 
     const existingUser = await this.prisma.user.findUnique({
-      where: { email: normalizedEmail }
+      where: accountEmail(normalizedEmail)
     });
 
     if (existingUser) {
@@ -1418,7 +1419,7 @@ export class OrganizationsService {
       throw err;
     }
     const account = await this.prisma.user.findUnique({
-      where: { email: email.toLowerCase() },
+      where: accountEmail(email.toLowerCase()),
       select: { id: true }
     });
     if (account) return 'sign_in';

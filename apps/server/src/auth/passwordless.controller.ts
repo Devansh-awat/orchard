@@ -36,6 +36,7 @@ import { getClientIp } from './client-ip';
 import { MAX_EMAIL_LENGTH, normalizeBoundedEmail } from './email-normalize';
 import { signupMode, signupDeniedError } from './signup-mode';
 import { signedInUser } from './signed-in-user';
+import { accountEmail } from '../users/account-scope';
 
 interface RequestOtpDto {
   email: string;
@@ -161,7 +162,7 @@ export class PasswordlessController {
     await this.turnstile.verifyRequest(req, 'signin', ipAddress);
 
     const existing = await this.prisma.user.findUnique({
-      where: { email: normalizeBoundedEmail(email) },
+      where: accountEmail(normalizeBoundedEmail(email)),
       select: { id: true, isSuperAdmin: true }
     });
     if (!existing?.isSuperAdmin) await this.authz.assertInstanceSsoNotEnforced('otp');
@@ -200,7 +201,7 @@ export class PasswordlessController {
     // signups don't leave an orphan user row with zero organizations.
     const normalizedEmail = result.email.toLowerCase().trim();
     const existingUser = await this.prisma.user.findUnique({
-      where: { email: normalizedEmail }
+      where: accountEmail(normalizedEmail)
     });
 
     const hasAccess = await this.hasPrivateBetaAccess(normalizedEmail, existingUser);
@@ -621,7 +622,7 @@ export class PasswordlessController {
     const normalizedEmail = email.toLowerCase().trim();
 
     let user = await this.prisma.user.findUnique({
-      where: { email: normalizedEmail }
+      where: accountEmail(normalizedEmail)
     });
 
     if (!user) {

@@ -29,7 +29,9 @@ function prismaWith(rows: Row[]) {
   return {
     user: {
       findUnique: async ({ where }: any) =>
-        rows.find((r) => r.email === where.email || r.id === where.id) ?? null,
+        rows.find(
+          (r) => r.email === (where.email ?? where.emailScope_email?.email) || r.id === where.id
+        ) ?? null,
       findFirst: async ({ where }: any) =>
         rows
           .filter((r) => (where?.isSuperAdmin ? r.isSuperAdmin : true))

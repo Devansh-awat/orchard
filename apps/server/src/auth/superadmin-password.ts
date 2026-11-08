@@ -1,4 +1,5 @@
 import * as bcrypt from 'bcrypt';
+import { accountEmail } from '../users/account-scope';
 
 const BCRYPT_ROUNDS = 12;
 const MIN_LENGTH = 12;
@@ -82,7 +83,7 @@ export async function superadminHasPassword(
   anyAccount = false
 ): Promise<boolean> {
   const user = await prisma.user.findUnique({
-    where: { email: email.toLowerCase().trim() },
+    where: accountEmail(email.toLowerCase().trim()),
     select: { id: true, email: true, isSuperAdmin: true, passwordHash: true }
   });
   return Boolean((user?.isSuperAdmin || anyAccount) && user?.passwordHash);
@@ -106,7 +107,7 @@ export async function verifySuperadminPassword(
   anyAccount = false
 ): Promise<{ id: string; email: string } | null> {
   const user = await prisma.user.findUnique({
-    where: { email: email.toLowerCase().trim() },
+    where: accountEmail(email.toLowerCase().trim()),
     select: { id: true, email: true, isSuperAdmin: true, passwordHash: true }
   });
 
@@ -120,7 +121,7 @@ async function findSuperadmin(prisma: PasswordPrisma, email: string) {
   const address = email.toLowerCase().trim();
   if (address) {
     const user = await prisma.user.findUnique({
-      where: { email: address },
+      where: accountEmail(address),
       select: { id: true, email: true, isSuperAdmin: true, passwordHash: true }
     });
     if (!user) throw new PasswordRefused(`no account here uses ${address}`);

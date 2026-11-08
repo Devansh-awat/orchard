@@ -5,6 +5,7 @@ import { randomBytes, createHash } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { AuthorizationService } from '../auth/authorization.service';
+import { ACCOUNT_SCOPE } from '../users/account-scope';
 
 @Injectable()
 export class AdminService {
@@ -240,7 +241,7 @@ export class AdminService {
     if (data.primaryOwnerEmail?.trim()) {
       const email = data.primaryOwnerEmail.trim().toLowerCase();
       const user = await this.prisma.user.findFirst({
-        where: { email: { equals: email, mode: 'insensitive' } }
+        where: { emailScope: ACCOUNT_SCOPE, email: { equals: email, mode: 'insensitive' } }
       });
       if (user) {
         primaryOwnerId = user.id;

@@ -50,6 +50,7 @@ import { projectedFill, sizeToResumeWrites, WRITE_GUARD_EXIT } from '../kubernet
 import { deriveDbTuning } from '../kubernetes/db-tuning';
 import { requestAuthStorage } from '../auth/request-context';
 import type { UploadOwner } from '../organizations/upload-references';
+import { accountEmail } from '../users/account-scope';
 
 const MAX_NAMESPACE_ATTEMPTS = 20;
 
@@ -1103,7 +1104,7 @@ export class ProjectsService {
     });
     if (!project) throw new NotFoundException('Project not found');
 
-    const user = await this.prisma.user.findUnique({ where: { email: normalizedEmail } });
+    const user = await this.prisma.user.findUnique({ where: accountEmail(normalizedEmail) });
     const orgMember = user
       ? await this.prisma.organizationMember.findUnique({
           where: {

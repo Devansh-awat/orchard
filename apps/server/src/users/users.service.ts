@@ -8,6 +8,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { EmailAvatarService } from './email-avatar.service';
 import { discardUnverifiedCredentials } from '../auth/unverified-adoption';
+import { accountEmail } from './account-scope';
 
 const MAX_SEEN_UPDATES = 100;
 
@@ -89,7 +90,7 @@ export class UsersService {
 
     if (!user) {
       user = await this.prisma.user.findUnique({
-        where: { email: hackClubUser.email }
+        where: accountEmail(hackClubUser.email)
       });
 
       if (user) {
@@ -245,7 +246,7 @@ export class UsersService {
     if (!user && userData?.email) {
       // Try to find by email first
       user = await this.prisma.user.findUnique({
-        where: { email: userData.email }
+        where: accountEmail(userData.email)
       });
 
       const uuidRegex =

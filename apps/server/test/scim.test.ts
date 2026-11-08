@@ -123,7 +123,9 @@ function makeDb() {
       findUnique: async ({ where }: any) =>
         users.find(
           (u) =>
-            (where.email ? u.email === where.email : u.id === where.id) ||
+            ((where.email ?? where.emailScope_email?.email)
+              ? u.email === (where.email ?? where.emailScope_email?.email)
+              : u.id === where.id) ||
             (where.username && u.username === where.username)
         ) ?? null
     },

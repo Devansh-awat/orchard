@@ -34,6 +34,7 @@ import {
   sameSecret,
   verifyAssertion
 } from './saml-response';
+import { accountEmail } from '../users/account-scope';
 
 const SAML_CLOCK_SKEW_MS = 60_000;
 const SAML_MAX_ASSERTION_AGE_MS = 10 * 60_000;
@@ -175,7 +176,7 @@ export class SsoLoginService {
           select: { id: true }
         })) ??
         (await this.prisma.user.findUnique({
-          where: { email: payload.email },
+          where: accountEmail(payload.email),
           select: { id: true }
         }));
       return user?.id;
@@ -636,7 +637,8 @@ export class SsoLoginService {
     const subject = cleanSubject(profile.subject);
     const bound = await this.mapping.findBound(provider, subject);
     const candidate =
-      bound ?? (await this.prisma.user.findUnique({ where: { email }, select: { id: true } }));
+      bound ??
+      (await this.prisma.user.findUnique({ where: accountEmail(email), select: { id: true } }));
     const mapping = await this.mapping.prepare(provider, profile.claims ?? null, candidate?.id);
 
     const user = provider.organizationId
@@ -770,7 +772,7 @@ export class SsoLoginService {
     mapping?: MappingContext
   ) {
     const organizationId = provider.organizationId;
-    let user = bound ?? (await this.prisma.user.findUnique({ where: { email } }));
+    let user = bound ?? (await this.prisma.user.findUnique({ where: accountEmail(email) }));
 
     if (user) {
       const membership = await this.prisma.organizationMember.findUnique({
@@ -940,7 +942,7 @@ export class SsoLoginService {
     emailVerified = false,
     linkedUserId?: string
   ) {
-    const existing = bound ?? (await this.prisma.user.findUnique({ where: { email } }));
+    const existing = bound ?? (await this.prisma.user.findUnique({ where: accountEmail(email) }));
 
     if (existing && !bound && !emailVerified && linkedUserId !== existing.id) {
       throw new UnauthorizedException({ message: 'sso_link_required' });

@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
+import { accountEmail } from '../src/users/account-scope';
 
 const prisma = new PrismaClient();
 
@@ -38,7 +39,7 @@ async function main() {
   const passwordHash = await bcrypt.hash('password123', 10);
 
   const user = await prisma.user.upsert({
-    where: { email: 'admin@orchard.dev' },
+    where: accountEmail('admin@orchard.dev'),
     update: { setupCompleted: true },
     create: {
       email: 'admin@orchard.dev',

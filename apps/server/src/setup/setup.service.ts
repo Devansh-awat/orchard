@@ -20,6 +20,7 @@ import {
   claimUrl,
   recoveryState
 } from './setup-token';
+import { accountEmail } from '../users/account-scope';
 
 export { SUPERADMIN_CLAIM_KEY };
 
@@ -834,7 +835,7 @@ export class SetupService implements OnModuleInit {
       throw new BadRequestException('Enter an email address to claim this instance');
     }
 
-    const existing = await this.prisma.user.findUnique({ where: { email: normalizedEmail } });
+    const existing = await this.prisma.user.findUnique({ where: accountEmail(normalizedEmail) });
     const user = existing ?? (await this.createUser(normalizedEmail));
 
     await this.prisma.$transaction(async (tx) => {

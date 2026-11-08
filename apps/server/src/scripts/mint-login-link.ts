@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import { OTP_EXPIRY_MINUTES, generateOtpCode, hashOtpCode } from '../auth/otp-code';
+import { accountEmail } from '../users/account-scope';
 
 // Backs `orchardctl login` on the host. It mints the same one-time code the
 // email flow does and prints it instead of mailing it, which is what makes an
@@ -21,7 +22,7 @@ async function main() {
   try {
     const asked = (flag('--email') ?? '').toLowerCase().trim();
     const user = asked
-      ? await prisma.user.findUnique({ where: { email: asked }, select: { email: true } })
+      ? await prisma.user.findUnique({ where: accountEmail(asked), select: { email: true } })
       : await prisma.user.findFirst({
           where: { isSuperAdmin: true },
           select: { email: true },

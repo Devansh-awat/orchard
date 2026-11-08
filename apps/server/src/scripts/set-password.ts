@@ -5,6 +5,7 @@ import {
   setAccountPassword,
   setSuperadminPassword
 } from '../auth/superadmin-password';
+import { accountEmail } from '../users/account-scope';
 
 // Backs `orchardctl password` on the host. The password arrives on stdin so it
 // never reaches a process list or a shell history, and the command that calls
@@ -52,7 +53,7 @@ async function main() {
 
     const account = email
       ? await prisma.user.findUnique({
-          where: { email: email.toLowerCase().trim() },
+          where: accountEmail(email.toLowerCase().trim()),
           select: { id: true, email: true, isSuperAdmin: true }
         })
       : null;

@@ -30,7 +30,9 @@ function harness() {
   const prisma: any = {
     user: {
       findUnique: async ({ where }: any) =>
-        where.email === passkeyUser.email ? { ...passkeyUser, passkeys } : null
+        (where.email ?? where.emailScope_email?.email) === passkeyUser.email
+          ? { ...passkeyUser, passkeys }
+          : null
     },
     passkey: {
       findMany: async () => passkeys,

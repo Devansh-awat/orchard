@@ -10,7 +10,9 @@ datasource db {
 model User {
   id                          String    @id @default(uuid()) @db.Uuid
   externalAuthId              String?   @unique @map("hackclub_id") @db.VarChar(255)
-  email                       String    @unique @db.VarChar(255)
+  email                       String    @db.VarChar(255)
+  emailScope                  String    @default("account") @map("email_scope") @db.VarChar(64)
+  homeOrganizationId          String?   @map("home_organization_id") @db.Uuid
   username                    String    @unique @db.VarChar(100)
   passwordHash                String?   @map("password_hash") @db.VarChar(255)
   firstName                   String?   @map("first_name") @db.VarChar(100)
@@ -32,6 +34,10 @@ model User {
   setupCompleted              Boolean   @default(false) @map("setup_completed")
   emailVerified               Boolean   @default(false) @map("email_verified")
   emailVerifiedAt             DateTime? @map("email_verified_at") @db.Timestamp(6)
+  emailVerifiedVia            String?   @map("email_verified_via") @db.VarChar(20)
+  disabledAt                  DateTime? @map("disabled_at") @db.Timestamp(6)
+  disabledReason              String?   @map("disabled_reason") @db.VarChar(255)
+  passkeyOnly                 Boolean   @default(false) @map("passkey_only")
   seenUpdates                 String[]  @default([]) @map("seen_updates")
   setupSkipped                String[]  @default([]) @map("setup_skipped")
   createdAt                   DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
@@ -74,7 +80,12 @@ model User {
   notificationDestinations   UserNotificationDestination[]
   createdNotificationRules   NotificationRule[]            @relation("NotificationRuleCreator")
   createdChannels            NotificationChannel[]         @relation("NotificationChannelCreator")
+  homeOrganization           Organization?                 @relation("OrgIdentities", fields: [homeOrganizationId], references: [id], onDelete: Cascade)
+  linkedIdentities           AccountLink[]                 @relation("AccountLinkAccount")
+  linkedAccount              AccountLink?                  @relation("AccountLinkIdentity")
 
+  @@unique([emailScope, email])
+  @@index([homeOrganizationId], map: "idx_users_home_organization")
   @@map("users")
 }
 
@@ -147,7 +158,8 @@ model Session {
   revokedAt         DateTime? @map("revoked_at") @db.Timestamp(6)
   refreshGeneration Int       @default(0) @map("refresh_generation")
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orgGrants SessionOrgGrant[]
 
   @@index([userId], map: "idx_sessions_user")
   @@index([expiresAt], map: "idx_sessions_expires")
@@ -315,6 +327,10 @@ model Organization {
   projects             Project[]
   ssoSettings          OrgSsoSettings?
   identityProviders    IdentityProvider[]
+  identities           User[]                    @relation("OrgIdentities")
+  accountLinks         AccountLink[]
+  sessionGrants        SessionOrgGrant[]
+  idpProjectRules      IdpProjectRule[]
   idpGroupRules        IdpGroupRule[]
   idpAutoCreateRule    IdpAutoCreateRule?
   domains              OrgDomain[]
@@ -331,6 +347,23 @@ model Organization {
 
   @@index([quotaGroupId], map: "idx_organizations_quota_group")
   @@map("organizations")
+}
+
+enum MemberStatus {
+  active
+  disabled
+
+  @@map("member_status")
+}
+
+enum MemberSource {
+  invite
+  sso
+  scim
+  rule
+  direct
+
+  @@map("member_source")
 }
 
 enum OrganizationRole {
@@ -382,6 +415,11 @@ model OrganizationMember {
   // (invite, direct add) are never removed by a rule, only re-roled when the
   // user matches one.
   managedByProviderId String? @map("managed_by_provider_id") @db.Uuid
+
+  status         MemberStatus  @default(active)
+  disabledAt     DateTime?     @map("disabled_at") @db.Timestamp(6)
+  disabledReason String?       @map("disabled_reason") @db.VarChar(255)
+  source         MemberSource?
 
   organization      Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   user              User              @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -438,8 +476,59 @@ model Role {
   projectMembers     ProjectMember[]
   projectInvitations ProjectInvitation[]
   orgInvitations     OrganizationInvitation[]
+  idpProjectRules    IdpProjectRule[]
 
   @@map("roles")
+}
+
+model AccountLink {
+  id             String   @id @default(uuid()) @db.Uuid
+  identityUserId String   @unique @map("identity_user_id") @db.Uuid
+  accountUserId  String   @map("account_user_id") @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+
+  identity     User         @relation("AccountLinkIdentity", fields: [identityUserId], references: [id], onDelete: Cascade)
+  account      User         @relation("AccountLinkAccount", fields: [accountUserId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([accountUserId, organizationId])
+  @@map("account_links")
+}
+
+model SessionOrgGrant {
+  sessionId      String   @map("session_id") @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  providerId     String?  @map("provider_id") @db.Uuid
+  expiresAt      DateTime @map("expires_at") @db.Timestamp(6)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+
+  session      Session      @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@id([sessionId, organizationId])
+  @@index([expiresAt], map: "idx_session_org_grants_expires")
+  @@map("session_org_grants")
+}
+
+model IdpProjectRule {
+  id             String   @id @default(uuid()) @db.Uuid
+  providerId     String   @map("provider_id") @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  projectId      String   @map("project_id") @db.Uuid
+  value          String   @db.VarChar(256)
+  roleId         String   @map("role_id") @db.Uuid
+  createdBy      String?  @map("created_by") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+
+  provider     IdentityProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project      Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  role         Role             @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([providerId, projectId, value])
+  @@index([organizationId], map: "idx_idp_project_rules_org")
+  @@map("idp_project_rules")
 }
 
 model Project {
@@ -468,6 +557,7 @@ model Project {
   creator             User?                    @relation("ProjectCreator", fields: [createdBy], references: [id], onDelete: SetNull)
   owner               User?                    @relation("ProjectOwner", fields: [ownerId], references: [id], onDelete: SetNull)
   members             ProjectMember[]
+  idpProjectRules     IdpProjectRule[]
   invitations         ProjectInvitation[]
   transferRequests    ProjectTransferRequest[]
   orgInvitations      OrganizationInvitation[]
@@ -1986,6 +2076,7 @@ model IdentityProvider {
 
   organization        Organization?        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   groupRules          IdpGroupRule[]
+  projectRules        IdpProjectRule[]
   autoCreateRules     IdpAutoCreateRule[]
   federatedIdentities FederatedIdentity[]
   managedMembers      OrganizationMember[]
@@ -2080,6 +2171,10 @@ model OrgSsoSettings {
   loginBgColor      String? @map("login_bg_color") @db.VarChar(7)
   loginWelcomeText  String? @map("login_welcome_text") @db.VarChar(500)
   loginTagline      String? @map("login_tagline") @db.VarChar(500)
+
+  guestsUseOwnLogin Boolean @default(true) @map("guests_use_own_login")
+  scimOnlySignIn    Boolean @default(false) @map("scim_only_sign_in")
+  maxSessionHours   Int     @default(12) @map("max_session_hours")
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
