@@ -242,3 +242,26 @@ test('one failing cleanup does not stop the others', async () => {
   await svc.tick();
   assert.deepEqual(ran.sort(), ['challenge', 'otp']);
 });
+
+test('an IPv6 client rotating addresses inside its /64 shares one bucket', async () => {
+  const throttle = memoryThrottle();
+  const svc = new RateLimitService({} as any, throttle as any);
+  const cap = RATE_LIMIT_CONFIGS.otp_request_ip.maxAttempts;
+  for (let i = 0; i < cap; i++) {
+    await svc.checkRateLimit(`2001:db8:aa:bb:${i.toString(16)}::1`, 'ip', 'otp_request');
+  }
+  assert.equal(
+    await blocked(svc.checkRateLimit('2001:db8:aa:bb:ffff:1:2:3', 'ip', 'otp_request')),
+    true
+  );
+  assert.equal(await blocked(svc.checkRateLimit('2001:db8:aa:cc::1', 'ip', 'otp_request')), false);
+  assert.equal(await blocked(svc.checkRateLimit('203.0.113.9', 'ip', 'otp_request')), false);
+});
+
+test('an IPv4-mapped IPv6 address shares the bucket of its IPv4', async () => {
+  const throttle = memoryThrottle();
+  const svc = new RateLimitService({} as any, throttle as any);
+  const cap = RATE_LIMIT_CONFIGS.otp_request_ip.maxAttempts;
+  for (let i = 0; i < cap; i++) await svc.checkRateLimit('203.0.113.9', 'ip', 'otp_request');
+  assert.equal(await blocked(svc.checkRateLimit('::ffff:203.0.113.9', 'ip', 'otp_request')), true);
+});

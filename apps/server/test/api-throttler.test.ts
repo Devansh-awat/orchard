@@ -154,3 +154,12 @@ test('Retry-After is skipped once headers are already sent', async () => {
   );
   assert.equal(res.headers['Retry-After'], undefined);
 });
+
+test('IPv6 clients are tracked by their /64', async () => {
+  const guard = makeGuard();
+  const a = await getTracker(guard, makeRequest(undefined, '2001:db8:1:2:aaaa::1'));
+  const b = await getTracker(guard, makeRequest(undefined, '2001:db8:1:2:bbbb::2'));
+  const c = await getTracker(guard, makeRequest(undefined, '2001:db8:1:3::1'));
+  assert.equal(a, b);
+  assert.notEqual(a, c);
+});

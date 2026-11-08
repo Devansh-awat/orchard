@@ -2,7 +2,7 @@ import { ExecutionContext, Inject, Injectable, Optional } from '@nestjs/common';
 import { ThrottlerGuard, type ThrottlerLimitDetail } from '@nestjs/throttler';
 import { PrismaService } from '../prisma/prisma.service';
 import { hashApiToken } from './api-tokens.service';
-import { getClientIp, isCollapsedAddress } from './client-ip';
+import { getClientIp, ipBucketKey, isCollapsedAddress } from './client-ip';
 
 const KNOWN_TOKEN_TTL_MS = 60_000;
 const KNOWN_TOKEN_MAX = 10_000;
@@ -69,7 +69,7 @@ export class ApiThrottlerGuard extends ThrottlerGuard {
       const hash = hashApiToken(token);
       if (await this.tokenExists(hash)) return `token:${hash}`;
     }
-    return getClientIp(req as any);
+    return ipBucketKey(getClientIp(req as any));
   }
 
   protected async throwThrottlingException(

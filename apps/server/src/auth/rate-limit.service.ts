@@ -1,7 +1,7 @@
 import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisThrottleService } from './redis-throttle.service';
-import { isCollapsedAddress } from './client-ip';
+import { ipBucketKey, isCollapsedAddress } from './client-ip';
 
 export const COLLAPSED_IP_MULTIPLIER = 10;
 export const COLLAPSED_IP_MAX_BLOCK_MS = 5 * 60 * 1000;
@@ -165,7 +165,7 @@ export class RateLimitService {
       };
     }
 
-    await this.consume(identifier, type, action, config);
+    await this.consume(type === 'ip' ? ipBucketKey(identifier) : identifier, type, action, config);
   }
 
   /**
@@ -272,10 +272,11 @@ export class RateLimitService {
    * Reset rate limit on successful authentication.
    */
   async resetRateLimit(
-    identifier: string,
+    rawIdentifier: string,
     type: RateLimitIdentifierType,
     action: string
   ): Promise<void> {
+    const identifier = type === 'ip' ? ipBucketKey(rawIdentifier) : rawIdentifier;
     if (await this.throttle.clear(RateLimitService.throttleKey(identifier, type, action))) {
       return;
     }

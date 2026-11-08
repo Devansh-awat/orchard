@@ -8,7 +8,7 @@ import { Duplex } from 'stream';
 import { Request, Response } from 'express';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthorizationService } from './authorization.service';
-import { getClientIp, getRawClientIp } from './client-ip';
+import { getClientIp, getRawClientIp, ipBucketKey } from './client-ip';
 import { RedisThrottleService, type ThrottleWindow } from './redis-throttle.service';
 import { SecretCryptoService } from '../crypto/secret-crypto.service';
 import { ingressPublicUrl } from '../projects/projects.utils';
@@ -350,7 +350,7 @@ export class ProtectionService {
       // every first visit to the site would otherwise burn an attempt.
       if (!authorizationHeader) return challenge;
 
-      const failureKey = `${ingress.id}:${clientIp || 'unknown'}`;
+      const failureKey = `${ingress.id}:${ipBucketKey(clientIp || 'unknown')}`;
       const retryAfter = await this.basicAuthRetryAfter(failureKey);
       if (retryAfter > 0) {
         return {
@@ -746,7 +746,7 @@ export class ProtectionService {
       // do replay it for a same-origin upgrade once the page itself was
       // fetched with credentials, and non-browser clients set it explicitly.
       const authorizationHeader = req.headers['authorization']?.toString();
-      const failureKey = `${ingress.id}:${getRawClientIp(req)}`;
+      const failureKey = `${ingress.id}:${ipBucketKey(getRawClientIp(req))}`;
       if (authorizationHeader) {
         if ((await this.basicAuthRetryAfter(failureKey)) > 0) {
           reject('429 Too Many Requests');

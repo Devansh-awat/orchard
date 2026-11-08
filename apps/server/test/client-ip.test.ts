@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   getClientIp,
   getRawClientIp,
+  ipBucketKey,
   isCollapsedAddress,
   parseTrustProxy,
   trustProxySetting
@@ -226,4 +227,28 @@ test('collapsed addresses are the non-public ones', () => {
   for (const a of [CLIENT, '2a00:1450::1']) {
     assert.equal(isCollapsedAddress(a), false, a);
   }
+});
+
+test('ipBucketKey collapses IPv6 to its /64 and leaves IPv4 alone', () => {
+  assert.equal(ipBucketKey('203.0.113.7'), '203.0.113.7');
+  const a = ipBucketKey('2001:db8:1:2:aaaa:bbbb:cccc:dddd');
+  const b = ipBucketKey('2001:db8:1:2:1::9');
+  const c = ipBucketKey('2001:db8:1:3::1');
+  assert.equal(a, b);
+  assert.notEqual(a, c);
+  assert.equal(a, '2001:db8:1:2:0:0:0:0/64');
+});
+
+test('ipBucketKey unwraps IPv4-mapped, 6to4 and Teredo addresses to the embedded IPv4', () => {
+  assert.equal(ipBucketKey('::ffff:203.0.113.7'), '203.0.113.7');
+  assert.equal(ipBucketKey('2002:cb00:7107:1::1'), '203.0.113.7');
+  assert.equal(ipBucketKey('2002:cb00:7107:ffff::5'), '203.0.113.7');
+  assert.equal(ipBucketKey('2001:0:4136:e378:8000:63bf:3fff:fdd2'), '192.0.2.45');
+});
+
+test('ipBucketKey keeps a deployment prefix and bounds unparseable input', () => {
+  const id = '0b2f6d0e-6f0e-4b43-9f7e-1d6a5c2b9a11';
+  assert.equal(ipBucketKey(`${id}:2001:db8::1`), `${id}:2001:db8:0:0:0:0:0:0/64`);
+  assert.equal(ipBucketKey('unknown'), 'unknown');
+  assert.equal(ipBucketKey('x'.repeat(500)).length, 64);
 });

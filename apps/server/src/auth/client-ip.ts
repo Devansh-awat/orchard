@@ -234,6 +234,37 @@ export function isCollapsedAddress(value: string): boolean {
   return NON_PUBLIC_RANGES.has(addr.range());
 }
 
+const UUID_PREFIX = /^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}:)(.*)$/i;
+
+function embeddedIpv4(addr: ipaddr.IPv6): string | null {
+  const parts = addr.parts;
+  if (parts[0] === 0x2002) {
+    return [parts[1] >> 8, parts[1] & 255, parts[2] >> 8, parts[2] & 255].join('.');
+  }
+  if (parts[0] === 0x2001 && parts[1] === 0) {
+    return [
+      (parts[6] >> 8) ^ 255,
+      (parts[6] & 255) ^ 255,
+      (parts[7] >> 8) ^ 255,
+      (parts[7] & 255) ^ 255
+    ].join('.');
+  }
+  return null;
+}
+
+export function ipBucketKey(value: string): string {
+  const prefixed = UUID_PREFIX.exec(value);
+  if (prefixed) return `${prefixed[1]}${ipBucketKey(prefixed[2])}`;
+  const addr = parse(value);
+  if (!addr) return value.length > 64 ? value.slice(0, 64) : value;
+  if (addr.kind() === 'ipv4') return addr.toString();
+  const v6 = addr as ipaddr.IPv6;
+  const v4 = embeddedIpv4(v6);
+  if (v4) return v4;
+  const masked = [...v6.parts.slice(0, 4), 0, 0, 0, 0];
+  return `${new ipaddr.IPv6(masked).toNormalizedString()}/64`;
+}
+
 export function getClientIp(req: Request): string {
   return resolve(req.headers, req.socket?.remoteAddress) ?? req.ip ?? 'unknown';
 }
