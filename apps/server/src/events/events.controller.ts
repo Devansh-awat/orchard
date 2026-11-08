@@ -24,6 +24,7 @@ import { MembershipCacheService } from '../auth/membership-cache.service';
 import { AuthorizationService } from '../auth/authorization.service';
 import { OrgEventsService } from './org-events.service';
 import { SseStreamLimiter } from './sse-stream-limiter';
+import { SsePreflight } from './sse-preflight.guard';
 
 @Auth()
 @Controller('events')
@@ -35,6 +36,20 @@ export class EventsController {
     private readonly streams: SseStreamLimiter
   ) {}
 
+  // Runs as a guard (see SsePreflight): a caller outside the org is refused with
+  // a plain 404 instead of an empty 200 stream.
+  async preflightOrg(req): Promise<void> {
+    const orgId = req.params.orgId;
+    if (!(await this.authz.isSuperAdmin(req.user.sub))) {
+      const orgMemberships = await this.memberships.getMembershipsForOrg(req.user.sub, orgId);
+      if (orgMemberships.length === 0) {
+        throw new NotFoundException('Organization not found');
+      }
+    }
+    await this.authz.listVisibleProjectIds(orgId, req.user.sub);
+  }
+
+  @SsePreflight('preflightOrg')
   @Sse('orgs/:orgId')
   async streamOrg(
     @Param('orgId') orgId: string,

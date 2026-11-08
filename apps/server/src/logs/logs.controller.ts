@@ -24,6 +24,7 @@ import {
   map
 } from 'rxjs';
 import { SseStreamLimiter } from '../events/sse-stream-limiter';
+import { SsePreflight } from '../events/sse-preflight.guard';
 import { RequestsService, type RequestRow } from './requests.service';
 import { LogsStoreError } from './victoria-logs.service';
 import { Auth } from '../auth/decorators';
@@ -112,6 +113,7 @@ export class LogsController {
     }
   }
 
+  @SsePreflight('preflightLogAccess')
   @Sse('deployments/:id/requests/stream')
   async streamRequests(@Param('id') id: string, @Request() req): Promise<Observable<MessageEvent>> {
     await this.assertLogAccess(id, req);
@@ -240,6 +242,11 @@ export class LogsController {
       limit: Number(limit) || undefined,
       cursor: cursor || null
     };
+  }
+
+  // Runs as a guard (see SsePreflight) so a denied stream is a plain 404/403.
+  async preflightLogAccess(req): Promise<void> {
+    await this.assertLogAccess(req.params.id, req);
   }
 
   private async assertLogAccess(deploymentId: string, req) {

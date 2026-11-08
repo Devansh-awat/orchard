@@ -16,6 +16,7 @@ import { Observable, finalize, takeUntil } from 'rxjs';
 import { Auth } from '../auth/decorators';
 import { ProjectAccessService } from '../projects/project-access.service';
 import { SseStreamLimiter } from '../events/sse-stream-limiter';
+import { SsePreflight } from '../events/sse-preflight.guard';
 import { ObservabilityService } from './observability.service';
 import { MetricsStoreError } from '../metrics/victoria-metrics.service';
 import { ErrorIngestService } from './error-ingest.service';
@@ -156,6 +157,7 @@ export class ObservabilityController {
     return this.observability.getBuildHistory(id, Number(limitStr) || 30);
   }
 
+  @SsePreflight('preflightLogAccess')
   @Sse('deployments/:id/build-logs/stream')
   async streamBuildLogs(
     @Param('id') id: string,
@@ -175,6 +177,7 @@ export class ObservabilityController {
       ) as Observable<MessageEvent>;
   }
 
+  @SsePreflight('preflightLogAccess')
   @Sse('deployments/:id/logs/stream')
   async streamRuntimeLogs(
     @Param('id') id: string,
@@ -240,6 +243,11 @@ export class ObservabilityController {
       throw new ForbiddenException('Editing error groups needs edit access to the project');
     }
     return this.errorIngest.updateGroup(id, fingerprint, body, user.id);
+  }
+
+  // Runs as a guard (see SsePreflight) so a denied stream is a plain 404/403.
+  async preflightLogAccess(req): Promise<void> {
+    await this.assertLogAccess(req.params.id, req);
   }
 
   private async assertLogAccess(deploymentId: string, req) {
