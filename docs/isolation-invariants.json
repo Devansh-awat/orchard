@@ -8,260 +8,443 @@
       "apps/server/src/auth/superadmin.guard.ts",
       "apps/server/src/auth/request-context.ts",
       "apps/server/src/projects/project-access.service.ts",
-      "apps/server/src/auth/route-classifier.ts"
+      "apps/server/src/projects/namespace-scope.ts",
+      "apps/server/src/kubernetes/kubernetes.controller.ts",
+      "apps/server/test/auth-coverage.snapshot.json"
     ],
     "required_config": [
-      "none beyond a correct database"
+      "none beyond a correctly operated database",
+      "restrict superadmin accounts"
+    ],
+    "not_guaranteed": [
+      "authorization is enforced in services, not by the data layer (no row-level security)",
+      "superadmins can read every org"
+    ],
+    "residual_risk": [
+      "a missing scope check in one route",
+      "no cross-tenant sweep over all authenticated routes"
     ],
     "test_files": [
       "apps/server/test/org-isolation.test.ts",
       "apps/server/test/auth-coverage.test.ts",
+      "apps/server/test/kubernetes-namespace-oracle.test.ts",
+      "apps/server/test/auth-methods-uniform.test.ts",
+      "apps/server/test/transfer-recipient-oracle.test.ts",
       "apps/server/test/rbac-coverage.test.ts"
-    ]
+    ],
+    "test_gaps": ["cross-tenant sweep of every authenticated route: none"]
   },
   {
     "id": "I2",
     "title": "Project to project inside an org",
-    "invariant": "A principal holds exactly the rights of their project role; project-scoped tokens and MCP grants cannot reach other projects or org-level power.",
+    "invariant": "A principal holds exactly the rights of their project role; project-scoped tokens, MCP grants, exec sessions and minted tokens cannot reach other projects or exceed their parent.",
     "mechanism_files": [
       "apps/server/src/auth/authorization.service.ts",
       "apps/server/src/auth/superadmin.guard.ts",
       "apps/server/src/auth/api-tokens.service.ts",
+      "apps/server/src/auth/request-context.ts",
       "apps/server/src/projects/namespace-scope.ts",
-      "apps/server/src/kubernetes/terminal.gateway.ts"
+      "apps/server/src/kubernetes/terminal.gateway.ts",
+      "apps/server/src/kubernetes/pod-exec-policy.ts",
+      "apps/server/src/kubernetes/exec-session-engine.ts"
     ],
     "required_config": [],
+    "not_guaranteed": [
+      "project editors are trusted with their own project: exec into app pods and read bound environment",
+      "org owners and admins see every project"
+    ],
+    "residual_risk": ["role x token x grant x route matrix is not tested"],
     "test_files": [
       "apps/server/test/api-token-lineage.test.ts",
+      "apps/server/test/exec-token-expiry.test.ts",
       "apps/server/test/mcp-gateway-scope.test.ts",
+      "apps/server/test/mcp-token-type.test.ts",
       "apps/server/test/project-member-role.test.ts",
       "apps/server/test/namespace-scope.test.ts",
-      "apps/server/test/security-hardening.test.ts"
-    ]
+      "apps/server/test/security-hardening.test.ts",
+      "apps/server/test/pod-exec-policy.test.ts",
+      "apps/server/test/org-scoped-personal-credentials.test.ts"
+    ],
+    "test_gaps": ["full role x route matrix: none"]
   },
   {
     "id": "I3",
     "title": "Tenant network",
-    "invariant": "A tenant pod reaches only its own namespace, DNS, ingress namespaces, the public internet outside private ranges, other tenants' published pods and the backup proxy; never the apiserver, nodes, metadata or unpublished services.",
+    "invariant": "A tenant pod reaches only its own namespace, DNS, ingress namespaces on serving ports, the public internet outside private ranges, node and apiserver addresses and mail ports, other tenants' published pods and the backup proxy; no platform pod accepts a connection from a tenant namespace.",
     "mechanism_files": [
       "apps/server/src/kubernetes/security-policies.ts",
+      "apps/server/src/kubernetes/cluster-addresses.ts",
+      "apps/server/src/kubernetes/kubernetes.service.ts",
       "apps/server/src/kubernetes/k8s-namespace.service.ts",
       "apps/server/src/engine/consumers/guard.consumer.ts",
       "apps/server/src/engine/guard/desired.ts",
+      "apps/server/src/engine/engine.service.ts",
+      "apps/server/src/docker/buildkit-daemon-policy.ts",
+      "apps/server/src/projects/public-exposure-quota.ts",
+      "infra/charts/orchard/templates/network-policies.yaml",
+      "infra/charts/orchard/templates/egress-deny.yaml",
       "infra/charts/orchard/templates/builders.yaml",
-      "apps/server/src/docker/buildkit-daemon-policy.ts"
+      "infra/charts/orchard/templates/redis.yaml",
+      "infra/charts/orchard/templates/r2-proxy.yaml",
+      "infra/charts/orchard/templates/_helpers.tpl"
     ],
     "required_config": [
       "CNI that enforces NetworkPolicy",
-      "TENANT_INGRESS_NAMESPACES",
-      "cilium.enabled",
-      "Cilium entity denies for host, remote-node, kube-apiserver (planned profile)",
-      "Cilium DNS rules (planned)",
-      "PSA baseline labels"
+      "TENANT_INGRESS_NAMESPACES (tenant.ingressNamespaces) when the controller is not in network or orchard",
+      "PLATFORM_EXTRA_DENY_CIDRS (tenant.extraDenyCidrs) for public LB IPs and service CIDR",
+      "cloud firewall for node ports 10250, 6443, 2379, 22, 9100",
+      "networkPolicy.platform.enabled left on",
+      "Cilium entity denies are automatic when Cilium is detected"
+    ],
+    "not_guaranteed": [
+      "no enforcement without an enforcing CNI",
+      "IPv6 is default-denied, not filtered",
+      "published pods of other tenants are reachable",
+      "allow-cilium-ingress admits host and remote-node entities"
+    ],
+    "residual_risk": [
+      "public apiserver or LB address missing from the computed excepts",
+      "no live check that policies are enforced"
     ],
     "test_files": [
       "apps/server/test/tenant-policy.test.ts",
+      "apps/server/test/network-isolation.test.ts",
+      "apps/server/test/namespace-fail-closed.test.ts",
       "apps/server/test/engine-guard.test.ts",
       "apps/server/test/database-platform-policy.test.ts",
       "apps/server/test/buildkit-daemon-policy.test.ts",
-      "apps/server/test/compose-network.test.ts"
-    ]
+      "apps/server/test/compose-network.test.ts",
+      "apps/server/test/chart-platform-policies.test.ts",
+      "apps/server/test/chart-egress-policies.test.ts",
+      "apps/server/test/public-exposure-quota.test.ts"
+    ],
+    "test_gaps": ["live enforcement (pod A cannot reach pod B, apiserver, node): none"]
   },
   {
     "id": "I4",
     "title": "Tenant compute",
-    "invariant": "A tenant container runs under a sandbox runtime so it cannot affect the host kernel or other tenants.",
+    "invariant": "Every object a tenant can cause to exist has a shape Orchard builds; a tenant process cannot affect the host kernel or other tenants when a sandbox runtime is configured.",
     "mechanism_files": [
       "apps/server/src/kubernetes/trusted-images.ts",
       "apps/server/src/kubernetes/k8s-workload.service.ts",
       "apps/server/src/kubernetes/rollout-strategy.ts",
       "apps/server/src/jobs/jobs-orchestrator.service.ts",
+      "apps/server/src/kubernetes/ingress-annotations.ts",
+      "apps/server/src/kubernetes/tenant-abuse-quota.ts",
+      "apps/server/src/kubernetes/k8s-cnpg.service.ts",
+      "apps/server/src/docker/build-posture.ts",
       "apps/server/src/docker/image-builder.service.ts",
+      "apps/server/src/docker/buildkit-pool.service.ts",
+      "infra/charts/orchard/templates/admission-policies.yaml",
+      "infra/charts/orchard/policies/orchard-tenant-policies.yaml",
+      "infra/charts/orchard/templates/database-sandbox.yaml",
       "infra/charts/orchard/templates/runtimeclass-gvisor.yaml",
       "infra/charts/orchard/templates/runtimeclass-kata.yaml"
     ],
     "required_config": [
-      "tenantSandbox.enabled=true (TENANT_RUNTIME_CLASS)",
-      "builderSandbox.enabled=true with Kata",
-      "runtime installed on every node"
+      "tenantSandbox.enabled with a runtime installed on every node (optional)",
+      "builderSandbox.enabled with Kata and KVM (optional)",
+      "user-namespace sysctl on build nodes for rootless builds",
+      "admissionPolicies.validationActions [Deny] when warnings are clean (optional)",
+      "admissionPolicies.extraIssuers and storageClasses (optional)",
+      "databases.runtimeClassName (optional)"
+    ],
+    "not_guaranteed": [
+      "tenant pods share the host kernel by default",
+      "rootless builds share the node kernel with Unconfined seccomp and AppArmor",
+      "database pods are not sandboxed unless databases.runtimeClassName is set",
+      "admission policies are Warn,Audit by default and fail open"
+    ],
+    "residual_risk": [
+      "kernel and runtime escapes",
+      "TENANT_RUNTIME_CLASS unset leaves pods on the node runtime"
     ],
     "test_files": [
       "apps/server/test/tenant-sandbox-uniform.test.ts",
       "apps/server/test/build-sandbox.test.ts",
-      "apps/server/test/build-config.test.ts"
-    ]
+      "apps/server/test/build-config.test.ts",
+      "apps/server/test/build-posture.test.ts",
+      "apps/server/test/pod-exec-policy.test.ts",
+      "apps/server/test/tenant-abuse-quota.test.ts",
+      "apps/server/test/ingress-issuer.test.ts",
+      "apps/server/test/chart-render.test.ts",
+      "infra/charts/orchard/policies/celtest/policy_test.go"
+    ],
+    "test_gaps": ["admission policies against a live API server: manual procedure only"]
   },
   {
     "id": "I5",
     "title": "Builds",
-    "invariant": "A build for project A cannot read project B's source, secrets, cache or registry images, nor push to B's repository.",
+    "invariant": "A build for project A cannot read project B's source, secrets, cache or registry images, cannot push to another project's repository and cannot reach the cluster.",
     "mechanism_files": [
+      "apps/server/src/docker/image-builder.service.ts",
       "apps/server/src/docker/buildkit-pool.service.ts",
       "apps/server/src/docker/buildkit-daemon-policy.ts",
-      "apps/server/src/docker/image-builder.service.ts",
+      "apps/server/src/docker/build-cache-s3.ts",
+      "apps/server/src/docker/build-posture.ts",
       "apps/server/src/kubernetes/registry-image-policy.ts",
       "apps/server/src/kubernetes/registry-image-policy.service.ts",
+      "apps/server/src/docker/build-args.ts",
+      "apps/server/src/docker/build-log-redaction.ts",
       "infra/charts/orchard/templates/builders.yaml"
     ],
     "required_config": [
-      "builderSandbox (Kata)",
-      "REGISTRY_IMAGE_POLICY=enforce",
-      "BUILDER_SIDECAR_PUSH not false",
-      "dedicated S3 cache key (BUILDKIT_S3_ACCESS_KEY_ID)"
+      "REGISTRY_IMAGE_POLICY enforce or auto, with registry hosts set",
+      "builders.registryEgress correct",
+      "r2-proxy enabled and serving the cache bucket (BUILDKIT_S3_VIA_PROXY, r2Proxy.allowedBuckets)",
+      "builderSandbox for VM-level separation (optional)",
+      "dedicated low-privilege registry account"
+    ],
+    "not_guaranteed": [
+      "the registry login is one credential for all tenants",
+      "with BUILDER_SIDECAR_PUSH=false the shared login is placed in the build or Depot session",
+      "without the r2-proxy the S3 cache key is instance-wide"
+    ],
+    "residual_risk": [
+      "shared registry login",
+      "compromise of the pusher container",
+      "node-kernel exploits from a Dockerfile RUN step without Kata"
     ],
     "test_files": [
       "apps/server/test/buildkit-daemon-policy.test.ts",
       "apps/server/test/registry-image-policy.test.ts",
+      "apps/server/test/image-ref.test.ts",
       "apps/server/test/build-secrets.test.ts",
       "apps/server/test/build-arg-injection.test.ts",
-      "apps/server/test/image-builder-cache.test.ts"
-    ]
+      "apps/server/test/build-cache-s3.test.ts",
+      "apps/server/test/image-builder-cache.test.ts",
+      "apps/server/test/builder-override-access.test.ts",
+      "apps/server/test/build-sandbox.test.ts",
+      "apps/server/test/build-posture.test.ts",
+      "apps/server/test/chart-egress-policies.test.ts"
+    ],
+    "test_gaps": ["cross-tenant cache or registry attack against a live cluster: none"]
   },
   {
     "id": "I6",
     "title": "Secrets",
-    "invariant": "A secret value is readable only by principals with edit rights on its project, is not returned by read APIs, and is not readable by other tenants at rest or in transit.",
+    "invariant": "A secret value is readable only by principals with edit rights on its project and the workload it is bound to, never returned by read APIs once written, and not readable by other tenants.",
     "mechanism_files": [
       "apps/server/src/crypto/secret-crypto.service.ts",
-      "apps/server/src/kubernetes/tenant-rbac.ts",
       "apps/server/src/projects/projects.utils.ts",
-      "apps/server/src/kubernetes/public-db-tls.ts",
-      "apps/server/src/kubernetes/k8s-cnpg.service.ts"
+      "apps/server/src/kubernetes/tenant-rbac.ts",
+      "apps/server/src/kubernetes/k8s-namespace.service.ts",
+      "apps/server/src/kubernetes/k8s-cnpg.service.ts",
+      "apps/server/src/kubernetes/pod-exec-policy.ts",
+      "apps/server/src/projects/domain-proof.ts"
     ],
     "required_config": [
       "SECRETS_ENCRYPTION_KEY",
       "etcd encryption at rest",
-      "publicTls.db.mode=perDatabase"
+      "publicTls.db.mode perDatabase (optional)"
+    ],
+    "not_guaranteed": [
+      "plaintext storage when the key is unset",
+      "one instance-wide key for all orgs",
+      "wildcard database TLS key is copied into tenant namespaces with a public database in the default mode"
+    ],
+    "residual_risk": [
+      "plaintext storage on a misconfigured Helm install",
+      "shared key for all orgs"
     ],
     "test_files": [
       "apps/server/test/secret-crypto-seal.test.ts",
       "apps/server/test/env-secret-write-only.test.ts",
       "apps/server/test/secret-redaction.test.ts",
+      "apps/server/test/log-redaction.test.ts",
       "apps/server/test/tenant-rbac.test.ts",
-      "apps/server/test/public-db-tls.test.ts"
-    ]
+      "apps/server/test/public-db-tls.test.ts",
+      "apps/server/test/database-public-connection.test.ts",
+      "apps/server/test/job-step-secrets.test.ts"
+    ],
+    "test_gaps": ["fail closed when the key is missing: none"]
   },
   {
     "id": "I7",
     "title": "Storage and backups",
-    "invariant": "A tenant's backup credentials, uploads and restores touch only that tenant's bucket prefix, and platform object-store credentials never reach a tenant namespace.",
+    "invariant": "A tenant's backup credentials, build cache keys, uploads and restores touch only that tenant's bucket prefix, and the platform object-store credentials never reach a tenant namespace.",
     "mechanism_files": [
       "apps/r2-proxy/main.go",
-      "infra/charts/orchard/templates/r2-proxy.yaml",
       "apps/server/src/organizations/upload-namespace.ts",
-      "apps/server/src/organizations/uploads.controller.ts",
-      "apps/server/src/prisma/prisma.service.ts"
+      "apps/server/src/projects/database-operations.service.ts",
+      "apps/server/src/docker/build-cache-s3.ts",
+      "infra/charts/orchard/templates/r2-proxy.yaml"
     ],
     "required_config": [
       "r2Proxy.allowedBuckets or defaultBucket",
       "r2Proxy.networkPolicy.enabled",
-      "separate buckets for cache and uploads"
+      "separate bucket or key for uploads"
+    ],
+    "not_guaranteed": ["org-supplied backup buckets use the org's own credential"],
+    "residual_risk": [
+      "a flaw in the SigV4 prefix check",
+      "storage scrubbing after deletion depends on the StorageClass"
     ],
     "test_files": [
       "apps/r2-proxy/main_test.go",
       "apps/server/test/r2-proxy-grants.test.ts",
       "apps/server/test/upload-namespace.test.ts",
-      "apps/server/test/object-storage.test.ts"
-    ]
+      "apps/server/test/object-storage.test.ts",
+      "apps/server/test/database-recovery.test.ts",
+      "apps/server/test/chart-platform-policies.test.ts"
+    ],
+    "test_gaps": ["backup and restore across tenants end to end: none"]
   },
   {
     "id": "I8",
     "title": "Observability",
-    "invariant": "A user sees logs, metrics, events and status only of projects they can view; a tenant workload cannot query platform metrics or log stores.",
+    "invariant": "A user sees logs, metrics, events and status of only the projects they can view; a tenant workload cannot query the platform metrics or log stores.",
     "mechanism_files": [
       "apps/server/src/logs/logsql.ts",
-      "apps/server/src/logs/logs.controller.ts",
       "apps/server/src/metrics/victoria-metrics.service.ts",
       "apps/server/src/metrics/pod-selector.ts",
-      "apps/server/src/status-pages/status-pages.service.ts"
+      "apps/server/src/status-pages/status-pages.service.ts",
+      "infra/charts/orchard/templates/network-policies.yaml"
     ],
     "required_config": [
-      "I3 egress deny holds",
-      "VictoriaMetrics/Logs not exposed externally"
+      "networkPolicy.platform.enabled and a CNI that enforces it",
+      "VictoriaMetrics and VictoriaLogs not exposed outside the cluster"
     ],
+    "not_guaranteed": [
+      "namespaces that are not classed as tenant or untrusted can reach the stores unless listed in networkPolicy.platform.untrustedNamespaces"
+    ],
+    "residual_risk": ["not every metrics query path was audited"],
     "test_files": [
       "apps/server/test/logsql.test.ts",
       "apps/server/test/logs-store.test.ts",
       "apps/server/test/status-page.test.ts",
-      "apps/server/test/pod-selector.test.ts"
-    ]
+      "apps/server/test/pod-selector.test.ts",
+      "apps/server/test/ingress-metrics.test.ts",
+      "apps/server/test/chart-platform-policies.test.ts"
+    ],
+    "test_gaps": ["cross-tenant query attempt: none"]
   },
   {
     "id": "I9",
     "title": "Identity",
-    "invariant": "An IdP, SCIM token or SSO session of org A can create, sign in or modify only identities and memberships within org A.",
+    "invariant": "An IdP, SCIM token or SSO session belonging to org A can create, sign in or modify only identities and memberships within org A.",
     "mechanism_files": [
-      "apps/server/src/auth/authorization.service.ts",
-      "apps/server/src/auth/superadmin.guard.ts",
       "apps/server/src/sso/org-domains.service.ts",
+      "apps/server/src/sso/sso-login.service.ts",
       "apps/server/src/sso/saml-guard.ts",
+      "apps/server/src/sso/saml-response.ts",
+      "apps/server/src/sso/saml-request.store.ts",
+      "apps/server/src/sso/group-rules.ts",
+      "apps/server/src/sso/identity-mapping.service.ts",
       "apps/server/src/scim/scim-auth.guard.ts",
-      "apps/server/src/auth/unverified-adoption.ts"
+      "apps/server/src/auth/unverified-adoption.ts",
+      "apps/server/src/auth/authorization.service.ts"
     ],
     "required_config": [
-      "verified org domains",
-      "identity-linking fixes merged"
+      "verify the organization's domains before enforcing SSO",
+      "keep instance-level SSO bypass off"
     ],
+    "not_guaranteed": [
+      "the IdP is trusted for the identity and group membership of its own users within its own org",
+      "group rules cannot grant owner"
+    ],
+    "residual_risk": ["no property tests for SAML, SCIM and OAuth lineage"],
     "test_files": [
       "apps/server/test/sso-enforcement.test.ts",
       "apps/server/test/saml-hardening.test.ts",
+      "apps/server/test/saml-trust-config.test.ts",
+      "apps/server/test/saml-idp-entity-backfill.test.ts",
       "apps/server/test/scim.test.ts",
+      "apps/server/test/scim-base-url.test.ts",
+      "apps/server/test/group-rules.test.ts",
+      "apps/server/test/identity-mapping.test.ts",
       "apps/server/test/unverified-adoption.test.ts",
-      "apps/server/test/org-isolation.test.ts"
-    ]
+      "apps/server/test/org-isolation.test.ts",
+      "apps/server/test/passkey.test.ts",
+      "apps/server/test/mcp-oauth-hardening.test.ts"
+    ],
+    "test_gaps": ["property tests for SAML, SCIM, OAuth lineage: none"]
   },
   {
     "id": "I10",
     "title": "Ingress and browser origin",
-    "invariant": "Only the project holding a hostname receives its traffic; a tenant app cannot read or set the dashboard's credentials or obtain a certificate for a host it does not control.",
+    "invariant": "Only the project that holds a hostname receives its traffic; a tenant app cannot read or set the dashboard credentials or obtain a certificate for a host it does not control.",
     "mechanism_files": [
       "apps/server/src/projects/project-access.service.ts",
       "apps/server/src/projects/host-claim.ts",
+      "apps/server/src/projects/generated-host.ts",
       "apps/server/src/projects/domain-proof.ts",
       "apps/server/src/instance-network/reserved-hosts.ts",
+      "apps/server/src/auth/protection.service.ts",
       "apps/server/src/auth/cookies.ts",
       "apps/server/src/auth/client-ip.ts",
-      "apps/server/src/auth/protection.service.ts",
+      "apps/server/src/kubernetes/ingress-annotations.ts",
       "apps/server/src/main.ts"
     ],
     "required_config": [
-      "tenant app domain separate from dashboard and on the Public Suffix List",
-      "COOKIE_DOMAIN not a parent of the app domain",
+      "app domain on the Public Suffix List and a different registrable domain from the dashboard",
+      "COOKIE_DOMAIN unset or not a parent of the app domain",
       "CUSTOM_DOMAIN_VERIFICATION=true",
-      "TRUST_PROXY / clientIp.*",
-      "origin locked to CDN"
+      "TRUST_PROXY, TRUSTED_PROXY_RANGES, TRUST_CLOUDFLARE, CLIENT_IP_HEADER and CLIENT_IP_HEADER_FROM matching the topology",
+      "CDN or tunnel origin lock"
+    ],
+    "not_guaranteed": [
+      "custom-domain verification is off by default",
+      "the session cookie has no __Host- prefix",
+      "the chart does not lock the origin or check the Public Suffix List",
+      "public hostnames with their own certificates appear in Certificate Transparency logs"
+    ],
+    "residual_risk": [
+      "host squatting before verification is on",
+      "operator misconfiguration of the app domain or origin"
     ],
     "test_files": [
       "apps/server/test/host-claim.test.ts",
-      "apps/server/test/reserved-hosts.test.ts",
       "apps/server/test/hostname-reservation.test.ts",
+      "apps/server/test/reserved-hosts.test.ts",
+      "apps/server/test/reserved-generated-zones.test.ts",
+      "apps/server/test/generated-host.test.ts",
+      "apps/server/test/ingress-issuer.test.ts",
       "apps/server/test/client-ip.test.ts",
+      "apps/server/test/protection-auth.test.ts",
+      "apps/server/test/protection-bypass-paths.test.ts",
+      "apps/server/test/protection-path-ambiguity.test.ts",
       "apps/server/test/protection-session-binding.test.ts",
-      "apps/server/test/protection-bypass-paths.test.ts"
-    ]
+      "apps/server/test/protection-proxy-headers.test.ts",
+      "apps/server/test/protection-redirect.test.ts",
+      "apps/server/test/ingress-limits.test.ts",
+      "apps/server/test/xss-and-assets.test.ts"
+    ],
+    "test_gaps": ["cookie scope against the real app domain: none"]
   },
   {
     "id": "I11",
     "title": "Resource fairness",
-    "invariant": "One tenant cannot exhaust CPU, memory, pods, volumes or request budget beyond its configured share.",
+    "invariant": "One tenant cannot exhaust CPU, memory, pods, volumes, load balancers or request budget beyond its configured share.",
     "mechanism_files": [
-      "apps/server/src/kubernetes/tenant-quota.ts",
       "apps/server/src/kubernetes/k8s-namespace.service.ts",
+      "apps/server/src/kubernetes/tenant-quota.ts",
+      "apps/server/src/kubernetes/tenant-abuse-quota.ts",
       "apps/server/src/quotas/quotas.service.ts",
+      "apps/server/src/projects/public-exposure-quota.ts",
       "apps/server/src/auth/api-throttler.guard.ts",
       "apps/server/src/auth/rate-limit.service.ts"
     ],
-    "required_config": [
-      "org CPU and memory caps",
-      "resource limits on",
-      "Redis for cross-replica throttling"
+    "required_config": ["organization CPU and memory caps", "Redis for cross-replica throttling"],
+    "not_guaranteed": [
+      "no CPU or memory quota without org caps",
+      "no node-level isolation by default"
     ],
+    "residual_risk": ["an org with no caps can consume node CPU and memory"],
     "test_files": [
       "apps/server/test/tenant-quota.test.ts",
+      "apps/server/test/tenant-abuse-quota.test.ts",
+      "apps/server/test/public-exposure-quota.test.ts",
       "apps/server/test/quota-zero.test.ts",
+      "apps/server/test/owner-allowance.test.ts",
+      "apps/server/test/resource-limits.test.ts",
       "apps/server/test/api-throttler.test.ts",
-      "apps/server/test/preauth-rate-limit.test.ts"
-    ]
+      "apps/server/test/preauth-rate-limit.test.ts",
+      "apps/server/test/body-limits.test.ts",
+      "apps/server/test/sse-stream-limiter.test.ts",
+      "apps/server/test/redis-throttle.test.ts"
+    ],
+    "test_gaps": []
   },
   {
     "id": "I12",
@@ -270,15 +453,29 @@
     "mechanism_files": [
       "apps/server/src/projects/namespace-teardown.service.ts",
       "apps/server/src/projects/projects.service.ts",
+      "apps/server/src/projects/environments.service.ts",
       "apps/server/src/projects/project-org-transfer.service.ts",
       "apps/server/src/auth/unverified-adoption.ts",
-      "apps/server/src/auth/sessions.service.ts"
+      "apps/server/src/auth/sessions.service.ts",
+      "apps/server/prisma/schema.prisma"
     ],
     "required_config": [],
+    "not_guaranteed": [
+      "the namespace keeps the former slug after a transfer",
+      "storage scrubbing depends on the StorageClass"
+    ],
+    "residual_risk": [
+      "slug disclosure to cluster operators",
+      "data remanence on the storage backend"
+    ],
     "test_files": [
       "apps/server/test/namespace-teardown-keep.test.ts",
       "apps/server/test/delete-deployment-builds.test.ts",
-      "apps/server/test/org-event-stream-reauth.test.ts"
-    ]
+      "apps/server/test/org-event-stream-reauth.test.ts",
+      "apps/server/test/session-jwt.test.ts",
+      "apps/server/test/backup-orphans.test.ts",
+      "apps/server/test/api-token-lineage.test.ts"
+    ],
+    "test_gaps": ["transfer then access: none"]
   }
 ]
