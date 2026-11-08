@@ -373,8 +373,8 @@ degrades to local-only delivery plus polling.
 | `redis.auth.enabled` | `true` | Require a password. The chart mints one into the `redis-auth` Secret on first install and keeps it on upgrades. Not used with `redis.url`. |
 | `redis.auth.password` | `""` | Use this password instead. Set it when a GitOps tool only runs `helm template`, which cannot read the existing Secret. |
 | `redis.networkPolicy.enabled` | `true` | Restrict who can reach it. |
-| `redis.maxmemory` | `""` | Pin Redis `maxmemory` (e.g. `384mb`). Empty derives it from the memory limit. |
-| `redis.maxmemoryPercent` | `75` | Share of `redis.resources.limits.memory` used as `maxmemory` when `maxmemory` is empty, leaving headroom for AOF rewrites and client buffers. |
+| `redis.maxmemory` | `""` | Pin Redis `maxmemory` (e.g. `256mb`). Empty derives it from the memory limit. |
+| `redis.maxmemoryPercent` | `50` | Share of `redis.resources.limits.memory` used as `maxmemory` when `maxmemory` is empty, leaving headroom for AOF rewrites and client buffers. |
 | `redis.maxmemoryPolicy` | `volatile-ttl` | Eviction policy at the cap. Everything the server stores in Redis (rate-limit windows, caches, idempotency and SSO state) carries a TTL, so a key flood evicts the soonest-expiring entries instead of OOM-killing Redis; keys without a TTL are never evicted. |
 | `redis.resources` | requests `50m/64Mi`, limits `500m/512Mi` | Resource block. |
 
