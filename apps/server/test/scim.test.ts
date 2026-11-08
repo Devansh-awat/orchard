@@ -174,7 +174,7 @@ function makeService() {
       return true;
     }
   };
-  const rateLimit = { checkRateLimit: async () => {} };
+  const rateLimit = { checkRateLimit: async () => {}, checkInviteMail: async () => {} };
   const service = new ScimService(
     db as any,
     audit as any,

@@ -394,7 +394,7 @@ export class ScimService implements OnModuleInit {
   // may belong to other orgs.
   private async notifyAdded(email: string, name: string, organizationId: string) {
     try {
-      await this.rateLimit.checkRateLimit(email, 'email', 'invite');
+      await this.rateLimit.checkInviteMail({ email, organizationId });
       const organization = await this.prisma.organization.findUnique({
         where: { id: organizationId },
         select: { name: true }

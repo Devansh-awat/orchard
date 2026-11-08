@@ -353,3 +353,72 @@ test('withheld sends still count against the per-address and per-ip send caps', 
   assert.equal(RATE_LIMIT_CONFIGS.otp_send_email.windowMs, 60 * 60 * 1000);
   assert.equal(RATE_LIMIT_CONFIGS.otp_send_ip.windowMs, 60 * 60 * 1000);
 });
+
+test('invite mail is capped per inviter, per org, per address and globally', async () => {
+  const user = RATE_LIMIT_CONFIGS.invite_user.maxAttempts;
+  const throttle = memoryThrottle();
+  const svc = new RateLimitService({} as any, throttle as any);
+  for (let i = 0; i < user; i++) {
+    await svc.checkInviteMail({
+      email: `a${i}@example.com`,
+      organizationId: `org${i}`,
+      userId: 'inviter'
+    });
+  }
+  assert.equal(
+    await blocked(
+      svc.checkInviteMail({ email: 'z@example.com', organizationId: 'orgz', userId: 'inviter' })
+    ),
+    true
+  );
+  assert.equal(
+    await blocked(
+      svc.checkInviteMail({ email: 'z@example.com', organizationId: 'orgz', userId: 'other' })
+    ),
+    false
+  );
+  const email = RATE_LIMIT_CONFIGS.invite_email.maxAttempts;
+  for (let i = 0; i < email; i++) {
+    await svc.checkInviteMail({
+      email: 'bomb@example.com',
+      organizationId: `o${i}`,
+      userId: `u${i}`
+    });
+  }
+  assert.equal(
+    await blocked(
+      svc.checkInviteMail({ email: 'bomb@example.com', organizationId: 'ox', userId: 'ux' })
+    ),
+    true
+  );
+  const org = RATE_LIMIT_CONFIGS.invite_org.maxAttempts;
+  for (let i = 0; i < org; i++) {
+    await svc.checkInviteMail({
+      email: `m${i}@example.com`,
+      organizationId: 'spam',
+      userId: `s${i}`
+    });
+  }
+  assert.equal(
+    await blocked(
+      svc.checkInviteMail({ email: 'n@example.com', organizationId: 'spam', userId: 'sx' })
+    ),
+    true
+  );
+});
+
+test('rejected invites do not spend the global invite budget', async () => {
+  const throttle = memoryThrottle();
+  const svc = new RateLimitService({} as any, throttle as any);
+  const email = RATE_LIMIT_CONFIGS.invite_email.maxAttempts;
+  for (let i = 0; i < email; i++) {
+    await svc.checkInviteMail({ email: 'bomb@example.com', organizationId: 'o', userId: `u${i}` });
+  }
+  const before = throttle.buckets.get('invite:global:all')!.count;
+  for (let i = 0; i < 100; i++) {
+    await svc
+      .checkInviteMail({ email: 'bomb@example.com', organizationId: 'o2', userId: `x${i}` })
+      .catch(() => undefined);
+  }
+  assert.equal(throttle.buckets.get('invite:global:all')!.count, before);
+});

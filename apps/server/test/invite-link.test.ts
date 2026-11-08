@@ -46,6 +46,7 @@ function setup(
     accounts?: any[];
     orgRole?: 'owner' | 'admin' | 'member' | null;
     ssoBlocked?: boolean;
+    rateLimited?: boolean;
   } = {}
 ) {
   const state = {
@@ -168,7 +169,12 @@ function setup(
       state.audit.push(entry.action);
     }
   };
-  const rateLimit = { checkRateLimit: async () => undefined };
+  const rateLimit = {
+    checkRateLimit: async () => undefined,
+    checkInviteMail: async () => {
+      if (opts.rateLimited) throw new Error('rate limited');
+    }
+  };
   const service = new (OrganizationsService as any)(
     prisma,
     users,
@@ -390,4 +396,32 @@ test('a link only skips address proof when the instance has no email', async () 
   await assert.rejects(build(true).service.acceptInvitationByToken('t', 'clerk'), /not found/i);
   await build(false).service.acceptInvitationByToken('t', 'clerk');
   await assert.rejects(build(false).service.acceptInvitationById('inv1', 'clerk'), /not found/i);
+});
+
+test('a project guest invitation is throttled before anything is written or mailed', async () => {
+  const { service, state } = setup({ email: true, orgRole: 'admin', rateLimited: true });
+  await assert.rejects(
+    service.createProjectGuestInvitation({
+      organizationId: 'org1',
+      projectId: 'p1',
+      projectName: 'P',
+      projectRoleId: 'r1',
+      projectRoleName: 'viewer',
+      email: 'guest@example.com',
+      inviter: { id: 'admin1', email: 'a@example.com' }
+    }),
+    /rate limited/
+  );
+  assert.equal(state.mails, 0);
+  assert.equal(state.invitation, null);
+});
+
+test('resending an invitation email is throttled', async () => {
+  const { service, state } = setup({
+    email: true,
+    invitation: invitationRow('old'),
+    rateLimited: true
+  });
+  await assert.rejects(service.resendInvitation('inv1', 'clerk'), /rate limited/);
+  assert.equal(state.mails, 0);
 });

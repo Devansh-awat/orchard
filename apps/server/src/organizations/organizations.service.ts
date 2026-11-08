@@ -46,6 +46,12 @@ export function normalizeBackupEndpoint(input: string | null): string | null {
   return raw;
 }
 
+const MAIL_LABEL_MAX = 100;
+
+function mailLabel(value: string): string {
+  return value.replace(/[\u0000-\u001f\u007f]/g, ' ').slice(0, MAIL_LABEL_MAX);
+}
+
 @Injectable()
 export class OrganizationsService {
   private readonly logger = new Logger(OrganizationsService.name);
@@ -888,8 +894,11 @@ export class OrganizationsService {
     }
 
     const normalizedEmail = email.toLowerCase().trim();
-    await this.rateLimit.checkRateLimit(normalizedEmail, 'email', 'invite');
-    await this.rateLimit.checkRateLimit(organizationId, 'org', 'invite');
+    await this.rateLimit.checkInviteMail({
+      email: normalizedEmail,
+      organizationId,
+      userId: inviter.id
+    });
 
     const existingUser = await this.prisma.user.findUnique({
       where: { email: normalizedEmail }
@@ -1028,6 +1037,12 @@ export class OrganizationsService {
     });
     if (!organization) throw new NotFoundException('Organization not found');
 
+    await this.rateLimit.checkInviteMail({
+      email: normalizedEmail,
+      organizationId,
+      userId: inviter.id
+    });
+
     // One pending invitation per org+email (DB unique). Re-inviting to the
     // same project refreshes the token/expiry; a pending invite for a
     // different target must be resolved first so we don't silently clobber it.
@@ -1074,9 +1089,9 @@ export class OrganizationsService {
       .sendProjectInviteEmail({
         recipientEmail: normalizedEmail,
         recipientName: normalizedEmail.split('@')[0],
-        organizationName: organization.name,
-        projectName,
-        inviterName,
+        organizationName: mailLabel(organization.name),
+        projectName: mailLabel(projectName),
+        inviterName: mailLabel(inviterName),
         role: projectRoleName,
         loginUrl: frontendUrl
       })
@@ -1728,6 +1743,12 @@ export class OrganizationsService {
     if (this.inviteDelivery() === 'link') {
       return this.reissueInvitationLink(invitation, user);
     }
+
+    await this.rateLimit.checkInviteMail({
+      email: invitation.email,
+      organizationId: invitation.organizationId,
+      userId: user.id
+    });
 
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
     const inviterName =

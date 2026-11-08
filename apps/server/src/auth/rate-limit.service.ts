@@ -93,6 +93,16 @@ export const RATE_LIMIT_CONFIGS: Record<string, RateLimitConfig> = {
     windowMs: 60 * 60 * 1000,
     blockDurationMs: 60 * 60 * 1000
   },
+  invite_user: {
+    maxAttempts: 30,
+    windowMs: 60 * 60 * 1000,
+    blockDurationMs: 60 * 60 * 1000
+  },
+  invite_global: {
+    maxAttempts: 2000,
+    windowMs: 60 * 60 * 1000,
+    blockDurationMs: 15 * 60 * 1000
+  },
   otp_request_global: {
     maxAttempts: 3000,
     windowMs: 15 * 60 * 1000,
@@ -220,6 +230,18 @@ export class RateLimitService {
       }
       throw e;
     }
+  }
+
+  async checkInviteMail(subjects: {
+    email?: string;
+    organizationId?: string;
+    userId?: string;
+  }): Promise<void> {
+    if (subjects.email) await this.checkRateLimit(subjects.email, 'email', 'invite');
+    if (subjects.organizationId)
+      await this.checkRateLimit(subjects.organizationId, 'org', 'invite');
+    if (subjects.userId) await this.checkRateLimit(subjects.userId, 'user', 'invite');
+    await this.checkRateLimit('all', 'global', 'invite');
   }
 
   async slowDown(): Promise<void> {
