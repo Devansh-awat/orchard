@@ -300,6 +300,7 @@ export interface MockSsoProvider {
 	defaultRole: 'admin' | 'member' | 'guest';
 	allowedDomains: string[];
 	requireVerifiedEmail: boolean;
+	trustEmail?: boolean;
 	lastUsedAt: string | null;
 	createdAt: string;
 	updatedAt: string;

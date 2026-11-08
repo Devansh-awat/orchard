@@ -34,6 +34,7 @@ const provider = (overrides: Partial<MockSsoProvider> & { name: string }): MockS
 		defaultRole: 'member',
 		allowedDomains: [],
 		requireVerifiedEmail: true,
+		trustEmail: false,
 		lastUsedAt: null,
 		createdAt: now,
 		updatedAt: now,

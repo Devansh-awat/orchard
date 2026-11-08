@@ -36,7 +36,8 @@
 		onSave,
 		onClose,
 		onIconUpload,
-		onIconRemove
+		onIconRemove,
+		instance = false
 	}: {
 		open?: boolean;
 		presets: SsoProviderPreset[];
@@ -47,6 +48,7 @@
 		onClose: () => void;
 		onIconUpload?: (file: File) => Promise<string | null>;
 		onIconRemove?: () => Promise<void>;
+		instance?: boolean;
 	} = $props();
 
 	let draft = $state<ProviderDraft | null>(null);
@@ -393,6 +395,13 @@
 						label="Require a verified email"
 						hint="Rejects sign-ins when the provider hasn't verified the address"
 					/>
+					{#if instance && draft.protocol === 'saml'}
+						<ToggleRow
+							bind:checked={draft.trustEmail}
+							label="This provider verifies email addresses"
+							hint="SAML can't say whether an address was checked. Only turn this on if your IdP stops people from setting an email they don't own"
+						/>
+					{/if}
 					<SettingRow label="Role for new members" for="{uid}-role">
 						<div class="role">
 							<Dropdown

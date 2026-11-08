@@ -559,6 +559,7 @@
 	onSave={saveProvider}
 	onIconUpload={uploadIcon}
 	onIconRemove={removeIcon}
+	instance
 	onClose={() => {
 		editing = null;
 		modalError = null;

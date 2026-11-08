@@ -47,6 +47,7 @@ export interface SsoProvider {
 	defaultRole: 'owner' | 'admin' | 'member' | 'guest';
 	allowedDomains: string[];
 	requireVerifiedEmail: boolean;
+	trustEmail?: boolean;
 	usable: boolean;
 	lastUsedAt: string | null;
 	callbackUrl: string;
@@ -143,6 +144,7 @@ export interface ProviderDraft {
 	defaultRole: 'admin' | 'member' | 'guest';
 	allowedDomains: string;
 	requireVerifiedEmail: boolean;
+	trustEmail: boolean;
 	iconUrl: string | null;
 	pendingIcon?: File | null;
 }
@@ -170,6 +172,7 @@ export function emptyDraft(preset: SsoProviderPreset): ProviderDraft {
 		defaultRole: 'member',
 		allowedDomains: '',
 		requireVerifiedEmail: true,
+		trustEmail: false,
 		iconUrl: null,
 		pendingIcon: null
 	};
@@ -195,6 +198,7 @@ export function draftFromProvider(provider: SsoProvider): ProviderDraft {
 		defaultRole: provider.defaultRole === 'owner' ? 'admin' : provider.defaultRole,
 		allowedDomains: provider.allowedDomains.join(', '),
 		requireVerifiedEmail: provider.requireVerifiedEmail,
+		trustEmail: provider.trustEmail ?? false,
 		iconUrl: provider.iconUrl,
 		pendingIcon: null
 	};
@@ -210,6 +214,7 @@ export function draftToPayload(draft: ProviderDraft) {
 		jitProvisioning: draft.jitProvisioning,
 		defaultRole: draft.defaultRole,
 		requireVerifiedEmail: draft.requireVerifiedEmail,
+		trustEmail: draft.trustEmail,
 		iconUrl: draft.iconUrl,
 		allowedDomains: draft.allowedDomains
 			.split(/[\s,]+/)

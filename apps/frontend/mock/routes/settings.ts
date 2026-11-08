@@ -85,7 +85,8 @@ const PROVIDER_FIELDS = [
 	'jitProvisioning',
 	'defaultRole',
 	'allowedDomains',
-	'requireVerifiedEmail'
+	'requireVerifiedEmail',
+	'trustEmail'
 ] as const;
 
 export function applyProviderInput(p: MockSsoProvider, body: any) {
