@@ -166,6 +166,7 @@
     "ipaddr.js": "^1.9.1",
     "jose": "^5.2.0",
     "js-yaml": "^4.3.2",
+    "minimatch": "^11.0.4",
     "mjml": "^5.4.0",
     "multer": "^2.5.0",
     "nodemailer": "^10.3.1",

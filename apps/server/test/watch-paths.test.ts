@@ -7,7 +7,8 @@ import {
   partitionByWatchPaths,
   fileMatchesWatchPaths,
   normalizeWatchPaths,
-  pushMatchesWatchPaths
+  pushMatchesWatchPaths,
+  watchPathProblem
 } from '../src/github/watch-paths';
 
 test('a bare directory matches everything under it', () => {
@@ -262,4 +263,38 @@ test('paths that are not a list of strings are treated as no filter', () => {
     ).unmatched,
     []
   );
+});
+
+test('repeated globstars match in linear time', () => {
+  const deep = `${'a/'.repeat(40)}y`;
+  const started = Date.now();
+  for (const repeats of [8, 30, 100]) {
+    const patterns = [`${'**/'.repeat(repeats)}x`];
+    assert.equal(fileMatchesWatchPaths(deep, patterns), false);
+    assert.equal(fileMatchesWatchPaths(`${deep}/x`, patterns), true);
+  }
+  const interleaved = [`${'**/a/'.repeat(7)}**/x`];
+  assert.equal(fileMatchesWatchPaths(deep, interleaved), false);
+  assert.ok(Date.now() - started < 500);
+});
+
+test('brace explosions cannot stall matching', () => {
+  const started = Date.now();
+  const patterns = ['{a,b}'.repeat(18), '{1..99999}{1..99999}'];
+  assert.equal(fileMatchesWatchPaths('a/b', patterns), false);
+  assert.ok(Date.now() - started < 500);
+});
+
+test('very long changed paths never match', () => {
+  assert.equal(fileMatchesWatchPaths(`${'a'.repeat(5000)}.ts`, ['**/*.ts']), false);
+});
+
+test('pathological patterns are rejected with a reason', () => {
+  assert.equal(watchPathProblem('src/**/*.ts'), null);
+  assert.equal(watchPathProblem('!docs/**/*.{md,mdx}'), null);
+  assert.match(watchPathProblem(`${'**/'.repeat(9)}x`) ?? '', /\*\*/);
+  assert.match(watchPathProblem(`${'a/'.repeat(33)}x`) ?? '', /segments/);
+  assert.match(watchPathProblem('{a,b}'.repeat(5)) ?? '', /brace/);
+  assert.match(watchPathProblem('{1..999}') ?? '', /range/);
+  assert.match(watchPathProblem('a'.repeat(501)) ?? '', /longer/);
 });

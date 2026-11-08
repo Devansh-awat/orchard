@@ -1,3 +1,5 @@
+import { Minimatch } from 'minimatch';
+
 export const MAX_WATCH_PATHS = 50;
 
 export const MAX_WATCH_PATH_LENGTH = 500;
@@ -9,8 +11,6 @@ const PUSH_COMMIT_PAYLOAD_LIMIT = 2048;
 const COMPARE_FILE_LIMIT = 300;
 
 const GLOB_CHARS = /[*?[\]{}]/;
-
-const regexCache = new Map<string, RegExp>();
 
 export function normalizeWatchPath(raw: string): string {
   return raw
@@ -36,88 +36,79 @@ export function normalizeWatchPaths(raw: unknown): string[] {
   return out;
 }
 
-function escapeLiteral(ch: string): string {
-  return /[.+^$(){}|[\]\\/]/.test(ch) ? `\\${ch}` : ch;
+const MAX_WATCH_PATH_SEGMENTS = 32;
+
+const MAX_WATCH_PATH_GLOBSTARS = 8;
+
+const MAX_WATCH_PATH_BRACES = 4;
+
+const MAX_MATCHED_PATH_LENGTH = 4096;
+
+const BRACE_RANGE = /\{[^{}]*\.\.[^{}]*\}/;
+
+type Matcher = (path: string) => boolean;
+
+const matcherCache = new Map<string, Matcher>();
+
+export function watchPathProblem(raw: string): string | null {
+  const body = raw.startsWith('!') ? raw.slice(1) : raw;
+  if (body.length > MAX_WATCH_PATH_LENGTH) {
+    return `Watch path is longer than ${MAX_WATCH_PATH_LENGTH} characters`;
+  }
+  const segments = body.split('/');
+  if (segments.length > MAX_WATCH_PATH_SEGMENTS) {
+    return `Watch path has more than ${MAX_WATCH_PATH_SEGMENTS} segments`;
+  }
+  if (segments.filter((segment) => segment === '**').length > MAX_WATCH_PATH_GLOBSTARS) {
+    return `Watch path has more than ${MAX_WATCH_PATH_GLOBSTARS} ** segments`;
+  }
+  if (body.split('{').length - 1 > MAX_WATCH_PATH_BRACES) {
+    return `Watch path has more than ${MAX_WATCH_PATH_BRACES} brace groups`;
+  }
+  if (BRACE_RANGE.test(body)) return 'Watch path brace ranges are not supported';
+  return null;
 }
 
-function segmentToRegex(segment: string): string {
-  let out = '';
-  let braceDepth = 0;
-  for (let i = 0; i < segment.length; i += 1) {
-    const ch = segment[i];
-    if (ch === '*') {
-      out += '[^/]*';
-    } else if (ch === '?') {
-      out += '[^/]';
-    } else if (ch === '{') {
-      out += '(?:';
-      braceDepth += 1;
-    } else if (ch === '}' && braceDepth > 0) {
-      out += ')';
-      braceDepth -= 1;
-    } else if (ch === ',' && braceDepth > 0) {
-      out += '|';
-    } else if (ch === '[' && segment.indexOf(']', i + 2) > i) {
-      const close = segment.indexOf(']', i + 2);
-      const body = segment.slice(i + 1, close).replace(/\\/g, '\\\\');
-      out += `[${body.startsWith('!') ? `^${body.slice(1)}` : body}]`;
-      i = close;
-    } else {
-      out += escapeLiteral(ch);
-    }
-  }
-  while (braceDepth > 0) {
-    out += ')';
-    braceDepth -= 1;
-  }
-  return out;
-}
-
-function buildRegex(pattern: string): RegExp {
+function buildMatcher(pattern: string): Matcher {
   const expanded = pattern.endsWith('/') ? `${pattern}**` : pattern;
 
   if (!GLOB_CHARS.test(expanded)) {
-    const literal = expanded.split('').map(escapeLiteral).join('');
-    return new RegExp(`^${literal}(?:/.*)?$`);
+    return (path) => path === expanded || path.startsWith(`${expanded}/`);
   }
 
-  const segments = expanded.split('/');
-  let source = '^';
-  segments.forEach((segment, index) => {
-    const isLast = index === segments.length - 1;
-    if (segment === '**') {
-      source += isLast ? '.*' : '(?:[^/]+/)*';
-      return;
-    }
-    source += segmentToRegex(segment);
-    if (!isLast) source += '/';
+  const mm = new Minimatch(expanded, {
+    dot: true,
+    nobrace: watchPathProblem(expanded) !== null,
+    noext: true,
+    nonegate: true,
+    nocomment: true
   });
-  return new RegExp(`${source}$`);
+  return (path) => mm.match(path);
 }
 
-function compile(pattern: string): RegExp {
-  const cached = regexCache.get(pattern);
+function compile(pattern: string): Matcher {
+  const cached = matcherCache.get(pattern);
   if (cached) return cached;
-  const built = buildRegex(pattern);
-  if (regexCache.size > 1000) regexCache.clear();
-  regexCache.set(pattern, built);
+  const built = buildMatcher(pattern);
+  if (matcherCache.size > 1000) matcherCache.clear();
+  matcherCache.set(pattern, built);
   return built;
 }
 
 export function fileMatchesWatchPaths(file: string, patterns: string[]): boolean {
   const path = normalizeWatchPath(file);
-  if (!path) return false;
+  if (!path || path.length > MAX_MATCHED_PATH_LENGTH) return false;
 
   let hasInclude = false;
   let included = false;
 
   for (const pattern of patterns) {
     if (pattern.startsWith('!')) {
-      if (compile(pattern.slice(1)).test(path)) return false;
+      if (compile(pattern.slice(1))(path)) return false;
       continue;
     }
     hasInclude = true;
-    if (!included && compile(pattern).test(path)) included = true;
+    if (!included && compile(pattern)(path)) included = true;
   }
 
   return hasInclude ? included : true;

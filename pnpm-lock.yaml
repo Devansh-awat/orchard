@@ -398,6 +398,9 @@ importers:
       js-yaml:
         specifier: ^4.3.2
         version: 4.3.2
+      minimatch:
+        specifier: ^11.0.4
+        version: 11.0.4
       mjml:
         specifier: ^5.4.0
         version: 5.4.0(svgo@4.1.0)(terser@5.44.0)(typescript@5.9.3)

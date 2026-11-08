@@ -41,7 +41,7 @@ import { isBuilderOverride } from '../docker/fc/build-backend-router';
 import { BuildJobInformerService } from '../docker/build-job-informer.service';
 import { GitHubService } from '../github/github.service';
 import { parseDockerfileHealthCheck } from '../github/dockerfile-healthcheck';
-import { normalizeWatchPaths, MAX_WATCH_PATHS, MAX_WATCH_PATH_LENGTH } from '../github/watch-paths';
+import { normalizeWatchPaths, watchPathProblem, MAX_WATCH_PATHS } from '../github/watch-paths';
 import { QuotasService } from '../quotas/quotas.service';
 import { TailscaleService } from '../tailscale/tailscale.service';
 import { MembershipCacheService } from '../auth/membership-cache.service';
@@ -4915,11 +4915,11 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       if (watchPaths.length > MAX_WATCH_PATHS) {
         throw new BadRequestException(`At most ${MAX_WATCH_PATHS} watch paths are allowed`);
       }
-      const tooLong = watchPaths.find((path) => path.length > MAX_WATCH_PATH_LENGTH);
-      if (tooLong) {
-        throw new BadRequestException(
-          `Watch path is longer than ${MAX_WATCH_PATH_LENGTH} characters: ${tooLong.slice(0, 60)}...`
-        );
+      for (const path of watchPaths) {
+        const problem = watchPathProblem(path);
+        if (problem) {
+          throw new BadRequestException(`${problem}: ${path.slice(0, 60)}`);
+        }
       }
     }
 
