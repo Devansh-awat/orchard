@@ -57,6 +57,7 @@ export const MAX_CLIENT_NAME_LENGTH = 100;
 export const MAX_REDIRECT_URIS = 5;
 export const MAX_REDIRECT_URI_LENGTH = 512;
 export const MAX_CACHED_CLIENTS = 5000;
+export const CLIENT_TOUCH_INTERVAL_MS = 60 * 60 * 1000;
 
 const ACCESS_TOKEN_TTL = '1d';
 const ACCESS_TOKEN_TTL_SECONDS = 24 * 60 * 60;
@@ -67,6 +68,7 @@ const REFRESH_TOKEN_TTL = '30d';
 @Injectable()
 export class McpOAuthService {
   private readonly oauthClients = new Map<string, OAuthClient>();
+  private readonly lastTouched = new Map<string, number>();
 
   constructor(
     private readonly sessions: SessionsService,
@@ -145,12 +147,32 @@ export class McpOAuthService {
     }
   }
 
+  private touchClient(clientId: string): void {
+    const now = Date.now();
+    const last = this.lastTouched.get(clientId);
+    if (last !== undefined && now - last < CLIENT_TOUCH_INTERVAL_MS) return;
+    if (this.lastTouched.size >= MAX_CACHED_CLIENTS) this.lastTouched.clear();
+    this.lastTouched.set(clientId, now);
+    Promise.resolve()
+      .then(() =>
+        this.prisma.mcpOauthClient.updateMany({
+          where: { id: clientId },
+          data: { lastUsedAt: new Date(now) }
+        })
+      )
+      .catch(() => {});
+  }
+
   private async getClient(clientId: string): Promise<OAuthClient | null> {
     if (!clientId) return null;
     const cached = this.oauthClients.get(clientId);
-    if (cached) return cached;
+    if (cached) {
+      this.touchClient(clientId);
+      return cached;
+    }
     const row = await this.prisma.mcpOauthClient.findUnique({ where: { id: clientId } });
     if (!row) return null;
+    this.touchClient(clientId);
     const client: OAuthClient = {
       clientId: row.id,
       clientSecret: row.clientSecret ?? undefined,

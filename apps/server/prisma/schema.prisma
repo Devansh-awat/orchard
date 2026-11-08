@@ -2559,7 +2559,8 @@ model McpOauthClient {
   clientSecret String?  @map("client_secret") @db.VarChar(128)
   name         String   @db.VarChar(255)
   redirectUris Json     @map("redirect_uris")
-  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  lastUsedAt   DateTime? @map("last_used_at") @db.Timestamp(6)
 
   @@map("mcp_oauth_clients")
 }
@@ -2618,6 +2619,7 @@ model ErrorGroup {
   @@unique([deploymentId, fingerprint], map: "uq_error_group_deployment_fingerprint")
   @@index([deploymentId, status], map: "idx_error_group_deployment_status")
   @@index([deploymentId, lastSeenAt(sort: Desc)], map: "idx_error_group_deployment_last_seen")
+  @@index([lastSeenAt], map: "idx_error_group_last_seen")
   @@map("error_groups")
 }
 

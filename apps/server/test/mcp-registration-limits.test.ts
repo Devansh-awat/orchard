@@ -136,3 +136,21 @@ test('the in-memory client map is bounded and falls back to the database', async
   assert.equal(reloaded.clientId, firstId);
   assert.ok(prisma.clients[firstId]);
 });
+
+test('a client is stamped as used at most once an hour', async () => {
+  const writes: any[] = [];
+  const prisma: any = memoryPrisma();
+  prisma.mcpOauthClient.updateMany = async (args: any) => {
+    writes.push(args);
+    return { count: 1 };
+  };
+  const service = new McpOAuthService({} as any, prisma);
+  const { registration } = await service.registerClient({
+    redirect_uris: ['https://client.example/cb']
+  });
+  for (let i = 0; i < 20; i++) await (service as any).getClient(registration.client_id);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(writes.length, 1);
+  assert.equal(writes[0].where.id, registration.client_id);
+  assert.ok(writes[0].data.lastUsedAt instanceof Date);
+});
