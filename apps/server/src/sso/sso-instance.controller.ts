@@ -17,6 +17,7 @@ import { SsoLoginService } from './sso-login.service';
 import { IdentityMappingService, RulesInput } from './identity-mapping.service';
 import { publicPresets } from './presets';
 import { assertProviderIcon, PROVIDER_ICON_UPLOAD } from './provider-icon';
+import { ImageUploadSlots } from '../http/upload-limits';
 
 /**
  * Instance-wide SSO. Superadmin-only by default-deny: no @Auth()/@SuperAdmin()
@@ -94,7 +95,7 @@ export class SsoInstanceController {
   }
 
   @Post('providers/:providerId/icon')
-  @UseInterceptors(FileInterceptor('file', PROVIDER_ICON_UPLOAD))
+  @UseInterceptors(ImageUploadSlots, FileInterceptor('file', PROVIDER_ICON_UPLOAD))
   uploadProviderIcon(
     @Param('providerId') providerId: string,
     @UploadedFile() file: Express.Multer.File,

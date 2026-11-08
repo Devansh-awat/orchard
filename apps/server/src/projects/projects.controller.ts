@@ -1,4 +1,12 @@
 import { Idempotent } from '../idempotency/idempotency.interceptor';
+import {
+  BUILD_CONTEXT_UPLOAD_BYTES,
+  BuildContextUploadSlots,
+  ImageUploadSlots,
+  PROJECT_BACKGROUND_UPLOAD_BYTES,
+  PROJECT_ICON_UPLOAD_BYTES,
+  uploadLimits
+} from '../http/upload-limits';
 import { DatabaseRecoveryService } from './database-recovery.service';
 import { Throttle } from '@nestjs/throttler';
 import {
@@ -339,7 +347,10 @@ export class ProjectsController {
   }
 
   @Post(':id/icon')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(
+    ImageUploadSlots,
+    FileInterceptor('file', uploadLimits(PROJECT_ICON_UPLOAD_BYTES))
+  )
   async uploadProjectIcon(
     @Param('id') id: string,
     @UploadedFile() file: Express.Multer.File,
@@ -374,7 +385,10 @@ export class ProjectsController {
   }
 
   @Post(':id/background-image')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(
+    ImageUploadSlots,
+    FileInterceptor('file', uploadLimits(PROJECT_BACKGROUND_UPLOAD_BYTES))
+  )
   async uploadProjectBackground(
     @Param('id') id: string,
     @UploadedFile() file: Express.Multer.File,
@@ -1478,7 +1492,10 @@ export class DeploymentsController {
 
   @Post(':id/build-context')
   @UseInterceptors(RolloutPinInterceptor)
-  @UseInterceptors(FileInterceptor('context', { limits: { fileSize: 100 * 1024 * 1024 } }))
+  @UseInterceptors(
+    BuildContextUploadSlots,
+    FileInterceptor('context', uploadLimits(BUILD_CONTEXT_UPLOAD_BYTES))
+  )
   async uploadBuildContext(
     @Param('id') id: string,
     @UploadedFile() file: Express.Multer.File,

@@ -1,4 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
+import { uploadLimits } from '../http/upload-limits';
 
 const MAX_BYTES = 1024 * 1024;
 
@@ -8,7 +9,7 @@ const EXTENSIONS: Record<string, string> = {
   'image/webp': 'webp'
 };
 
-export const PROVIDER_ICON_UPLOAD = { limits: { fileSize: MAX_BYTES, files: 1 } };
+export const PROVIDER_ICON_UPLOAD = uploadLimits(MAX_BYTES);
 
 function sniff(buffer: Buffer): string | null {
   if (buffer.length >= 8 && buffer.subarray(0, 8).equals(Buffer.from('89504e470d0a1a0a', 'hex'))) {

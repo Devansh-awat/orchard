@@ -11,6 +11,7 @@ import {
   UploadedFile,
   BadRequestException
 } from '@nestjs/common';
+import { AVATAR_UPLOAD_BYTES, ImageUploadSlots, uploadLimits } from '../http/upload-limits';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { OrganizationRole } from '@prisma/client';
 import { OrganizationsService } from './organizations.service';
@@ -59,7 +60,7 @@ export class OrganizationsController {
   }
 
   @Post(':id/avatar')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(ImageUploadSlots, FileInterceptor('file', uploadLimits(AVATAR_UPLOAD_BYTES)))
   async uploadAvatar(
     @Param('id') organizationId: string,
     @UploadedFile() file: Express.Multer.File,

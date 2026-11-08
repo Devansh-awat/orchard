@@ -13,6 +13,7 @@ import {
   UseInterceptors,
   UploadedFile
 } from '@nestjs/common';
+import { AVATAR_UPLOAD_BYTES, ImageUploadSlots, uploadLimits } from '../http/upload-limits';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Request, Response } from 'express';
 import * as crypto from 'crypto';
@@ -360,7 +361,7 @@ export class OAuthController {
 
   @Auth()
   @Post('me/avatar')
-  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 5 * 1024 * 1024, files: 1 } }))
+  @UseInterceptors(ImageUploadSlots, FileInterceptor('file', uploadLimits(AVATAR_UPLOAD_BYTES)))
   async uploadAvatar(@UploadedFile() file: Express.Multer.File, @Req() req: any) {
     if (!file) {
       throw new HttpException('No file provided', HttpStatus.BAD_REQUEST);

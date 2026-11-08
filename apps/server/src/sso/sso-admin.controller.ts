@@ -15,6 +15,7 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { SsoService, ProviderInput, SettingsInput } from './sso.service';
 import { assertProviderIcon, PROVIDER_ICON_UPLOAD } from './provider-icon';
+import { ImageUploadSlots } from '../http/upload-limits';
 import { SsoLoginService } from './sso-login.service';
 import { OrgDomainsService } from './org-domains.service';
 import { IdentityMappingService, RulesInput } from './identity-mapping.service';
@@ -181,7 +182,7 @@ export class SsoAdminController {
   }
 
   @Post('providers/:providerId/icon')
-  @UseInterceptors(FileInterceptor('file', PROVIDER_ICON_UPLOAD))
+  @UseInterceptors(ImageUploadSlots, FileInterceptor('file', PROVIDER_ICON_UPLOAD))
   async uploadProviderIcon(
     @Param('id') organizationId: string,
     @Param('providerId') providerId: string,
