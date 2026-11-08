@@ -255,6 +255,11 @@ is the complete list.
 | `tenant.cnpgOperatorNamespace` | `""` | Where CloudNativePG runs, as `CNPG_OPERATOR_NAMESPACE`. Empty leaves the server's default, `postgresql`. A value in `server.env` wins. With the wrong one, the tenant policy keeps the operator out of database pods, and databases show `Instance Status Extraction Error`. |
 | `tenant.wildcardDomains` | `""` | `.suffix=tlsSecret` pairs generated app URLs are built from. Empty derives one from `gateway.http.appDomain`. |
 | `tenant.publicIp` | `""` | Fallback external IP publicly exposed ports and databases are published on, via `PUBLIC_EXPOSURE_IP`. An organization that sets its own overrides it. Empty means every organization must configure one before it can expose anything, and setting it here locks the admin-panel field. |
+| `tenant.newOrgCpu` | `""` | CPU cap written into NEW organizations when they are created, as `NEW_ORG_CPU`. Empty means 16 cores; `0` or `unlimited` creates uncapped organizations. Existing organizations are never changed. |
+| `tenant.newOrgMemory` | `""` | Memory cap written into NEW organizations, as `NEW_ORG_MEMORY`. Empty means `32Gi`; `0` or `unlimited` creates uncapped organizations. |
+| `tenant.maxProjectsPerOrg` | `""` | Most projects one organization may hold, as `MAX_PROJECTS_PER_ORG`. Empty means 500; `0` is unlimited. An organization already above the limit keeps what it has and cannot create more. |
+| `tenant.maxEnvironmentsPerOrg` | `""` | Most extra environments (one namespace each) per organization, as `MAX_ENVIRONMENTS_PER_ORG`. Empty means 1000; `0` is unlimited. |
+| `tenant.maxDeploymentsPerOrg` | `""` | Most deployments per organization, as `MAX_DEPLOYMENTS_PER_ORG`. Empty means 2000; `0` is unlimited. |
 
 ### Datadog (`datadog.*`)
 

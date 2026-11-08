@@ -1,4 +1,5 @@
 import { assertOrgCanExposeNodePort, assertOrgCanExposePublicPort } from './public-exposure-quota';
+import { assertOrgCanCreate } from '../quotas/org-limits';
 import { assertVolumeQuantity } from '../kubernetes/pvc-limits';
 import { pickPreviousImage } from './rollback-target';
 import { findVolumeConflict, volumeClaim } from './volume-claims';
@@ -6711,6 +6712,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
 
     await this.authz.requireProjectEdit(project.id, user.id, 'create deployments');
     await this.assertResourceRequest(data, user.id);
+    await assertOrgCanCreate(this.prisma, project.organizationId, 'deployments');
 
     // Resolve the target environment (explicit id or the project default).
     // The environment owns the namespace the resource deploys into.
@@ -7123,6 +7125,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
 
     await this.authz.requireProjectEdit(project.id, user.id, 'create deployments');
     await this.assertResourceRequest(data, user.id);
+    await assertOrgCanCreate(this.prisma, project.organizationId, 'deployments');
 
     const environment = await this.environments.resolveEnvironment(project.id, data.environmentId);
 
@@ -7622,6 +7625,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
 
     await this.authz.requireProjectEdit(project.id, user.id, 'create deployments');
     await this.assertResourceRequest(data, user.id);
+    await assertOrgCanCreate(this.prisma, project.organizationId, 'deployments');
     const environment = await this.environments.resolveEnvironment(project.id, data.environmentId);
 
     const nameInput = String(data.name || '').trim();

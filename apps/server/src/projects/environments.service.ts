@@ -1,4 +1,5 @@
 import { randomBytes } from 'crypto';
+import { assertOrgCanCreate } from '../quotas/org-limits';
 import {
   Injectable,
   Logger,
@@ -163,6 +164,7 @@ export class EnvironmentsService {
       }
     });
     if (!project) throw new NotFoundException('Project not found');
+    await assertOrgCanCreate(this.prisma, project.organizationId, 'environments');
 
     const name = String(input.name ?? '').trim();
     if (!name) throw new BadRequestException('Environment name is required');

@@ -320,6 +320,12 @@ The trade-off is that the URLs are harder to read and to recognise in logs and D
 
 Every tenant namespace also gets an `orchard-abuse-quota` that applies whatever the limits mode. `TENANT_QUOTA_FLOOR_LOADBALANCERS` (default 20) and `TENANT_QUOTA_FLOOR_NODEPORTS` (default 10) cap the Services that publish ports and databases. `TENANT_EPHEMERAL_STORAGE_LIMIT_GIB` (default 20) is the ephemeral-storage limit each container gets when it sets none, so a pod cannot fill a node's disk. Set it to 0 to turn the ephemeral-storage part off.
 
+## Organization limits
+
+A new organization is created with a CPU cap of 16 cores and a memory cap of 32Gi, so that no organization starts with unlimited compute. Change the values with `NEW_ORG_CPU` and `NEW_ORG_MEMORY` (`tenant.newOrgCpu` and `tenant.newOrgMemory` in the chart); `0` or `unlimited` creates uncapped organizations. These only apply when an organization is created. Existing organizations keep whatever caps they have, and an administrator can change any organization's caps in the admin panel. The first organization that the setup flow creates is never capped.
+
+One organization can hold at most 500 projects, 1000 extra environments (each is a namespace) and 2000 deployments. Change them with `MAX_PROJECTS_PER_ORG`, `MAX_ENVIRONMENTS_PER_ORG` and `MAX_DEPLOYMENTS_PER_ORG` (`tenant.maxProjectsPerOrg`, `tenant.maxEnvironmentsPerOrg` and `tenant.maxDeploymentsPerOrg`); `0` is unlimited. An organization that is already above a limit keeps everything it has and cannot create more.
+
 ## The What's new sheet
 
 The dashboard shows each person the latest release notes once. The server reads the notes from a folder that holds `latest.json` and one Markdown file for each release.

@@ -1,4 +1,5 @@
 import { maxVolumeBytes, maxVolumeSize } from '../kubernetes/pvc-limits';
+import { assertOrgCanCreate } from '../quotas/org-limits';
 import { randomBytes } from 'crypto';
 import {
   Injectable,
@@ -264,6 +265,7 @@ export class ProjectsService {
     // Org membership + creation gate. Guests can be invited into an org per
     // project but explicitly cannot spawn new projects of their own.
     await this.authz.requireOrgCanCreateProjects(organizationId, user.id);
+    await assertOrgCanCreate(this.prisma, organizationId, 'projects');
 
     assertUploadUrlOwned(data.icon?.trim(), null, null, 'Icon');
     assertUploadUrlOwned(data.backgroundImage?.trim(), null, null, 'Background image');

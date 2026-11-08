@@ -135,6 +135,19 @@ tenant:
   # Most public ports (NodePorts, app public ports, public databases) one
   # organization may hold. Empty keeps the server default of 20; 0 is unlimited.
   maxPublicPortsPerOrg: ""
+  # Caps written into NEW organizations when they are created, as NEW_ORG_CPU
+  # and NEW_ORG_MEMORY. Empty keeps the server defaults (16 cores, 32Gi); "0" or
+  # "unlimited" creates uncapped organizations. Existing organizations are never
+  # changed, and an administrator can edit any organization's caps afterwards.
+  newOrgCpu: ""
+  newOrgMemory: ""
+  # Most projects, extra environments (one namespace each) and deployments one
+  # organization may hold. Empty keeps the server defaults of 500, 1000 and 2000;
+  # 0 is unlimited. An organization already over a limit keeps what it has and
+  # just cannot create more.
+  maxProjectsPerOrg: ""
+  maxEnvironmentsPerOrg: ""
+  maxDeploymentsPerOrg: ""
   # Namespaces a tenant pod may be reached from, and reach. Every tenant
   # namespace is default-deny, so the ingress controller has to be on this list
   # or it cannot reach the app at all.

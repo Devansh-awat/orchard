@@ -1,4 +1,5 @@
 import { Injectable, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { newOrgCaps } from '../quotas/org-limits';
 import { Prisma } from '@prisma/client';
 import { randomBytes, createHash } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
@@ -230,7 +231,8 @@ export class AdminService {
       plan?: string;
       primaryOwnerEmail?: string;
     },
-    inviterId?: string
+    inviterId?: string,
+    options: { applyDefaultCaps?: boolean } = {}
   ) {
     let primaryOwnerId: string | undefined;
 
@@ -251,7 +253,8 @@ export class AdminService {
         description: data.description,
         avatarUrl: data.avatarUrl,
         plan: data.plan,
-        createdBy: primaryOwnerId
+        createdBy: primaryOwnerId,
+        ...(options.applyDefaultCaps === false ? {} : newOrgCaps())
       }
     });
 

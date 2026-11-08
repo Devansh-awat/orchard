@@ -874,7 +874,9 @@ export class SetupService implements OnModuleInit {
         slug = `${formatSlug(label) || 'orchard'}-${attempt}`;
       }
 
-      await this.admin.createOrganization({ name, slug, primaryOwnerEmail: email }, userId);
+      await this.admin.createOrganization({ name, slug, primaryOwnerEmail: email }, userId, {
+        applyDefaultCaps: false
+      });
       this.logger.warn(`created organization ${slug} for ${email}`);
     } catch (e: any) {
       // A claim that half-succeeds is worse than one with no org: the token is

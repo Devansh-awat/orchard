@@ -506,6 +506,21 @@ true
             {{- if .maxPublicPortsPerOrg }}
             - { name: MAX_PUBLIC_PORTS_PER_ORG, value: {{ .maxPublicPortsPerOrg | quote }} }
             {{- end }}
+            {{- if .newOrgCpu }}
+            - { name: NEW_ORG_CPU, value: {{ .newOrgCpu | quote }} }
+            {{- end }}
+            {{- if .newOrgMemory }}
+            - { name: NEW_ORG_MEMORY, value: {{ .newOrgMemory | quote }} }
+            {{- end }}
+            {{- if .maxProjectsPerOrg }}
+            - { name: MAX_PROJECTS_PER_ORG, value: {{ .maxProjectsPerOrg | quote }} }
+            {{- end }}
+            {{- if .maxEnvironmentsPerOrg }}
+            - { name: MAX_ENVIRONMENTS_PER_ORG, value: {{ .maxEnvironmentsPerOrg | quote }} }
+            {{- end }}
+            {{- if .maxDeploymentsPerOrg }}
+            - { name: MAX_DEPLOYMENTS_PER_ORG, value: {{ .maxDeploymentsPerOrg | quote }} }
+            {{- end }}
             {{- end }}
             {{- with (include "orchard.wildcardDomains" .) }}
             - { name: PLATFORM_WILDCARD_DOMAINS, value: {{ . | quote }} }
