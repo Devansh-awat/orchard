@@ -353,6 +353,7 @@ export default defineConfig({
               collapsed: true,
               items: [
                 { label: 'Security and isolation', slug: 'operate/security' },
+                { label: 'Cluster settings to review', slug: 'operate/cluster-settings' },
                 { label: 'Bot protection', slug: 'operate/bot-protection' },
                 { label: 'Image scanning', slug: 'operate/image-scanning' },
                 { label: 'Check isolation', slug: 'operate/doctor' }

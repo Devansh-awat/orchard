@@ -64,6 +64,8 @@ These cost something, so they are your decision.
 | Pod Security labels                                | Orchard sets `baseline` enforce and `restricted` warn and audit on tenant namespaces. | Enforcing `restricted` breaks images that run as root. Do not remove the labels. |
 | `HOSTNAME_STYLE=readable`                          | Generated hostnames contain the app and project names.                                | The names show in DNS and certificate logs. The default is opaque.               |
 
+Each setting, with what to check before and how to undo it, is on [Cluster settings to review](/operate/cluster-settings/).
+
 The admission guard ships in `Warn` and `Audit` mode, so it reports and does not refuse until you switch it. See [Security and isolation](/operate/security/#admission-guard-for-tenant-namespaces).
 
 ## What Orchard does not guarantee
