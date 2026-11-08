@@ -182,6 +182,7 @@ orchard member      list | invite | remove | set-role |
 orchard notify      channel list|create|update|delete|test|deliveries
 orchard audit       list
 orchard quota       show | me | members | projects
+orchard doctor      [--selftest]  (superadmin)
 ```
 
 **Utility**

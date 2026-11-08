@@ -15,7 +15,7 @@ brew install --cask leafdtk/tap/orchard-cli
 ```
 
 Every command accepts `-o json` for machine-readable output, and `--org` / `--env` to
-override the saved context. **418 commands** are available.
+override the saved context. **419 commands** are available.
 
 ## alert
 
@@ -1933,6 +1933,21 @@ orchard deploy webhook-token list <id>
 ```
 
 Aliases: `ls`
+
+## doctor
+
+### `orchard doctor`
+
+Check the instance's isolation and security configuration (superadmin)
+
+```bash
+orchard doctor
+```
+
+| Flag | Type | Default | Description |
+| --- | --- | --- | --- |
+| `--selftest` | bool | `false` | also run the active isolation self-test (creates temporary namespaces and pods) |
+| `--timeout` | duration | `10m0s` | how long to wait for the self-test to finish |
 
 ## domain
 

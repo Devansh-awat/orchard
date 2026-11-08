@@ -237,6 +237,123 @@
         ]
       }
     },
+    "/admin/doctor": {
+      "get": {
+        "description": "Auth: superadmin",
+        "operationId": "admin_doctor_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {},
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "GET /admin/doctor",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/doctor/selftest": {
+      "post": {
+        "description": "Auth: superadmin",
+        "operationId": "admin_doctor_selftest",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": {},
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {},
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "POST /admin/doctor/selftest",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/doctor/selftest/{id}": {
+      "get": {
+        "description": "Auth: superadmin",
+        "operationId": "admin_doctor_selftest_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {},
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "GET /admin/doctor/selftest/:id",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
     "/admin/grafts": {
       "get": {
         "description": "Auth: superadmin",

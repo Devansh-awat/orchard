@@ -354,7 +354,8 @@ export default defineConfig({
               items: [
                 { label: 'Security and isolation', slug: 'operate/security' },
                 { label: 'Bot protection', slug: 'operate/bot-protection' },
-                { label: 'Image scanning', slug: 'operate/image-scanning' }
+                { label: 'Image scanning', slug: 'operate/image-scanning' },
+                { label: 'Check isolation', slug: 'operate/doctor' }
               ]
             },
             {
