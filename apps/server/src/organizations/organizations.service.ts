@@ -1874,12 +1874,6 @@ export class OrganizationsService {
     return { success: true, message: 'Access turned off' };
   }
 
-  /**
-   * Members are disabled, never deleted: the row keeps who they were for the
-   * audit trail and for anything they built, and they lose every way in. A
-   * later re-enable starts them with no project access, so nothing stale comes
-   * back with them.
-   */
   async disableMember(
     member: { id: string; userId: string; user?: { homeOrganizationId?: string | null } | null },
     organizationId: string,
@@ -1904,10 +1898,6 @@ export class OrganizationsService {
     }
   }
 
-  /**
-   * The org's side of a link. It only ever removes the link from one of the
-   * org's own identities; the account behind it is never named or touched.
-   */
   async unlinkMemberAccount(
     organizationId: string,
     memberId: string,

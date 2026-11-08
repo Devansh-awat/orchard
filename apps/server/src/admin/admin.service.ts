@@ -158,11 +158,6 @@ export class AdminService {
     return updated;
   }
 
-  /**
-   * Turns an account off across the whole instance, Datadog-style: the row,
-   * its memberships and everything it built stay, every session and token
-   * dies, and no sign-in method can start a new one until it is turned back on.
-   */
   async setUserDisabled(userId: string, requesterId: string, disabled: boolean, reason?: string) {
     if (userId === requesterId) {
       throw new ForbiddenException("You can't turn off your own account");

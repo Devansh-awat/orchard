@@ -118,12 +118,6 @@ export class AuthorizationService {
    * enforces its own IdP is not asking to also trust the instance's Google
    * button.
    */
-  /**
-   * Instance-wide enforcement is the operator's call and applies to every
-   * sign-in method but SSO. An organization's enforcement never reaches the
-   * account: it gates entry into that organization (blockedByOrgSso), so an
-   * org can lock its own door but never lock someone out of their account.
-   */
   async assertSsoNotEnforced(
     user: { id: string; email?: string | null; isSuperAdmin?: boolean | null } | null,
     authMethod: AuthMethod
@@ -200,11 +194,6 @@ export class AuthorizationService {
     return true;
   }
 
-  /**
-   * A person's own session that has just passed this organization's IdP. The
-   * IdP vouched for that session, it didn't mint one: the account stays the
-   * person's, and the grant lapses on the org's own session lifetime.
-   */
   private async hasOrgGrant(sessionId: string, organizationId: string): Promise<boolean> {
     const grant = await this.prisma.sessionOrgGrant.findUnique({
       where: { sessionId_organizationId: { sessionId, organizationId } },

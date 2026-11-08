@@ -379,11 +379,6 @@ export class UsersService {
     return updated;
   }
 
-  /**
-   * Turns an account off across the whole instance, Datadog-style: the row,
-   * its memberships and everything it built stay, every session and token
-   * dies, and no sign-in method can start a new one until it is turned back on.
-   */
   async setDisabled(userId: string, disabled: boolean, reason?: string) {
     const user = await this.prisma.user.update({
       where: { id: userId },

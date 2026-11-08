@@ -726,11 +726,6 @@ export class SsoService implements OnApplicationBootstrap {
     return this.adminProvider(updated);
   }
 
-  /**
-   * Whoever can change these decides which signed assertions the provider
-   * accepts, so a change hands the provider to a new party: earlier bindings
-   * and the creator's sign-in exemption must not carry over to it.
-   */
   trustChanged(existing: IdentityProvider, data: Record<string, unknown>): boolean {
     const fields = [
       'protocol',

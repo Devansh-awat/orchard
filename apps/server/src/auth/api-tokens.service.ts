@@ -82,12 +82,6 @@ export class ApiTokensService {
     return cleaned;
   }
 
-  /**
-   * A token limited to one organization, minted from a browser session that
-   * just passed that organization's IdP. Without the grant the request is
-   * refused rather than quietly unscoped, so a person who asked for an org
-   * token never ends up holding one that cannot reach the org.
-   */
   async grantedOrganization(
     auth: { apiTokenId?: string; sessionId?: string },
     organizationId: string

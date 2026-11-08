@@ -694,17 +694,6 @@ export class SsoLoginService {
     return this.issueSession(provider, user as User, returnTo, undefined);
   }
 
-  /**
-   * An organization's IdP signs in the organization's own people (org
-   * identities) and nobody else. It never resolves an account by email.
-   *
-   * An account reaches the org through its IdP only when it is already bound
-   * to this provider (the person linked it from their own session) and either
-   * the person is signing in from that session now, which grants the session
-   * entry without minting a new one, or the account's address is on a domain
-   * this org has verified, which means the org holds the mailbox anyway.
-   * Owners and superadmins always need their own session.
-   */
   private async completeOrgLogin(
     provider: IdentityProvider,
     profile: IdpProfile,

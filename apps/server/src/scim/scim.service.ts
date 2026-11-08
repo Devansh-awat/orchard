@@ -645,9 +645,6 @@ export class ScimService implements OnModuleInit {
       }
     }
 
-    // SCIM provisions the organization's own people. It never attaches an
-    // account someone else holds, whatever address the IdP sends: that person
-    // joins by invitation, or links their account themselves.
     const scimFields = {
       scimManaged: true,
       scimExternalId: write.externalId,

@@ -12,13 +12,6 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { SsoService } from './sso.service';
 
-/**
- * The organizations a person reaches through an org identity they linked to
- * their account. A link is a shortcut and nothing more: it lists the org in
- * the switcher, and opening it still goes through that org's IdP. Only the
- * account side manages links, so an org can never add itself to someone's
- * account or learn which other orgs they belong to.
- */
 @Auth()
 @Controller('auth/links')
 export class AccountLinksController {

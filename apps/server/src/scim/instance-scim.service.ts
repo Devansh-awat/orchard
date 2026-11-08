@@ -55,17 +55,6 @@ const SELECT = {
   updatedAt: true
 } as const;
 
-/**
- * Provisioning for the instance's own directory: the operator's IdP creates,
- * renames and turns off **accounts** here. The instance is trusted, so this is
- * the one SCIM surface allowed to touch accounts; organization SCIM only ever
- * manages that organization's own identities. Its tokens live in their own
- * table so an organization token can never be presented here, and the other
- * way round.
- *
- * "Delete" turns the account off rather than removing it, and access to orgs
- * and projects still comes from the instance group rules at sign-in.
- */
 @Injectable()
 export class InstanceScimService {
   constructor(

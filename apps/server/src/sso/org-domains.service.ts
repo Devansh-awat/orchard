@@ -293,14 +293,6 @@ export class OrgDomainsService {
     }
   }
 
-  /**
-   * Verification is a fact about who held the domain on one day. Re-check
-   * every verified domain daily so a lapsed or sold domain stops vouching for
-   * its old organization. A DNS error proves nothing, so only a definite
-   * NXDOMAIN, an empty answer or a missing token counts as missing, and only
-   * after MISSING_GRACE_MS. A later RDAP registration date is definite on its
-   * own: the domain was re-registered, whatever its TXT records say now.
-   */
   async recheckDue(now = new Date()): Promise<Record<RecheckOutcome, number>> {
     const tally: Record<RecheckOutcome, number> = { kept: 0, missing: 0, revoked: 0, unknown: 0 };
     const rows = await this.prisma.orgDomain.findMany({

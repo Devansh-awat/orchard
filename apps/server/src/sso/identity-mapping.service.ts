@@ -458,12 +458,6 @@ export class IdentityMappingService {
     });
   }
 
-  /**
-   * Project roles from IdP groups. A rule only ever lands inside an org the
-   * person is already an active member of, and only ever touches project
-   * memberships it created itself: someone added to a project by hand keeps
-   * that membership whatever their groups say.
-   */
   async syncProjects(
     provider: IdentityProvider,
     userId: string,

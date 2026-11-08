@@ -12,12 +12,6 @@ const MAX_CACHE = 10_000;
 
 export type DomainKind = 'registrable' | 'public_suffix' | 'private_suffix' | 'invalid';
 
-/**
- * Where a name sits relative to the public suffix list. Only a registrable
- * domain under an ICANN suffix is something a single party can own outright:
- * a public suffix (co.uk) belongs to nobody, and anything under a private
- * suffix (vercel.app, github.io) belongs to a platform that hands names out.
- */
 export function classifyDomain(domain: string): { kind: DomainKind; registrable: string | null } {
   const parsed = parse(domain, { allowPrivateDomains: true });
   if (!parsed.hostname || parsed.isIp || !parsed.publicSuffix) {
@@ -39,15 +33,6 @@ export function registrationFromRdap(body: unknown): Date | null {
   return null;
 }
 
-/**
- * When the domain behind an address was last registered, from RDAP.
- *
- * A registration date later than the moment Orchard verified an address on
- * that domain means the domain lapsed and someone re-registered it: whoever
- * holds the mailbox now is not who proved it. `undefined` means "couldn't
- * tell" (no RDAP for the TLD, lookup failed, no registration event) and must
- * never be read as "fine" or "changed".
- */
 @Injectable()
 export class DomainRegistrationService {
   private readonly logger = new Logger(DomainRegistrationService.name);
@@ -79,7 +64,6 @@ export class DomainRegistrationService {
     return value;
   }
 
-  /** True only when RDAP positively says the domain was registered after `since`. */
   async changedHandsSince(domain: string, since: Date | null | undefined): Promise<boolean> {
     if (!since) return false;
     const registered = await this.registeredAt(domain);

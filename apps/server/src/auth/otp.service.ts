@@ -211,11 +211,6 @@ export class OtpService {
     return { valid: true, email: normalizedEmail };
   }
 
-  /**
-   * A code only proves who holds the mailbox today. If the domain was
-   * registered after this account's address was verified, the domain lapsed
-   * and was bought by someone else, and the code is theirs, not the owner's.
-   */
   private async refuseBlockedEmailSignIn(email: string): Promise<void> {
     const user = await this.prisma.user.findUnique({
       where: accountEmail(email),

@@ -14,13 +14,6 @@ export interface OrgIdentityInput {
   source: MemberSource;
 }
 
-/**
- * Members an organization owns outright: provisioned by its IdP or SCIM,
- * confined to it, and never an account anyone signs in to any other way. The
- * email lives in the org's own namespace (emailScope = org id), so it can
- * repeat an address that also has a personal account, or one another org
- * provisioned, without either ever resolving to the other.
- */
 @Injectable()
 export class OrgIdentityService {
   private readonly logger = new Logger(OrgIdentityService.name);
@@ -97,10 +90,6 @@ export class OrgIdentityService {
     return user;
   }
 
-  /**
-   * Usernames are global, so an org's people get a suffix with the org's slug.
-   * An org can then never take a bare handle like "admin" or someone's name.
-   */
   private async uniqueUsername(email: string, orgSlug: string): Promise<string> {
     const suffix = `-${sanitizeUsername(orgSlug).slice(0, 40)}`;
     const base = sanitizeUsername(email.split('@')[0]).slice(0, 100 - suffix.length - 6);

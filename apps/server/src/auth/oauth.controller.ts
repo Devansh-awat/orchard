@@ -284,6 +284,7 @@ export class OAuthController {
       ...(user.homeOrganizationId ? { homeOrganizationId: user.homeOrganizationId } : {}),
       ...(req.user.orgScope ? { sessionOrganizationId: req.user.orgScope } : {}),
       ...(user.passkeyOnly ? { passkeyOnly: true } : {}),
+      ...(await this.sessionGrants(req.user.sessionId, req.user.orgScope)),
       ...(!user.homeOrganizationId && !req.user.orgScope
         ? await this.emailDomainOwner(user.email)
         : {})
@@ -291,11 +292,27 @@ export class OAuthController {
     return user.isSuperAdmin ? { ...base, isSuperAdmin: true } : base;
   }
 
-  /**
-   * An organization that verified the domain of this account's address
-   * controls that mailbox, so it can always sign in with an email code. Say so
-   * on the account, rather than letting someone find out the hard way.
-   */
+  private async sessionGrants(sessionId: string | undefined, orgScope: string | undefined) {
+    if (!sessionId || orgScope) return {};
+    const grants = await this.prisma.sessionOrgGrant.findMany({
+      where: { sessionId, expiresAt: { gt: new Date() } },
+      select: {
+        organizationId: true,
+        expiresAt: true,
+        organization: { select: { name: true, slug: true } }
+      }
+    });
+    if (!grants.length) return {};
+    return {
+      ssoGrants: grants.map((g) => ({
+        organizationId: g.organizationId,
+        name: g.organization.name,
+        slug: g.organization.slug,
+        expiresAt: g.expiresAt
+      }))
+    };
+  }
+
   private async emailDomainOwner(email: string) {
     const domain = email.split('@')[1]?.toLowerCase();
     if (!domain) return {};
