@@ -12,7 +12,6 @@ import {
 const ROUTE_ARGS_METADATA = '__routeArguments__';
 const ARG_BODY = 3;
 const ARG_QUERY = 4;
-const ARG_PARAM = 5;
 
 const SRC_ROOT = path.resolve(__dirname, '../../src');
 const GRAFTS_ROOT = path.resolve(__dirname, '../../../../grafts');
@@ -264,9 +263,7 @@ function decoratorNames(node: ts.Node): string[] {
   const decorators = ts.canHaveDecorators(node) ? (ts.getDecorators(node) ?? []) : [];
   return decorators.map((decorator) => {
     const expression = decorator.expression;
-    return ts.isCallExpression(expression)
-      ? expression.expression.getText()
-      : expression.getText();
+    return ts.isCallExpression(expression) ? expression.expression.getText() : expression.getText();
   });
 }
 

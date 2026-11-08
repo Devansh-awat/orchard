@@ -117,19 +117,30 @@ export function validateMatrix(routes: InventoryRoute[], matrix: Matrix): string
     if (route.auth === 'superadmin' && entry.class !== 'superadmin') {
       problems.push(`${route.key}: auth is superadmin but class is ${entry.class}`);
     }
-    if (route.auth === 'authenticated' && (entry.class === 'public' || entry.class === 'superadmin')) {
+    if (
+      route.auth === 'authenticated' &&
+      (entry.class === 'public' || entry.class === 'superadmin')
+    ) {
       problems.push(`${route.key}: auth is authenticated but class is ${entry.class}`);
     }
     if (route.auth === 'authenticated') {
       const unknown = route.pathParams.filter((param) => param.kind === 'unknown');
       for (const param of unknown) {
-        problems.push(`${route.key}: path param :${param.name} has no resource kind (inventory.ts)`);
+        problems.push(
+          `${route.key}: path param :${param.name} has no resource kind (inventory.ts)`
+        );
       }
       const scoped = route.pathParams.some((param) => isTenantKind(param.kind));
       if (entry.class === 'own-scope-only' && scoped) {
-        problems.push(`${route.key}: takes a resource id in the path, so it cannot be own-scope-only`);
+        problems.push(
+          `${route.key}: takes a resource id in the path, so it cannot be own-scope-only`
+        );
       }
-      if (entry.class === 'resource-scoped' && !scoped && entry.queryIds.length + entry.bodyIds.length === 0) {
+      if (
+        entry.class === 'resource-scoped' &&
+        !scoped &&
+        entry.queryIds.length + entry.bodyIds.length === 0
+      ) {
         problems.push(`${route.key}: resource-scoped but carries no resource id`);
       }
     }

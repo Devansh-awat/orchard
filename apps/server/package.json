@@ -19,7 +19,7 @@
     "test:rbac": "tsx --test test/rbac.e2e.ts",
     "test:auth-coverage": "tsx --test test/auth-coverage.test.ts",
     "test:isolation:matrix": "tsx --test test/isolation/matrix.test.ts",
-    "test:isolation": "node -r ts-node/register/transpile-only --test test/isolation/replay.test.ts",
+    "test:isolation": "node -r ts-node/register/transpile-only --test --test-force-exit test/isolation/replay.test.ts",
     "test:analytics-flags": "tsx --test test/analytics-flags.test.ts",
     "test:throttler": "tsx --test test/api-throttler.test.ts",
     "test:build-config": "tsx --test test/build-config.test.ts",
