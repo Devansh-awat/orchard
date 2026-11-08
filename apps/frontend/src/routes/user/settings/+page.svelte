@@ -28,6 +28,7 @@
 		UserIdentityHero,
 		UserInvitations,
 		UserLinkedOrganizations,
+		UserSignInSafety,
 		UserGitHub,
 		UserGitProviders,
 		UserTailscale,
@@ -854,6 +855,9 @@
 	{/if}
 
 	{#if activeTab === 'security'}
+		{#if !$user?.homeOrganizationId && !$user?.sessionOrganizationId}
+			<UserSignInSafety passkeyCount={passkeys.length} />
+		{/if}
 		<UserPasskeys
 			index={0}
 			{passkeys}

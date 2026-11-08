@@ -260,6 +260,12 @@
 			const data = await response.json().catch(() => ({}));
 			if (!response.ok) {
 				if (blockedBy(response.status, data)) return;
+				if (data?.message === 'passkey_only' || data?.message === 'email_domain_changed_hands') {
+					throw new Error(data.detail || 'Sign in with a passkey instead.');
+				}
+				if (data?.message === 'account_disabled') {
+					throw new Error('This account is turned off. Ask your Orchard admin.');
+				}
 				throw new Error(data?.message || 'That code is wrong or expired.');
 			}
 			busy = null;

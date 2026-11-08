@@ -13,3 +13,4 @@ export { default as UserAppearance } from './UserAppearance.svelte';
 export { default as UserNotifications } from './UserNotifications.svelte';
 export { default as UserLogs } from './UserLogs.svelte';
 export { default as UserLinkedOrganizations } from './UserLinkedOrganizations.svelte';
+export { default as UserSignInSafety } from './UserSignInSafety.svelte';

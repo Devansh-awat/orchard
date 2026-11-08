@@ -17,6 +17,8 @@ export interface User {
 	seenUpdates?: string[];
 	homeOrganizationId?: string;
 	sessionOrganizationId?: string;
+	passkeyOnly?: boolean;
+	emailDomainOwner?: { domain: string; organization: string };
 }
 
 function createAuthStore() {
