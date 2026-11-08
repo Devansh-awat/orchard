@@ -12,6 +12,8 @@ import { InstanceSettingsService } from '../instance-settings/instance-settings.
 import { AnalyticsModule } from '../analytics/analytics.module';
 import { AuditService } from '../audit/audit.service';
 import { SessionsService } from '../auth/sessions.service';
+import { RateLimitService } from '../auth/rate-limit.service';
+import { RedisThrottleService } from '../auth/redis-throttle.service';
 import { SecretCryptoService } from '../crypto/secret-crypto.service';
 
 // AuditService and InstanceSettingsService are registered as providers here
@@ -34,6 +36,8 @@ import { SecretCryptoService } from '../crypto/secret-crypto.service';
     McpOAuthService,
     McpTransportService,
     SessionsService,
+    RateLimitService,
+    RedisThrottleService,
     AuditService,
     InstanceSettingsService,
     SecretCryptoService

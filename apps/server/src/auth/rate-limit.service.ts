@@ -103,6 +103,16 @@ export const RATE_LIMIT_CONFIGS: Record<string, RateLimitConfig> = {
     windowMs: 60 * 60 * 1000,
     blockDurationMs: 15 * 60 * 1000
   },
+  mcp_register_ip: {
+    maxAttempts: 20,
+    windowMs: 24 * 60 * 60 * 1000,
+    blockDurationMs: 60 * 60 * 1000
+  },
+  mcp_register_global: {
+    maxAttempts: 5000,
+    windowMs: 24 * 60 * 60 * 1000,
+    blockDurationMs: 15 * 60 * 1000
+  },
   otp_request_global: {
     maxAttempts: 3000,
     windowMs: 15 * 60 * 1000,

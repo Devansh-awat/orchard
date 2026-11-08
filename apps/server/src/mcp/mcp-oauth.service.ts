@@ -53,6 +53,11 @@ interface McpTokenClaims {
   scope: McpScope;
 }
 
+export const MAX_CLIENT_NAME_LENGTH = 100;
+export const MAX_REDIRECT_URIS = 5;
+export const MAX_REDIRECT_URI_LENGTH = 512;
+export const MAX_CACHED_CLIENTS = 5000;
+
 const ACCESS_TOKEN_TTL = '1d';
 const ACCESS_TOKEN_TTL_SECONDS = 24 * 60 * 60;
 // Refresh tokens rotate on every use, so an actively-used client stays
@@ -130,6 +135,16 @@ export class McpOAuthService {
       .catch(() => {});
   }
 
+  private cacheClient(clientId: string, client: OAuthClient): void {
+    this.oauthClients.delete(clientId);
+    this.oauthClients.set(clientId, client);
+    while (this.oauthClients.size > MAX_CACHED_CLIENTS) {
+      const oldest = this.oauthClients.keys().next().value;
+      if (oldest === undefined) break;
+      this.oauthClients.delete(oldest);
+    }
+  }
+
   private async getClient(clientId: string): Promise<OAuthClient | null> {
     if (!clientId) return null;
     const cached = this.oauthClients.get(clientId);
@@ -142,7 +157,7 @@ export class McpOAuthService {
       redirectUris: Array.isArray(row.redirectUris) ? (row.redirectUris as string[]) : [],
       name: row.name
     };
-    this.oauthClients.set(clientId, client);
+    this.cacheClient(clientId, client);
     return client;
   }
 
@@ -220,6 +235,18 @@ export class McpOAuthService {
       `[MCP OAuth] Register client: name=${body.client_name}, redirect_uris=${JSON.stringify(body.redirect_uris)}`
     );
     const redirectUris = Array.isArray(body.redirect_uris) ? body.redirect_uris : [];
+    if (
+      (body.client_name !== undefined &&
+        (typeof body.client_name !== 'string' ||
+          body.client_name.length > MAX_CLIENT_NAME_LENGTH)) ||
+      redirectUris.length > MAX_REDIRECT_URIS ||
+      redirectUris.some((uri) => typeof uri === 'string' && uri.length > MAX_REDIRECT_URI_LENGTH)
+    ) {
+      return {
+        error: 'invalid_client_metadata',
+        error_description: `client_name must be at most ${MAX_CLIENT_NAME_LENGTH} characters and redirect_uris at most ${MAX_REDIRECT_URIS} entries of ${MAX_REDIRECT_URI_LENGTH} characters`
+      };
+    }
     if (redirectUris.length === 0) {
       return {
         error: 'invalid_redirect_uri',
@@ -252,7 +279,7 @@ export class McpOAuthService {
         redirectUris
       }
     });
-    this.oauthClients.set(clientId, {
+    this.cacheClient(clientId, {
       clientId,
       clientSecret: storedSecret,
       redirectUris,
@@ -552,7 +579,7 @@ export class McpOAuthService {
       const upgraded = hashClientSecret(presentedSecret as string);
       await this.prisma.mcpOauthClient
         .update({ where: { id: clientId }, data: { clientSecret: upgraded } })
-        .then(() => this.oauthClients.set(clientId, { ...client, clientSecret: upgraded }))
+        .then(() => this.cacheClient(clientId, { ...client, clientSecret: upgraded }))
         .catch(() => {});
     }
     return client;
