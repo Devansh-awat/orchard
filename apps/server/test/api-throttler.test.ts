@@ -18,6 +18,8 @@ import {
   bearerApiToken,
   API_TOKEN_RATE_LIMIT,
   IP_RATE_LIMIT,
+  PRINCIPAL_RATE_LIMIT,
+  principalThrottler,
   retryAfterSeconds
 } from '../src/auth/api-throttler.guard';
 import { ThrottlerException } from '@nestjs/throttler';
@@ -162,4 +164,58 @@ test('IPv6 clients are tracked by their /64', async () => {
   const c = await getTracker(guard, makeRequest(undefined, '2001:db8:1:3::1'));
   assert.equal(a, b);
   assert.notEqual(a, c);
+});
+
+test('minting more tokens does not buy a user more capacity', async () => {
+  const { ThrottlerStorageService } = await import('@nestjs/throttler');
+  const { Reflector } = await import('@nestjs/core');
+  const options = [{ ttl: 60000, limit: apiThrottlerLimit }, principalThrottler()];
+  const storage = new ThrottlerStorageService();
+  const guard = new ApiThrottlerGuard(options as any, storage, new Reflector());
+  (guard as any).prisma = {
+    apiToken: { findUnique: async () => ({ id: 'token', userId: 'user-1' }) }
+  };
+  await guard.onModuleInit();
+
+  const res = { header: () => undefined, setHeader: () => undefined, headersSent: false };
+  const handler = () => undefined;
+  const context = (token: string) => {
+    const req = makeRequest(`Bearer ${token}`, '198.51.100.1');
+    return {
+      getType: () => 'http',
+      getHandler: () => handler,
+      getClass: () => ApiThrottlerGuard,
+      switchToHttp: () => ({ getRequest: () => req, getResponse: () => res })
+    } as any;
+  };
+  const tokens = [PAT, OTHER_PAT, `orch_${'1'.repeat(64)}`];
+  let allowed = 0;
+  let denied = 0;
+  for (let i = 0; i < PRINCIPAL_RATE_LIMIT + 300; i++) {
+    try {
+      await guard.canActivate(context(tokens[i % 3]));
+      allowed++;
+    } catch (e) {
+      assert.ok(e instanceof ThrottlerException);
+      denied++;
+    }
+  }
+  assert.equal(allowed, PRINCIPAL_RATE_LIMIT);
+  assert.equal(denied, 300);
+  assert.ok(PRINCIPAL_RATE_LIMIT > API_TOKEN_RATE_LIMIT);
+});
+
+test('an unknown token is looked up once, not on every request', async () => {
+  let lookups = 0;
+  const guard = makeGuard();
+  (guard as any).prisma = {
+    apiToken: {
+      findUnique: async () => {
+        lookups++;
+        return null;
+      }
+    }
+  };
+  for (let i = 0; i < 20; i++) await getTracker(guard, makeRequest(`Bearer ${PAT}`));
+  assert.equal(lookups, 1);
 });

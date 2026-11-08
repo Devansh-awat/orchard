@@ -23,6 +23,7 @@ export function hashApiToken(plaintext: string): string {
 }
 
 const MAX_TOKEN_DEPTH = 8;
+export const MAX_ACTIVE_TOKENS_PER_USER = 200;
 
 @Injectable()
 export class ApiTokensService {
@@ -158,6 +159,15 @@ export class ApiTokensService {
         }
       }
     }
+    const active = await this.prisma.apiToken.count({
+      where: { userId, OR: [{ expiresAt: null }, { expiresAt: { gt: new Date(now) } }] }
+    });
+    if (active >= MAX_ACTIVE_TOKENS_PER_USER) {
+      throw new BadRequestException(
+        `You can have at most ${MAX_ACTIVE_TOKENS_PER_USER} active API tokens. Revoke unused ones first.`
+      );
+    }
+
     const token = `orch_${randomBytes(32).toString('hex')}`;
     const tokenHash = hashApiToken(token);
 

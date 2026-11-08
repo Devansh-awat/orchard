@@ -1,6 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { ApiTokensService, hashApiToken } from '../src/auth/api-tokens.service';
+import {
+  ApiTokensService,
+  MAX_ACTIVE_TOKENS_PER_USER,
+  hashApiToken
+} from '../src/auth/api-tokens.service';
 
 const DAY = 24 * 60 * 60 * 1000;
 const PARENT = '11111111-1111-4111-8111-111111111111';
@@ -23,6 +27,10 @@ function store() {
         rows.set(row.id, row);
         return row;
       },
+      count: async ({ where }: any) =>
+        [...rows.values()].filter(
+          (r) => r.userId === where.userId && (!r.expiresAt || r.expiresAt.getTime() > Date.now())
+        ).length,
       findUnique: async ({ where }: any) => {
         if (where.id) return rows.get(where.id) ?? null;
         return [...rows.values()].find((r) => r.tokenHash === where.tokenHash) ?? null;
@@ -125,4 +133,15 @@ test('an ancestor that is gone or expired blocks minting from a descendant', asy
   await svc.create('u', 'ok', undefined, ['read'], undefined, ceiling('b'));
   rows.get('a')!.expiresAt = new Date(Date.now() - 1);
   await assert.rejects(() => svc.create('u', 'c', undefined, ['read'], undefined, ceiling('b')));
+});
+
+test('a user cannot hold more than the cap of active tokens', async () => {
+  const { rows, prisma } = store();
+  for (let i = 0; i < MAX_ACTIVE_TOKENS_PER_USER; i++) {
+    root(rows, `t${i}`, new Date(Date.now() + DAY));
+  }
+  const svc = service(prisma);
+  await assert.rejects(svc.create('u', 'one more'), /at most/);
+  rows.delete('t0');
+  await svc.create('u', 'fits now');
 });

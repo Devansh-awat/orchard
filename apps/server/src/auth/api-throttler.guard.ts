@@ -1,14 +1,21 @@
 import { ExecutionContext, Inject, Injectable, Optional } from '@nestjs/common';
-import { ThrottlerGuard, type ThrottlerLimitDetail } from '@nestjs/throttler';
+import {
+  ThrottlerGuard,
+  type ThrottlerLimitDetail,
+  type ThrottlerRequest
+} from '@nestjs/throttler';
 import { PrismaService } from '../prisma/prisma.service';
 import { hashApiToken } from './api-tokens.service';
 import { getClientIp, ipBucketKey, isCollapsedAddress } from './client-ip';
 
 const KNOWN_TOKEN_TTL_MS = 60_000;
+const UNKNOWN_TOKEN_TTL_MS = 10_000;
 const KNOWN_TOKEN_MAX = 10_000;
 
 export const IP_RATE_LIMIT = 200;
 export const API_TOKEN_RATE_LIMIT = 600;
+export const PRINCIPAL_RATE_LIMIT = 1200;
+export const PRINCIPAL_THROTTLER = 'principal';
 export const COLLAPSED_IP_MULTIPLIER = 10;
 
 // Extracts a PAT from the Authorization header. Mirrors the parsing in
@@ -37,7 +44,8 @@ export function apiThrottlerLimit(context: ExecutionContext): number {
 }
 
 // ThrottlerGuard that keys buckets per API token instead of per IP for
-// PAT-authenticated requests, so a CLI, a TUI, and an agent sharing one host
+// PAT-authenticated requests, and adds a per-owner bucket across all of a
+// user's tokens so minting more tokens does not buy more capacity, so a CLI, a TUI, and an agent sharing one host
 // don't collide. The tracker is the token's sha256 (the same digest stored as
 // ApiToken.tokenHash); the raw token is never stored or logged. Everything
 // else (cookie sessions, unauthenticated traffic) keeps the trust-proxy-aware
@@ -49,27 +57,46 @@ export class ApiThrottlerGuard extends ThrottlerGuard {
   @Inject(PrismaService)
   private readonly prisma?: PrismaService;
 
-  private readonly knownTokens = new Map<string, number>();
+  private readonly knownTokens = new Map<string, { userId: string | null; until: number }>();
 
-  private async tokenExists(hash: string): Promise<boolean> {
-    const until = this.knownTokens.get(hash);
-    if (until && until > Date.now()) return true;
+  private async tokenOwner(hash: string): Promise<string | null> {
+    const cached = this.knownTokens.get(hash);
+    if (cached && cached.until > Date.now()) return cached.userId;
     const row = await this.prisma?.apiToken
-      .findUnique({ where: { tokenHash: hash }, select: { id: true } })
+      .findUnique({ where: { tokenHash: hash }, select: { id: true, userId: true } })
       .catch(() => null);
-    if (!row) return false;
     if (this.knownTokens.size >= KNOWN_TOKEN_MAX) this.knownTokens.clear();
-    this.knownTokens.set(hash, Date.now() + KNOWN_TOKEN_TTL_MS);
-    return true;
+    const userId = row ? ((row as { userId?: string }).userId ?? hash) : null;
+    this.knownTokens.set(hash, {
+      userId,
+      until: Date.now() + (row ? KNOWN_TOKEN_TTL_MS : UNKNOWN_TOKEN_TTL_MS)
+    });
+    return userId;
   }
 
   protected async getTracker(req: Record<string, any>): Promise<string> {
     const token = bearerApiToken(req);
     if (token) {
       const hash = hashApiToken(token);
-      if (await this.tokenExists(hash)) return `token:${hash}`;
+      if (await this.tokenOwner(hash)) return `token:${hash}`;
     }
     return ipBucketKey(getClientIp(req as any));
+  }
+
+  private async principalTracker(req: Record<string, any>): Promise<string> {
+    const token = bearerApiToken(req);
+    if (token) {
+      const owner = await this.tokenOwner(hashApiToken(token));
+      if (owner) return `user:${owner}`;
+    }
+    return ipBucketKey(getClientIp(req as any));
+  }
+
+  protected async handleRequest(props: ThrottlerRequest): Promise<boolean> {
+    if (props.throttler.name === PRINCIPAL_THROTTLER) {
+      return super.handleRequest({ ...props, getTracker: (req) => this.principalTracker(req) });
+    }
+    return super.handleRequest(props);
   }
 
   protected async throwThrottlingException(
@@ -93,4 +120,14 @@ export function retryAfterSeconds(detail: {
   const raw = Number(detail.timeToBlockExpire) > 0 ? detail.timeToBlockExpire : detail.timeToExpire;
   const secs = Math.ceil(Number(raw));
   return Number.isFinite(secs) && secs > 0 ? secs : 1;
+}
+
+export function principalThrottler() {
+  return {
+    name: PRINCIPAL_THROTTLER,
+    ttl: 60000,
+    limit: PRINCIPAL_RATE_LIMIT,
+    skipIf: (context: ExecutionContext) =>
+      context.getType() !== 'http' || !bearerApiToken(context.switchToHttp().getRequest())
+  };
 }

@@ -4,7 +4,11 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { LargeBodyInterceptor } from './http/large-body.interceptor';
-import { ApiThrottlerGuard, apiThrottlerLimit } from './auth/api-throttler.guard';
+import {
+  ApiThrottlerGuard,
+  apiThrottlerLimit,
+  principalThrottler
+} from './auth/api-throttler.guard';
 import { HealthModule } from './health/health.module';
 import { AgentSpecModule } from './agent-spec/agent-spec.module';
 import { IdempotencyModule } from './idempotency/idempotency.module';
@@ -63,7 +67,7 @@ import { graftImports } from './grafts/boot';
     // per token for PAT bearers (ApiThrottlerGuard keys those buckets on a
     // sha256 of the token). Tune per-route with @Throttle({...}) or exempt
     // with @SkipThrottle().
-    ThrottlerModule.forRoot([{ ttl: 60000, limit: apiThrottlerLimit }]),
+    ThrottlerModule.forRoot([{ ttl: 60000, limit: apiThrottlerLimit }, principalThrottler()]),
     PrismaModule,
     UpdatesModule,
     CryptoModule,

@@ -1,7 +1,11 @@
 import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerModule } from '@nestjs/throttler';
-import { ApiThrottlerGuard, apiThrottlerLimit } from '../auth/api-throttler.guard';
+import {
+  ApiThrottlerGuard,
+  apiThrottlerLimit,
+  principalThrottler
+} from '../auth/api-throttler.guard';
 import { McpOAuthController } from './mcp-oauth.controller';
 import { McpTransportController } from './mcp-transport.controller';
 import { McpOAuthService } from './mcp-oauth.service';
@@ -25,7 +29,7 @@ import { SecretCryptoService } from '../crypto/secret-crypto.service';
 // The MCP only needs the services, never the controllers.
 @Module({
   imports: [
-    ThrottlerModule.forRoot([{ ttl: 60000, limit: apiThrottlerLimit }]),
+    ThrottlerModule.forRoot([{ ttl: 60000, limit: apiThrottlerLimit }, principalThrottler()]),
     PrismaModule,
     AnalyticsModule
   ],
