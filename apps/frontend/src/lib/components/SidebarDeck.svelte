@@ -35,6 +35,7 @@
 	import { motionEnabled, transition } from '$lib/utils/motion.svelte';
 	import { animate } from 'motion';
 	import {
+		apiFetch,
 		user,
 		isSuperAdmin,
 		instanceChecklist,
@@ -65,6 +66,26 @@
 	}
 
 	const orgSlug = $derived($selectedOrganization?.slug ?? '');
+
+	let linkedOrgs = $state<
+		Array<{
+			id: string;
+			organization: { name: string; avatarUrl: string | null };
+			loginUrl: string | null;
+			disabled: boolean;
+		}>
+	>([]);
+	let linkedFor: string | null = null;
+	$effect(() => {
+		const id = $user?.id ?? null;
+		const confined = Boolean($user?.homeOrganizationId || $user?.sessionOrganizationId);
+		if (!browser || !id || confined || linkedFor === id) return;
+		linkedFor = id;
+		void apiFetch('/apiv1/auth/links')
+			.then((res) => (res.ok ? res.json() : []))
+			.then((list) => (linkedOrgs = list))
+			.catch(() => (linkedOrgs = []));
+	});
 	const canOpenOrgSettings = $derived(
 		$selectedOrganization?.myRole === 'owner' || $selectedOrganization?.myRole === 'admin'
 	);
@@ -350,6 +371,22 @@
 								</IconTile>
 							{/snippet}
 							{org.name}
+						</MenuItem>
+					{/if}
+				{/each}
+			{/if}
+			{#if linkedOrgs.length > 0}
+				<MenuSeparator />
+				{#each linkedOrgs as link (link.id)}
+					{#if link.loginUrl && !link.disabled}
+						<MenuItem href={link.loginUrl}>
+							{#snippet leading()}
+								<IconTile src={link.organization.avatarUrl}>
+									{#snippet fallback()}<Monogram name={link.organization.name} />{/snippet}
+								</IconTile>
+							{/snippet}
+							{link.organization.name}
+							{#snippet trailing()}<Badge>SSO</Badge>{/snippet}
 						</MenuItem>
 					{/if}
 				{/each}

@@ -1022,6 +1022,7 @@
 				{cancellingInvitationId}
 				{removingMemberId}
 				{organizationSlug}
+				organizationId={organization?.id ?? ''}
 				{revokingAccessId}
 				onRevokeProjectAccess={revokeProjectAccess}
 				onAddMember={addMember}

@@ -4,7 +4,6 @@
 	import { Building2, ExternalLink, Unlink } from 'lucide-svelte';
 	import { apiFetch, toasts } from '$lib/stores';
 	import {
-		Alert,
 		Badge,
 		Button,
 		Field,
@@ -12,7 +11,6 @@
 		List,
 		ListRow,
 		SectionCard,
-		Skeleton,
 		ToneTile
 	} from '$lib/components/ui';
 	import RemoteImg from '$lib/components/ui/RemoteImg.svelte';
@@ -26,8 +24,6 @@
 	}
 
 	let links = $state<LinkedOrganization[]>([]);
-	let loading = $state(true);
-	let error = $state<string | null>(null);
 	let removing = $state<string | null>(null);
 	let adding = $state(false);
 	let slug = $state('');
@@ -36,17 +32,8 @@
 	onMount(load);
 
 	async function load() {
-		loading = true;
-		error = null;
-		try {
-			const res = await apiFetch('/apiv1/auth/links');
-			if (!res.ok) throw new Error("Couldn't load linked organizations");
-			links = await res.json();
-		} catch (err) {
-			error = err instanceof Error ? err.message : "Couldn't load linked organizations";
-		} finally {
-			loading = false;
-		}
+		const res = await apiFetch('/apiv1/auth/links').catch(() => null);
+		if (res?.ok) links = await res.json();
 	}
 
 	async function remove(link: LinkedOrganization) {
@@ -77,48 +64,40 @@
 	}
 </script>
 
-<SectionCard
-	title="Work organizations"
-	description="Organizations you sign in to with their single sign-on. Linking one lists it here and in your switcher. The organization never sees or controls this account."
->
-	{#snippet actions()}
-		{#if !adding}
-			<Button size="sm" onclick={() => (adding = true)}>Add work organization</Button>
-		{/if}
-	{/snippet}
-	<div class="body">
-		{#if adding}
-			<form
-				class="add"
-				onsubmit={(e) => {
-					e.preventDefault();
-					startAdding();
-				}}
-			>
-				<Field
-					label="Organization"
-					for="link-org-slug"
-					hint="The name in its sign-in link, like acme in orchard.example/acme/login. You'll sign in with its single sign-on."
-				>
-					<Input id="link-org-slug" bind:value={slug} placeholder="acme" autocomplete="off" />
-				</Field>
-				<div class="add-actions">
-					<Button size="sm" variant="ghost" onclick={() => (adding = false)}>Cancel</Button>
-					<Button size="sm" variant="primary" type="submit" disabled={!slug.trim()}>Continue</Button
-					>
-				</div>
-			</form>
-		{/if}
-		{#if error}
-			<Alert tone="error">{error}</Alert>
-		{/if}
-		{#if loading}
-			<Skeleton height="2.5rem" />
-		{:else if links.length === 0}
-			{#if !error && !adding}
-				<p class="quiet">No work organizations linked.</p>
+{#if links.length > 0}
+	<SectionCard
+		title="Work organizations"
+		description="Organizations you open with their single sign-on. They never see or control this account."
+	>
+		{#snippet actions()}
+			{#if !adding}
+				<Button size="sm" onclick={() => (adding = true)}>Add work organization</Button>
 			{/if}
-		{:else}
+		{/snippet}
+		<div class="body">
+			{#if adding}
+				<form
+					class="add"
+					onsubmit={(e) => {
+						e.preventDefault();
+						startAdding();
+					}}
+				>
+					<Field
+						label="Organization"
+						for="link-org-slug"
+						hint="The name in its sign-in link, like acme in orchard.example/acme/login. You'll sign in with its single sign-on."
+					>
+						<Input id="link-org-slug" bind:value={slug} placeholder="acme" autocomplete="off" />
+					</Field>
+					<div class="add-actions">
+						<Button size="sm" variant="ghost" onclick={() => (adding = false)}>Cancel</Button>
+						<Button size="sm" variant="primary" type="submit" disabled={!slug.trim()}
+							>Continue</Button
+						>
+					</div>
+				</form>
+			{/if}
 			<List inset={false} label="Linked organizations">
 				{#each links as link (link.id)}
 					<ListRow flush presence title={link.organization.name} subtitle={link.email}>
@@ -156,9 +135,9 @@
 					</ListRow>
 				{/each}
 			</List>
-		{/if}
-	</div>
-</SectionCard>
+		</div>
+	</SectionCard>
+{/if}
 
 <style>
 	.body {
@@ -175,10 +154,5 @@
 		display: flex;
 		justify-content: flex-end;
 		gap: 0.5rem;
-	}
-	.quiet {
-		font-size: var(--text-callout);
-		line-height: var(--lh-callout);
-		color: var(--text-muted);
 	}
 </style>

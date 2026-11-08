@@ -30,6 +30,7 @@
 	import InstanceIdentityPolicy from '$lib/components/org-settings/InstanceIdentityPolicy.svelte';
 	import SsoProviderModal from '$lib/components/org-settings/SsoProviderModal.svelte';
 	import ProjectRulesEditor from '$lib/components/org-settings/ProjectRulesEditor.svelte';
+	import OrgScimTab from '$lib/components/org-settings/OrgScimTab.svelte';
 	import { ProviderIcon } from '$lib/components/login';
 	import { draftToPayload } from '$lib/components/org-settings/sso-types';
 	import { removeProviderIcon, uploadProviderIcon } from '$lib/components/org-settings/sso-icon';
@@ -101,6 +102,77 @@
 		mappable.find((p) => p.id === rulesProviderId) ?? mappable[0] ?? null
 	);
 	const orgChoices = $derived(organizations.map((o) => ({ id: o.organizationId, name: o.name })));
+	type ScimToken = {
+		id: string;
+		name: string;
+		lastUsedAt: string | null;
+		expiresAt: string | null;
+		createdAt: string;
+	};
+	let scimLoading = $state(true);
+	let scimBaseUrl = $state('');
+	let scimTokens = $state<ScimToken[]>([]);
+	let scimNewName = $state('');
+	let scimCreating = $state(false);
+	let scimRevokingId = $state<string | null>(null);
+	let scimCreatedToken = $state<{ name: string; token: string } | null>(null);
+
+	async function loadScim() {
+		scimLoading = true;
+		try {
+			const res = await apiFetch('/apiv1/admin/scim/tokens');
+			if (res.ok) {
+				const data = await res.json();
+				scimBaseUrl = data.baseUrl;
+				scimTokens = data.tokens;
+			}
+		} finally {
+			scimLoading = false;
+		}
+	}
+
+	async function createScimToken() {
+		const name = scimNewName.trim();
+		if (!name) return;
+		scimCreating = true;
+		try {
+			const res = await apiFetch('/apiv1/admin/scim/tokens', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ name })
+			});
+			const data = await res.json().catch(() => ({}));
+			if (!res.ok) throw new Error(data.message || "Couldn't create the token");
+			scimCreatedToken = { name: data.name, token: data.token };
+			await loadScim();
+		} catch (e) {
+			toasts.add({
+				title: e instanceof Error ? e.message : "Couldn't create the token",
+				color: 'error'
+			});
+		} finally {
+			scimCreating = false;
+		}
+	}
+
+	async function revokeScimToken(id: string) {
+		scimRevokingId = id;
+		try {
+			const res = await apiFetch(`/apiv1/admin/scim/tokens/${id}`, { method: 'DELETE' });
+			if (!res.ok) throw new Error("Couldn't revoke the token");
+			scimTokens = scimTokens.filter((t) => t.id !== id);
+		} catch (e) {
+			toasts.add({
+				title: e instanceof Error ? e.message : "Couldn't revoke the token",
+				color: 'error'
+			});
+		} finally {
+			scimRevokingId = null;
+		}
+	}
+
+	onMount(loadScim);
+
 	let instanceProjects = $state<Array<{ id: string; name: string; group: string }>>([]);
 	let projectsFor = '';
 	$effect(() => {
@@ -525,6 +597,21 @@
 				/>
 				<InstanceIdentityPolicy {providers} />
 			{/if}
+
+			<OrgScimTab
+				isOwner
+				{scimLoading}
+				{scimBaseUrl}
+				{scimTokens}
+				bind:scimNewName
+				{scimCreating}
+				{scimRevokingId}
+				{scimCreatedToken}
+				description="Create and turn off accounts from your company directory. Access to organizations and projects still comes from the group rules."
+				onCreateToken={createScimToken}
+				onRevokeToken={revokeScimToken}
+				onDismissCreatedToken={() => (scimCreatedToken = null)}
+			/>
 
 			<SectionCard
 				title="Organization access"

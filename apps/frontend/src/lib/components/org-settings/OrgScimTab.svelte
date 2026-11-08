@@ -36,7 +36,8 @@
 		scimCreatedToken,
 		onCreateToken,
 		onRevokeToken,
-		onDismissCreatedToken
+		onDismissCreatedToken,
+		description = 'Sync members from your identity provider'
 	}: {
 		isOwner: boolean;
 		scimLoading: boolean;
@@ -49,6 +50,7 @@
 		onCreateToken: () => void;
 		onRevokeToken: (id: string) => void;
 		onDismissCreatedToken: () => void;
+		description?: string;
 	} = $props();
 
 	const uid = $props.id();
@@ -100,7 +102,7 @@
 		<p class="quiet">Only the organization owner can manage SCIM provisioning.</p>
 	</SectionCard>
 {:else}
-	<SectionCard title="SCIM provisioning" description="Sync members from your identity provider">
+	<SectionCard title="SCIM provisioning" {description}>
 		<SettingsList>
 			<SettingRow
 				label="Endpoint"

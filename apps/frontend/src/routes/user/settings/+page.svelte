@@ -855,7 +855,7 @@
 	{/if}
 
 	{#if activeTab === 'security'}
-		{#if !$user?.homeOrganizationId && !$user?.sessionOrganizationId}
+		{#if !$user?.homeOrganizationId && !$user?.sessionOrganizationId && (passkeys.length > 0 || $user?.passkeyOnly || $user?.emailDomainOwner)}
 			<UserSignInSafety passkeyCount={passkeys.length} />
 		{/if}
 		<UserPasskeys

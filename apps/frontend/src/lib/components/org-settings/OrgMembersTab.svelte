@@ -4,6 +4,7 @@
 		ChevronsUpDown,
 		Link2,
 		Mail,
+		Unlink,
 		UserCheck,
 		UserPlus,
 		UserX,
@@ -27,7 +28,7 @@
 	} from '$lib/components/ui';
 	import Tooltip from '$lib/components/ui/Tooltip.svelte';
 	import type { TableColumn, TableSort } from '$lib/components/ui/Table.svelte';
-	import { user } from '$lib/stores';
+	import { apiFetch, toasts, user } from '$lib/stores';
 
 	interface MemberProject {
 		projectMemberId: string;
@@ -54,6 +55,18 @@
 			homeOrganizationId?: string | null;
 			linkedAccount?: { createdAt: string } | null;
 		};
+	}
+
+	async function unlink(member: Member) {
+		const res = await apiFetch(`/apiv1/organizations/${organizationId}/members/${member.id}/link`, {
+			method: 'DELETE'
+		}).catch(() => null);
+		if (!res?.ok) {
+			toasts.add({ title: "Couldn't unlink that account", color: 'error' });
+			return;
+		}
+		member.user.linkedAccount = null;
+		toasts.add({ title: 'Account unlinked', color: 'success' });
 	}
 
 	function memberDetail(member: Member): string {
@@ -95,6 +108,7 @@
 		cancellingInvitationId,
 		removingMemberId = null,
 		organizationSlug = '',
+		organizationId = '',
 		revokingAccessId = null,
 		onRevokeProjectAccess = undefined,
 		onAddMember,
@@ -114,6 +128,7 @@
 		cancellingInvitationId: string | null;
 		removingMemberId?: string | null;
 		organizationSlug?: string;
+		organizationId?: string;
 		revokingAccessId?: string | null;
 		onRevokeProjectAccess?: (projectId: string, projectMemberId: string) => void;
 		onAddMember: () => void;
@@ -400,6 +415,16 @@
 					<span class="quiet">{formatRole(member.role)}</span>
 				{/if}
 			{:else if canInvite && member.role !== 'owner'}
+				{#if member.user.homeOrganizationId && member.user.linkedAccount}
+					<Button
+						variant="ghost"
+						size="sm"
+						icon={Unlink}
+						label="Unlink the Orchard account from {memberName(member) || member.user.email}"
+						disabled={removingMemberId !== null}
+						onclick={() => unlink(member)}
+					/>
+				{/if}
 				<Button
 					variant="ghost"
 					size="sm"

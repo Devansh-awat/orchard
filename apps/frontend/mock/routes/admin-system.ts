@@ -299,6 +299,53 @@ export function adminSystemRoutes(r: Router, { store }: MockContext) {
 			? { success: false, error: 'The metadata URL answered 404.' }
 			: { success: true };
 	});
+	r.get('/admin/sso/providers/:id/rules', () => ({
+		groupClaim: 'groups',
+		rules: [{ id: 'rule-1', organizationId: 'org-robotics', value: 'robotics', role: 'member' }]
+	}));
+	r.put('/admin/sso/providers/:id/rules', ({ body }) => ({
+		groupClaim: body?.groupClaim ?? 'groups',
+		rules: body?.rules ?? []
+	}));
+	let projectRules: any[] = [];
+	r.get('/admin/sso/providers/:id/project-rules', () => projectRules);
+	r.put('/admin/sso/providers/:id/project-rules', ({ body }) => {
+		projectRules = (body?.rules ?? []).map((rule: any, i: number) => ({
+			id: `prule-${i}`,
+			value: rule.value,
+			projectId: rule.projectId,
+			role: { name: rule.role }
+		}));
+		return projectRules;
+	});
+	let scimTokens = [
+		{
+			id: 'iscim-1',
+			name: 'Okta',
+			lastUsedAt: new Date().toISOString(),
+			expiresAt: null,
+			createdAt: new Date(Date.now() - 86_400_000 * 12).toISOString()
+		}
+	];
+	r.get('/admin/scim/tokens', () => ({
+		baseUrl: 'https://orchard.example/apiv1/scim/instance/v2',
+		tokens: scimTokens
+	}));
+	r.post('/admin/scim/tokens', ({ body }) => {
+		const row = {
+			id: `iscim-${scimTokens.length + 1}`,
+			name: String(body?.name ?? 'token'),
+			lastUsedAt: null,
+			expiresAt: null,
+			createdAt: new Date().toISOString()
+		};
+		scimTokens = [row, ...scimTokens];
+		return { ...row, token: 'iscim_mock_token' };
+	});
+	r.delete('/admin/scim/tokens/:id', ({ params }) => {
+		scimTokens = scimTokens.filter((t) => t.id !== params.id);
+		return { success: true };
+	});
 	r.patch('/admin/sso/organizations/:id', ({ params, body }) => {
 		allowed.set(params.id, Boolean(body?.platformEnabled));
 		return { ok: true };
