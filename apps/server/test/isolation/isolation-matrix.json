@@ -3,9 +3,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxesController.opencodeProxy",
-    "params": [
-      "id:sandbox"
-    ],
+    "params": ["id:sandbox"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -42,9 +40,7 @@
     "class": "superadmin",
     "auth": "superadmin",
     "handler": "InstanceConfigController.clear",
-    "params": [
-      "id:unknown"
-    ],
+    "params": ["id:unknown"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -53,9 +49,7 @@
     "class": "superadmin",
     "auth": "superadmin",
     "handler": "NodePoolsController.remove",
-    "params": [
-      "id:unknown"
-    ],
+    "params": ["id:unknown"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -64,10 +58,7 @@
     "class": "superadmin",
     "auth": "superadmin",
     "handler": "NodesController.deleteAssignment",
-    "params": [
-      "id:unknown",
-      "orgId:org"
-    ],
+    "params": ["id:unknown", "orgId:org"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -76,9 +67,7 @@
     "class": "superadmin",
     "auth": "superadmin",
     "handler": "AdminController.deleteOrganization",
-    "params": [
-      "id:org"
-    ],
+    "params": ["id:org"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -87,9 +76,7 @@
     "class": "superadmin",
     "auth": "superadmin",
     "handler": "SsoInstanceController.deleteProvider",
-    "params": [
-      "providerId:ssoProvider"
-    ],
+    "params": ["providerId:ssoProvider"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -98,9 +85,7 @@
     "class": "superadmin",
     "auth": "superadmin",
     "handler": "SsoInstanceController.removeProviderIcon",
-    "params": [
-      "providerId:ssoProvider"
-    ],
+    "params": ["providerId:ssoProvider"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -109,9 +94,7 @@
     "class": "superadmin",
     "auth": "superadmin",
     "handler": "AdminController.deleteUser",
-    "params": [
-      "id:unknown"
-    ],
+    "params": ["id:unknown"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -120,9 +103,7 @@
     "class": "exempt",
     "auth": "superadmin",
     "handler": "AnnouncementsController.remove",
-    "params": [
-      "id:unknown"
-    ],
+    "params": ["id:unknown"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -141,9 +122,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "PasswordlessController.deletePasskey",
-    "params": [
-      "id:passkey"
-    ],
+    "params": ["id:passkey"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -152,9 +131,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "PasswordlessController.revokeSession",
-    "params": [
-      "id:session"
-    ],
+    "params": ["id:session"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -163,9 +140,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "ApiTokensController.revoke",
-    "params": [
-      "id:apiToken"
-    ],
+    "params": ["id:apiToken"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -174,9 +149,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DatabaseRecoveryController.hideCheckpoint",
-    "params": [
-      "id:databaseCheckpoint"
-    ],
+    "params": ["id:databaseCheckpoint"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -194,9 +167,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "ComposeStacksController.remove",
-    "params": [
-      "id:composeStack"
-    ],
+    "params": ["id:composeStack"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -205,9 +176,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DatabasesController.deleteDatabase",
-    "params": [
-      "id:database"
-    ],
+    "params": ["id:database"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -216,9 +185,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DatabasesController.clearBackupSchedule",
-    "params": [
-      "id:database"
-    ],
+    "params": ["id:database"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -227,10 +194,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DatabasesController.uninstallExtension",
-    "params": [
-      "id:database",
-      "name:name"
-    ],
+    "params": ["id:database", "name:name"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -239,9 +203,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DatabasesController.disablePublic",
-    "params": [
-      "id:database"
-    ],
+    "params": ["id:database"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -250,10 +212,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DatabaseShellController.close",
-    "params": [
-      "id:database",
-      "pod:pod"
-    ],
+    "params": ["id:database", "pod:pod"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -262,10 +221,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DatabaseRecoveryController.deleteRole",
-    "params": [
-      "id:database",
-      "name:name"
-    ],
+    "params": ["id:database", "name:name"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -274,10 +230,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DeploymentsController.deleteDeploymentIngress",
-    "params": [
-      "deploymentId:deployment",
-      "ingressId:ingress"
-    ],
+    "params": ["deploymentId:deployment", "ingressId:ingress"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -286,10 +239,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DeploymentsController.deleteDeploymentService",
-    "params": [
-      "deploymentId:deployment",
-      "serviceId:service"
-    ],
+    "params": ["deploymentId:deployment", "serviceId:service"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -298,11 +248,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DeploymentsController.disableServicePortPublic",
-    "params": [
-      "deploymentId:deployment",
-      "serviceId:service",
-      "portId:servicePort"
-    ],
+    "params": ["deploymentId:deployment", "serviceId:service", "portId:servicePort"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -311,9 +257,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DeploymentsController.deleteDeployment",
-    "params": [
-      "id:deployment"
-    ],
+    "params": ["id:deployment"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -322,10 +266,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "ResourceBindingsController.unbind",
-    "params": [
-      "id:deployment",
-      "bindingId:binding"
-    ],
+    "params": ["id:deployment", "bindingId:binding"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -334,10 +275,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DeploymentsController.deleteWebhookToken",
-    "params": [
-      "id:deployment",
-      "tokenId:webhookToken"
-    ],
+    "params": ["id:deployment", "tokenId:webhookToken"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -346,9 +284,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "EnvironmentsController.remove",
-    "params": [
-      "id:environment"
-    ],
+    "params": ["id:environment"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -357,9 +293,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "ForumController.deleteThread",
-    "params": [
-      "id:thread"
-    ],
+    "params": ["id:thread"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -369,10 +303,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "ForumController.deleteReply",
-    "params": [
-      "id:thread",
-      "replyId:reply"
-    ],
+    "params": ["id:thread", "replyId:reply"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -382,9 +313,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "ForumController.unvote",
-    "params": [
-      "id:thread"
-    ],
+    "params": ["id:thread"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -403,9 +332,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "UserContextController.remove",
-    "params": [
-      "itemId:contextItem"
-    ],
+    "params": ["itemId:contextItem"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -415,9 +342,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxesController.remove",
-    "params": [
-      "id:sandbox"
-    ],
+    "params": ["id:sandbox"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -427,10 +352,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxAgentChatsController.cancelLogin",
-    "params": [
-      "id:sandbox",
-      "loginId:login"
-    ],
+    "params": ["id:sandbox", "loginId:login"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -440,10 +362,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxesController.removeConversation",
-    "params": [
-      "id:sandbox",
-      "cid:conversation"
-    ],
+    "params": ["id:sandbox", "cid:conversation"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -453,10 +372,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxLinksController.detach",
-    "params": [
-      "id:sandbox",
-      "projectId:project"
-    ],
+    "params": ["id:sandbox", "projectId:project"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -466,10 +382,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxMembersController.remove",
-    "params": [
-      "id:sandbox",
-      "userId:user"
-    ],
+    "params": ["id:sandbox", "userId:user"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -479,10 +392,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxSessionsController.removeRepo",
-    "params": [
-      "id:sandbox",
-      "name:name"
-    ],
+    "params": ["id:sandbox", "name:name"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -492,10 +402,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxSessionsController.remove",
-    "params": [
-      "id:sandbox",
-      "sid:session"
-    ],
+    "params": ["id:sandbox", "sid:session"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -505,11 +412,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxAgentChatsController.remove",
-    "params": [
-      "id:sandbox",
-      "sid:session",
-      "cid:agentChat"
-    ],
+    "params": ["id:sandbox", "sid:session", "cid:agentChat"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -519,11 +422,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxSessionsController.deleteChat",
-    "params": [
-      "id:sandbox",
-      "sid:session",
-      "chatId:chat"
-    ],
+    "params": ["id:sandbox", "sid:session", "chatId:chat"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -533,10 +432,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxLinksController.previewRemove",
-    "params": [
-      "id:sandbox",
-      "sid:session"
-    ],
+    "params": ["id:sandbox", "sid:session"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -546,10 +442,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxShareLinksController.revoke",
-    "params": [
-      "id:sandbox",
-      "linkId:link"
-    ],
+    "params": ["id:sandbox", "linkId:link"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -559,9 +452,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SshIdentitiesController.remove",
-    "params": [
-      "id:sshIdentity"
-    ],
+    "params": ["id:sshIdentity"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -591,9 +482,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "JobsController.deleteJob",
-    "params": [
-      "id:job"
-    ],
+    "params": ["id:job"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -602,9 +491,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "OrganizationsController.deleteAvatar",
-    "params": [
-      "id:org"
-    ],
+    "params": ["id:org"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -613,10 +500,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "OrganizationsController.cancelInvitation",
-    "params": [
-      "id:org",
-      "invitationId:orgInvitation"
-    ],
+    "params": ["id:org", "invitationId:orgInvitation"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -625,10 +509,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "OrganizationsController.removeMemberFromOrganization",
-    "params": [
-      "id:org",
-      "memberId:orgMember"
-    ],
+    "params": ["id:org", "memberId:orgMember"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -637,10 +518,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "AlertsController.remove",
-    "params": [
-      "id:org",
-      "ruleId:metricAlertRule"
-    ],
+    "params": ["id:org", "ruleId:metricAlertRule"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -649,10 +527,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "NotificationChannelsController.deleteChannel",
-    "params": [
-      "id:org",
-      "channelId:notificationChannel"
-    ],
+    "params": ["id:org", "channelId:notificationChannel"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -661,10 +536,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "NotificationChannelsController.deleteRule",
-    "params": [
-      "id:org",
-      "ruleId:notificationRule"
-    ],
+    "params": ["id:org", "ruleId:notificationRule"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -673,10 +545,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "ScimTokensController.revoke",
-    "params": [
-      "id:org",
-      "tokenId:scimToken"
-    ],
+    "params": ["id:org", "tokenId:scimToken"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -685,10 +554,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "SsoAdminController.removeDomain",
-    "params": [
-      "id:org",
-      "domainId:orgDomain"
-    ],
+    "params": ["id:org", "domainId:orgDomain"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -697,10 +563,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "SsoAdminController.deleteProvider",
-    "params": [
-      "id:org",
-      "providerId:ssoProvider"
-    ],
+    "params": ["id:org", "providerId:ssoProvider"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -709,10 +572,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "SsoAdminController.removeProviderIcon",
-    "params": [
-      "id:org",
-      "providerId:ssoProvider"
-    ],
+    "params": ["id:org", "providerId:ssoProvider"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -721,10 +581,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "StatusPagesController.remove",
-    "params": [
-      "id:org",
-      "pageId:statusPage"
-    ],
+    "params": ["id:org", "pageId:statusPage"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -733,10 +590,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "OrganizationRegistryCredentialsController.remove",
-    "params": [
-      "organizationId:org",
-      "id:orgRegistryCredential"
-    ],
+    "params": ["organizationId:org", "id:orgRegistryCredential"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -745,12 +599,8 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "KubernetesController.deletePod",
-    "params": [
-      "podName:pod"
-    ],
-    "queryIds": [
-      "namespace"
-    ],
+    "params": ["podName:pod"],
+    "queryIds": ["namespace"],
     "bodyIds": [],
     "unseeded": []
   },
@@ -758,9 +608,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "ProjectsController.deleteProject",
-    "params": [
-      "id:project"
-    ],
+    "params": ["id:project"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -769,10 +617,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "ProjectsController.deleteProjectIngress",
-    "params": [
-      "id:project",
-      "ingressId:ingress"
-    ],
+    "params": ["id:project", "ingressId:ingress"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -781,10 +626,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "ProjectsController.revokeProjectInvitation",
-    "params": [
-      "id:project",
-      "invitationId:projectInvitation"
-    ],
+    "params": ["id:project", "invitationId:projectInvitation"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -793,10 +635,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "ProjectsController.removeProjectMember",
-    "params": [
-      "id:project",
-      "memberId:projectMember"
-    ],
+    "params": ["id:project", "memberId:projectMember"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -805,9 +644,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "ProjectsController.cancelProjectOwnershipTransfer",
-    "params": [
-      "id:project"
-    ],
+    "params": ["id:project"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -816,10 +653,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "RegistryCredentialsController.remove",
-    "params": [
-      "projectId:project",
-      "id:registryCredential"
-    ],
+    "params": ["projectId:project", "id:registryCredential"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -828,9 +662,7 @@
     "class": "public",
     "auth": "public",
     "handler": "ScimController.deleteGroup",
-    "params": [
-      "id:unknown"
-    ],
+    "params": ["id:unknown"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -839,9 +671,7 @@
     "class": "public",
     "auth": "public",
     "handler": "ScimController.deleteUser",
-    "params": [
-      "id:unknown"
-    ],
+    "params": ["id:unknown"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -868,9 +698,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "TemplatesController.deleteTemplateInstance",
-    "params": [
-      "id:templateInstance"
-    ],
+    "params": ["id:templateInstance"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -879,9 +707,7 @@
     "class": "superadmin",
     "auth": "superadmin",
     "handler": "TemplatesController.deleteTemplate",
-    "params": [
-      "id:template"
-    ],
+    "params": ["id:template"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -890,9 +716,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "GitConnectionsController.remove",
-    "params": [
-      "connectionId:gitConnection"
-    ],
+    "params": ["connectionId:gitConnection"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -901,9 +725,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "UserNotificationsController.deleteDestination",
-    "params": [
-      "destinationId:notificationDestination"
-    ],
+    "params": ["destinationId:notificationDestination"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -912,10 +734,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "UserNotificationsController.clearScopeSettings",
-    "params": [
-      "scopeType:scopeType",
-      "scopeId:scopeId"
-    ],
+    "params": ["scopeType:scopeType", "scopeId:scopeId"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -978,9 +797,7 @@
     "class": "superadmin",
     "auth": "superadmin",
     "handler": "DoctorController.getSelfTest",
-    "params": [
-      "id:unknown"
-    ],
+    "params": ["id:unknown"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -1007,9 +824,7 @@
     "class": "superadmin",
     "auth": "superadmin",
     "handler": "InstanceConfigController.one",
-    "params": [
-      "id:unknown"
-    ],
+    "params": ["id:unknown"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -1099,9 +914,7 @@
     "class": "superadmin",
     "auth": "superadmin",
     "handler": "NodePoolsController.get",
-    "params": [
-      "id:unknown"
-    ],
+    "params": ["id:unknown"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -1119,9 +932,7 @@
     "class": "superadmin",
     "auth": "superadmin",
     "handler": "NodesController.get",
-    "params": [
-      "id:unknown"
-    ],
+    "params": ["id:unknown"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -1139,9 +950,7 @@
     "class": "superadmin",
     "auth": "superadmin",
     "handler": "AdminQuotasController.getOrgQuota",
-    "params": [
-      "id:org"
-    ],
+    "params": ["id:org"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -1195,9 +1004,7 @@
     "class": "superadmin",
     "auth": "superadmin",
     "handler": "SsoInstanceController.getProvider",
-    "params": [
-      "providerId:ssoProvider"
-    ],
+    "params": ["providerId:ssoProvider"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -1206,9 +1013,7 @@
     "class": "superadmin",
     "auth": "superadmin",
     "handler": "SsoInstanceController.listAutoCreateRules",
-    "params": [
-      "providerId:ssoProvider"
-    ],
+    "params": ["providerId:ssoProvider"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -1217,9 +1022,7 @@
     "class": "superadmin",
     "auth": "superadmin",
     "handler": "SsoInstanceController.listRules",
-    "params": [
-      "providerId:ssoProvider"
-    ],
+    "params": ["providerId:ssoProvider"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -1273,9 +1076,7 @@
     "class": "superadmin",
     "auth": "superadmin",
     "handler": "AdminController.getUser",
-    "params": [
-      "id:unknown"
-    ],
+    "params": ["id:unknown"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -1303,9 +1104,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "AuditController.getDeploymentLogs",
-    "params": [
-      "id:deployment"
-    ],
+    "params": ["id:deployment"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -1323,9 +1122,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "AuditController.getOrgLogs",
-    "params": [
-      "id:org"
-    ],
+    "params": ["id:org"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -1407,9 +1204,7 @@
     "auth": "public",
     "handler": "ProtectionController.info",
     "params": [],
-    "queryIds": [
-      "ingressId"
-    ],
+    "queryIds": ["ingressId"],
     "bodyIds": [],
     "unseeded": []
   },
@@ -1444,9 +1239,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DatabaseRecoveryController.checkpointGroup",
-    "params": [
-      "groupId:checkpointGroup"
-    ],
+    "params": ["groupId:checkpointGroup"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -1464,9 +1257,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "ComposeStacksController.get",
-    "params": [
-      "id:composeStack"
-    ],
+    "params": ["id:composeStack"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -1475,9 +1266,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DatabaseRecoveryController.operation",
-    "params": [
-      "opId:databaseOperation"
-    ],
+    "params": ["opId:databaseOperation"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -1496,9 +1285,7 @@
     "auth": "authenticated",
     "handler": "DatabasesController.listDatabases",
     "params": [],
-    "queryIds": [
-      "orgId"
-    ],
+    "queryIds": ["orgId"],
     "bodyIds": [],
     "unseeded": []
   },
@@ -1506,9 +1293,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DatabasesController.getDatabase",
-    "params": [
-      "id:database"
-    ],
+    "params": ["id:database"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -1517,9 +1302,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DatabaseRecoveryController.activity",
-    "params": [
-      "id:database"
-    ],
+    "params": ["id:database"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -1528,9 +1311,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "AnomaliesController.forDatabase",
-    "params": [
-      "id:database"
-    ],
+    "params": ["id:database"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -1539,9 +1320,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DatabasesController.getBackupSchedule",
-    "params": [
-      "id:database"
-    ],
+    "params": ["id:database"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -1550,9 +1329,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DatabasesController.listBackups",
-    "params": [
-      "id:database"
-    ],
+    "params": ["id:database"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -1561,9 +1338,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DatabaseRecoveryController.listCheckpoints",
-    "params": [
-      "id:database"
-    ],
+    "params": ["id:database"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -1572,9 +1347,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DatabasesController.getConnection",
-    "params": [
-      "id:database"
-    ],
+    "params": ["id:database"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -1583,9 +1356,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DatabaseRecoveryController.diagnose",
-    "params": [
-      "id:database"
-    ],
+    "params": ["id:database"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -1594,9 +1365,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DatabasesController.listExtensions",
-    "params": [
-      "id:database"
-    ],
+    "params": ["id:database"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -1605,9 +1374,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DatabasesController.getDatabaseKilledContainers",
-    "params": [
-      "id:database"
-    ],
+    "params": ["id:database"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -1616,10 +1383,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DatabasesController.getDatabaseKilledContainerLogs",
-    "params": [
-      "id:database",
-      "entryId:killedContainer"
-    ],
+    "params": ["id:database", "entryId:killedContainer"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -1628,9 +1392,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DatabasesController.getDatabaseLive",
-    "params": [
-      "id:database"
-    ],
+    "params": ["id:database"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -1639,9 +1401,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DatabasesController.getDatabaseMetrics",
-    "params": [
-      "id:database"
-    ],
+    "params": ["id:database"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -1650,9 +1410,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DatabaseRecoveryController.listOperations",
-    "params": [
-      "id:database"
-    ],
+    "params": ["id:database"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -1661,9 +1419,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DatabaseRecoveryController.getPooler",
-    "params": [
-      "id:database"
-    ],
+    "params": ["id:database"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -1672,9 +1428,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DatabasesController.getProvisioning",
-    "params": [
-      "id:database"
-    ],
+    "params": ["id:database"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -1683,9 +1437,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DatabasesController.getDatabaseQueryStats",
-    "params": [
-      "id:database"
-    ],
+    "params": ["id:database"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -1694,9 +1446,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DatabaseRecoveryController.recoveryWindow",
-    "params": [
-      "id:database"
-    ],
+    "params": ["id:database"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -1705,9 +1455,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DatabaseRecoveryController.replication",
-    "params": [
-      "id:database"
-    ],
+    "params": ["id:database"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -1716,9 +1464,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DatabaseRecoveryController.listRestoreTests",
-    "params": [
-      "id:database"
-    ],
+    "params": ["id:database"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -1727,9 +1473,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DatabaseRecoveryController.security",
-    "params": [
-      "id:database"
-    ],
+    "params": ["id:database"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -1738,9 +1482,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DatabasesController.getSettings",
-    "params": [
-      "id:database"
-    ],
+    "params": ["id:database"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -1749,9 +1491,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DatabaseRecoveryController.listRoles",
-    "params": [
-      "id:database"
-    ],
+    "params": ["id:database"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -1770,9 +1510,7 @@
     "auth": "authenticated",
     "handler": "DeploymentsController.listDeployments",
     "params": [],
-    "queryIds": [
-      "orgId"
-    ],
+    "queryIds": ["orgId"],
     "bodyIds": [],
     "unseeded": []
   },
@@ -1780,9 +1518,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DeploymentsController.getDeployment",
-    "params": [
-      "id:deployment"
-    ],
+    "params": ["id:deployment"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -1791,9 +1527,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "AnomaliesController.forDeployment",
-    "params": [
-      "id:deployment"
-    ],
+    "params": ["id:deployment"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -1802,9 +1536,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DeploymentsController.getAutoDeployStatus",
-    "params": [
-      "id:deployment"
-    ],
+    "params": ["id:deployment"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -1813,9 +1545,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "ResourceBindingsController.list",
-    "params": [
-      "id:deployment"
-    ],
+    "params": ["id:deployment"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -1824,9 +1554,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "ResourceBindingsController.options",
-    "params": [
-      "id:deployment"
-    ],
+    "params": ["id:deployment"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -1835,9 +1563,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DeploymentsController.getBuildRuns",
-    "params": [
-      "id:deployment"
-    ],
+    "params": ["id:deployment"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -1846,10 +1572,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DeploymentsController.getBuildRunLogs",
-    "params": [
-      "id:deployment",
-      "runId:buildRun"
-    ],
+    "params": ["id:deployment", "runId:buildRun"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -1858,9 +1581,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DiagnosisController.diagnose",
-    "params": [
-      "id:deployment"
-    ],
+    "params": ["id:deployment"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -1869,9 +1590,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DeploymentsController.getGitHubDeployments",
-    "params": [
-      "id:deployment"
-    ],
+    "params": ["id:deployment"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -1880,9 +1599,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DeploymentsController.getImageHistory",
-    "params": [
-      "id:deployment"
-    ],
+    "params": ["id:deployment"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -1891,10 +1608,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DeploymentsController.getImageHistoryLogs",
-    "params": [
-      "id:deployment",
-      "imageHistoryId:imageHistory"
-    ],
+    "params": ["id:deployment", "imageHistoryId:imageHistory"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -1903,9 +1617,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DeploymentsController.getKilledContainers",
-    "params": [
-      "id:deployment"
-    ],
+    "params": ["id:deployment"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -1914,10 +1626,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DeploymentsController.getKilledContainerLogs",
-    "params": [
-      "id:deployment",
-      "entryId:killedContainer"
-    ],
+    "params": ["id:deployment", "entryId:killedContainer"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -1926,9 +1635,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DeploymentsController.getDeploymentLogs",
-    "params": [
-      "id:deployment"
-    ],
+    "params": ["id:deployment"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -1937,9 +1644,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DeploymentsController.getDeploymentMetrics",
-    "params": [
-      "id:deployment"
-    ],
+    "params": ["id:deployment"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -1948,9 +1653,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DeploymentsController.getDeploymentNextSteps",
-    "params": [
-      "id:deployment"
-    ],
+    "params": ["id:deployment"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -1959,9 +1662,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DeploymentsController.getDeploymentPods",
-    "params": [
-      "id:deployment"
-    ],
+    "params": ["id:deployment"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -1970,9 +1671,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DeploymentsController.getDeploymentPodsLive",
-    "params": [
-      "id:deployment"
-    ],
+    "params": ["id:deployment"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -1981,9 +1680,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DeploymentsController.getReleases",
-    "params": [
-      "id:deployment"
-    ],
+    "params": ["id:deployment"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -1992,10 +1689,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DeploymentsController.getReleaseVerdict",
-    "params": [
-      "id:deployment",
-      "releaseId:release"
-    ],
+    "params": ["id:deployment", "releaseId:release"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -2004,9 +1698,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DeploymentsController.getRightsizing",
-    "params": [
-      "id:deployment"
-    ],
+    "params": ["id:deployment"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -2015,9 +1707,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "RolloutController.getRollout",
-    "params": [
-      "id:deployment"
-    ],
+    "params": ["id:deployment"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -2026,9 +1716,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "SecurityController.report",
-    "params": [
-      "id:deployment"
-    ],
+    "params": ["id:deployment"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -2037,9 +1725,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "SecurityController.getAttacks",
-    "params": [
-      "id:deployment"
-    ],
+    "params": ["id:deployment"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -2048,9 +1734,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DeploymentsController.listWebhookTokens",
-    "params": [
-      "id:deployment"
-    ],
+    "params": ["id:deployment"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -2069,9 +1753,7 @@
     "auth": "authenticated",
     "handler": "DeploymentsController.listRecentBuilds",
     "params": [],
-    "queryIds": [
-      "orgId"
-    ],
+    "queryIds": ["orgId"],
     "bodyIds": [],
     "unseeded": []
   },
@@ -2080,9 +1762,7 @@
     "auth": "authenticated",
     "handler": "KubernetesController.listEndpoints",
     "params": [],
-    "queryIds": [
-      "namespace"
-    ],
+    "queryIds": ["namespace"],
     "bodyIds": [],
     "unseeded": []
   },
@@ -2099,9 +1779,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "EnvironmentsController.getShared",
-    "params": [
-      "id:environment"
-    ],
+    "params": ["id:environment"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -2110,12 +1788,8 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "EventsController.streamOrg",
-    "params": [
-      "orgId:org"
-    ],
-    "queryIds": [
-      "lastEventId"
-    ],
+    "params": ["orgId:org"],
+    "queryIds": ["lastEventId"],
     "bodyIds": [],
     "unseeded": []
   },
@@ -2143,9 +1817,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "ForumController.getThread",
-    "params": [
-      "id:thread"
-    ],
+    "params": ["id:thread"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -2155,9 +1827,7 @@
     "class": "public",
     "auth": "public",
     "handler": "GitOauthController.callback",
-    "params": [
-      "provider:provider"
-    ],
+    "params": ["provider:provider"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -2166,9 +1836,7 @@
     "class": "public",
     "auth": "public",
     "handler": "GitOauthController.start",
-    "params": [
-      "provider:provider"
-    ],
+    "params": ["provider:provider"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -2222,10 +1890,7 @@
     "class": "own-scope-only",
     "auth": "authenticated",
     "handler": "GitHubController.getBranches",
-    "params": [
-      "owner:githubOwner",
-      "repo:githubRepo"
-    ],
+    "params": ["owner:githubOwner", "repo:githubRepo"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -2234,10 +1899,7 @@
     "class": "own-scope-only",
     "auth": "authenticated",
     "handler": "GitHubController.getContents",
-    "params": [
-      "owner:githubOwner",
-      "repo:githubRepo"
-    ],
+    "params": ["owner:githubOwner", "repo:githubRepo"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -2246,10 +1908,7 @@
     "class": "own-scope-only",
     "auth": "authenticated",
     "handler": "GitHubController.detectRepoConfig",
-    "params": [
-      "owner:githubOwner",
-      "repo:githubRepo"
-    ],
+    "params": ["owner:githubOwner", "repo:githubRepo"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -2258,10 +1917,7 @@
     "class": "own-scope-only",
     "auth": "authenticated",
     "handler": "GitHubController.getDockerfileInfo",
-    "params": [
-      "owner:githubOwner",
-      "repo:githubRepo"
-    ],
+    "params": ["owner:githubOwner", "repo:githubRepo"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -2270,10 +1926,7 @@
     "class": "own-scope-only",
     "auth": "authenticated",
     "handler": "GitHubController.getDockerfileStages",
-    "params": [
-      "owner:githubOwner",
-      "repo:githubRepo"
-    ],
+    "params": ["owner:githubOwner", "repo:githubRepo"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -2282,10 +1935,7 @@
     "class": "own-scope-only",
     "auth": "authenticated",
     "handler": "GitHubController.getDockerfiles",
-    "params": [
-      "owner:githubOwner",
-      "repo:githubRepo"
-    ],
+    "params": ["owner:githubOwner", "repo:githubRepo"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -2351,9 +2001,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "UserContextController.get",
-    "params": [
-      "itemId:contextItem"
-    ],
+    "params": ["itemId:contextItem"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -2364,9 +2012,7 @@
     "auth": "authenticated",
     "handler": "SandboxesController.list",
     "params": [],
-    "queryIds": [
-      "organizationId"
-    ],
+    "queryIds": ["organizationId"],
     "bodyIds": [],
     "unseeded": [],
     "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
@@ -2375,9 +2021,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxesController.get",
-    "params": [
-      "id:sandbox"
-    ],
+    "params": ["id:sandbox"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -2387,9 +2031,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxAgentController.usage",
-    "params": [
-      "id:sandbox"
-    ],
+    "params": ["id:sandbox"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -2399,9 +2041,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxAgentChatsController.catalog",
-    "params": [
-      "id:sandbox"
-    ],
+    "params": ["id:sandbox"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -2411,9 +2051,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxAgentChatsController.loginMethods",
-    "params": [
-      "id:sandbox"
-    ],
+    "params": ["id:sandbox"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -2423,10 +2061,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxAgentChatsController.loginStatus",
-    "params": [
-      "id:sandbox",
-      "loginId:login"
-    ],
+    "params": ["id:sandbox", "loginId:login"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -2436,9 +2071,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxesController.bootStatus",
-    "params": [
-      "id:sandbox"
-    ],
+    "params": ["id:sandbox"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -2448,9 +2081,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxesController.changes",
-    "params": [
-      "id:sandbox"
-    ],
+    "params": ["id:sandbox"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -2460,9 +2091,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxesController.connectInfo",
-    "params": [
-      "id:sandbox"
-    ],
+    "params": ["id:sandbox"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -2472,9 +2101,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxesController.listConversations",
-    "params": [
-      "id:sandbox"
-    ],
+    "params": ["id:sandbox"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -2484,10 +2111,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxesController.conversationHistory",
-    "params": [
-      "id:sandbox",
-      "cid:conversation"
-    ],
+    "params": ["id:sandbox", "cid:conversation"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -2497,9 +2121,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxesController.diff",
-    "params": [
-      "id:sandbox"
-    ],
+    "params": ["id:sandbox"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -2509,9 +2131,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxesController.listDirs",
-    "params": [
-      "id:sandbox"
-    ],
+    "params": ["id:sandbox"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -2521,9 +2141,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxesController.readFile",
-    "params": [
-      "id:sandbox"
-    ],
+    "params": ["id:sandbox"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -2533,9 +2151,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxesController.gitBranches",
-    "params": [
-      "id:sandbox"
-    ],
+    "params": ["id:sandbox"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -2545,9 +2161,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxesController.gitIdentity",
-    "params": [
-      "id:sandbox"
-    ],
+    "params": ["id:sandbox"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -2557,9 +2171,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxesController.hostKey",
-    "params": [
-      "id:sandbox"
-    ],
+    "params": ["id:sandbox"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -2569,9 +2181,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "IntegrationsController.sandboxIssues",
-    "params": [
-      "id:sandbox"
-    ],
+    "params": ["id:sandbox"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -2581,9 +2191,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxLinksController.list",
-    "params": [
-      "id:sandbox"
-    ],
+    "params": ["id:sandbox"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -2593,9 +2201,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxMembersController.list",
-    "params": [
-      "id:sandbox"
-    ],
+    "params": ["id:sandbox"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -2605,9 +2211,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxMembersController.previewToken",
-    "params": [
-      "id:sandbox"
-    ],
+    "params": ["id:sandbox"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -2617,9 +2221,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxesController.listRepos",
-    "params": [
-      "id:sandbox"
-    ],
+    "params": ["id:sandbox"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -2629,9 +2231,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxSessionsController.list",
-    "params": [
-      "id:sandbox"
-    ],
+    "params": ["id:sandbox"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -2641,10 +2241,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxSessionsController.get",
-    "params": [
-      "id:sandbox",
-      "sid:session"
-    ],
+    "params": ["id:sandbox", "sid:session"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -2654,10 +2251,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxAgentChatsController.list",
-    "params": [
-      "id:sandbox",
-      "sid:session"
-    ],
+    "params": ["id:sandbox", "sid:session"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -2667,11 +2261,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxAgentChatsController.events",
-    "params": [
-      "id:sandbox",
-      "sid:session",
-      "cid:agentChat"
-    ],
+    "params": ["id:sandbox", "sid:session", "cid:agentChat"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -2681,11 +2271,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxAgentChatsController.stream",
-    "params": [
-      "id:sandbox",
-      "sid:session",
-      "cid:agentChat"
-    ],
+    "params": ["id:sandbox", "sid:session", "cid:agentChat"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -2695,10 +2281,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxMembersController.authors",
-    "params": [
-      "id:sandbox",
-      "sid:session"
-    ],
+    "params": ["id:sandbox", "sid:session"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -2708,10 +2291,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxSessionsController.chats",
-    "params": [
-      "id:sandbox",
-      "sid:session"
-    ],
+    "params": ["id:sandbox", "sid:session"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -2721,10 +2301,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxSessionsController.checks",
-    "params": [
-      "id:sandbox",
-      "sid:session"
-    ],
+    "params": ["id:sandbox", "sid:session"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -2734,10 +2311,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxMembersController.comments",
-    "params": [
-      "id:sandbox",
-      "sid:session"
-    ],
+    "params": ["id:sandbox", "sid:session"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -2747,10 +2321,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxSessionsController.ports",
-    "params": [
-      "id:sandbox",
-      "sid:session"
-    ],
+    "params": ["id:sandbox", "sid:session"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -2760,10 +2331,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxSessionsController.scripts",
-    "params": [
-      "id:sandbox",
-      "sid:session"
-    ],
+    "params": ["id:sandbox", "sid:session"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -2773,10 +2341,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxAgentController.transcript",
-    "params": [
-      "id:sandbox",
-      "sid:session"
-    ],
+    "params": ["id:sandbox", "sid:session"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -2786,9 +2351,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxShareLinksController.list",
-    "params": [
-      "id:sandbox"
-    ],
+    "params": ["id:sandbox"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -2798,9 +2361,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxesController.ssh",
-    "params": [
-      "id:sandbox"
-    ],
+    "params": ["id:sandbox"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -2810,9 +2371,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxUsageController.usage",
-    "params": [
-      "id:sandbox"
-    ],
+    "params": ["id:sandbox"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -2842,9 +2401,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxShareViewerController.view",
-    "params": [
-      "token:publicToken"
-    ],
+    "params": ["token:publicToken"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -2854,10 +2411,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxShareViewerController.changes",
-    "params": [
-      "token:publicToken",
-      "sid:session"
-    ],
+    "params": ["token:publicToken", "sid:session"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -2867,10 +2421,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxShareViewerController.diff",
-    "params": [
-      "token:publicToken",
-      "sid:session"
-    ],
+    "params": ["token:publicToken", "sid:session"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -2880,10 +2431,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxShareViewerController.transcript",
-    "params": [
-      "token:publicToken",
-      "sid:session"
-    ],
+    "params": ["token:publicToken", "sid:session"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -2893,9 +2441,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxShareViewerController.changesByHeader",
-    "params": [
-      "sid:session"
-    ],
+    "params": ["sid:session"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -2905,9 +2451,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxShareViewerController.diffByHeader",
-    "params": [
-      "sid:session"
-    ],
+    "params": ["sid:session"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -2917,9 +2461,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxShareViewerController.transcriptByHeader",
-    "params": [
-      "sid:session"
-    ],
+    "params": ["sid:session"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -2968,9 +2510,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "IngressesController.getIngress",
-    "params": [
-      "id:ingress"
-    ],
+    "params": ["id:ingress"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -2988,9 +2528,7 @@
     "class": "public",
     "auth": "public",
     "handler": "InvitationsController.getInvitationByToken",
-    "params": [
-      "token:invitationToken"
-    ],
+    "params": ["token:invitationToken"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -3008,9 +2546,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "JobsController.getRun",
-    "params": [
-      "runId:jobRun"
-    ],
+    "params": ["runId:jobRun"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -3019,10 +2555,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "JobsController.getStepLogs",
-    "params": [
-      "runId:jobRun",
-      "order:stepOrder"
-    ],
+    "params": ["runId:jobRun", "order:stepOrder"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -3031,9 +2564,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "JobsController.getJob",
-    "params": [
-      "id:job"
-    ],
+    "params": ["id:job"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -3042,9 +2573,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "JobsController.listRuns",
-    "params": [
-      "id:job"
-    ],
+    "params": ["id:job"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -3062,9 +2591,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "ObservabilityController.streamBuildLogs",
-    "params": [
-      "id:deployment"
-    ],
+    "params": ["id:deployment"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -3073,9 +2600,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "ObservabilityController.getBuildHistory",
-    "params": [
-      "id:deployment"
-    ],
+    "params": ["id:deployment"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -3084,9 +2609,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "ObservabilityController.getCapabilities",
-    "params": [
-      "id:deployment"
-    ],
+    "params": ["id:deployment"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -3095,9 +2618,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "ObservabilityController.getChanges",
-    "params": [
-      "id:deployment"
-    ],
+    "params": ["id:deployment"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -3106,9 +2627,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "ObservabilityController.getErrors",
-    "params": [
-      "id:deployment"
-    ],
+    "params": ["id:deployment"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -3117,9 +2636,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "ObservabilityController.getFindings",
-    "params": [
-      "id:deployment"
-    ],
+    "params": ["id:deployment"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -3128,9 +2645,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "ObservabilityController.getHttpMetrics",
-    "params": [
-      "id:deployment"
-    ],
+    "params": ["id:deployment"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -3139,9 +2654,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "LogsController.context",
-    "params": [
-      "id:deployment"
-    ],
+    "params": ["id:deployment"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -3150,9 +2663,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "LogsController.export",
-    "params": [
-      "id:deployment"
-    ],
+    "params": ["id:deployment"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -3161,9 +2672,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "LogsController.levels",
-    "params": [
-      "id:deployment"
-    ],
+    "params": ["id:deployment"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -3172,9 +2681,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "LogsController.search",
-    "params": [
-      "id:deployment"
-    ],
+    "params": ["id:deployment"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -3183,9 +2690,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "ObservabilityController.streamRuntimeLogs",
-    "params": [
-      "id:deployment"
-    ],
+    "params": ["id:deployment"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -3194,9 +2699,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "ObservabilityController.getStructuredLogs",
-    "params": [
-      "id:deployment"
-    ],
+    "params": ["id:deployment"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -3205,9 +2708,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "ObservabilityController.getOverview",
-    "params": [
-      "id:deployment"
-    ],
+    "params": ["id:deployment"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -3216,9 +2717,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "ObservabilityController.getPodHealth",
-    "params": [
-      "id:deployment"
-    ],
+    "params": ["id:deployment"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -3227,9 +2726,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "LogsController.getRequests",
-    "params": [
-      "id:deployment"
-    ],
+    "params": ["id:deployment"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -3238,9 +2735,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "LogsController.streamRequests",
-    "params": [
-      "id:deployment"
-    ],
+    "params": ["id:deployment"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -3249,9 +2744,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "ObservabilityController.getRuntime",
-    "params": [
-      "id:deployment"
-    ],
+    "params": ["id:deployment"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -3260,9 +2753,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "ObservabilityController.getTimeline",
-    "params": [
-      "id:deployment"
-    ],
+    "params": ["id:deployment"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -3271,9 +2762,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "ObservabilityController.getVolumes",
-    "params": [
-      "id:deployment"
-    ],
+    "params": ["id:deployment"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -3291,9 +2780,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "OrganizationsController.getOrganization",
-    "params": [
-      "id:org"
-    ],
+    "params": ["id:org"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -3302,9 +2789,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "OrganizationsController.getBackupSettings",
-    "params": [
-      "id:org"
-    ],
+    "params": ["id:org"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -3313,9 +2798,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "OrganizationsController.getOrganizationInvitations",
-    "params": [
-      "id:org"
-    ],
+    "params": ["id:org"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -3324,9 +2807,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "OrganizationsController.getOrganizationMembers",
-    "params": [
-      "id:org"
-    ],
+    "params": ["id:org"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -3335,9 +2816,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "OrganizationsController.getCurrentUserMembership",
-    "params": [
-      "id:org"
-    ],
+    "params": ["id:org"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -3346,12 +2825,8 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "AlertsController.list",
-    "params": [
-      "id:org"
-    ],
-    "queryIds": [
-      "scopeId"
-    ],
+    "params": ["id:org"],
+    "queryIds": ["scopeId"],
     "bodyIds": [],
     "unseeded": []
   },
@@ -3359,9 +2834,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "AlertsController.catalogue",
-    "params": [
-      "id:org"
-    ],
+    "params": ["id:org"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -3370,12 +2843,8 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "AlertsController.states",
-    "params": [
-      "id:org"
-    ],
-    "queryIds": [
-      "deploymentId"
-    ],
+    "params": ["id:org"],
+    "queryIds": ["deploymentId"],
     "bodyIds": [],
     "unseeded": []
   },
@@ -3383,12 +2852,8 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "NotificationChannelsController.listChannels",
-    "params": [
-      "id:org"
-    ],
-    "queryIds": [
-      "scopeId"
-    ],
+    "params": ["id:org"],
+    "queryIds": ["scopeId"],
     "bodyIds": [],
     "unseeded": []
   },
@@ -3396,10 +2861,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "NotificationChannelsController.listDeliveries",
-    "params": [
-      "id:org",
-      "channelId:notificationChannel"
-    ],
+    "params": ["id:org", "channelId:notificationChannel"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -3408,12 +2870,8 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "NotificationChannelsController.listRules",
-    "params": [
-      "id:org"
-    ],
-    "queryIds": [
-      "scopeId"
-    ],
+    "params": ["id:org"],
+    "queryIds": ["scopeId"],
     "bodyIds": [],
     "unseeded": []
   },
@@ -3421,9 +2879,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "ScimTokensController.list",
-    "params": [
-      "id:org"
-    ],
+    "params": ["id:org"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -3432,9 +2888,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "SsoAdminController.overview",
-    "params": [
-      "id:org"
-    ],
+    "params": ["id:org"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -3443,9 +2897,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "SsoAdminController.listDomains",
-    "params": [
-      "id:org"
-    ],
+    "params": ["id:org"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -3454,9 +2906,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "SsoAdminController.listProviders",
-    "params": [
-      "id:org"
-    ],
+    "params": ["id:org"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -3465,10 +2915,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "SsoAdminController.getProvider",
-    "params": [
-      "id:org",
-      "providerId:ssoProvider"
-    ],
+    "params": ["id:org", "providerId:ssoProvider"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -3477,10 +2924,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "SsoAdminController.listRules",
-    "params": [
-      "id:org",
-      "providerId:ssoProvider"
-    ],
+    "params": ["id:org", "providerId:ssoProvider"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -3489,9 +2933,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "StatusPagesController.list",
-    "params": [
-      "id:org"
-    ],
+    "params": ["id:org"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -3500,9 +2942,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "StatusPagesController.options",
-    "params": [
-      "id:org"
-    ],
+    "params": ["id:org"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -3511,9 +2951,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "ImagePortsController.forOrganization",
-    "params": [
-      "organizationId:org"
-    ],
+    "params": ["organizationId:org"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -3522,9 +2960,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "OrganizationRegistryCredentialsController.list",
-    "params": [
-      "organizationId:org"
-    ],
+    "params": ["organizationId:org"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -3533,9 +2969,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "JobsController.listOrgJobs",
-    "params": [
-      "orgId:org"
-    ],
+    "params": ["orgId:org"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -3544,9 +2978,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "MetricsController.getProvisioning",
-    "params": [
-      "orgId:org"
-    ],
+    "params": ["orgId:org"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -3555,9 +2987,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "OrgQuotasController.get",
-    "params": [
-      "orgId:org"
-    ],
+    "params": ["orgId:org"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -3566,9 +2996,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "OrgQuotasController.getMyUsage",
-    "params": [
-      "orgId:org"
-    ],
+    "params": ["orgId:org"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -3577,9 +3005,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "OrgQuotasController.listMembersUsage",
-    "params": [
-      "orgId:org"
-    ],
+    "params": ["orgId:org"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -3588,9 +3014,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "OrgQuotasController.listProjectCaps",
-    "params": [
-      "orgId:org"
-    ],
+    "params": ["orgId:org"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -3599,9 +3023,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "OrganizationsController.getOrganizationBySlug",
-    "params": [
-      "slug:orgSlug"
-    ],
+    "params": ["slug:orgSlug"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -3628,9 +3050,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "OverviewController.getOrgOverview",
-    "params": [
-      "orgSlug:orgSlug"
-    ],
+    "params": ["orgSlug:orgSlug"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -3639,9 +3059,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "OverviewController.getOrgBuilds",
-    "params": [
-      "orgSlug:orgSlug"
-    ],
+    "params": ["orgSlug:orgSlug"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -3651,9 +3069,7 @@
     "auth": "authenticated",
     "handler": "KubernetesController.listPods",
     "params": [],
-    "queryIds": [
-      "namespace"
-    ],
+    "queryIds": ["namespace"],
     "bodyIds": [],
     "unseeded": []
   },
@@ -3661,12 +3077,8 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "KubernetesController.getPod",
-    "params": [
-      "podName:pod"
-    ],
-    "queryIds": [
-      "namespace"
-    ],
+    "params": ["podName:pod"],
+    "queryIds": ["namespace"],
     "bodyIds": [],
     "unseeded": []
   },
@@ -3674,12 +3086,8 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "KubernetesController.getPodLogs",
-    "params": [
-      "podName:pod"
-    ],
-    "queryIds": [
-      "namespace"
-    ],
+    "params": ["podName:pod"],
+    "queryIds": ["namespace"],
     "bodyIds": [],
     "unseeded": []
   },
@@ -3697,9 +3105,7 @@
     "auth": "authenticated",
     "handler": "ProjectsController.listProjects",
     "params": [],
-    "queryIds": [
-      "orgId"
-    ],
+    "queryIds": ["orgId"],
     "bodyIds": [],
     "unseeded": []
   },
@@ -3707,9 +3113,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "ProjectsController.getProject",
-    "params": [
-      "id:project"
-    ],
+    "params": ["id:project"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -3718,9 +3122,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "AnomaliesController.forProject",
-    "params": [
-      "id:project"
-    ],
+    "params": ["id:project"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -3729,9 +3131,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "ProjectsController.getProjectDatabases",
-    "params": [
-      "id:project"
-    ],
+    "params": ["id:project"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -3740,9 +3140,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DatabaseRecoveryController.listDeleted",
-    "params": [
-      "id:project"
-    ],
+    "params": ["id:project"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -3751,9 +3149,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "ProjectsController.getProjectDeployments",
-    "params": [
-      "id:project"
-    ],
+    "params": ["id:project"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -3762,10 +3158,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "ProjectsController.getProjectIngress",
-    "params": [
-      "id:project",
-      "ingressId:ingress"
-    ],
+    "params": ["id:project", "ingressId:ingress"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -3774,10 +3167,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "ProjectsController.getIngressProtection",
-    "params": [
-      "id:project",
-      "ingressId:ingress"
-    ],
+    "params": ["id:project", "ingressId:ingress"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -3786,12 +3176,8 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "ProjectsController.previewProjectOrgTransfer",
-    "params": [
-      "id:project"
-    ],
-    "queryIds": [
-      "destinationOrgId"
-    ],
+    "params": ["id:project"],
+    "queryIds": ["destinationOrgId"],
     "bodyIds": [],
     "unseeded": []
   },
@@ -3799,9 +3185,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "ComposeStacksController.list",
-    "params": [
-      "projectId:project"
-    ],
+    "params": ["projectId:project"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -3810,9 +3194,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "EnvironmentsController.list",
-    "params": [
-      "projectId:project"
-    ],
+    "params": ["projectId:project"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -3821,9 +3203,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "ImagePortsController.forProject",
-    "params": [
-      "projectId:project"
-    ],
+    "params": ["projectId:project"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -3832,9 +3212,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "JobsController.listProjectJobs",
-    "params": [
-      "projectId:project"
-    ],
+    "params": ["projectId:project"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -3843,9 +3221,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "RegistryCredentialsController.list",
-    "params": [
-      "projectId:project"
-    ],
+    "params": ["projectId:project"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -3854,9 +3230,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "TemplatesController.getProjectTemplateInstances",
-    "params": [
-      "projectId:project"
-    ],
+    "params": ["projectId:project"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -3865,10 +3239,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "ProjectsController.getProjectBySlugsFull",
-    "params": [
-      "orgSlug:orgSlug",
-      "projectSlug:projectSlug"
-    ],
+    "params": ["orgSlug:orgSlug", "projectSlug:projectSlug"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -3877,12 +3248,8 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "ProjectsController.getProjectBySlug",
-    "params": [
-      "slug:projectSlug"
-    ],
-    "queryIds": [
-      "orgId"
-    ],
+    "params": ["slug:projectSlug"],
+    "queryIds": ["orgId"],
     "bodyIds": [],
     "unseeded": []
   },
@@ -3899,9 +3266,7 @@
     "class": "public",
     "auth": "public",
     "handler": "ScimController.getGroup",
-    "params": [
-      "id:unknown"
-    ],
+    "params": ["id:unknown"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -3919,9 +3284,7 @@
     "class": "public",
     "auth": "public",
     "handler": "ScimController.resourceType",
-    "params": [
-      "id:unknown"
-    ],
+    "params": ["id:unknown"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -3939,9 +3302,7 @@
     "class": "public",
     "auth": "public",
     "handler": "ScimController.schema",
-    "params": [
-      "id:unknown"
-    ],
+    "params": ["id:unknown"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -3968,9 +3329,7 @@
     "class": "public",
     "auth": "public",
     "handler": "ScimController.getUser",
-    "params": [
-      "id:unknown"
-    ],
+    "params": ["id:unknown"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -4042,9 +3401,7 @@
     "class": "public",
     "auth": "public",
     "handler": "SsoController.legacyOidcCallback",
-    "params": [
-      "orgId:org"
-    ],
+    "params": ["orgId:org"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -4053,9 +3410,7 @@
     "class": "public",
     "auth": "public",
     "handler": "SsoController.legacyLogin",
-    "params": [
-      "orgId:org"
-    ],
+    "params": ["orgId:org"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -4064,9 +3419,7 @@
     "class": "public",
     "auth": "public",
     "handler": "SsoController.callback",
-    "params": [
-      "providerId:ssoProvider"
-    ],
+    "params": ["providerId:ssoProvider"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -4075,9 +3428,7 @@
     "class": "public",
     "auth": "public",
     "handler": "SsoController.getOrgLogin",
-    "params": [
-      "slug:slug"
-    ],
+    "params": ["slug:slug"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -4095,9 +3446,7 @@
     "class": "public",
     "auth": "public",
     "handler": "SsoController.metadata",
-    "params": [
-      "providerId:ssoProvider"
-    ],
+    "params": ["providerId:ssoProvider"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -4106,9 +3455,7 @@
     "class": "public",
     "auth": "public",
     "handler": "SsoController.start",
-    "params": [
-      "providerId:ssoProvider"
-    ],
+    "params": ["providerId:ssoProvider"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -4117,9 +3464,7 @@
     "class": "public",
     "auth": "public",
     "handler": "SsoController.resolveSubdomain",
-    "params": [
-      "subdomain:subdomain"
-    ],
+    "params": ["subdomain:subdomain"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -4128,9 +3473,7 @@
     "class": "public",
     "auth": "public",
     "handler": "PublicStatusController.show",
-    "params": [
-      "slug:slug"
-    ],
+    "params": ["slug:slug"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -4148,9 +3491,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "KubernetesController.syncNamespace",
-    "params": [
-      "namespace:namespace"
-    ],
+    "params": ["namespace:namespace"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -4159,9 +3500,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "TailscaleController.getDeploymentStatus",
-    "params": [
-      "deploymentId:deployment"
-    ],
+    "params": ["deploymentId:deployment"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -4179,9 +3518,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "TemplatesController.getTemplateInstance",
-    "params": [
-      "id:templateInstance"
-    ],
+    "params": ["id:templateInstance"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -4199,9 +3536,7 @@
     "class": "own-scope-only",
     "auth": "authenticated",
     "handler": "TemplatesController.getTemplate",
-    "params": [
-      "id:template"
-    ],
+    "params": ["id:template"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -4237,9 +3572,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "GitConnectionsController.branches",
-    "params": [
-      "connectionId:gitConnection"
-    ],
+    "params": ["connectionId:gitConnection"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -4248,9 +3581,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "GitConnectionsController.detect",
-    "params": [
-      "connectionId:gitConnection"
-    ],
+    "params": ["connectionId:gitConnection"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -4259,9 +3590,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "GitConnectionsController.repos",
-    "params": [
-      "connectionId:gitConnection"
-    ],
+    "params": ["connectionId:gitConnection"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -4270,9 +3599,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "GitConnectionsController.webhookSecret",
-    "params": [
-      "connectionId:gitConnection"
-    ],
+    "params": ["connectionId:gitConnection"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -4308,13 +3635,8 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "UserNotificationsController.getScopeSettings",
-    "params": [
-      "scopeType:scopeType",
-      "scopeId:scopeId"
-    ],
-    "queryIds": [
-      "organizationId"
-    ],
+    "params": ["scopeType:scopeType", "scopeId:scopeId"],
+    "queryIds": ["organizationId"],
     "bodyIds": [],
     "unseeded": []
   },
@@ -4376,9 +3698,7 @@
     "class": "superadmin",
     "auth": "superadmin",
     "handler": "NodePoolsController.update",
-    "params": [
-      "id:unknown"
-    ],
+    "params": ["id:unknown"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -4387,9 +3707,7 @@
     "class": "superadmin",
     "auth": "superadmin",
     "handler": "NodesController.update",
-    "params": [
-      "id:unknown"
-    ],
+    "params": ["id:unknown"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -4398,9 +3716,7 @@
     "class": "superadmin",
     "auth": "superadmin",
     "handler": "NodesController.setLabels",
-    "params": [
-      "id:unknown"
-    ],
+    "params": ["id:unknown"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -4409,9 +3725,7 @@
     "class": "superadmin",
     "auth": "superadmin",
     "handler": "NodesController.setTaints",
-    "params": [
-      "id:unknown"
-    ],
+    "params": ["id:unknown"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -4420,9 +3734,7 @@
     "class": "superadmin",
     "auth": "superadmin",
     "handler": "AdminController.updateOrganization",
-    "params": [
-      "id:org"
-    ],
+    "params": ["id:org"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -4431,9 +3743,7 @@
     "class": "superadmin",
     "auth": "superadmin",
     "handler": "AdminQuotasController.updateOrgQuota",
-    "params": [
-      "id:org"
-    ],
+    "params": ["id:org"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -4460,9 +3770,7 @@
     "class": "superadmin",
     "auth": "superadmin",
     "handler": "SsoInstanceController.setPlatformEnabled",
-    "params": [
-      "organizationId:org"
-    ],
+    "params": ["organizationId:org"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -4471,23 +3779,16 @@
     "class": "superadmin",
     "auth": "superadmin",
     "handler": "SsoInstanceController.updateProvider",
-    "params": [
-      "providerId:ssoProvider"
-    ],
+    "params": ["providerId:ssoProvider"],
     "queryIds": [],
-    "bodyIds": [
-      "clientId",
-      "samlIdpEntityId"
-    ],
+    "bodyIds": ["clientId", "samlIdpEntityId"],
     "unseeded": []
   },
   "PATCH /admin/users/:id": {
     "class": "superadmin",
     "auth": "superadmin",
     "handler": "AdminController.updateUser",
-    "params": [
-      "id:unknown"
-    ],
+    "params": ["id:unknown"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -4505,9 +3806,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "ApiTokensController.rename",
-    "params": [
-      "id:apiToken"
-    ],
+    "params": ["id:apiToken"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -4516,9 +3815,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "ComposeStacksController.rename",
-    "params": [
-      "id:composeStack"
-    ],
+    "params": ["id:composeStack"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -4527,9 +3824,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DatabasesController.renameDatabase",
-    "params": [
-      "id:database"
-    ],
+    "params": ["id:database"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -4538,9 +3833,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DatabaseRecoveryController.updateProtection",
-    "params": [
-      "id:database"
-    ],
+    "params": ["id:database"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -4549,9 +3842,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DatabasesController.updateDatabaseReplicas",
-    "params": [
-      "id:database"
-    ],
+    "params": ["id:database"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -4560,9 +3851,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DatabaseRecoveryController.setReplication",
-    "params": [
-      "id:database"
-    ],
+    "params": ["id:database"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -4571,9 +3860,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DatabasesController.updateDatabaseResources",
-    "params": [
-      "id:database"
-    ],
+    "params": ["id:database"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -4582,9 +3869,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DatabasesController.updateSettings",
-    "params": [
-      "id:database"
-    ],
+    "params": ["id:database"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -4593,9 +3878,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DatabasesController.expandDatabaseStorage",
-    "params": [
-      "id:database"
-    ],
+    "params": ["id:database"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -4604,10 +3887,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DeploymentsController.updateServiceExposure",
-    "params": [
-      "deploymentId:deployment",
-      "serviceId:service"
-    ],
+    "params": ["deploymentId:deployment", "serviceId:service"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -4616,9 +3896,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DeploymentsController.updateDeploymentDisruptionBudget",
-    "params": [
-      "id:deployment"
-    ],
+    "params": ["id:deployment"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -4627,9 +3905,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DeploymentsController.updateDeploymentImage",
-    "params": [
-      "id:deployment"
-    ],
+    "params": ["id:deployment"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -4638,9 +3914,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DeploymentsController.renameDeployment",
-    "params": [
-      "id:deployment"
-    ],
+    "params": ["id:deployment"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -4649,22 +3923,16 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DeploymentsController.updateDeploymentPlacement",
-    "params": [
-      "id:deployment"
-    ],
+    "params": ["id:deployment"],
     "queryIds": [],
-    "bodyIds": [
-      "nodePoolId"
-    ],
+    "bodyIds": ["nodePoolId"],
     "unseeded": []
   },
   "PATCH /deployments/:id/pull-policy": {
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DeploymentsController.updateDeploymentPullPolicy",
-    "params": [
-      "id:deployment"
-    ],
+    "params": ["id:deployment"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -4673,9 +3941,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DeploymentsController.updateResources",
-    "params": [
-      "id:deployment"
-    ],
+    "params": ["id:deployment"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -4684,9 +3950,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DeploymentsController.updateDeploymentStrategy",
-    "params": [
-      "id:deployment"
-    ],
+    "params": ["id:deployment"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -4695,9 +3959,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "EnvironmentsController.rename",
-    "params": [
-      "id:environment"
-    ],
+    "params": ["id:environment"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -4706,9 +3968,7 @@
     "class": "exempt",
     "auth": "superadmin",
     "handler": "ForumController.setLocked",
-    "params": [
-      "id:thread"
-    ],
+    "params": ["id:thread"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -4718,9 +3978,7 @@
     "class": "exempt",
     "auth": "superadmin",
     "handler": "ForumController.setPinned",
-    "params": [
-      "id:thread"
-    ],
+    "params": ["id:thread"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -4730,9 +3988,7 @@
     "class": "exempt",
     "auth": "superadmin",
     "handler": "ForumController.setPriority",
-    "params": [
-      "id:thread"
-    ],
+    "params": ["id:thread"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -4742,9 +3998,7 @@
     "class": "exempt",
     "auth": "superadmin",
     "handler": "ForumController.setStatus",
-    "params": [
-      "id:thread"
-    ],
+    "params": ["id:thread"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -4754,9 +4008,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "UserContextController.update",
-    "params": [
-      "itemId:contextItem"
-    ],
+    "params": ["itemId:contextItem"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -4766,13 +4018,9 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxesController.update",
-    "params": [
-      "id:sandbox"
-    ],
+    "params": ["id:sandbox"],
     "queryIds": [],
-    "bodyIds": [
-      "sshIdentityId"
-    ],
+    "bodyIds": ["sshIdentityId"],
     "unseeded": [],
     "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
@@ -4780,10 +4028,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxesController.updateConversation",
-    "params": [
-      "id:sandbox",
-      "cid:conversation"
-    ],
+    "params": ["id:sandbox", "cid:conversation"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -4793,10 +4038,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxMembersController.update",
-    "params": [
-      "id:sandbox",
-      "userId:user"
-    ],
+    "params": ["id:sandbox", "userId:user"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -4806,10 +4048,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxSessionsController.update",
-    "params": [
-      "id:sandbox",
-      "sid:session"
-    ],
+    "params": ["id:sandbox", "sid:session"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -4819,11 +4058,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxAgentChatsController.rename",
-    "params": [
-      "id:sandbox",
-      "sid:session",
-      "cid:agentChat"
-    ],
+    "params": ["id:sandbox", "sid:session", "cid:agentChat"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -4833,36 +4068,25 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "JobsController.updateJob",
-    "params": [
-      "id:job"
-    ],
+    "params": ["id:job"],
     "queryIds": [],
-    "bodyIds": [
-      "nodePoolId"
-    ],
+    "bodyIds": ["nodePoolId"],
     "unseeded": []
   },
   "PATCH /observe/deployments/:id/errors/:fingerprint": {
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "ObservabilityController.updateError",
-    "params": [
-      "id:deployment",
-      "fingerprint:errorFingerprint"
-    ],
+    "params": ["id:deployment", "fingerprint:errorFingerprint"],
     "queryIds": [],
-    "bodyIds": [
-      "assigneeId"
-    ],
+    "bodyIds": ["assigneeId"],
     "unseeded": []
   },
   "PATCH /organizations/:id": {
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "OrganizationsController.updateOrganization",
-    "params": [
-      "id:org"
-    ],
+    "params": ["id:org"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -4871,10 +4095,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "OrganizationsController.updateMemberRole",
-    "params": [
-      "id:org",
-      "memberId:orgMember"
-    ],
+    "params": ["id:org", "memberId:orgMember"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -4883,67 +4104,43 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "AlertsController.update",
-    "params": [
-      "id:org",
-      "ruleId:metricAlertRule"
-    ],
+    "params": ["id:org", "ruleId:metricAlertRule"],
     "queryIds": [],
-    "bodyIds": [
-      "scopeId"
-    ],
+    "bodyIds": ["scopeId"],
     "unseeded": []
   },
   "PATCH /organizations/:id/notification-channels/:channelId": {
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "NotificationChannelsController.updateChannel",
-    "params": [
-      "id:org",
-      "channelId:notificationChannel"
-    ],
+    "params": ["id:org", "channelId:notificationChannel"],
     "queryIds": [],
-    "bodyIds": [
-      "scopeId"
-    ],
+    "bodyIds": ["scopeId"],
     "unseeded": []
   },
   "PATCH /organizations/:id/notification-rules/:ruleId": {
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "NotificationChannelsController.updateRule",
-    "params": [
-      "id:org",
-      "ruleId:notificationRule"
-    ],
+    "params": ["id:org", "ruleId:notificationRule"],
     "queryIds": [],
-    "bodyIds": [
-      "channelId",
-      "scopeId"
-    ],
+    "bodyIds": ["channelId", "scopeId"],
     "unseeded": []
   },
   "PATCH /organizations/:id/sso/providers/:providerId": {
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "SsoAdminController.updateProvider",
-    "params": [
-      "id:org",
-      "providerId:ssoProvider"
-    ],
+    "params": ["id:org", "providerId:ssoProvider"],
     "queryIds": [],
-    "bodyIds": [
-      "clientId",
-      "samlIdpEntityId"
-    ],
+    "bodyIds": ["clientId", "samlIdpEntityId"],
     "unseeded": []
   },
   "PATCH /organizations/:id/sso/settings": {
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "SsoAdminController.updateSettings",
-    "params": [
-      "id:org"
-    ],
+    "params": ["id:org"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -4952,10 +4149,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "StatusPagesController.update",
-    "params": [
-      "id:org",
-      "pageId:statusPage"
-    ],
+    "params": ["id:org", "pageId:statusPage"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -4964,9 +4158,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "VanityDomainController.setSubdomain",
-    "params": [
-      "id:org"
-    ],
+    "params": ["id:org"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -4975,9 +4167,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "OrgQuotasController.updateDefaultAllowance",
-    "params": [
-      "orgId:org"
-    ],
+    "params": ["orgId:org"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -4986,10 +4176,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "OrgQuotasController.updateMemberAllowance",
-    "params": [
-      "orgId:org",
-      "userId:user"
-    ],
+    "params": ["orgId:org", "userId:user"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -4998,10 +4185,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "OrgQuotasController.updateProjectCaps",
-    "params": [
-      "orgId:org",
-      "projectId:project"
-    ],
+    "params": ["orgId:org", "projectId:project"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -5010,9 +4194,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "ProjectsController.updateProject",
-    "params": [
-      "id:project"
-    ],
+    "params": ["id:project"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -5021,10 +4203,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "ProjectsController.updateProjectMemberRole",
-    "params": [
-      "id:project",
-      "memberId:projectMember"
-    ],
+    "params": ["id:project", "memberId:projectMember"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -5033,9 +4212,7 @@
     "class": "public",
     "auth": "public",
     "handler": "ScimController.patchGroup",
-    "params": [
-      "id:unknown"
-    ],
+    "params": ["id:unknown"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -5044,9 +4221,7 @@
     "class": "public",
     "auth": "public",
     "handler": "ScimController.patchUser",
-    "params": [
-      "id:unknown"
-    ],
+    "params": ["id:unknown"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -5055,9 +4230,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "TemplatesController.renameTemplateInstance",
-    "params": [
-      "id:templateInstance"
-    ],
+    "params": ["id:templateInstance"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -5066,9 +4239,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "GitConnectionsController.update",
-    "params": [
-      "connectionId:gitConnection"
-    ],
+    "params": ["connectionId:gitConnection"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -5149,10 +4320,7 @@
     "class": "superadmin",
     "auth": "superadmin",
     "handler": "NodesController.upsertAssignment",
-    "params": [
-      "id:unknown",
-      "orgId:org"
-    ],
+    "params": ["id:unknown", "orgId:org"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -5179,22 +4347,16 @@
     "class": "superadmin",
     "auth": "superadmin",
     "handler": "AdminQuotasController.connectQuota",
-    "params": [
-      "id:org"
-    ],
+    "params": ["id:org"],
     "queryIds": [],
-    "bodyIds": [
-      "otherOrgId"
-    ],
+    "bodyIds": ["otherOrgId"],
     "unseeded": []
   },
   "POST /admin/organizations/:id/quota/disconnect": {
     "class": "superadmin",
     "auth": "superadmin",
     "handler": "AdminQuotasController.disconnectQuota",
-    "params": [
-      "id:org"
-    ],
+    "params": ["id:org"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -5205,19 +4367,14 @@
     "handler": "SsoInstanceController.createProvider",
     "params": [],
     "queryIds": [],
-    "bodyIds": [
-      "clientId",
-      "samlIdpEntityId"
-    ],
+    "bodyIds": ["clientId", "samlIdpEntityId"],
     "unseeded": []
   },
   "POST /admin/sso/providers/:providerId/icon": {
     "class": "superadmin",
     "auth": "superadmin",
     "handler": "SsoInstanceController.uploadProviderIcon",
-    "params": [
-      "providerId:ssoProvider"
-    ],
+    "params": ["providerId:ssoProvider"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -5226,9 +4383,7 @@
     "class": "superadmin",
     "auth": "superadmin",
     "handler": "SsoInstanceController.previewRules",
-    "params": [
-      "providerId:ssoProvider"
-    ],
+    "params": ["providerId:ssoProvider"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -5237,9 +4392,7 @@
     "class": "superadmin",
     "auth": "superadmin",
     "handler": "SsoInstanceController.testProvider",
-    "params": [
-      "providerId:ssoProvider"
-    ],
+    "params": ["providerId:ssoProvider"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -5348,9 +4501,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "PasswordlessController.updatePasskey",
-    "params": [
-      "id:passkey"
-    ],
+    "params": ["id:passkey"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -5379,9 +4530,7 @@
     "handler": "ProtectionController.exchangeOrchard",
     "params": [],
     "queryIds": [],
-    "bodyIds": [
-      "ingressId"
-    ],
+    "bodyIds": ["ingressId"],
     "unseeded": []
   },
   "POST /auth/protect/exchange/password": {
@@ -5390,9 +4539,7 @@
     "handler": "ProtectionController.exchangePassword",
     "params": [],
     "queryIds": [],
-    "bodyIds": [
-      "ingressId"
-    ],
+    "bodyIds": ["ingressId"],
     "unseeded": []
   },
   "POST /auth/sessions/revoke-all": {
@@ -5410,9 +4557,7 @@
     "handler": "ApiTokensController.create",
     "params": [],
     "queryIds": [],
-    "bodyIds": [
-      "restrictedProjectIds"
-    ],
+    "bodyIds": ["restrictedProjectIds"],
     "unseeded": []
   },
   "POST /authorize/complete": {
@@ -5430,33 +4575,23 @@
     "handler": "DatabaseRecoveryController.createCheckpoints",
     "params": [],
     "queryIds": [],
-    "bodyIds": [
-      "databaseIds",
-      "environmentId",
-      "projectId"
-    ],
+    "bodyIds": ["databaseIds", "environmentId", "projectId"],
     "unseeded": []
   },
   "POST /checkpoints/:id/restore": {
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DatabaseRecoveryController.restoreCheckpoint",
-    "params": [
-      "id:databaseCheckpoint"
-    ],
+    "params": ["id:databaseCheckpoint"],
     "queryIds": [],
-    "bodyIds": [
-      "environmentId"
-    ],
+    "bodyIds": ["environmentId"],
     "unseeded": []
   },
   "POST /checkpoints/groups/:groupId/restore": {
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DatabaseRecoveryController.restoreGroup",
-    "params": [
-      "groupId:checkpointGroup"
-    ],
+    "params": ["groupId:checkpointGroup"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -5474,9 +4609,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "ComposeStacksController.redeploy",
-    "params": [
-      "id:composeStack"
-    ],
+    "params": ["id:composeStack"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -5485,9 +4618,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DatabaseRecoveryController.cancel",
-    "params": [
-      "opId:databaseOperation"
-    ],
+    "params": ["opId:databaseOperation"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -5496,9 +4627,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DatabaseRecoveryController.undo",
-    "params": [
-      "opId:databaseOperation"
-    ],
+    "params": ["opId:databaseOperation"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -5507,9 +4636,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DatabasesController.createBackup",
-    "params": [
-      "id:database"
-    ],
+    "params": ["id:database"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -5518,9 +4645,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DatabaseRecoveryController.createCheckpoint",
-    "params": [
-      "id:database"
-    ],
+    "params": ["id:database"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -5529,9 +4654,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DatabasesController.installExtension",
-    "params": [
-      "id:database"
-    ],
+    "params": ["id:database"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -5540,25 +4663,16 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DatabaseRecoveryController.fork",
-    "params": [
-      "id:database"
-    ],
+    "params": ["id:database"],
     "queryIds": [],
-    "bodyIds": [
-      "backupId",
-      "checkpointId",
-      "environmentId",
-      "projectId"
-    ],
+    "bodyIds": ["backupId", "checkpointId", "environmentId", "projectId"],
     "unseeded": []
   },
   "POST /databases/:id/public": {
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DatabasesController.enablePublic",
-    "params": [
-      "id:database"
-    ],
+    "params": ["id:database"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -5567,9 +4681,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DatabasesController.resetDatabaseQueryStats",
-    "params": [
-      "id:database"
-    ],
+    "params": ["id:database"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -5578,9 +4690,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DatabasesController.restartDatabase",
-    "params": [
-      "id:database"
-    ],
+    "params": ["id:database"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -5589,24 +4699,16 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DatabasesController.restoreBackup",
-    "params": [
-      "id:database"
-    ],
+    "params": ["id:database"],
     "queryIds": [],
-    "bodyIds": [
-      "backupId",
-      "checkpointId",
-      "environmentId"
-    ],
+    "bodyIds": ["backupId", "checkpointId", "environmentId"],
     "unseeded": []
   },
   "POST /databases/:id/restore-tests": {
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DatabaseRecoveryController.runRestoreTest",
-    "params": [
-      "id:database"
-    ],
+    "params": ["id:database"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -5615,9 +4717,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DatabasesController.rotatePassword",
-    "params": [
-      "id:database"
-    ],
+    "params": ["id:database"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -5626,9 +4726,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DatabaseShellController.open",
-    "params": [
-      "id:database"
-    ],
+    "params": ["id:database"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -5637,9 +4735,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DatabasesController.startDatabase",
-    "params": [
-      "id:database"
-    ],
+    "params": ["id:database"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -5648,9 +4744,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DatabasesController.stopDatabase",
-    "params": [
-      "id:database"
-    ],
+    "params": ["id:database"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -5659,9 +4753,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DatabaseRecoveryController.upgrade",
-    "params": [
-      "id:database"
-    ],
+    "params": ["id:database"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -5670,9 +4762,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DatabaseRecoveryController.createRole",
-    "params": [
-      "id:database"
-    ],
+    "params": ["id:database"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -5681,22 +4771,16 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DatabaseRecoveryController.undelete",
-    "params": [
-      "id:deletedDatabase"
-    ],
+    "params": ["id:deletedDatabase"],
     "queryIds": [],
-    "bodyIds": [
-      "environmentId"
-    ],
+    "bodyIds": ["environmentId"],
     "unseeded": []
   },
   "POST /deployments/:deploymentId/services": {
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DeploymentsController.createDeploymentService",
-    "params": [
-      "deploymentId:deployment"
-    ],
+    "params": ["deploymentId:deployment"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -5705,11 +4789,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DeploymentsController.enableServicePortPublic",
-    "params": [
-      "deploymentId:deployment",
-      "serviceId:service",
-      "portId:servicePort"
-    ],
+    "params": ["deploymentId:deployment", "serviceId:service", "portId:servicePort"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -5718,9 +4798,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DeploymentsController.disableAutoDeploy",
-    "params": [
-      "id:deployment"
-    ],
+    "params": ["id:deployment"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -5729,9 +4807,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DeploymentsController.enableAutoDeploy",
-    "params": [
-      "id:deployment"
-    ],
+    "params": ["id:deployment"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -5740,22 +4816,16 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "ResourceBindingsController.bind",
-    "params": [
-      "id:deployment"
-    ],
+    "params": ["id:deployment"],
     "queryIds": [],
-    "bodyIds": [
-      "resourceId"
-    ],
+    "bodyIds": ["resourceId"],
     "unseeded": []
   },
   "POST /deployments/:id/build-context": {
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DeploymentsController.uploadBuildContext",
-    "params": [
-      "id:deployment"
-    ],
+    "params": ["id:deployment"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -5764,9 +4834,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DeploymentsController.cancelDeploymentBuild",
-    "params": [
-      "id:deployment"
-    ],
+    "params": ["id:deployment"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -5775,9 +4843,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DeploymentsController.createDeploymentIngress",
-    "params": [
-      "id:deployment"
-    ],
+    "params": ["id:deployment"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -5786,9 +4852,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DeploymentsController.rebuildDeployment",
-    "params": [
-      "id:deployment"
-    ],
+    "params": ["id:deployment"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -5797,9 +4861,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DeploymentsController.restartDeployment",
-    "params": [
-      "id:deployment"
-    ],
+    "params": ["id:deployment"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -5808,9 +4870,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DeploymentsController.retryApply",
-    "params": [
-      "id:deployment"
-    ],
+    "params": ["id:deployment"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -5819,9 +4879,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DeploymentsController.rollbackToPrevious",
-    "params": [
-      "id:deployment"
-    ],
+    "params": ["id:deployment"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -5830,10 +4888,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DeploymentsController.rollbackToImage",
-    "params": [
-      "id:deployment",
-      "imageHistoryId:imageHistory"
-    ],
+    "params": ["id:deployment", "imageHistoryId:imageHistory"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -5842,9 +4897,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DeploymentsController.scaleDeployment",
-    "params": [
-      "id:deployment"
-    ],
+    "params": ["id:deployment"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -5853,9 +4906,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "SecurityController.scan",
-    "params": [
-      "id:deployment"
-    ],
+    "params": ["id:deployment"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -5864,9 +4915,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DeploymentsController.startDeployment",
-    "params": [
-      "id:deployment"
-    ],
+    "params": ["id:deployment"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -5875,9 +4924,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DeploymentsController.stopDeployment",
-    "params": [
-      "id:deployment"
-    ],
+    "params": ["id:deployment"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -5886,9 +4933,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DeploymentsController.createWebhookToken",
-    "params": [
-      "id:deployment"
-    ],
+    "params": ["id:deployment"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -5906,9 +4951,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "EnvironmentsController.setDefault",
-    "params": [
-      "id:environment"
-    ],
+    "params": ["id:environment"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -5927,9 +4970,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "ForumController.reply",
-    "params": [
-      "id:thread"
-    ],
+    "params": ["id:thread"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -5939,9 +4980,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "ForumController.vote",
-    "params": [
-      "id:thread"
-    ],
+    "params": ["id:thread"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -5961,9 +5000,7 @@
     "class": "public",
     "auth": "public",
     "handler": "GitWebhookController.receive",
-    "params": [
-      "connectionId:gitConnection"
-    ],
+    "params": ["connectionId:gitConnection"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -6052,10 +5089,7 @@
     "handler": "SandboxesController.create",
     "params": [],
     "queryIds": [],
-    "bodyIds": [
-      "organizationId",
-      "sshIdentityId"
-    ],
+    "bodyIds": ["organizationId", "sshIdentityId"],
     "unseeded": [],
     "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
@@ -6063,9 +5097,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxAgentChatsController.startLogin",
-    "params": [
-      "id:sandbox"
-    ],
+    "params": ["id:sandbox"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -6075,10 +5107,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxAgentChatsController.answerLogin",
-    "params": [
-      "id:sandbox",
-      "loginId:login"
-    ],
+    "params": ["id:sandbox", "loginId:login"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -6088,9 +5117,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxesController.retryApply",
-    "params": [
-      "id:sandbox"
-    ],
+    "params": ["id:sandbox"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -6100,13 +5127,9 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxesController.chatStream",
-    "params": [
-      "id:sandbox"
-    ],
+    "params": ["id:sandbox"],
     "queryIds": [],
-    "bodyIds": [
-      "conversationId"
-    ],
+    "bodyIds": ["conversationId"],
     "unseeded": [],
     "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
@@ -6114,9 +5137,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "UserContextController.sync",
-    "params": [
-      "id:sandbox"
-    ],
+    "params": ["id:sandbox"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -6126,9 +5147,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxesController.createConversation",
-    "params": [
-      "id:sandbox"
-    ],
+    "params": ["id:sandbox"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -6138,9 +5157,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxForkController.fork",
-    "params": [
-      "id:sandbox"
-    ],
+    "params": ["id:sandbox"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -6150,9 +5167,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxSessionsController.deletePath",
-    "params": [
-      "id:sandbox"
-    ],
+    "params": ["id:sandbox"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -6162,9 +5177,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxSessionsController.mkdir",
-    "params": [
-      "id:sandbox"
-    ],
+    "params": ["id:sandbox"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -6174,9 +5187,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxSessionsController.rename",
-    "params": [
-      "id:sandbox"
-    ],
+    "params": ["id:sandbox"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -6186,9 +5197,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxesController.gitDeleteBranch",
-    "params": [
-      "id:sandbox"
-    ],
+    "params": ["id:sandbox"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -6198,9 +5207,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxesController.gitCheckout",
-    "params": [
-      "id:sandbox"
-    ],
+    "params": ["id:sandbox"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -6210,9 +5217,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxesController.gitCommit",
-    "params": [
-      "id:sandbox"
-    ],
+    "params": ["id:sandbox"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -6222,9 +5227,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxesController.gitFetch",
-    "params": [
-      "id:sandbox"
-    ],
+    "params": ["id:sandbox"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -6234,9 +5237,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxesController.gitPr",
-    "params": [
-      "id:sandbox"
-    ],
+    "params": ["id:sandbox"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -6246,9 +5247,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxesController.gitPull",
-    "params": [
-      "id:sandbox"
-    ],
+    "params": ["id:sandbox"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -6258,9 +5257,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxesController.gitPush",
-    "params": [
-      "id:sandbox"
-    ],
+    "params": ["id:sandbox"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -6270,9 +5267,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxesController.gitUncommit",
-    "params": [
-      "id:sandbox"
-    ],
+    "params": ["id:sandbox"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -6282,14 +5277,9 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxLinksController.attach",
-    "params": [
-      "id:sandbox"
-    ],
+    "params": ["id:sandbox"],
     "queryIds": [],
-    "bodyIds": [
-      "environmentId",
-      "projectId"
-    ],
+    "bodyIds": ["environmentId", "projectId"],
     "unseeded": [],
     "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
@@ -6297,13 +5287,9 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxMembersController.add",
-    "params": [
-      "id:sandbox"
-    ],
+    "params": ["id:sandbox"],
     "queryIds": [],
-    "bodyIds": [
-      "userId"
-    ],
+    "bodyIds": ["userId"],
     "unseeded": [],
     "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
@@ -6311,9 +5297,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxesController.addRepo",
-    "params": [
-      "id:sandbox"
-    ],
+    "params": ["id:sandbox"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -6323,9 +5307,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxesController.initRepo",
-    "params": [
-      "id:sandbox"
-    ],
+    "params": ["id:sandbox"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -6335,9 +5317,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxesController.linkRepo",
-    "params": [
-      "id:sandbox"
-    ],
+    "params": ["id:sandbox"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -6347,9 +5327,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxSessionsController.create",
-    "params": [
-      "id:sandbox"
-    ],
+    "params": ["id:sandbox"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -6359,10 +5337,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxAgentChatsController.create",
-    "params": [
-      "id:sandbox",
-      "sid:session"
-    ],
+    "params": ["id:sandbox", "sid:session"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -6372,11 +5347,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxAgentChatsController.cancel",
-    "params": [
-      "id:sandbox",
-      "sid:session",
-      "cid:agentChat"
-    ],
+    "params": ["id:sandbox", "sid:session", "cid:agentChat"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -6386,11 +5357,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxAgentChatsController.config",
-    "params": [
-      "id:sandbox",
-      "sid:session",
-      "cid:agentChat"
-    ],
+    "params": ["id:sandbox", "sid:session", "cid:agentChat"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -6400,11 +5367,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxAgentChatsController.permission",
-    "params": [
-      "id:sandbox",
-      "sid:session",
-      "cid:agentChat"
-    ],
+    "params": ["id:sandbox", "sid:session", "cid:agentChat"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -6414,11 +5377,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxAgentChatsController.prompt",
-    "params": [
-      "id:sandbox",
-      "sid:session",
-      "cid:agentChat"
-    ],
+    "params": ["id:sandbox", "sid:session", "cid:agentChat"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -6428,11 +5387,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxAgentChatsController.revert",
-    "params": [
-      "id:sandbox",
-      "sid:session",
-      "cid:agentChat"
-    ],
+    "params": ["id:sandbox", "sid:session", "cid:agentChat"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -6442,10 +5397,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxSessionsController.createChat",
-    "params": [
-      "id:sandbox",
-      "sid:session"
-    ],
+    "params": ["id:sandbox", "sid:session"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -6455,14 +5407,9 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxMembersController.comment",
-    "params": [
-      "id:sandbox",
-      "sid:session"
-    ],
+    "params": ["id:sandbox", "sid:session"],
     "queryIds": [],
-    "bodyIds": [
-      "chatId"
-    ],
+    "bodyIds": ["chatId"],
     "unseeded": [],
     "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
@@ -6470,10 +5417,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxSessionsController.merge",
-    "params": [
-      "id:sandbox",
-      "sid:session"
-    ],
+    "params": ["id:sandbox", "sid:session"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -6483,15 +5427,9 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxLinksController.previewDeploy",
-    "params": [
-      "id:sandbox",
-      "sid:session"
-    ],
+    "params": ["id:sandbox", "sid:session"],
     "queryIds": [],
-    "bodyIds": [
-      "deploymentId",
-      "projectId"
-    ],
+    "bodyIds": ["deploymentId", "projectId"],
     "unseeded": [],
     "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
@@ -6499,10 +5437,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxAgentController.prompt",
-    "params": [
-      "id:sandbox",
-      "sid:session"
-    ],
+    "params": ["id:sandbox", "sid:session"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -6512,10 +5447,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxSessionsController.run",
-    "params": [
-      "id:sandbox",
-      "sid:session"
-    ],
+    "params": ["id:sandbox", "sid:session"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -6525,13 +5457,9 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxShareLinksController.create",
-    "params": [
-      "id:sandbox"
-    ],
+    "params": ["id:sandbox"],
     "queryIds": [],
-    "bodyIds": [
-      "sessionId"
-    ],
+    "bodyIds": ["sessionId"],
     "unseeded": [],
     "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
@@ -6539,9 +5467,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxesController.start",
-    "params": [
-      "id:sandbox"
-    ],
+    "params": ["id:sandbox"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -6551,9 +5477,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxesController.stop",
-    "params": [
-      "id:sandbox"
-    ],
+    "params": ["id:sandbox"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -6583,9 +5507,7 @@
     "class": "public",
     "auth": "public",
     "handler": "ImageScanResultController.result",
-    "params": [
-      "id:unknown"
-    ],
+    "params": ["id:unknown"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -6594,9 +5516,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "InvitationsController.acceptInvitation",
-    "params": [
-      "token:invitationToken"
-    ],
+    "params": ["token:invitationToken"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -6605,9 +5525,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "InvitationsController.declineInvitation",
-    "params": [
-      "token:invitationToken"
-    ],
+    "params": ["token:invitationToken"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -6616,9 +5534,7 @@
     "class": "public",
     "auth": "public",
     "handler": "InvitationsController.signUp",
-    "params": [
-      "token:invitationToken"
-    ],
+    "params": ["token:invitationToken"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -6636,9 +5552,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "InvitationsController.acceptInvitationById",
-    "params": [
-      "id:orgInvitation"
-    ],
+    "params": ["id:orgInvitation"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -6647,9 +5561,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "InvitationsController.declineInvitationById",
-    "params": [
-      "id:orgInvitation"
-    ],
+    "params": ["id:orgInvitation"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -6658,9 +5570,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "JobsController.cancelRun",
-    "params": [
-      "runId:jobRun"
-    ],
+    "params": ["runId:jobRun"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -6669,9 +5579,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "JobsController.runNow",
-    "params": [
-      "id:job"
-    ],
+    "params": ["id:job"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -6680,9 +5588,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "OrganizationsController.uploadAvatar",
-    "params": [
-      "id:org"
-    ],
+    "params": ["id:org"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -6691,10 +5597,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "OrganizationsController.resendInvitation",
-    "params": [
-      "id:org",
-      "invitationId:orgInvitation"
-    ],
+    "params": ["id:org", "invitationId:orgInvitation"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -6703,9 +5606,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "OrganizationsController.leaveOrganization",
-    "params": [
-      "id:org"
-    ],
+    "params": ["id:org"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -6714,9 +5615,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "OrganizationsController.inviteMemberToOrganization",
-    "params": [
-      "id:org"
-    ],
+    "params": ["id:org"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -6725,9 +5624,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "OrganizationsController.superadminJoinOrganization",
-    "params": [
-      "id:org"
-    ],
+    "params": ["id:org"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -6736,36 +5633,25 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "AlertsController.create",
-    "params": [
-      "id:org"
-    ],
+    "params": ["id:org"],
     "queryIds": [],
-    "bodyIds": [
-      "scopeId"
-    ],
+    "bodyIds": ["scopeId"],
     "unseeded": []
   },
   "POST /organizations/:id/notification-channels": {
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "NotificationChannelsController.createChannel",
-    "params": [
-      "id:org"
-    ],
+    "params": ["id:org"],
     "queryIds": [],
-    "bodyIds": [
-      "scopeId"
-    ],
+    "bodyIds": ["scopeId"],
     "unseeded": []
   },
   "POST /organizations/:id/notification-channels/:channelId/replay": {
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "NotificationChannelsController.replayChannel",
-    "params": [
-      "id:org",
-      "channelId:notificationChannel"
-    ],
+    "params": ["id:org", "channelId:notificationChannel"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -6774,10 +5660,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "NotificationChannelsController.testChannel",
-    "params": [
-      "id:org",
-      "channelId:notificationChannel"
-    ],
+    "params": ["id:org", "channelId:notificationChannel"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -6786,23 +5669,16 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "NotificationChannelsController.createRule",
-    "params": [
-      "id:org"
-    ],
+    "params": ["id:org"],
     "queryIds": [],
-    "bodyIds": [
-      "channelId",
-      "scopeId"
-    ],
+    "bodyIds": ["channelId", "scopeId"],
     "unseeded": []
   },
   "POST /organizations/:id/scim/tokens": {
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "ScimTokensController.create",
-    "params": [
-      "id:org"
-    ],
+    "params": ["id:org"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -6811,9 +5687,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "SsoAdminController.addDomain",
-    "params": [
-      "id:org"
-    ],
+    "params": ["id:org"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -6822,10 +5696,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "SsoAdminController.verifyDomain",
-    "params": [
-      "id:org",
-      "domainId:orgDomain"
-    ],
+    "params": ["id:org", "domainId:orgDomain"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -6834,24 +5705,16 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "SsoAdminController.createProvider",
-    "params": [
-      "id:org"
-    ],
+    "params": ["id:org"],
     "queryIds": [],
-    "bodyIds": [
-      "clientId",
-      "samlIdpEntityId"
-    ],
+    "bodyIds": ["clientId", "samlIdpEntityId"],
     "unseeded": []
   },
   "POST /organizations/:id/sso/providers/:providerId/icon": {
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "SsoAdminController.uploadProviderIcon",
-    "params": [
-      "id:org",
-      "providerId:ssoProvider"
-    ],
+    "params": ["id:org", "providerId:ssoProvider"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -6860,10 +5723,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "SsoAdminController.previewRules",
-    "params": [
-      "id:org",
-      "providerId:ssoProvider"
-    ],
+    "params": ["id:org", "providerId:ssoProvider"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -6872,10 +5732,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "SsoAdminController.testProvider",
-    "params": [
-      "id:org",
-      "providerId:ssoProvider"
-    ],
+    "params": ["id:org", "providerId:ssoProvider"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -6884,9 +5741,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "StatusPagesController.create",
-    "params": [
-      "id:org"
-    ],
+    "params": ["id:org"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -6895,24 +5750,16 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "KubernetesController.execInPod",
-    "params": [
-      "podName:pod"
-    ],
-    "queryIds": [
-      "namespace"
-    ],
-    "bodyIds": [
-      "namespace"
-    ],
+    "params": ["podName:pod"],
+    "queryIds": ["namespace"],
+    "bodyIds": ["namespace"],
     "unseeded": []
   },
   "POST /project-transfers/:id/accept": {
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "ProjectTransfersController.accept",
-    "params": [
-      "id:projectTransfer"
-    ],
+    "params": ["id:projectTransfer"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -6921,9 +5768,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "ProjectTransfersController.decline",
-    "params": [
-      "id:projectTransfer"
-    ],
+    "params": ["id:projectTransfer"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -6934,18 +5779,14 @@
     "handler": "ProjectsController.createProject",
     "params": [],
     "queryIds": [],
-    "bodyIds": [
-      "organizationId"
-    ],
+    "bodyIds": ["organizationId"],
     "unseeded": []
   },
   "POST /projects/:id/background-image": {
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "ProjectsController.uploadProjectBackground",
-    "params": [
-      "id:project"
-    ],
+    "params": ["id:project"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -6954,65 +5795,43 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "ProjectsController.createDatabase",
-    "params": [
-      "id:project"
-    ],
+    "params": ["id:project"],
     "queryIds": [],
-    "bodyIds": [
-      "environmentId",
-      "nodePoolId"
-    ],
+    "bodyIds": ["environmentId", "nodePoolId"],
     "unseeded": []
   },
   "POST /projects/:id/deployments": {
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "ProjectsController.createDeployment",
-    "params": [
-      "id:project"
-    ],
+    "params": ["id:project"],
     "queryIds": [],
-    "bodyIds": [
-      "environmentId",
-      "nodePoolId"
-    ],
+    "bodyIds": ["environmentId", "nodePoolId"],
     "unseeded": []
   },
   "POST /projects/:id/deployments/from-github": {
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "ProjectsController.createDeploymentFromGitHub",
-    "params": [
-      "id:project"
-    ],
+    "params": ["id:project"],
     "queryIds": [],
-    "bodyIds": [
-      "environmentId",
-      "externalRepoId",
-      "gitConnectionId"
-    ],
+    "bodyIds": ["environmentId", "externalRepoId", "gitConnectionId"],
     "unseeded": []
   },
   "POST /projects/:id/deployments/from-local": {
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "ProjectsController.createDeploymentFromLocal",
-    "params": [
-      "id:project"
-    ],
+    "params": ["id:project"],
     "queryIds": [],
-    "bodyIds": [
-      "environmentId"
-    ],
+    "bodyIds": ["environmentId"],
     "unseeded": []
   },
   "POST /projects/:id/icon": {
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "ProjectsController.uploadProjectIcon",
-    "params": [
-      "id:project"
-    ],
+    "params": ["id:project"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -7021,22 +5840,16 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "ProjectsController.createProjectIngress",
-    "params": [
-      "id:project"
-    ],
+    "params": ["id:project"],
     "queryIds": [],
-    "bodyIds": [
-      "deploymentId"
-    ],
+    "bodyIds": ["deploymentId"],
     "unseeded": []
   },
   "POST /projects/:id/members": {
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "ProjectsController.addProjectMember",
-    "params": [
-      "id:project"
-    ],
+    "params": ["id:project"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -7045,48 +5858,34 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "ProjectsController.transferProjectToOrg",
-    "params": [
-      "id:project"
-    ],
+    "params": ["id:project"],
     "queryIds": [],
-    "bodyIds": [
-      "destinationOrgId"
-    ],
+    "bodyIds": ["destinationOrgId"],
     "unseeded": []
   },
   "POST /projects/:id/transfer-request": {
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "ProjectsController.requestProjectOwnershipTransfer",
-    "params": [
-      "id:project"
-    ],
+    "params": ["id:project"],
     "queryIds": [],
-    "bodyIds": [
-      "userId"
-    ],
+    "bodyIds": ["userId"],
     "unseeded": []
   },
   "POST /projects/:projectId/compose-stacks/from-github": {
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "ComposeStacksController.createFromGithub",
-    "params": [
-      "projectId:project"
-    ],
+    "params": ["projectId:project"],
     "queryIds": [],
-    "bodyIds": [
-      "environmentId"
-    ],
+    "bodyIds": ["environmentId"],
     "unseeded": []
   },
   "POST /projects/:projectId/environments": {
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "EnvironmentsController.create",
-    "params": [
-      "projectId:project"
-    ],
+    "params": ["projectId:project"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -7095,26 +5894,18 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "JobsController.createJob",
-    "params": [
-      "projectId:project"
-    ],
+    "params": ["projectId:project"],
     "queryIds": [],
-    "bodyIds": [
-      "nodePoolId"
-    ],
+    "bodyIds": ["nodePoolId"],
     "unseeded": []
   },
   "POST /projects/:projectId/template-instances": {
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "TemplatesController.deployTemplate",
-    "params": [
-      "projectId:project"
-    ],
+    "params": ["projectId:project"],
     "queryIds": [],
-    "bodyIds": [
-      "templateId"
-    ],
+    "bodyIds": ["templateId"],
     "unseeded": []
   },
   "POST /projects/import": {
@@ -7123,9 +5914,7 @@
     "handler": "ProjectsController.importFromGitHub",
     "params": [],
     "queryIds": [],
-    "bodyIds": [
-      "organizationId"
-    ],
+    "bodyIds": ["organizationId"],
     "unseeded": []
   },
   "POST /projects/ingresses/validate-dns": {
@@ -7134,9 +5923,7 @@
     "handler": "ProjectsController.validateIngressDns",
     "params": [],
     "queryIds": [],
-    "bodyIds": [
-      "projectId"
-    ],
+    "bodyIds": ["projectId"],
     "unseeded": []
   },
   "POST /register": {
@@ -7224,9 +6011,7 @@
     "class": "public",
     "auth": "public",
     "handler": "SsoController.legacySamlCallback",
-    "params": [
-      "orgId:org"
-    ],
+    "params": ["orgId:org"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -7235,9 +6020,7 @@
     "class": "public",
     "auth": "public",
     "handler": "SsoController.samlCallback",
-    "params": [
-      "providerId:ssoProvider"
-    ],
+    "params": ["providerId:ssoProvider"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -7255,9 +6038,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "TailscaleController.exposeDeployment",
-    "params": [
-      "deploymentId:deployment"
-    ],
+    "params": ["deploymentId:deployment"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -7275,9 +6056,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "TailscaleController.unexposeDeployment",
-    "params": [
-      "deploymentId:deployment"
-    ],
+    "params": ["deploymentId:deployment"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -7322,9 +6101,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "UserNotificationsController.testDestination",
-    "params": [
-      "destinationId:notificationDestination"
-    ],
+    "params": ["destinationId:notificationDestination"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -7342,9 +6119,7 @@
     "class": "public",
     "auth": "public",
     "handler": "WebhooksController.triggerDeploy",
-    "params": [
-      "token:publicToken"
-    ],
+    "params": ["token:publicToken"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -7353,9 +6128,7 @@
     "class": "superadmin",
     "auth": "superadmin",
     "handler": "InstanceConfigController.save",
-    "params": [
-      "id:unknown"
-    ],
+    "params": ["id:unknown"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -7364,9 +6137,7 @@
     "class": "superadmin",
     "auth": "superadmin",
     "handler": "SsoInstanceController.replaceAutoCreateRules",
-    "params": [
-      "providerId:ssoProvider"
-    ],
+    "params": ["providerId:ssoProvider"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -7375,9 +6146,7 @@
     "class": "superadmin",
     "auth": "superadmin",
     "handler": "SsoInstanceController.replaceRules",
-    "params": [
-      "providerId:ssoProvider"
-    ],
+    "params": ["providerId:ssoProvider"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -7395,9 +6164,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "ComposeStacksController.setAutoDeploy",
-    "params": [
-      "id:composeStack"
-    ],
+    "params": ["id:composeStack"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -7406,9 +6173,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DatabasesController.setBackupSchedule",
-    "params": [
-      "id:database"
-    ],
+    "params": ["id:database"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -7417,9 +6182,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DatabaseRecoveryController.setPooler",
-    "params": [
-      "id:database"
-    ],
+    "params": ["id:database"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -7428,10 +6191,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DeploymentsController.updateDeploymentIngress",
-    "params": [
-      "deploymentId:deployment",
-      "ingressId:ingress"
-    ],
+    "params": ["deploymentId:deployment", "ingressId:ingress"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -7440,10 +6200,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DeploymentsController.updateServiceConfiguration",
-    "params": [
-      "deploymentId:deployment",
-      "serviceId:service"
-    ],
+    "params": ["deploymentId:deployment", "serviceId:service"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -7452,9 +6209,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DeploymentsController.updateDeploymentBuildConfig",
-    "params": [
-      "id:deployment"
-    ],
+    "params": ["id:deployment"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -7463,9 +6218,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DeploymentsController.updateDeploymentEnvVars",
-    "params": [
-      "id:deployment"
-    ],
+    "params": ["id:deployment"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -7474,9 +6227,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DeploymentsController.updateDeploymentGitHubRepo",
-    "params": [
-      "id:deployment"
-    ],
+    "params": ["id:deployment"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -7485,9 +6236,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DeploymentsController.updateDeploymentHealthCheck",
-    "params": [
-      "id:deployment"
-    ],
+    "params": ["id:deployment"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -7496,9 +6245,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "DeploymentsController.updateDeploymentVolumes",
-    "params": [
-      "id:deployment"
-    ],
+    "params": ["id:deployment"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -7507,9 +6254,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "EnvironmentsController.putShared",
-    "params": [
-      "id:environment"
-    ],
+    "params": ["id:environment"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -7518,9 +6263,7 @@
     "class": "exempt",
     "auth": "superadmin",
     "handler": "SandboxLimitsController.update",
-    "params": [
-      "userId:user"
-    ],
+    "params": ["userId:user"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -7540,9 +6283,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxesController.writeFile",
-    "params": [
-      "id:sandbox"
-    ],
+    "params": ["id:sandbox"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -7552,10 +6293,7 @@
     "class": "exempt",
     "auth": "authenticated",
     "handler": "SandboxesController.setRepoIcon",
-    "params": [
-      "id:sandbox",
-      "name:name"
-    ],
+    "params": ["id:sandbox", "name:name"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
@@ -7585,9 +6323,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "JobsController.replaceSteps",
-    "params": [
-      "id:job"
-    ],
+    "params": ["id:job"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -7596,10 +6332,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "SsoAdminController.replaceRules",
-    "params": [
-      "id:org",
-      "providerId:ssoProvider"
-    ],
+    "params": ["id:org", "providerId:ssoProvider"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -7608,9 +6341,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "OrganizationRegistryCredentialsController.upsert",
-    "params": [
-      "organizationId:org"
-    ],
+    "params": ["organizationId:org"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -7619,10 +6350,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "ProjectsController.updateProjectIngress",
-    "params": [
-      "id:project",
-      "ingressId:ingress"
-    ],
+    "params": ["id:project", "ingressId:ingress"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -7631,10 +6359,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "ProjectsController.updateIngressProtection",
-    "params": [
-      "id:project",
-      "ingressId:ingress"
-    ],
+    "params": ["id:project", "ingressId:ingress"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -7643,9 +6368,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "RegistryCredentialsController.upsert",
-    "params": [
-      "projectId:project"
-    ],
+    "params": ["projectId:project"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -7654,9 +6377,7 @@
     "class": "public",
     "auth": "public",
     "handler": "ScimController.replaceGroup",
-    "params": [
-      "id:unknown"
-    ],
+    "params": ["id:unknown"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -7665,9 +6386,7 @@
     "class": "public",
     "auth": "public",
     "handler": "ScimController.replaceUser",
-    "params": [
-      "id:unknown"
-    ],
+    "params": ["id:unknown"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -7676,9 +6395,7 @@
     "class": "superadmin",
     "auth": "superadmin",
     "handler": "TemplatesController.updateTemplate",
-    "params": [
-      "id:template"
-    ],
+    "params": ["id:template"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -7687,9 +6404,7 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "UserNotificationsController.setDestinationEnabled",
-    "params": [
-      "destinationId:notificationDestination"
-    ],
+    "params": ["destinationId:notificationDestination"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -7707,14 +6422,9 @@
     "class": "resource-scoped",
     "auth": "authenticated",
     "handler": "UserNotificationsController.setScopeSettings",
-    "params": [
-      "scopeType:scopeType",
-      "scopeId:scopeId"
-    ],
+    "params": ["scopeType:scopeType", "scopeId:scopeId"],
     "queryIds": [],
-    "bodyIds": [
-      "organizationId"
-    ],
+    "bodyIds": ["organizationId"],
     "unseeded": []
   }
 }
