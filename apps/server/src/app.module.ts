@@ -24,6 +24,7 @@ import { GitHubModule } from './github/github.module';
 import { DockerModule } from './docker/docker.module';
 import { EmailModule } from './email/email.module';
 import { AdminModule } from './admin/admin.module';
+import { DoctorModule } from './doctor/doctor.module';
 import { WebhooksModule } from './webhooks/webhooks.module';
 import { TemplatesModule } from './templates/templates.module';
 import { ComposeStacksModule } from './compose-stacks/compose-stacks.module';
@@ -86,6 +87,7 @@ import { graftImports } from './grafts/boot';
     DockerModule,
     EmailModule,
     AdminModule,
+    DoctorModule,
     InstanceSettingsModule,
     InstanceConfigModule,
     InstanceNetworkModule,

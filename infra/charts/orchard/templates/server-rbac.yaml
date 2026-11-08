@@ -103,6 +103,22 @@ rules:
 {{- else }}
     verbs: ["get", "list", "watch"]
 {{- end }}
+  # Read-only cluster facts for `orchard doctor` (GET /admin/doctor): the CNI
+  # daemonset, the tenant and builder RuntimeClass, the platform PriorityClass
+  # and the certificate ClusterIssuer. A missing grant makes that check report
+  # unknown; it never changes behaviour.
+  - apiGroups: ["apps"]
+    resources: ["daemonsets"]
+    verbs: ["get", "list"]
+  - apiGroups: ["node.k8s.io"]
+    resources: ["runtimeclasses"]
+    verbs: ["get", "list"]
+  - apiGroups: ["scheduling.k8s.io"]
+    resources: ["priorityclasses"]
+    verbs: ["get", "list"]
+  - apiGroups: ["cert-manager.io"]
+    resources: ["clusterissuers"]
+    verbs: ["get", "list"]
 {{- if .Values.cilium.enabled }}
   # Per-tenant L3/L7 policy and the basic-auth proxy in front of protected
   # deployments are Cilium CRDs. Only needed when Cilium is the CNI.
