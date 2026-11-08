@@ -330,6 +330,10 @@ One organization can hold at most 500 projects, 1000 extra environments (each is
 
 When `SIGNUP_MODE` is `open`, adding a custom domain needs a TXT record that proves ownership, unless the admin switch or `CUSTOM_DOMAIN_VERIFICATION` says otherwise. Domains that a project already serves are never checked again. An organization can hold 250 custom hostnames and add 30 new ones an hour (`MAX_CUSTOM_DOMAINS_PER_ORG` and `MAX_CUSTOM_DOMAIN_CREATES_PER_HOUR`; `0` is unlimited). After five failed proofs, the organization has to wait a minute before it can add another domain, and the wait doubles with each further failure, up to a day. This keeps one tenant from using up the certificate authority's limits for everyone.
 
+## Platform priority
+
+The chart creates a `PriorityClass` named `orchard-platform` (value 100000) and sets it on the platform pods: the server, worker, frontend, MCP, Redis, the platform Postgres and its pooler, the logs and metrics stores, Vector, and the other monitoring pods. Tenant workloads keep the default priority, so on a busy cluster the scheduler places the platform first and the kubelet evicts it last. Tenants cannot choose a class. Orchard sets none on tenant pods, and the tenant admission policy refuses names that start with `system-` or `orchard-`. Set `priorityClasses.enabled: false` to turn this off. The first upgrade that enables it restarts the platform pods once.
+
 ## The What's new sheet
 
 The dashboard shows each person the latest release notes once. The server reads the notes from a folder that holds `latest.json` and one Markdown file for each release.

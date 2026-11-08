@@ -55,6 +55,7 @@ spec:
         runAsUser: 999
         runAsGroup: 999
         fsGroup: 999
+      {{- include "orchard.priorityClass" $ | nindent 6 }}
       containers:
         - name: redis
           image: {{ .Values.redis.image | quote }}

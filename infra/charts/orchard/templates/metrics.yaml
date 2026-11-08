@@ -42,6 +42,7 @@ spec:
     spec:
       securityContext:
         fsGroup: 1000
+      {{- include "orchard.priorityClass" $ | nindent 6 }}
       containers:
         - name: victoriametrics
           image: {{ .Values.metrics.victoriametrics.image }}
@@ -204,6 +205,7 @@ spec:
         app: kube-state-metrics
     spec:
       serviceAccountName: kube-state-metrics
+      {{- include "orchard.priorityClass" $ | nindent 6 }}
       containers:
         - name: kube-state-metrics
           image: {{ .Values.metrics.kubeStateMetrics.image }}
@@ -266,6 +268,7 @@ spec:
       dnsPolicy: ClusterFirstWithHostNet
       tolerations:
         - operator: Exists
+      {{- include "orchard.priorityClass" $ | nindent 6 }}
       containers:
         - name: node-exporter
           image: {{ .Values.metrics.nodeExporter.image }}
@@ -520,6 +523,7 @@ spec:
         app: vmagent
     spec:
       serviceAccountName: vmagent
+      {{- include "orchard.priorityClass" $ | nindent 6 }}
       containers:
         - name: vmagent
           image: {{ .Values.metrics.vmagent.image }}

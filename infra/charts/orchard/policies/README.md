@@ -4,7 +4,7 @@
 
 | Policy | Operations | Refuses |
 | --- | --- | --- |
-| `orchard-tenant-pods` | create | host namespaces, `nodeName`, `system-*` priority classes, privileged or `procMount`, `hostPort`, capabilities beyond the Pod Security baseline, host-backed volume types |
+| `orchard-tenant-pods` | create | host namespaces, `nodeName`, `system-*` and `orchard-*` priority classes, privileged or `procMount`, `hostPort`, capabilities beyond the Pod Security baseline, host-backed volume types |
 | `orchard-tenant-pods-hardening` | create | containers that do not drop ALL, pods outside the tenant RuntimeClass (advisory by default) |
 | `orchard-tenant-services` | create, update | `externalIPs`, `ExternalName`, NodePort when off, LoadBalancer or LB-IPAM pinning by anyone but the server, selector-less Services other than protection proxies |
 | `orchard-tenant-endpointslices` | create, update | the server writing anything but protection-proxy slices (pinned to `protectionProxyIPs` when set) |

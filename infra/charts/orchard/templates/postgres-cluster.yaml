@@ -8,6 +8,9 @@ metadata:
     {{- include "orchard.labels" (dict "root" . "name" "postgres") | nindent 4 }}
 spec:
   instances: {{ .Values.postgres.instances }}
+  {{- if .Values.priorityClasses.enabled }}
+  priorityClassName: orchard-platform
+  {{- end }}
   {{- with .Values.postgres.imageName }}
   imageName: {{ . }}
   {{- end }}

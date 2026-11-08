@@ -92,6 +92,7 @@ spec:
       enableServiceLinks: false
       securityContext:
         seccompProfile: { type: RuntimeDefault }
+      {{- include "orchard.priorityClass" $ | nindent 6 }}
       containers:
         - name: versitygw
           image: {{ $local.image }}

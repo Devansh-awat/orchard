@@ -21,6 +21,7 @@ spec:
       labels:
         {{- include "orchard.labels" (dict "root" . "name" "postgres-pooler") | nindent 8 }}
     spec:
+      {{- include "orchard.priorityClass" $ | nindent 6 }}
       containers:
         - name: pgbouncer
           {{- with .Values.postgres.pooler.image }}

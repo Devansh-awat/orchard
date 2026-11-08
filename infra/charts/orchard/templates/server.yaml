@@ -24,6 +24,7 @@ spec:
       terminationGracePeriodSeconds: 45
       {{- include "orchard.pullSecrets" . | nindent 6 }}
       {{- if include "orchard.graftsOn" . }}{{- include "orchard.graftInit" . }}{{- end }}
+      {{- include "orchard.priorityClass" $ | nindent 6 }}
       containers:
         - name: server
           image: {{ include "orchard.image" (list . .Values.server.image.name .Values.server.image.tag) }}

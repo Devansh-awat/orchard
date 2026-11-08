@@ -30,13 +30,15 @@ spec:
           ? object.spec.containers + object.spec.initContainers
           : object.spec.containers
   validations:
-    - message: "host namespaces, nodeName and system priority classes are not allowed in tenant namespaces"
+    - message: "host namespaces, nodeName and system priority classes (or the orchard- platform ones) are not allowed in tenant namespaces"
       expression: >-
         (!has(object.spec.hostNetwork) || !object.spec.hostNetwork) &&
         (!has(object.spec.hostPID) || !object.spec.hostPID) &&
         (!has(object.spec.hostIPC) || !object.spec.hostIPC) &&
         (!has(object.spec.nodeName) || object.spec.nodeName == '') &&
-        (!has(object.spec.priorityClassName) || !object.spec.priorityClassName.startsWith('system-'))
+        (!has(object.spec.priorityClassName) ||
+          (!object.spec.priorityClassName.startsWith('system-') &&
+           !object.spec.priorityClassName.startsWith('orchard-')))
     - message: "privileged containers, procMount, hostPort and capabilities outside the Pod Security baseline are not allowed"
       expression: >-
         variables.containers.all(c,

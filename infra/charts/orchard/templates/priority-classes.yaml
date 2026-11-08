@@ -1,0 +1,12 @@
+{{- if .Values.priorityClasses.enabled }}
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: orchard-platform
+  labels:
+    {{- include "orchard.labels" (dict "root" . "name" "priority-classes") | nindent 4 }}
+value: 100000
+globalDefault: false
+preemptionPolicy: PreemptLowerPriority
+description: "Orchard platform components. Tenant workloads run at the default priority (0), so the platform is scheduled first and evicted last. Tenant namespaces cannot select this class."
+{{- end }}

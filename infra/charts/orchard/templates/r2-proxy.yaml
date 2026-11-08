@@ -92,6 +92,7 @@ spec:
         app.kubernetes.io/instance: {{ .Release.Name }}
     spec:
       {{- include "orchard.pullSecrets" . | nindent 6 }}
+      {{- include "orchard.priorityClass" $ | nindent 6 }}
       containers:
         - name: r2-proxy
           image: {{ include "orchard.image" (list . .Values.r2Proxy.image.name .Values.r2Proxy.image.tag .Values.r2Proxy.image.repository) }}

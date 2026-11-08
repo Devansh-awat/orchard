@@ -914,3 +914,9 @@ v1
 {{- printf "%dmb" (int $mib) -}}
 {{- end -}}
 {{- end }}
+
+{{- define "orchard.priorityClass" -}}
+{{- if .Values.priorityClasses.enabled }}
+priorityClassName: orchard-platform
+{{- end }}
+{{- end }}

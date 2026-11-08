@@ -901,6 +901,17 @@ tenantSandbox:
   enabled: false
   runtimeClassName: gvisor
 
+# PriorityClass for the platform's own pods (server, worker, frontend, MCP, Redis,
+# Postgres and pooler, logs and metrics stores, object storage, R2 proxy). It
+# makes the scheduler place them before tenant workloads, which keep the default
+# priority 0, and the kubelet evict them last under node pressure. Tenants never
+# choose a class: the server sets none, and the admission policy refuses
+# system-* and orchard-* names in tenant namespaces. The class is cluster scoped
+# and its value is fixed at 100000. Turning this off also drops the setting from
+# the platform pods.
+priorityClasses:
+  enabled: true
+
 # Admission guard for tenant namespaces (namespaces labelled orchard.my/managed):
 # native ValidatingAdmissionPolicies that refuse the object shapes Orchard never
 # creates (hostPath, privileged pods, externalIPs, NodePort when off, foreign

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { loadAll } from 'js-yaml';
@@ -774,3 +774,54 @@ test(
     assert.ok(!render(['admissionPolicies.enabled=false']).includes('orchard-tenant-policy'));
   }
 );
+
+function podSpecs(objects: any[]): { name: string; spec: any }[] {
+  const out: { name: string; spec: any }[] = [];
+  for (const d of objects) {
+    const name = `${d.kind}/${d.metadata?.name}`;
+    if (d.kind === 'Cluster') out.push({ name, spec: d.spec });
+    else if (d.kind === 'Pooler') out.push({ name, spec: d.spec?.template?.spec });
+    else if (d.spec?.template?.spec?.containers) out.push({ name, spec: d.spec.template.spec });
+  }
+  return out;
+}
+
+test(
+  'platform pods run under the orchard-platform priority class',
+  { skip: !helmAvailable() },
+  () => {
+    const objects = parsed(render(['postgres.enabled=true', 'redis.enabled=true']));
+    const klass = objects.find((d) => d.kind === 'PriorityClass');
+    assert.equal(klass.metadata.name, 'orchard-platform');
+    assert.equal(klass.value, 100000);
+    assert.equal(klass.globalDefault, false);
+    const pods = podSpecs(objects);
+    assert.ok(pods.length >= 8, `found ${pods.length} platform pod specs`);
+    for (const name of ['Deployment/server', 'Deployment/frontend', 'Deployment/redis']) {
+      assert.equal(pods.find((p) => p.name === name)?.spec.priorityClassName, 'orchard-platform');
+    }
+    const unclassed = pods
+      .filter((p) => p.spec.priorityClassName !== 'orchard-platform')
+      .map((p) => p.name);
+    assert.deepEqual(
+      unclassed,
+      ['StatefulSet/fc-builder'].filter((n) => unclassed.includes(n))
+    );
+  }
+);
+
+test(
+  'priorityClasses.enabled=false renders no class and no references',
+  { skip: !helmAvailable() },
+  () => {
+    const out = render(['priorityClasses.enabled=false', 'postgres.enabled=true']);
+    assert.ok(!parsed(out).some((d) => d.kind === 'PriorityClass'));
+    assert.doesNotMatch(out, /priorityClassName: orchard-platform/);
+  }
+);
+
+test('the tenant pod policy refuses system and platform priority classes', () => {
+  const policies = readFileSync(resolve(chart, 'policies/orchard-tenant-policies.yaml'), 'utf8');
+  assert.match(policies, /priorityClassName\.startsWith\('system-'\)/);
+  assert.match(policies, /priorityClassName\.startsWith\('orchard-'\)/);
+});

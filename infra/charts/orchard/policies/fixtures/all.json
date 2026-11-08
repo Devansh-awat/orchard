@@ -3553,6 +3553,40 @@
   }
  },
  {
+  "denied-by": "system priority",
+  "expect": "deny",
+  "name": "hostile/pod-platform-priority",
+  "object": {
+   "apiVersion": "v1",
+   "kind": "Pod",
+   "metadata": {
+    "labels": {
+     "app.kubernetes.io/name": "evil"
+    },
+    "name": "evil",
+    "namespace": "orchard-policy-test"
+   },
+   "spec": {
+    "containers": [
+     {
+      "image": "registry.example.com/org/app:1",
+      "name": "c",
+      "securityContext": {
+       "allowPrivilegeEscalation": false,
+       "capabilities": {
+        "drop": [
+         "ALL"
+        ]
+       }
+      }
+     }
+    ],
+    "priorityClassName": "orchard-platform",
+    "runtimeClassName": "gvisor"
+   }
+  }
+ },
+ {
   "denied-by": "privileged containers",
   "expect": "deny",
   "name": "hostile/pod-privileged-init",
