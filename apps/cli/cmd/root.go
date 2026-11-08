@@ -123,6 +123,7 @@ func rootCmd() *cobra.Command {
 		gitCmd(),
 		auditCmd(),
 		quotaCmd(),
+		doctorCmd(),
 		overviewCmd(),
 		openCmd(),
 		userCmd(),

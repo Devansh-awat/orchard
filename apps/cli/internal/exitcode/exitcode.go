@@ -21,8 +21,12 @@ const (
 	Deadline       = 8
 	DeployFailed   = 9
 	DeployCrashing = 10
+	ChecksFailed   = 11
 	Interrupted    = 130
 )
+
+// ErrChecksFailed marks a health report with at least one failing check.
+var ErrChecksFailed = errors.New("one or more checks failed")
 
 // UsageError marks bad invocations (unknown flags, refused prompts) → exit 2.
 type UsageError struct{ Err error }
@@ -49,6 +53,9 @@ func FromError(err error) int {
 	}
 	if errors.Is(err, api.ErrDeployCrashing) {
 		return DeployCrashing
+	}
+	if errors.Is(err, ErrChecksFailed) {
+		return ChecksFailed
 	}
 	var apiErr *api.APIError
 	if errors.As(err, &apiErr) {

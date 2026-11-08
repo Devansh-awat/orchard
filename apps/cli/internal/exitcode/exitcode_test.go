@@ -35,6 +35,8 @@ func TestFromError(t *testing.T) {
 		{"deploy failed", api.ErrDeployFailed, DeployFailed},
 		{"deploy failed wrapped", fmt.Errorf("up: %w", api.ErrDeployFailed), DeployFailed},
 		{"deploy crashing", api.ErrDeployCrashing, DeployCrashing},
+		{"checks failed", ErrChecksFailed, ChecksFailed},
+		{"checks failed wrapped", fmt.Errorf("doctor: %w", ErrChecksFailed), ChecksFailed},
 		{"rollout error build", api.RolloutOutcome(&api.Rollout{Phase: "build_failed", Terminal: true}), DeployFailed},
 		{"rollout error crashing", api.RolloutOutcome(&api.Rollout{Phase: "crashing", Terminal: true}), DeployCrashing},
 		{"rollout error unhealthy", api.RolloutOutcome(&api.Rollout{Phase: "unhealthy", Terminal: true}), DeployCrashing},

@@ -163,10 +163,10 @@ func TestExitCodesRendersAllCodes(t *testing.T) {
 	if err := json.Unmarshal([]byte(out), &docs); err != nil {
 		t.Fatalf("exit-codes -o json is not valid JSON: %v\n%s", err, out)
 	}
-	if len(docs) != 12 {
-		t.Fatalf("exit-codes lists %d codes, want 12", len(docs))
+	if len(docs) != 13 {
+		t.Fatalf("exit-codes lists %d codes, want 13", len(docs))
 	}
-	want := []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 130}
+	want := []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 130}
 	for i, doc := range docs {
 		if doc.Code != want[i] {
 			t.Errorf("code[%d] = %d, want %d", i, doc.Code, want[i])

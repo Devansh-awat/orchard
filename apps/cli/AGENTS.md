@@ -79,6 +79,7 @@ Format resolution, in order: explicit `-o json|table` flag, then `ORCHARD_JSON=1
 | 8    | `--wait` gave up after `--timeout`                                                                       |
 | 9    | `deploy-failed`: the build failed during a wait                                                          |
 | 10   | `deploy-crashing`: pods crash-loop or the rollout is unhealthy, or `db diagnose` found the database down |
+| 11   | `checks-failed`: `orchard doctor` found at least one failing check                                       |
 | 130  | interrupted (Ctrl-C / SIGTERM)                                                                           |
 
 ## Scoping

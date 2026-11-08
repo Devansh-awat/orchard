@@ -17,7 +17,7 @@ description: Deploy and manage apps, databases, scheduled jobs, domains, and log
 - Piped output is JSON on stdout; status lines go to stderr. `ORCHARD_JSON=1` or `-o json` forces it.
 - `events tail` emits NDJSON; `--follow` log commands stream plain lines, except piped `observe logs --follow`, which emits JSON entries.
 - Errors in JSON mode: one stderr line `{"error":{"status":<http>,"code":<exit>,"message":"..."}}`.
-- Exit codes: 0 ok, 1 generic, 2 usage/refused prompt, 3 auth, 4 not found, 5 validation, 6 rate limited, 7 server, 8 wait timeout, 9 deploy-failed (build failed), 10 deploy-crashing (pods crashing or rollout unhealthy), 130 interrupted.
+- Exit codes: 0 ok, 1 generic, 2 usage/refused prompt, 3 auth, 4 not found, 5 validation, 6 rate limited, 7 server, 8 wait timeout, 9 deploy-failed (build failed), 10 deploy-crashing (pods crashing or rollout unhealthy), 11 checks-failed (`orchard doctor`), 130 interrupted.
 
 ## Rules
 
