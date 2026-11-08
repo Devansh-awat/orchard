@@ -1904,6 +1904,48 @@ export class OrganizationsService {
     }
   }
 
+  /**
+   * The org's side of a link. It only ever removes the link from one of the
+   * org's own identities; the account behind it is never named or touched.
+   */
+  async unlinkMemberAccount(
+    organizationId: string,
+    memberId: string,
+    actorClerkId: string,
+    userData?: any
+  ) {
+    const actor = await this.usersService.findOrCreateByClerkId(actorClerkId, userData);
+    if (!actor) throw new NotFoundException('User not found');
+    await this.authz.requireOrgAdmin(organizationId, actor.id);
+    const member = await this.prisma.organizationMember.findUnique({
+      where: { id: memberId },
+      include: { user: { select: { id: true, email: true, homeOrganizationId: true } } }
+    });
+    if (
+      !member ||
+      member.organizationId !== organizationId ||
+      member.user.homeOrganizationId !== organizationId
+    ) {
+      throw new NotFoundException('Member not found in this organization');
+    }
+    const { count } = await this.prisma.accountLink.deleteMany({
+      where: { identityUserId: member.userId, organizationId }
+    });
+    if (count) {
+      void this.audit.log({
+        action: 'account.link.removed',
+        actorUserId: actor.id,
+        actorEmail: actor.email,
+        organizationId,
+        targetType: 'user',
+        targetId: member.userId,
+        targetLabel: member.user.email,
+        metadata: { by: 'organization' }
+      });
+    }
+    return { success: true };
+  }
+
   async enableMember(organizationId: string, memberId: string, enabledBy: string, userData?: any) {
     const actor = await this.usersService.findOrCreateByClerkId(enabledBy, userData);
     if (!actor) throw new NotFoundException('User not found');

@@ -953,6 +953,15 @@ server-side fetches. If your IdP genuinely runs on internal DNS, set
 an organization's provider is controlled by that organization, so it can never
 reach internal addresses.
 
+To provision accounts from your company directory, create an instance SCIM
+token under **Admin → Sign in** and point your IdP's SCIM connector at
+`https://<your-host>/apiv1/scim/instance/v2`. It creates accounts, renames
+them and turns them off; deleting a user in the IdP turns the account off
+rather than removing it. Which organizations and projects people reach still
+comes from the instance group rules at sign-in. Organization SCIM tokens can't
+be used here, and instance tokens can't be used on an organization's SCIM
+endpoint.
+
 Two rules keep an organization's provider from being turned against the
 organization. **Provider management is owner-only**: creating, editing,
 testing or deleting an org's identity providers and domains, and toggling

@@ -26,6 +26,7 @@ export class ApiTokensController {
       expiresAt?: string;
       scopes?: string[];
       restrictedProjectIds?: string[];
+      organizationId?: string;
     }
   ) {
     const auth = req['auth'] as {
@@ -34,7 +35,13 @@ export class ApiTokensController {
       tokenScopes?: string[];
       tokenProjectIds?: string[];
       sessionOrgId?: string;
+      sessionId?: string;
     };
+    const scopeOrganizationId =
+      auth.sessionOrgId ??
+      (body.organizationId
+        ? await this.apiTokensService.grantedOrganization(auth, body.organizationId)
+        : undefined);
     const expiresAt = body.expiresAt ? new Date(body.expiresAt) : undefined;
     return this.apiTokensService.create(
       auth.userId,
@@ -49,7 +56,7 @@ export class ApiTokensController {
             tokenId: auth.apiTokenId
           }
         : undefined,
-      auth.sessionOrgId
+      scopeOrganizationId
     );
   }
 

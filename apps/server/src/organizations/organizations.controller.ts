@@ -262,6 +262,18 @@ export class OrganizationsController {
     });
   }
 
+  @Delete(':id/members/:memberId/link')
+  async unlinkMemberAccount(
+    @Param('id') organizationId: string,
+    @Param('memberId') memberId: string,
+    @Request() req
+  ) {
+    return this.organizationsService.unlinkMemberAccount(organizationId, memberId, req.user.sub, {
+      email: req.user.email,
+      username: req.user.username
+    });
+  }
+
   @Post(':id/members/:memberId/enable')
   async enableMember(
     @Param('id') organizationId: string,

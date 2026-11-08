@@ -2312,6 +2312,121 @@
         ]
       }
     },
+    "/admin/scim/tokens": {
+      "get": {
+        "description": "Auth: superadmin",
+        "operationId": "admin_scim_tokens_list",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {},
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "GET /admin/scim/tokens",
+        "tags": [
+          "admin"
+        ]
+      },
+      "post": {
+        "description": "Auth: superadmin",
+        "operationId": "admin_scim_tokens_create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": {},
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {},
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "POST /admin/scim/tokens",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/scim/tokens/{id}": {
+      "delete": {
+        "description": "Auth: superadmin",
+        "operationId": "admin_scim_tokens_delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {},
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "DELETE /admin/scim/tokens/:id",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
     "/admin/sso": {
       "get": {
         "description": "Auth: superadmin",
@@ -52732,6 +52847,56 @@
         ]
       }
     },
+    "/organizations/{id}/members/{memberId}/link": {
+      "delete": {
+        "description": "Auth: authenticated",
+        "operationId": "organizations_members_link_delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "memberId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {},
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "DELETE /organizations/:id/members/:memberId/link",
+        "tags": [
+          "organizations"
+        ]
+      }
+    },
     "/organizations/{id}/members/join": {
       "post": {
         "description": "Auth: authenticated",
@@ -64724,6 +64889,239 @@
         "summary": "POST /register",
         "tags": [
           "register"
+        ]
+      }
+    },
+    "/scim/instance/v2/ServiceProviderConfig": {
+      "get": {
+        "description": "Auth: public",
+        "operationId": "scim_instance_v2_service_provider_config_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {},
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "GET /scim/instance/v2/ServiceProviderConfig",
+        "tags": [
+          "scim"
+        ]
+      }
+    },
+    "/scim/instance/v2/Users": {
+      "get": {
+        "description": "Auth: public",
+        "operationId": "scim_instance_v2_users_list",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {},
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "GET /scim/instance/v2/Users",
+        "tags": [
+          "scim"
+        ]
+      },
+      "post": {
+        "description": "Auth: public",
+        "operationId": "scim_instance_v2_users_create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": {},
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {},
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "POST /scim/instance/v2/Users",
+        "tags": [
+          "scim"
+        ]
+      }
+    },
+    "/scim/instance/v2/Users/{id}": {
+      "delete": {
+        "description": "Auth: public",
+        "operationId": "scim_instance_v2_users_delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {},
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "DELETE /scim/instance/v2/Users/:id",
+        "tags": [
+          "scim"
+        ]
+      },
+      "get": {
+        "description": "Auth: public",
+        "operationId": "scim_instance_v2_users_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {},
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "GET /scim/instance/v2/Users/:id",
+        "tags": [
+          "scim"
+        ]
+      },
+      "patch": {
+        "description": "Auth: public",
+        "operationId": "scim_instance_v2_users_update_by_id_patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": {},
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {},
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "PATCH /scim/instance/v2/Users/:id",
+        "tags": [
+          "scim"
+        ]
+      },
+      "put": {
+        "description": "Auth: public",
+        "operationId": "scim_instance_v2_users_update_by_id_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": {},
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {},
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "PUT /scim/instance/v2/Users/:id",
+        "tags": [
+          "scim"
         ]
       }
     },

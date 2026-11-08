@@ -379,6 +379,32 @@ export class UsersService {
     return updated;
   }
 
+  /**
+   * Turns an account off across the whole instance, Datadog-style: the row,
+   * its memberships and everything it built stay, every session and token
+   * dies, and no sign-in method can start a new one until it is turned back on.
+   */
+  async setDisabled(userId: string, disabled: boolean, reason?: string) {
+    const user = await this.prisma.user.update({
+      where: { id: userId },
+      data: disabled
+        ? {
+            disabledAt: new Date(),
+            disabledReason: (reason || 'Turned off by an admin').slice(0, 255)
+          }
+        : { disabledAt: null, disabledReason: null }
+    });
+    if (disabled) {
+      await this.prisma.session.updateMany({
+        where: { userId, revokedAt: null },
+        data: { revokedAt: new Date() }
+      });
+      await this.prisma.apiToken.deleteMany({ where: { userId } });
+    }
+    this.invalidateUserCache(user);
+    return user;
+  }
+
   async markUpdateSeen(userId: string, updateId: string) {
     if (!/^[a-z0-9][a-z0-9-]{0,63}$/.test(updateId)) {
       throw new BadRequestException('Invalid update id');

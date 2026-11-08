@@ -72,6 +72,15 @@
     "bodyIds": [],
     "unseeded": []
   },
+  "DELETE /admin/scim/tokens/:id": {
+    "class": "superadmin",
+    "auth": "superadmin",
+    "handler": "InstanceScimTokensController.revoke",
+    "params": ["id:apiToken"],
+    "queryIds": [],
+    "bodyIds": [],
+    "unseeded": []
+  },
   "DELETE /admin/sso/providers/:providerId": {
     "class": "superadmin",
     "auth": "superadmin",
@@ -523,6 +532,15 @@
     "bodyIds": [],
     "unseeded": []
   },
+  "DELETE /organizations/:id/members/:memberId/link": {
+    "class": "resource-scoped",
+    "auth": "authenticated",
+    "handler": "OrganizationsController.unlinkMemberAccount",
+    "params": ["id:org", "memberId:orgMember"],
+    "queryIds": [],
+    "bodyIds": [],
+    "unseeded": []
+  },
   "DELETE /organizations/:id/metric-alerts/:ruleId": {
     "class": "resource-scoped",
     "auth": "authenticated",
@@ -663,6 +681,15 @@
     "auth": "authenticated",
     "handler": "RegistryCredentialsController.remove",
     "params": ["projectId:project", "id:registryCredential"],
+    "queryIds": [],
+    "bodyIds": [],
+    "unseeded": []
+  },
+  "DELETE /scim/instance/v2/Users/:id": {
+    "class": "public",
+    "auth": "public",
+    "handler": "InstanceScimController.remove",
+    "params": ["id:unknown"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -969,6 +996,15 @@
     "auth": "superadmin",
     "handler": "AdminQuotasController.getOrgQuota",
     "params": ["id:org"],
+    "queryIds": [],
+    "bodyIds": [],
+    "unseeded": []
+  },
+  "GET /admin/scim/tokens": {
+    "class": "superadmin",
+    "auth": "superadmin",
+    "handler": "InstanceScimTokensController.list",
+    "params": [],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -3298,6 +3334,33 @@
     "bodyIds": [],
     "unseeded": []
   },
+  "GET /scim/instance/v2/ServiceProviderConfig": {
+    "class": "public",
+    "auth": "public",
+    "handler": "InstanceScimController.config",
+    "params": [],
+    "queryIds": [],
+    "bodyIds": [],
+    "unseeded": []
+  },
+  "GET /scim/instance/v2/Users": {
+    "class": "public",
+    "auth": "public",
+    "handler": "InstanceScimController.list",
+    "params": [],
+    "queryIds": [],
+    "bodyIds": [],
+    "unseeded": []
+  },
+  "GET /scim/instance/v2/Users/:id": {
+    "class": "public",
+    "auth": "public",
+    "handler": "InstanceScimController.get",
+    "params": ["id:unknown"],
+    "queryIds": [],
+    "bodyIds": [],
+    "unseeded": []
+  },
   "GET /scim/v2/Groups": {
     "class": "public",
     "auth": "public",
@@ -4262,6 +4325,15 @@
     "bodyIds": [],
     "unseeded": []
   },
+  "PATCH /scim/instance/v2/Users/:id": {
+    "class": "public",
+    "auth": "public",
+    "handler": "InstanceScimController.patch",
+    "params": ["id:unknown"],
+    "queryIds": [],
+    "bodyIds": [],
+    "unseeded": []
+  },
   "PATCH /scim/v2/Groups/:id": {
     "class": "public",
     "auth": "public",
@@ -4411,6 +4483,15 @@
     "auth": "superadmin",
     "handler": "AdminQuotasController.disconnectQuota",
     "params": ["id:org"],
+    "queryIds": [],
+    "bodyIds": [],
+    "unseeded": []
+  },
+  "POST /admin/scim/tokens": {
+    "class": "superadmin",
+    "auth": "superadmin",
+    "handler": "InstanceScimTokensController.create",
+    "params": [],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
@@ -4629,7 +4710,7 @@
     "handler": "ApiTokensController.create",
     "params": [],
     "queryIds": [],
-    "bodyIds": ["restrictedProjectIds"],
+    "bodyIds": ["organizationId", "restrictedProjectIds"],
     "unseeded": []
   },
   "POST /authorize/complete": {
@@ -6016,6 +6097,15 @@
     "bodyIds": [],
     "unseeded": []
   },
+  "POST /scim/instance/v2/Users": {
+    "class": "public",
+    "auth": "public",
+    "handler": "InstanceScimController.create",
+    "params": [],
+    "queryIds": [],
+    "bodyIds": [],
+    "unseeded": []
+  },
   "POST /scim/v2/Groups": {
     "class": "public",
     "auth": "public",
@@ -6468,6 +6558,15 @@
     "auth": "authenticated",
     "handler": "RegistryCredentialsController.upsert",
     "params": ["projectId:project"],
+    "queryIds": [],
+    "bodyIds": [],
+    "unseeded": []
+  },
+  "PUT /scim/instance/v2/Users/:id": {
+    "class": "public",
+    "auth": "public",
+    "handler": "InstanceScimController.replace",
+    "params": ["id:unknown"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []

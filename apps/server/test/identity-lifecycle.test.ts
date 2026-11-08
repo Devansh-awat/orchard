@@ -6,6 +6,7 @@ import { IdentityMappingService } from '../src/sso/identity-mapping.service';
 import { OrganizationsService } from '../src/organizations/organizations.service';
 import { SessionsService } from '../src/auth/sessions.service';
 import { AdminService } from '../src/admin/admin.service';
+import { UsersService } from '../src/users/users.service';
 import { collection, type Row } from './support/memory-db';
 
 const ORG = 'org-a';
@@ -238,6 +239,8 @@ function adminWorld(users: Row[]) {
   const revoked: string[] = [];
   const tokens: string[] = [];
   svc.audit = { log: async () => {} };
+  svc.users = Object.create(UsersService.prototype);
+  svc.users.invalidateUserCache = () => {};
   svc.prisma = {
     user: {
       findUnique: async ({ where }: any) => users.find((u) => u.id === where.id) ?? null,
@@ -262,6 +265,7 @@ function adminWorld(users: Row[]) {
       }
     }
   };
+  svc.users.prisma = svc.prisma;
   return { svc: svc as AdminService, revoked, tokens };
 }
 
@@ -284,7 +288,6 @@ test('a superadmin turns accounts off and on, never their own and never the last
 });
 
 test('passkey-only needs a passkey to turn on, and the last passkey cannot be removed while it is on', async () => {
-  const { UsersService } = await import('../src/users/users.service');
   const { PasskeyService } = await import('../src/auth/passkey.service');
   let passkeys = 0;
   const users = Object.create(UsersService.prototype) as any;
@@ -311,4 +314,38 @@ test('passkey-only needs a passkey to turn on, and the last passkey cannot be re
   passkeys = 2;
   await service.deletePasskey('u1', 'pk1');
   assert.deepEqual(deleted, ['pk1']);
+});
+
+test('an org-limited API token needs a live org grant on the session that asks for it', async () => {
+  const { ApiTokensService } = await import('../src/auth/api-tokens.service');
+  const service = Object.create(ApiTokensService.prototype) as any;
+  const grants: Record<string, Date> = { 's1:org-a': new Date(Date.now() + 60_000) };
+  service.prisma = {
+    sessionOrgGrant: {
+      findUnique: async ({ where }: any) => {
+        const { sessionId, organizationId } = where.sessionId_organizationId;
+        const expiresAt = grants[`${sessionId}:${organizationId}`];
+        return expiresAt ? { expiresAt } : null;
+      }
+    }
+  };
+  assert.equal(await service.grantedOrganization({ sessionId: 's1' }, 'org-a'), 'org-a');
+  await assert.rejects(
+    () => service.grantedOrganization({ sessionId: 's1' }, 'org-b'),
+    ForbiddenException
+  );
+  await assert.rejects(
+    () => service.grantedOrganization({ sessionId: 's2' }, 'org-a'),
+    ForbiddenException
+  );
+  await assert.rejects(
+    () => service.grantedOrganization({ apiTokenId: 't', sessionId: 's1' }, 'org-a'),
+    ForbiddenException,
+    'a token can never mint an org token by itself'
+  );
+  grants['s1:org-a'] = new Date(Date.now() - 1);
+  await assert.rejects(
+    () => service.grantedOrganization({ sessionId: 's1' }, 'org-a'),
+    ForbiddenException
+  );
 });

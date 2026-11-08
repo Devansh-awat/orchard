@@ -82,6 +82,29 @@ export class ApiTokensService {
     return cleaned;
   }
 
+  /**
+   * A token limited to one organization, minted from a browser session that
+   * just passed that organization's IdP. Without the grant the request is
+   * refused rather than quietly unscoped, so a person who asked for an org
+   * token never ends up holding one that cannot reach the org.
+   */
+  async grantedOrganization(
+    auth: { apiTokenId?: string; sessionId?: string },
+    organizationId: string
+  ): Promise<string> {
+    if (auth.apiTokenId || !auth.sessionId || typeof organizationId !== 'string') {
+      throw new ForbiddenException('Sign in to that organization with its single sign-on first');
+    }
+    const grant = await this.prisma.sessionOrgGrant.findUnique({
+      where: { sessionId_organizationId: { sessionId: auth.sessionId, organizationId } },
+      select: { expiresAt: true }
+    });
+    if (!grant || grant.expiresAt <= new Date()) {
+      throw new ForbiddenException('Sign in to that organization with its single sign-on first');
+    }
+    return organizationId;
+  }
+
   async create(
     userId: string,
     name: string,

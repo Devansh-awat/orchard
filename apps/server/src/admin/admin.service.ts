@@ -6,6 +6,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { AuthorizationService } from '../auth/authorization.service';
 import { ACCOUNT_SCOPE } from '../users/account-scope';
+import { UsersService } from '../users/users.service';
 
 @Injectable()
 export class AdminService {
@@ -13,7 +14,8 @@ export class AdminService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly authz: AuthorizationService,
-    private readonly settings: InstanceSettingsService
+    private readonly settings: InstanceSettingsService,
+    private readonly users: UsersService
   ) {}
 
   async getStats() {
@@ -173,22 +175,7 @@ export class AdminService {
       });
       if (others === 0) throw new ForbiddenException("You can't turn off the last superadmin");
     }
-    await this.prisma.user.update({
-      where: { id: userId },
-      data: disabled
-        ? {
-            disabledAt: new Date(),
-            disabledReason: (reason || 'Turned off by an admin').slice(0, 255)
-          }
-        : { disabledAt: null, disabledReason: null }
-    });
-    if (disabled) {
-      await this.prisma.session.updateMany({
-        where: { userId, revokedAt: null },
-        data: { revokedAt: new Date() }
-      });
-      await this.prisma.apiToken.deleteMany({ where: { userId } });
-    }
+    await this.users.setDisabled(userId, disabled, reason);
     void this.audit.log({
       action: disabled ? 'user.disabled' : 'user.enabled',
       actorUserId: requesterId,
