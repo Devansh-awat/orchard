@@ -148,6 +148,13 @@ tenant:
   maxProjectsPerOrg: ""
   maxEnvironmentsPerOrg: ""
   maxDeploymentsPerOrg: ""
+  # Most custom (non-generated) hostnames one organization may hold, and most it
+  # may add per hour, as MAX_CUSTOM_DOMAINS_PER_ORG and
+  # MAX_CUSTOM_DOMAIN_CREATES_PER_HOUR. Empty keeps the server defaults of 250 and
+  # 30; 0 is unlimited. Proof of domain ownership is on by default when
+  # signupMode is open (override with CUSTOM_DOMAIN_VERIFICATION in server.env).
+  maxCustomDomainsPerOrg: ""
+  maxCustomDomainCreatesPerHour: ""
   # Namespaces a tenant pod may be reached from, and reach. Every tenant
   # namespace is default-deny, so the ingress controller has to be on this list
   # or it cannot reach the app at all.

@@ -13,6 +13,7 @@ import { isReservedHost, normalizeHost } from '../instance-network/reserved-host
 import { optionalDomain } from '../env/platform-domains';
 import { InstanceSettingsService } from '../instance-settings/instance-settings.service';
 import { platformWildcardDomains } from './projects.utils';
+import { DomainBudget, isPlatformHost } from './domain-budget';
 import {
   domainProofRecordName,
   domainProofToken,
@@ -39,7 +40,11 @@ export class ProjectAccessService {
     private readonly authz: AuthorizationService,
     private readonly membershipCache: MembershipCacheService,
     private readonly instanceSettings: InstanceSettingsService
-  ) {}
+  ) {
+    this.domainBudget = new DomainBudget(prisma);
+  }
+
+  protected domainBudget?: DomainBudget;
 
   /**
    * C-2: enforce global hostname uniqueness across projects.
@@ -61,14 +66,41 @@ export class ProjectAccessService {
   async assertHostnameAvailable(rawHost: string, projectId: string): Promise<void> {
     await this.assertHostnameUnclaimed(rawHost, projectId);
     const host = normalizeHost(rawHost);
+    const budget = this.domainBudget;
+    const organizationId =
+      budget && !isPlatformHost(host) && !(await this.projectHoldsHost(host, projectId))
+        ? (
+            await this.prisma.project.findUnique({
+              where: { id: projectId },
+              select: { organizationId: true }
+            })
+          )?.organizationId
+        : undefined;
+    if (budget && organizationId) {
+      await budget.assertProofNotPaused(organizationId);
+      await budget.assertCapacity(organizationId);
+    }
     const proof = await this.domainProofStatus(host, projectId);
     if (proof && !proof.found) {
+      if (budget && organizationId) await budget.recordProofFailure(organizationId);
       throw new BadRequestException({
         error: 'domain_proof_required',
         message: `Prove you own ${host}: add a TXT record named ${proof.fullName} with the value ${proof.record.value}, then try again.`,
         records: [proof.record]
       });
     }
+    if (budget && organizationId) {
+      if (proof) await budget.clearProofFailures(organizationId);
+      await budget.consumeCreate(organizationId);
+    }
+  }
+
+  private async projectHoldsHost(host: string, projectId: string): Promise<boolean> {
+    const held = await this.prisma.ingress.findFirst({
+      where: { host: { equals: host, mode: 'insensitive' }, projectId },
+      select: { id: true }
+    });
+    return !!held;
   }
 
   async assertHostnameUnclaimed(

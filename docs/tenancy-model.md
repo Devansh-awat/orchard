@@ -277,7 +277,7 @@ Rule for this document: where something is still unfixed it is described as hard
 
 - Host claims: `ProjectAccessService.assertHostnameUnclaimed` / `assertHostnameAvailable` with a global advisory lock (`beginHostClaim`, `apps/server/src/projects/host-claim.ts`; `lockHostnameClaims`, `apps/server/src/instance-network/reserved-hosts.ts`). Vanity, status-page and custom-domain claims share one platform host reservation, and generated app, database and preview zones are reserved (`isReservedHost`, `isReservedSubdomainLabel`; env `RESERVED_HOSTS`, `RESERVED_HOST_SUFFIXES`).
 - Generated hostnames are opaque by default (`generatedHostLabel`, `opaqueDatabaseLabel`, `apps/server/src/projects/generated-host.ts`): an HMAC of the deployment id keyed by `JWT_SECRET`. `HOSTNAME_STYLE=readable` brings back readable labels that reveal the deployment and project names.
-- Custom-domain proof of ownership: TXT `_orchard-challenge.<host>` (`domainProofStatus`, `domain-proof.ts`), or a verified org domain. Enabled by `CUSTOM_DOMAIN_VERIFICATION` (default off) or the admin switch.
+- Custom-domain proof of ownership: TXT `_orchard-challenge.<host>` (`domainProofStatus`, `domain-proof.ts`), or a verified org domain. Enabled by `CUSTOM_DOMAIN_VERIFICATION` or the admin switch; with nothing set it is on when `SIGNUP_MODE=open` and off otherwise. A host the project already serves is never re-verified. `DomainBudget` (`apps/server/src/projects/domain-budget.ts`) caps custom hostnames per org (`MAX_CUSTOM_DOMAINS_PER_ORG`, 250), new custom hostnames per hour (`MAX_CUSTOM_DOMAIN_CREATES_PER_HOUR`, 30) and backs off exponentially after repeated failed proofs.
 - The ClusterIssuer is chosen by the server; tenant-supplied cert-manager annotations are ignored.
 - Protected apps: `ProtectionService` (`apps/server/src/auth/protection.service.ts`). The protection cookie is a JWT bound to the ingress id and to a generation HMAC of the ingress protection mode and password hash (`protectionGeneration`), and the subject must still be able to view the project (`protectionCookieGrants`, `subjectCanViewIngress`); changing the mode or password invalidates every cookie. Cookie name per ingress (`protectionCookieName`), `HttpOnly`, `SameSite=Lax`, path `/`, no `Domain` (host-only). Ambiguous paths never count as public. `apps/docs/src/content/docs/deploy/protection.mdx` has the curl checks for the operator's ingress controller.
 - Dashboard session cookie `session_token`: `HttpOnly`, `SameSite=Lax`, `Secure` in production (`SESSION_COOKIE_SECURE` overrides), `Domain` only when `COOKIE_DOMAIN` is set (`apps/server/src/auth/cookies.ts`). CORS: platform origins with credentials; tenant-facing GET routes open with credentials off (`apps/server/src/main.ts`).
@@ -292,7 +292,7 @@ Rule for this document: where something is still unfixed it is described as hard
 
 **Not guaranteed.**
 
-- Custom-domain verification defaults to off: the first claim wins, with no proof of DNS control.
+- Custom-domain verification defaults to off unless `SIGNUP_MODE=open`: otherwise the first claim wins, with no proof of DNS control.
 - The session cookie has no `__Host-` prefix. A `COOKIE_DOMAIN` that is a parent of app hosts sends the dashboard session to every tenant app.
 - Neither the chart nor the code checks the Public Suffix List. An unlisted app domain gives sibling apps shared cookie scope (cookie tossing).
 - The chart does not lock the origin to the CDN; direct-to-origin traffic bypasses the CDN and its WAF.

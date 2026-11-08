@@ -260,6 +260,8 @@ is the complete list.
 | `tenant.maxProjectsPerOrg` | `""` | Most projects one organization may hold, as `MAX_PROJECTS_PER_ORG`. Empty means 500; `0` is unlimited. An organization already above the limit keeps what it has and cannot create more. |
 | `tenant.maxEnvironmentsPerOrg` | `""` | Most extra environments (one namespace each) per organization, as `MAX_ENVIRONMENTS_PER_ORG`. Empty means 1000; `0` is unlimited. |
 | `tenant.maxDeploymentsPerOrg` | `""` | Most deployments per organization, as `MAX_DEPLOYMENTS_PER_ORG`. Empty means 2000; `0` is unlimited. |
+| `tenant.maxCustomDomainsPerOrg` | `""` | Most custom hostnames one organization may hold, as `MAX_CUSTOM_DOMAINS_PER_ORG`. Empty means 250; `0` is unlimited. |
+| `tenant.maxCustomDomainCreatesPerHour` | `""` | Most custom hostnames one organization may add per hour, as `MAX_CUSTOM_DOMAIN_CREATES_PER_HOUR`. Empty means 30; `0` is unlimited. With `signupMode: open`, adding a custom domain also needs a TXT proof unless `CUSTOM_DOMAIN_VERIFICATION=false` is set in `server.env`. |
 
 ### Datadog (`datadog.*`)
 

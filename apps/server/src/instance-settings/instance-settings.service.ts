@@ -1,6 +1,7 @@
 import { ConflictException, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { tenantBackupTarget } from '../instance-config/object-storage';
+import { signupMode } from '../auth/signup-mode';
 
 export const USERSPACE_NODE_SCHEDULING_KEY = 'userspace_node_scheduling';
 const USERSPACE_NODE_SCHEDULING_ENV = 'USERSPACE_NODE_SCHEDULING';
@@ -219,11 +220,19 @@ export class InstanceSettingsService implements OnModuleInit {
   }
 
   isCustomDomainVerificationRequired(): Promise<boolean> {
-    return this.resolveBool(CUSTOM_DOMAIN_VERIFICATION_KEY, CUSTOM_DOMAIN_VERIFICATION_ENV);
+    return this.resolveBool(
+      CUSTOM_DOMAIN_VERIFICATION_KEY,
+      CUSTOM_DOMAIN_VERIFICATION_ENV,
+      signupMode() === 'open'
+    );
   }
 
   getCustomDomainVerificationState(): Promise<ToggleState> {
-    return this.toggleState(CUSTOM_DOMAIN_VERIFICATION_KEY, CUSTOM_DOMAIN_VERIFICATION_ENV);
+    return this.toggleState(
+      CUSTOM_DOMAIN_VERIFICATION_KEY,
+      CUSTOM_DOMAIN_VERIFICATION_ENV,
+      signupMode() === 'open'
+    );
   }
 
   async setCustomDomainVerification(value: boolean): Promise<void> {

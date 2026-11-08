@@ -326,6 +326,10 @@ A new organization is created with a CPU cap of 16 cores and a memory cap of 32G
 
 One organization can hold at most 500 projects, 1000 extra environments (each is a namespace) and 2000 deployments. Change them with `MAX_PROJECTS_PER_ORG`, `MAX_ENVIRONMENTS_PER_ORG` and `MAX_DEPLOYMENTS_PER_ORG` (`tenant.maxProjectsPerOrg`, `tenant.maxEnvironmentsPerOrg` and `tenant.maxDeploymentsPerOrg`); `0` is unlimited. An organization that is already above a limit keeps everything it has and cannot create more.
 
+## Custom domains
+
+When `SIGNUP_MODE` is `open`, adding a custom domain needs a TXT record that proves ownership, unless the admin switch or `CUSTOM_DOMAIN_VERIFICATION` says otherwise. Domains that a project already serves are never checked again. An organization can hold 250 custom hostnames and add 30 new ones an hour (`MAX_CUSTOM_DOMAINS_PER_ORG` and `MAX_CUSTOM_DOMAIN_CREATES_PER_HOUR`; `0` is unlimited). After five failed proofs, the organization has to wait a minute before it can add another domain, and the wait doubles with each further failure, up to a day. This keeps one tenant from using up the certificate authority's limits for everyone.
+
 ## The What's new sheet
 
 The dashboard shows each person the latest release notes once. The server reads the notes from a folder that holds `latest.json` and one Markdown file for each release.

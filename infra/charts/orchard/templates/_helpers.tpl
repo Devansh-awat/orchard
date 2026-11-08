@@ -521,6 +521,12 @@ true
             {{- if .maxDeploymentsPerOrg }}
             - { name: MAX_DEPLOYMENTS_PER_ORG, value: {{ .maxDeploymentsPerOrg | quote }} }
             {{- end }}
+            {{- if .maxCustomDomainsPerOrg }}
+            - { name: MAX_CUSTOM_DOMAINS_PER_ORG, value: {{ .maxCustomDomainsPerOrg | quote }} }
+            {{- end }}
+            {{- if .maxCustomDomainCreatesPerHour }}
+            - { name: MAX_CUSTOM_DOMAIN_CREATES_PER_HOUR, value: {{ .maxCustomDomainCreatesPerHour | quote }} }
+            {{- end }}
             {{- end }}
             {{- with (include "orchard.wildcardDomains" .) }}
             - { name: PLATFORM_WILDCARD_DOMAINS, value: {{ . | quote }} }
