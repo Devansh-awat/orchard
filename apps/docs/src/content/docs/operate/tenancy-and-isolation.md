@@ -5,66 +5,88 @@ sidebar:
   order: 7
 ---
 
-Orchard treats every organization and every project as mutually untrusted. This page states what is isolated, what enforces it, and what you must configure. For the network and kernel details, refer to [Security and isolation](/operate/security/).
-
-Some items below are marked planned. They do not exist yet.
+Orchard treats every organization and every project as mutually untrusted. This page states what is isolated, what you must set up yourself, and what Orchard does not guarantee. For the network and kernel details, refer to [Security and isolation](/operate/security/).
 
 ## What is isolated
 
-| Boundary                                                | Enforced by                                                                                                                                                                      | What you must configure                                                                              |
-| ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| Organization from organization in the dashboard and API | Membership checks on every route. A user outside an organization gets a not-found response, not a permission error.                                                              | Nothing. Limit who is a superadmin, because superadmins can read every organization.                 |
-| Project from project inside an organization             | Project roles (admin, member, viewer), project-scoped API tokens, and scoped MCP grants. Org owners and admins see every project.                                                | Give people project roles, not org admin.                                                            |
-| Network between tenants                                 | A `default-deny-all` NetworkPolicy in every tenant namespace that Orchard restores if it is removed or edited.                                                                   | A CNI that enforces NetworkPolicy, such as Cilium or Calico. Orchard does not check that yours does. |
-| Kernel between tenants                                  | A sandbox RuntimeClass on tenant pods.                                                                                                                                           | `tenantSandbox` with gVisor, and `builderSandbox` with Kata. Both are off by default.                |
-| Builds                                                  | One BuildKit daemon per project namespace, a separate pusher container that holds the registry login, and an admission rule that stops a pod from using another project's image. | `builderSandbox`, and `REGISTRY_IMAGE_POLICY=enforce`.                                               |
-| Secrets                                                 | Encrypted at rest, write-only in the API, and mounted only in the project's namespace.                                                                                           | `SECRETS_ENCRYPTION_KEY`.                                                                            |
-| Database backups                                        | The backup proxy gives each database a key that works only for its own bucket prefix.                                                                                            | `r2Proxy.allowedBuckets` listing only the buckets you intend.                                        |
-| Single sign-on and SCIM                                 | Sessions from one organization's identity provider see only that organization. Email-domain routing uses only domains the organization verified.                                 | Verify the organization's domains before you enforce SSO.                                            |
-| Quotas                                                  | A ResourceQuota and LimitRange in each namespace.                                                                                                                                | Set organization CPU and memory caps. Without caps the namespace has no CPU or memory quota.         |
+| Boundary                                                | Enforced by                                                                                                                                                                                    | What you must configure                                                                              |
+| ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Organization from organization in the dashboard and API | Membership checks on every route. A user outside an organization gets a not-found response, not a permission error.                                                                            | Nothing. Limit who is a superadmin, because superadmins can read every organization.                 |
+| Project from project inside an organization             | Project roles (admin, member, viewer), project-scoped API tokens, and scoped MCP grants. Tokens that Orchard mints are revoked with their parent. Org owners and admins see every project.     | Give people project roles, not org admin.                                                            |
+| Network between tenants                                 | A `default-deny-all` NetworkPolicy in every tenant namespace. Orchard deletes a new namespace if it cannot apply the policy, and restores the policy if someone removes or edits it.           | A CNI that enforces NetworkPolicy, such as Cilium or Calico. Orchard does not check that yours does. |
+| Network from tenants to the platform and the nodes      | Tenant egress excludes the cluster's node and API server addresses and mail ports. The server, Postgres, Redis, metrics and logs accept connections only from namespaces that are not tenants. | Block the node ports at your firewall. Add public load balancer IPs with `tenant.extraDenyCidrs`.    |
+| Kernel between tenants                                  | A sandbox RuntimeClass on tenant pods.                                                                                                                                                         | Optional: `tenantSandbox` with gVisor and `builderSandbox` with Kata. Both are off by default.       |
+| Builds                                                  | One BuildKit daemon per project namespace, a separate pusher container that holds the registry login, rootless BuildKit by default, and a rule that stops a pod using another project's image. | Nodes that allow user namespaces. Keep `REGISTRY_IMAGE_POLICY` at its default or `enforce`.          |
+| Build cache                                             | With the backup proxy enabled, each build gets a short-lived key that reaches only its own project's cache folder.                                                                             | Enable the proxy and let it serve the cache bucket.                                                  |
+| Secrets                                                 | Encrypted at rest, write-only in the API, and mounted only in the project's namespace.                                                                                                         | `SECRETS_ENCRYPTION_KEY`.                                                                            |
+| Shell access                                            | Project editors can open a shell in their own app pods. Database, pooler, job and build pods refuse it.                                                                                        | Nothing.                                                                                             |
+| Database backups                                        | The backup proxy gives each database a key that works only for its own bucket prefix.                                                                                                          | `r2Proxy.allowedBuckets` listing only the buckets you intend.                                        |
+| Single sign-on, group rules and SCIM                    | Sessions from one organization's identity provider see only that organization. Group rules can give `admin`, `member` or `guest`, never `owner`.                                               | Verify the organization's domains before you enforce SSO.                                            |
+| Quotas                                                  | A ResourceQuota and LimitRange in each namespace, plus caps on load balancers, node ports and ephemeral storage.                                                                               | Set organization CPU and memory caps. Without them the namespace has no CPU or memory quota.         |
 
-## Hardened profile checklist
+## What you must do
 
-A single chart profile that sets these is planned, along with an `orchard doctor` command that checks a live cluster. Until then, set each item yourself.
+Orchard cannot do these for you. If one is missing, the matching guarantee does not hold.
 
-- [ ] Install gVisor on every node and set `tenantSandbox.enabled: true`. Confirm with `kubectl get runtimeclass gvisor`.
-- [ ] Install Kata and set `builderSandbox.enabled: true`. Without it, builds run privileged on the host kernel.
-- [ ] Use a CNI that enforces NetworkPolicy. Test it: from a pod in one tenant namespace, try to reach a pod in another.
-- [ ] If you use Cilium, add policies that deny egress from tenant namespaces to the `host`, `remote-node` and `kube-apiserver` entities. Orchard does not ship these. The `10.0.0.0/8` style exceptions in the tenant policy do not cover node or apiserver addresses that are public.
-- [ ] Restrict DNS queries from tenant pods to names in their own namespace (a Cilium DNS rule). Planned as part of the profile. Without it a tenant can list the service names of other namespaces.
-- [ ] Leave Pod Security Admission at `baseline` enforce, which Orchard sets on tenant namespaces. Do not remove the labels.
-- [ ] Set `REGISTRY_IMAGE_POLICY=enforce`. The code default is `warn`.
-- [ ] Set `SECRETS_ENCRYPTION_KEY`, and enable encryption of Secrets at rest in Kubernetes.
-- [ ] Set `TRUST_PROXY` (`clientIp.trustProxy`) to the number of proxies in front of the server, and restrict the origin so that only your CDN or tunnel can reach it. Orchard does not lock the origin for you.
-- [ ] Put the tenant app domain on a different registrable domain from the dashboard, and add it to the [Public Suffix List](https://publicsuffix.org/). Without that, apps on sibling hostnames can set cookies for each other. Never set `COOKIE_DOMAIN` to a parent of the app domain.
-- [ ] Turn on custom-domain verification (`CUSTOM_DOMAIN_VERIFICATION=true`). It is off by default, so the first project to claim a hostname wins.
-- [ ] Set `publicTls.db.mode: perDatabase` if you offer public databases. In the default `wildcard` mode, the wildcard private key is copied into each tenant namespace that has a public database, and anyone who can open a shell in that database pod can read it. `perDatabase` counts against Let's Encrypt rate limits.
-- [ ] Give the build cache its own bucket and its own access key (`BUILDKIT_S3_ACCESS_KEY_ID`). The default key is bucket-wide.
-- [ ] Do not share administrator credentials. The registry login that builds use is shared by all tenants today, so use a dedicated low-privilege account, not the Harbor `admin` account. Per-organization registry accounts are planned.
-- [ ] Use a wildcard certificate for generated app hostnames, so that project hostnames do not appear one by one in Certificate Transparency logs. Refer to [Set up wildcard certificates](/operate/wildcard-certificates/).
-- [ ] Keep the VictoriaMetrics and VictoriaLogs services unreachable from outside the cluster. They have no authentication.
+| Requirement                          | Setting                                                                                                                                                                                                   | Why                                                                                                      |
+| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| A CNI that enforces NetworkPolicy    | Cilium, Calico, Antrea or kube-router. Plain flannel does not.                                                                                                                                            | Every network control is a NetworkPolicy. To test it, try to reach a pod in another tenant namespace.    |
+| A firewall for node ports            | Block `10250`, `6443`, `2379`, `22` and `9100` from the internet.                                                                                                                                         | Orchard keeps tenants away from these addresses. The firewall closes them for everyone else.             |
+| Public load balancer addresses       | `tenant.extraDenyCidrs` (`PLATFORM_EXTRA_DENY_CIDRS`), a comma-separated list.                                                                                                                            | Orchard finds node, pod and API server addresses itself. It cannot find a load balancer that is not one. |
+| Ingress controller namespace         | `tenant.ingressNamespaces` (`TENANT_INGRESS_NAMESPACES`), if the controller is not in `network` or `orchard`.                                                                                             | Tenant ingress is default-deny. A wrong value stops sites and certificate issuing.                       |
+| Origin lock and proxy settings       | Allow only your CDN or tunnel to reach the origin. Set `clientIp.trustProxy` (`TRUST_PROXY`) to the number of proxies in front of the server, and `clientIp.trustedProxyRanges` for a CDN.                | Per-IP limits and audit logs use this address. Traffic straight to the origin skips your CDN and WAF.    |
+| Reverse DNS block                    | The installer does this on its own k3s cluster. Elsewhere, add `acl in-addr.arpa ip6.arpa { block type PTR }` to the CoreDNS `Corefile`.                                                                  | Stops a pod from listing every Service name in the cluster by reverse lookup.                            |
+| User namespaces for builds           | On Ubuntu 24.04 build nodes, set `kernel.apparmor_restrict_unprivileged_userns=0`.                                                                                                                        | Default builds are rootless and need unprivileged user namespaces. Otherwise the build fails.            |
+| App domain on the Public Suffix List | Submit your generated app domain to the [Public Suffix List](https://publicsuffix.org/). Use a different registrable domain from the dashboard. Do not set `COOKIE_DOMAIN` to a parent of the app domain. | Without it, apps on sibling hostnames can set cookies for each other.                                    |
+| Secrets key                          | Set `SECRETS_ENCRYPTION_KEY`. The installer does this. On a Helm install, put it in `server.env`.                                                                                                         | Without it, secrets are stored in plain text in Postgres.                                                |
+| Custom-domain verification           | `CUSTOM_DOMAIN_VERIFICATION=true`.                                                                                                                                                                        | It starts off, so the first project to claim a hostname wins.                                            |
+| Organization caps                    | Set CPU and memory caps per organization.                                                                                                                                                                 | Without caps one organization can use all the CPU and memory of the nodes.                               |
+| Dedicated registry account           | Use a low-privilege account in `HARBOR_USERNAME`, not the Harbor `admin` account.                                                                                                                         | All tenants' builds share this login.                                                                    |
+| Kubernetes Secret encryption         | Turn on encryption at rest for Secrets in your cluster.                                                                                                                                                   | Orchard stores values as Kubernetes Secrets.                                                             |
+
+If you use Cilium, Orchard adds `host`, `remote-node` and `kube-apiserver` denies to tenant namespaces and to builder, sandbox and scan namespaces on its own. Do not set `TENANT_DENY_ENTITIES=none` unless your ingress controller uses host networking and your apps call their own hostnames.
+
+Do not apply `infra/k8s/orchard-metrics/30-network-policies.yaml` on a shared cluster. It lets every namespace query the metrics store. The chart's control-plane policies replace it.
+
+## What you can choose
+
+These cost something, so they are your decision.
+
+| Setting                                            | What it does                                                                          | Cost                                                                             |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `tenantSandbox.enabled` (gVisor)                   | Tenant pods run on a user-space kernel.                                               | Install the runtime on every node first. Some syscalls and IO are slower.        |
+| `builderSandbox.enabled` (Kata)                    | Builds run in a lightweight virtual machine.                                          | Needs Kata and KVM on the build nodes.                                           |
+| `publicTls.db.mode: perDatabase`                   | One certificate per public database. The shared wildcard key stays out of tenants.    | Needs a DNS-01 issuer and counts against Let's Encrypt rate limits.              |
+| `databases.runtimeClassName`                       | Runs database, pooler and Tailscale proxy pods in the sandbox.                        | IO and latency cost. It affects only pods created afterwards.                    |
+| `tenant.nodePortExposure: false`                   | Stops tenants opening NodePorts on every node.                                        | On a shared multi-node cluster, only load balancer ports remain.                 |
+| `admissionPolicies.validationActions: [Deny]`      | The API server refuses the object shapes the guard describes.                         | Read the warnings for a week first. Older pods can fail the hardening rules.     |
+| `admissionPolicies.extraIssuers`, `storageClasses` | Fill in the parameters of the issuer and StorageClass rules.                          | Empty lists skip those rules. Wrong values refuse real objects once on `Deny`.   |
+| Pod Security labels                                | Orchard sets `baseline` enforce and `restricted` warn and audit on tenant namespaces. | Enforcing `restricted` breaks images that run as root. Do not remove the labels. |
+| `HOSTNAME_STYLE=readable`                          | Generated hostnames contain the app and project names.                                | The names show in DNS and certificate logs. The default is opaque.               |
+
+The admission guard ships in `Warn` and `Audit` mode, so it reports and does not refuse until you switch it. See [Security and isolation](/operate/security/#admission-guard-for-tenant-namespaces).
 
 ## What Orchard does not guarantee
 
-- **Kernel isolation by default.** Without gVisor or Kata, tenant pods share the host kernel. A container escape reaches every tenant on the node.
-- **Isolation without a NetworkPolicy-enforcing CNI.** Orchard creates the policy and cannot tell whether it is enforced.
-- **Instant policy at creation.** If creating a namespace's network policy fails, the project is still created, and the policy is restored later by the guard or at the next server start. Check the logs for `Failed to create network policy`.
-- **Protection from the control plane itself.** The server's service account can create pods in any namespace, bind a role that reads Secrets in any namespace, and delete the isolation policies. A compromise of the server is a compromise of the cluster. A least-privilege redesign is planned.
-- **Database sandboxing.** Managed database pods do not use the tenant RuntimeClass.
-- **Secrecy from project editors.** Anyone with edit access to a project can open a shell in its pods, including database pods, and read their environment.
+- **Kernel isolation by default.** Without gVisor or Kata, tenant pods share the host kernel. Default builds are rootless and not privileged, but they still share the node kernel. A container escape reaches every tenant on the node.
+- **Isolation without a NetworkPolicy-enforcing CNI.** Orchard creates the policies and cannot tell whether they are enforced.
+- **Protection from the control plane itself.** The server's service account can create pods in any namespace, grant itself read access to Secrets in any namespace, and remove the isolation policies. A compromise of the server is a compromise of the cluster. Keep the server patched and limit who can reach it.
+- **Separate registry credentials.** All tenants' builds use one registry login, kept in a container that does not run tenant code.
+- **Separate encryption keys.** One key encrypts secrets for every organization.
+- **Secrecy from project editors.** Anyone with edit access can open a shell in their project's app pods and read their environment.
 - **Hiding names from cluster operators.** Namespace names contain the organization and project slugs, and an organization transfer keeps the old name.
 - **Hardware isolation.** gVisor and Kata reduce the attack surface of the kernel. Neither is a separate machine.
 
 ## What a tenant can learn about other tenants
 
-With the checklist above in place, tenant pods cannot reach the Kubernetes API, the metrics and log stores or other tenants' unpublished services. These remain:
+With the requirements above in place, tenant pods cannot reach the Kubernetes API, the nodes, the metrics and log stores, or other tenants' unpublished services. These remain:
 
-- Public hostnames of anything with its own certificate, through Certificate Transparency logs.
-- The service names of other namespaces, through cluster DNS, until you add a DNS rule.
+- Public hostnames of anything with its own certificate, through Certificate Transparency logs. Generated hostnames are opaque, and a wildcard certificate hides the labels. Refer to [Set up wildcard certificates](/operate/wildcard-certificates/).
+- Service names in cluster DNS, through forward lookups. The names end in a random suffix, so they are hard to guess.
 - Services another tenant has published, which answer on the pod network as they do on the internet.
 - On the login endpoints, the name, slug and sign-in providers of an organization that has SSO turned on, if someone guesses its slug. An organization without SSO is indistinguishable from a missing one.
 
-The full inventory is in the internal tenancy model, `docs/tenancy-model.md` in the repository.
+The full inventory, with the code and tests behind each guarantee, is in the internal tenancy model, `docs/tenancy-model.md` in the repository.
 
 ## Related resources
 
@@ -72,3 +94,4 @@ The full inventory is in the internal tenancy model, `docs/tenancy-model.md` in 
 - [Go to production](/operate/production/)
 - [Set up wildcard certificates](/operate/wildcard-certificates/)
 - [Set quotas](/teams/quotas/)
+- [Protect an app](/deploy/protection/)
