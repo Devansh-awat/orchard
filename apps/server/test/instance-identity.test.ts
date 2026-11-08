@@ -18,6 +18,8 @@ function makeWorld() {
     organization: [],
     organizationMember: [],
     idpGroupRule: [],
+    idpProjectRule: [],
+    projectMember: [],
     idpAutoCreateRule: [],
     federatedIdentity: [],
     scimGroupMember: [],
@@ -60,6 +62,8 @@ function makeWorld() {
       managedByProviderId: null
     })),
     idpGroupRule: col('idpGroupRule', () => ({ id: randomUUID() })),
+    idpProjectRule: col('idpProjectRule', () => ({ id: randomUUID() })),
+    projectMember: col('projectMember', () => ({ id: randomUUID() })),
     idpAutoCreateRule: col('idpAutoCreateRule', () => ({ id: randomUUID(), organizationId: null })),
     federatedIdentity: col('federatedIdentity', () => ({
       id: randomUUID(),

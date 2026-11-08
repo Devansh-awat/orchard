@@ -32,6 +32,8 @@ import {
 
 export const NOT_MAPPED = 'sso_not_mapped';
 
+const PROJECT_ROLE_RANK: Record<string, number> = { viewer: 0, member: 1, admin: 2 };
+
 const MAX_SUBJECT_LENGTH = 255;
 const AUDIT_LIST_LIMIT = 20;
 
@@ -234,6 +236,7 @@ export class IdentityMappingService {
       });
       if (!user || user.isSuperAdmin) continue;
       await this.syncOne(provider, user, organizationId, after, false);
+      await this.syncProjects(provider, user.id, change.after, organizationId);
       touched += 1;
     }
     return touched;
@@ -263,6 +266,16 @@ export class IdentityMappingService {
   }
 
   async apply(
+    provider: IdentityProvider,
+    user: { id: string; email: string },
+    ctx: MappingContext
+  ): Promise<void> {
+    if (ctx.groups?.kind !== 'groups') return;
+    await this.applyOrgs(provider, user, ctx);
+    await this.syncProjects(provider, user.id, ctx.groups.groups);
+  }
+
+  private async applyOrgs(
     provider: IdentityProvider,
     user: { id: string; email: string },
     ctx: MappingContext
@@ -443,6 +456,175 @@ export class IdentityMappingService {
       targetId: provider.id,
       targetLabel: provider.name
     });
+  }
+
+  /**
+   * Project roles from IdP groups. A rule only ever lands inside an org the
+   * person is already an active member of, and only ever touches project
+   * memberships it created itself: someone added to a project by hand keeps
+   * that membership whatever their groups say.
+   */
+  async syncProjects(
+    provider: IdentityProvider,
+    userId: string,
+    groups: ReadonlySet<string>,
+    onlyOrganizationId?: string
+  ): Promise<void> {
+    const rules = await this.prisma.idpProjectRule.findMany({
+      where: {
+        providerId: provider.id,
+        ...(provider.organizationId ? { organizationId: provider.organizationId } : {}),
+        ...(onlyOrganizationId ? { organizationId: onlyOrganizationId } : {})
+      },
+      select: { projectId: true, organizationId: true, value: true, roleId: true, role: true }
+    });
+    const managed = await this.prisma.projectMember.findMany({
+      where: {
+        userId,
+        managedByProviderId: provider.id,
+        ...(onlyOrganizationId ? { project: { organizationId: onlyOrganizationId } } : {})
+      },
+      select: { id: true, projectId: true, roleId: true }
+    });
+    if (rules.length === 0 && managed.length === 0) return;
+
+    const memberships = await this.prisma.organizationMember.findMany({
+      where: {
+        userId,
+        status: 'active',
+        organizationId: { in: rules.map((r) => r.organizationId) }
+      },
+      select: { organizationId: true }
+    });
+    const activeOrgs = new Set(memberships.map((m) => m.organizationId));
+    const wanted = new Map<string, { roleId: string; rank: number }>();
+    for (const rule of rules) {
+      if (!groups.has(rule.value) || !activeOrgs.has(rule.organizationId)) continue;
+      const rank = PROJECT_ROLE_RANK[rule.role.name] ?? -1;
+      const current = wanted.get(rule.projectId);
+      if (!current || rank > current.rank)
+        wanted.set(rule.projectId, { roleId: rule.roleId, rank });
+    }
+
+    for (const [projectId, { roleId }] of wanted) {
+      const existing = await this.prisma.projectMember.findFirst({
+        where: { projectId, userId },
+        select: { id: true, roleId: true, managedByProviderId: true }
+      });
+      if (!existing) {
+        await this.prisma.projectMember.create({
+          data: { projectId, userId, roleId, managedByProviderId: provider.id }
+        });
+      } else if (existing.managedByProviderId === provider.id && existing.roleId !== roleId) {
+        await this.prisma.projectMember.update({ where: { id: existing.id }, data: { roleId } });
+      }
+    }
+    const dropped = managed.filter((m) => !wanted.has(m.projectId));
+    if (dropped.length) {
+      await this.prisma.projectMember.deleteMany({
+        where: { id: { in: dropped.map((m) => m.id) } }
+      });
+    }
+    if (dropped.length || wanted.size) this.membershipCache.invalidateInternalUserId(userId);
+  }
+
+  async listProjectRules(provider: IdentityProvider) {
+    return this.prisma.idpProjectRule.findMany({
+      where: { providerId: provider.id },
+      orderBy: [{ organizationId: 'asc' }, { value: 'asc' }],
+      select: {
+        id: true,
+        organizationId: true,
+        projectId: true,
+        value: true,
+        roleId: true,
+        role: { select: { name: true } },
+        project: { select: { name: true, slug: true } }
+      }
+    });
+  }
+
+  async replaceProjectRules(
+    provider: IdentityProvider,
+    input: { rules: Array<{ value: string; projectId: string; role: string }> },
+    actor: Actor
+  ) {
+    if (provider.protocol !== SsoProtocol.oidc && provider.protocol !== SsoProtocol.saml) {
+      throw new BadRequestException('Group rules need an OIDC or SAML provider');
+    }
+    if (!input || !Array.isArray(input.rules))
+      throw new BadRequestException('rules must be a list');
+    if (input.rules.length > MAX_RULES_PER_ORG) {
+      throw new BadRequestException(`At most ${MAX_RULES_PER_ORG} rules per provider`);
+    }
+    const roles = await this.prisma.role.findMany({
+      where: { name: { in: Object.keys(PROJECT_ROLE_RANK) } },
+      select: { id: true, name: true }
+    });
+    const roleByName = new Map(roles.map((r) => [r.name, r.id]));
+    const projectIds = [...new Set(input.rules.map((r) => r?.projectId).filter(Boolean))];
+    const projects = await this.prisma.project.findMany({
+      where: {
+        id: { in: projectIds },
+        ...(provider.organizationId ? { organizationId: provider.organizationId } : {})
+      },
+      select: { id: true, organizationId: true }
+    });
+    const projectOrg = new Map(projects.map((p) => [p.id, p.organizationId]));
+
+    const wanted = new Map<
+      string,
+      { value: string; projectId: string; organizationId: string; roleId: string }
+    >();
+    for (const r of input.rules) {
+      if (!r || typeof r !== 'object') throw new BadRequestException('Invalid rule');
+      let value: string;
+      try {
+        value = ruleValue(r.value);
+      } catch (err) {
+        if (err instanceof RuleValueError) throw new BadRequestException(err.message);
+        throw err;
+      }
+      const organizationId = projectOrg.get(r.projectId);
+      if (!organizationId) {
+        throw new BadRequestException(
+          provider.organizationId
+            ? "An organization's provider can only map into that organization's projects"
+            : 'Unknown project'
+        );
+      }
+      const roleId = roleByName.get(r.role);
+      if (!roleId) throw new BadRequestException('Role must be admin, member or viewer');
+      const key = `${r.projectId}\u0000${value}`;
+      if (wanted.has(key)) throw new BadRequestException(`Duplicate rule for "${value}"`);
+      wanted.set(key, { value, projectId: r.projectId, organizationId, roleId });
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.idpProjectRule.deleteMany({ where: { providerId: provider.id } }),
+      ...(wanted.size
+        ? [
+            this.prisma.idpProjectRule.createMany({
+              data: [...wanted.values()].map((w) => ({
+                ...w,
+                providerId: provider.id,
+                createdBy: actor.userId
+              }))
+            })
+          ]
+        : [])
+    ]);
+    void this.audit.log({
+      action: 'sso.project_rules.updated',
+      actorUserId: actor.userId,
+      actorEmail: actor.email,
+      organizationId: provider.organizationId,
+      targetType: 'identity_provider',
+      targetId: provider.id,
+      targetLabel: provider.name,
+      metadata: { total: wanted.size }
+    });
+    return this.listProjectRules(provider);
   }
 
   async requireProvider(providerId: string, organizationId: string | null) {

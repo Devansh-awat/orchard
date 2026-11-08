@@ -22,6 +22,8 @@ function makeWorld() {
     scimGroup: [],
     scimGroupMember: [],
     idpGroupRule: [],
+    idpProjectRule: [],
+    projectMember: [],
     identityProvider: [
       { id: PROVIDER_A, organizationId: ORG_A, name: 'A idp', groupClaim: 'groups' },
       { id: PROVIDER_B, organizationId: ORG_B, name: 'B idp', groupClaim: 'groups' }
@@ -69,6 +71,8 @@ function makeWorld() {
     })),
     scimGroupMember: collection('scimGroupMember'),
     idpGroupRule: collection('idpGroupRule'),
+    idpProjectRule: collection('idpProjectRule'),
+    projectMember: collection('projectMember'),
     identityProvider: collection('identityProvider'),
     apiToken: {
       deleteMany: async ({ where }: any) => {

@@ -30,7 +30,37 @@ class Fake {
 
   detached: string[] = [];
 
+  projectRules: Row[] = [];
+
+  projectMembers: Row[] = [];
+
   prisma: any = {
+    idpProjectRule: {
+      findMany: async ({ where }: any) =>
+        this.projectRules.filter((r) => r.providerId === where.providerId)
+    },
+    projectMember: {
+      findMany: async ({ where }: any) =>
+        this.projectMembers.filter(
+          (m) => m.userId === where.userId && m.managedByProviderId === where.managedByProviderId
+        ),
+      findFirst: async ({ where }: any) =>
+        this.projectMembers.find(
+          (m) => m.projectId === where.projectId && m.userId === where.userId
+        ) ?? null,
+      create: async ({ data }: any) => {
+        this.projectMembers.push({ id: id('pm'), ...data });
+      },
+      update: async ({ where, data }: any) => {
+        Object.assign(
+          this.projectMembers.find((m) => m.id === where.id)!,
+          data
+        );
+      },
+      deleteMany: async ({ where }: any) => {
+        this.projectMembers = this.projectMembers.filter((m) => !where.id.in.includes(m.id));
+      }
+    },
     idpGroupRule: {
       findMany: async ({ where }: any) =>
         this.rules.filter((r) => !where?.providerId || r.providerId === where.providerId),

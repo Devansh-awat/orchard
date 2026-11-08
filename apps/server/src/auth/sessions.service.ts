@@ -1,10 +1,12 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { ForbiddenException, Injectable, Logger } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
 import { UAParser } from 'ua-parser-js';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { deviceLabel } from './org-scoped-devices';
+
+export const ACCOUNT_DISABLED = 'account_disabled';
 
 // M-1: Geo enrichment uses ipwho.is over HTTPS with a short timeout. Plain HTTP
 // would leak every login IP in cleartext and let a network attacker forge the
@@ -60,6 +62,12 @@ export class SessionsService {
     deviceName?: string;
     ttlMs?: number;
   }): Promise<string> {
+    const owner = await this.prisma.user.findUnique({
+      where: { id: params.userId },
+      select: { disabledAt: true }
+    });
+    if (owner?.disabledAt) throw new ForbiddenException(ACCOUNT_DISABLED);
+
     const deviceName =
       params.deviceName ?? (params.userAgent ? this.parseDeviceName(params.userAgent) : null);
 
@@ -159,12 +167,14 @@ export class SessionsService {
    */
   async validateSession(sessionId: string): Promise<boolean> {
     const session = await this.prisma.session.findUnique({
-      where: { id: sessionId }
+      where: { id: sessionId },
+      include: { user: { select: { disabledAt: true } } }
     });
 
     if (!session) return false;
     if (session.revokedAt) return false;
     if (session.expiresAt < new Date()) return false;
+    if (session.user?.disabledAt) return false;
 
     return true;
   }

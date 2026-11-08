@@ -43,6 +43,16 @@ export class AdminController {
     return this.adminService.updateUser(id, req.auth.userId, body);
   }
 
+  @Post('users/:id/disable')
+  async disableUser(@Param('id') id: string, @Body() body: { reason?: string }, @Req() req: any) {
+    return this.adminService.setUserDisabled(id, req.auth.userId, true, body?.reason);
+  }
+
+  @Post('users/:id/enable')
+  async enableUser(@Param('id') id: string, @Req() req: any) {
+    return this.adminService.setUserDisabled(id, req.auth.userId, false);
+  }
+
   @Delete('users/:id')
   async deleteUser(@Param('id') id: string, @Req() req: any) {
     return this.adminService.deleteUser(id, req.auth.userId);

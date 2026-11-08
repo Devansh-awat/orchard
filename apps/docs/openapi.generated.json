@@ -2864,6 +2864,99 @@
         ]
       }
     },
+    "/admin/sso/providers/{providerId}/project-rules": {
+      "get": {
+        "description": "Auth: superadmin",
+        "operationId": "admin_sso_providers_project_rules_list",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "providerId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {},
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "GET /admin/sso/providers/:providerId/project-rules",
+        "tags": [
+          "admin"
+        ]
+      },
+      "put": {
+        "description": "Auth: superadmin",
+        "operationId": "admin_sso_providers_project_rules_set",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "providerId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": {},
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {},
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "PUT /admin/sso/providers/:providerId/project-rules",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
     "/admin/sso/providers/{providerId}/rules": {
       "get": {
         "description": "Auth: superadmin",
@@ -3392,6 +3485,112 @@
           }
         ],
         "summary": "PATCH /admin/users/:id",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/users/{id}/disable": {
+      "post": {
+        "description": "Auth: superadmin",
+        "operationId": "admin_users_disable",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": {},
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {},
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "POST /admin/users/:id/disable",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/users/{id}/enable": {
+      "post": {
+        "description": "Auth: superadmin",
+        "operationId": "admin_users_enable",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": {},
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {},
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "POST /admin/users/:id/enable",
         "tags": [
           "admin"
         ]
@@ -52369,6 +52568,67 @@
         ]
       }
     },
+    "/organizations/{id}/members/{memberId}/enable": {
+      "post": {
+        "description": "Auth: authenticated",
+        "operationId": "organizations_members_enable",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "memberId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": {},
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {},
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "POST /organizations/:id/members/:memberId/enable",
+        "tags": [
+          "organizations"
+        ]
+      }
+    },
     "/organizations/{id}/members/join": {
       "post": {
         "description": "Auth: authenticated",
@@ -54069,6 +54329,115 @@
           }
         ],
         "summary": "POST /organizations/:id/sso/providers/:providerId/icon",
+        "tags": [
+          "organizations"
+        ]
+      }
+    },
+    "/organizations/{id}/sso/providers/{providerId}/project-rules": {
+      "get": {
+        "description": "Auth: authenticated",
+        "operationId": "organizations_sso_providers_project_rules_list",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "providerId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {},
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "GET /organizations/:id/sso/providers/:providerId/project-rules",
+        "tags": [
+          "organizations"
+        ]
+      },
+      "put": {
+        "description": "Auth: authenticated",
+        "operationId": "organizations_sso_providers_project_rules_set",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "providerId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": {},
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {},
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "PUT /organizations/:id/sso/providers/:providerId/project-rules",
         "tags": [
           "organizations"
         ]

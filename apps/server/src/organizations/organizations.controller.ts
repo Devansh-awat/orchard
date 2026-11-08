@@ -262,6 +262,18 @@ export class OrganizationsController {
     });
   }
 
+  @Post(':id/members/:memberId/enable')
+  async enableMember(
+    @Param('id') organizationId: string,
+    @Param('memberId') memberId: string,
+    @Request() req
+  ) {
+    return this.organizationsService.enableMember(organizationId, memberId, req.user.sub, {
+      email: req.user.email,
+      username: req.user.username
+    });
+  }
+
   @Delete(':id/members/:memberId')
   async removeMemberFromOrganization(
     @Param('id') organizationId: string,

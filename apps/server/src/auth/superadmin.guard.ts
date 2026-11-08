@@ -453,7 +453,8 @@ export class SuperAdminGuard implements CanActivate {
               username: true,
               firstName: true,
               lastName: true,
-              externalAuthId: true
+              externalAuthId: true,
+              disabledAt: true
             }
           }
         }
@@ -465,6 +466,9 @@ export class SuperAdminGuard implements CanActivate {
 
       if (apiToken.expiresAt && apiToken.expiresAt < new Date()) {
         throw new UnauthorizedException('API token has expired');
+      }
+      if (apiToken.user.disabledAt) {
+        throw new UnauthorizedException('This account is turned off');
       }
 
       if (deniedToApiToken(request.path)) {

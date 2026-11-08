@@ -666,10 +666,13 @@ model ProjectMember {
   addedAt   DateTime @default(now()) @map("added_at") @db.Timestamp(6)
   addedBy   String?  @map("added_by") @db.Uuid
 
-  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  role    Role    @relation(fields: [roleId], references: [id], onDelete: Cascade)
-  adder   User?   @relation("ProjectMemberAdder", fields: [addedBy], references: [id], onDelete: SetNull)
+  managedByProviderId String? @map("managed_by_provider_id") @db.Uuid
+
+  project           Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user              User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role              Role              @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  adder             User?             @relation("ProjectMemberAdder", fields: [addedBy], references: [id], onDelete: SetNull)
+  managedByProvider IdentityProvider? @relation(fields: [managedByProviderId], references: [id], onDelete: SetNull)
 
   @@unique([projectId, userId])
   @@index([projectId], map: "idx_project_members_project")
@@ -2074,12 +2077,13 @@ model IdentityProvider {
   createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
   updatedAt  DateTime  @updatedAt @map("updated_at") @db.Timestamp(6)
 
-  organization        Organization?        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  groupRules          IdpGroupRule[]
-  projectRules        IdpProjectRule[]
-  autoCreateRules     IdpAutoCreateRule[]
-  federatedIdentities FederatedIdentity[]
-  managedMembers      OrganizationMember[]
+  organization          Organization?        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  groupRules            IdpGroupRule[]
+  projectRules          IdpProjectRule[]
+  managedProjectMembers ProjectMember[]
+  autoCreateRules       IdpAutoCreateRule[]
+  federatedIdentities   FederatedIdentity[]
+  managedMembers        OrganizationMember[]
 
   @@unique([organizationId, slug])
   @@index([organizationId], map: "idx_identity_providers_org")

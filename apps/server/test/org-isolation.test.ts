@@ -262,6 +262,18 @@ test('tokens, owners and domain-managed members cannot leave', async () => {
   );
 });
 
+test('an org identity cannot leave the org that owns it', async () => {
+  const { service } = buildOrgs({
+    id: 'm',
+    role: 'member',
+    user: { homeOrganizationId: 'org' }
+  });
+  await assert.rejects(
+    () => inBrowser(() => service.leaveOrganization('org', 'pepito')),
+    /belongs to the organization/
+  );
+});
+
 test('a confined session cannot leave a different org', async () => {
   const { service } = buildOrgs({ id: 'm', role: 'member' });
   await assert.rejects(

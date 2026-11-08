@@ -168,6 +168,21 @@ export class SsoInstanceController {
     return this.mapping.replaceRules(provider, body, this.actor(req));
   }
 
+  @Get('providers/:providerId/project-rules')
+  async listProjectRules(@Param('providerId') providerId: string) {
+    return this.mapping.listProjectRules(await this.mapping.requireProvider(providerId, null));
+  }
+
+  @Put('providers/:providerId/project-rules')
+  async replaceProjectRules(
+    @Param('providerId') providerId: string,
+    @Body() body: { rules: Array<{ value: string; projectId: string; role: string }> },
+    @Request() req
+  ) {
+    const provider = await this.mapping.requireProvider(providerId, null);
+    return this.mapping.replaceProjectRules(provider, body, this.actor(req));
+  }
+
   @Post('providers/:providerId/rules/preview')
   async previewRules(@Param('providerId') providerId: string, @Body('groups') groups: string[]) {
     return this.mapping.preview(await this.mapping.requireProvider(providerId, null), groups);

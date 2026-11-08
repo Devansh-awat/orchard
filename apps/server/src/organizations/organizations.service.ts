@@ -1855,10 +1855,13 @@ export class OrganizationsService {
       throw new ForbiddenException('Only the organization owner can remove an admin');
     }
 
-    await this.detachMember(member, organizationId);
+    if (member.status === 'disabled') {
+      return { success: true, message: "This member's access is already turned off" };
+    }
+    await this.disableMember(member, organizationId, 'Turned off by an admin');
 
     void this.audit.log({
-      action: 'org.member.removed',
+      action: 'org.member.disabled',
       actorUserId: remover.id,
       actorEmail: remover.email,
       organizationId,
@@ -1868,7 +1871,73 @@ export class OrganizationsService {
       metadata: { role: member.role }
     });
 
-    return { success: true, message: 'Member removed from organization' };
+    return { success: true, message: 'Access turned off' };
+  }
+
+  /**
+   * Members are disabled, never deleted: the row keeps who they were for the
+   * audit trail and for anything they built, and they lose every way in. A
+   * later re-enable starts them with no project access, so nothing stale comes
+   * back with them.
+   */
+  async disableMember(
+    member: { id: string; userId: string; user?: { homeOrganizationId?: string | null } | null },
+    organizationId: string,
+    reason: string
+  ): Promise<void> {
+    await this.prisma.organizationMember.update({
+      where: { id: member.id },
+      data: { status: 'disabled', disabledAt: new Date(), disabledReason: reason.slice(0, 255) }
+    });
+    await this.revokeMemberAccess(member, organizationId);
+    await this.prisma.sessionOrgGrant.deleteMany({
+      where: { organizationId, session: { userId: member.userId } }
+    });
+    await this.prisma.apiToken.deleteMany({
+      where: { userId: member.userId, scopeOrganizationId: organizationId }
+    });
+    if (member.user?.homeOrganizationId === organizationId) {
+      await this.prisma.session.updateMany({
+        where: { userId: member.userId, revokedAt: null },
+        data: { revokedAt: new Date() }
+      });
+    }
+  }
+
+  async enableMember(organizationId: string, memberId: string, enabledBy: string, userData?: any) {
+    const actor = await this.usersService.findOrCreateByClerkId(enabledBy, userData);
+    if (!actor) throw new NotFoundException('User not found');
+    const access = await this.authz.requireOrgAdmin(organizationId, actor.id);
+    const member = await this.prisma.organizationMember.findUnique({
+      where: { id: memberId },
+      include: { user: true }
+    });
+    if (!member || member.organizationId !== organizationId) {
+      throw new NotFoundException('Member not found in this organization');
+    }
+    if (member.role === 'admin' && access.role !== 'owner') {
+      throw new ForbiddenException('Only the organization owner can turn an admin back on');
+    }
+    if (member.status === 'active') return { success: true };
+    if (member.user.disabledAt) {
+      throw new BadRequestException('This account is turned off for the whole instance');
+    }
+    await this.prisma.organizationMember.update({
+      where: { id: member.id },
+      data: { status: 'active', disabledAt: null, disabledReason: null }
+    });
+    this.membershipCache.invalidateInternalUserId(member.userId);
+    void this.audit.log({
+      action: 'org.member.enabled',
+      actorUserId: actor.id,
+      actorEmail: actor.email,
+      organizationId,
+      targetType: 'user',
+      targetId: member.userId,
+      targetLabel: member.user.email,
+      metadata: { role: member.role }
+    });
+    return { success: true };
   }
 
   async leaveOrganization(organizationId: string, clerkId: string, userData?: any) {
@@ -1889,6 +1958,11 @@ export class OrganizationsService {
     if (!member) throw new NotFoundException('Organization not found');
     if (member.role === 'owner') {
       throw new BadRequestException('Transfer ownership before you leave this organization');
+    }
+    if (member.user?.homeOrganizationId === organizationId) {
+      throw new ForbiddenException(
+        'This profile belongs to the organization. Ask an admin to turn off your access.'
+      );
     }
     if (member.scimManaged) {
       const domain = user.email.split('@')[1]?.toLowerCase() ?? '';
@@ -1934,14 +2008,22 @@ export class OrganizationsService {
     // out short of promoting a new admin in every project they held.
     await this.prisma.$transaction(async (tx) => {
       await tx.projectMember.deleteMany({
-        where: {
-          userId: member.userId,
-          project: { organizationId }
-        }
+        where: { userId: member.userId, project: { organizationId } }
       });
-      await tx.organizationMember.delete({
-        where: { id: memberId }
-      });
+      await tx.organizationMember.delete({ where: { id: memberId } });
+    });
+    await this.revokeMemberAccess(member, organizationId);
+  }
+
+  private async revokeMemberAccess(
+    member: { id: string; userId: string },
+    organizationId: string
+  ): Promise<void> {
+    await this.prisma.projectMember.deleteMany({
+      where: {
+        userId: member.userId,
+        project: { organizationId }
+      }
     });
 
     // Project-scoped API tokens that point at this org's projects must not

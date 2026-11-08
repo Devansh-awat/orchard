@@ -225,6 +225,30 @@ export class SsoAdminController {
     return this.mapping.replaceRules(provider, body, actor);
   }
 
+  @Get('providers/:providerId/project-rules')
+  async listProjectRules(
+    @Param('id') organizationId: string,
+    @Param('providerId') providerId: string,
+    @Request() req
+  ) {
+    await this.requireAdmin(organizationId, req);
+    return this.mapping.listProjectRules(
+      await this.mapping.requireProvider(providerId, organizationId)
+    );
+  }
+
+  @Put('providers/:providerId/project-rules')
+  async replaceProjectRules(
+    @Param('id') organizationId: string,
+    @Param('providerId') providerId: string,
+    @Body() body: { rules: Array<{ value: string; projectId: string; role: string }> },
+    @Request() req
+  ) {
+    const actor = await this.requireOwner(organizationId, req);
+    const provider = await this.mapping.requireProvider(providerId, organizationId);
+    return this.mapping.replaceProjectRules(provider, body, actor);
+  }
+
   @Post('providers/:providerId/rules/preview')
   async previewRules(
     @Param('id') organizationId: string,

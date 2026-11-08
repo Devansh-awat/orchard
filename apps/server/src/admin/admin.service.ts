@@ -54,6 +54,8 @@ export class AdminService {
           imageUrl: true,
           isSuperAdmin: true,
           createdAt: true,
+          disabledAt: true,
+          homeOrganizationId: true,
           _count: {
             select: {
               organizationMembers: true,
@@ -152,6 +154,49 @@ export class AdminService {
     }
 
     return updated;
+  }
+
+  /**
+   * Turns an account off across the whole instance, Datadog-style: the row,
+   * its memberships and everything it built stay, every session and token
+   * dies, and no sign-in method can start a new one until it is turned back on.
+   */
+  async setUserDisabled(userId: string, requesterId: string, disabled: boolean, reason?: string) {
+    if (userId === requesterId) {
+      throw new ForbiddenException("You can't turn off your own account");
+    }
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new NotFoundException('User not found');
+    if (disabled && user.isSuperAdmin) {
+      const others = await this.prisma.user.count({
+        where: { isSuperAdmin: true, disabledAt: null, id: { not: userId } }
+      });
+      if (others === 0) throw new ForbiddenException("You can't turn off the last superadmin");
+    }
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: disabled
+        ? {
+            disabledAt: new Date(),
+            disabledReason: (reason || 'Turned off by an admin').slice(0, 255)
+          }
+        : { disabledAt: null, disabledReason: null }
+    });
+    if (disabled) {
+      await this.prisma.session.updateMany({
+        where: { userId, revokedAt: null },
+        data: { revokedAt: new Date() }
+      });
+      await this.prisma.apiToken.deleteMany({ where: { userId } });
+    }
+    void this.audit.log({
+      action: disabled ? 'user.disabled' : 'user.enabled',
+      actorUserId: requesterId,
+      targetType: 'user',
+      targetId: userId,
+      targetLabel: user.email
+    });
+    return { success: true, disabled };
   }
 
   async deleteUser(userId: string, requesterId: string) {

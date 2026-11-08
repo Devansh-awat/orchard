@@ -1036,6 +1036,15 @@
     "bodyIds": [],
     "unseeded": []
   },
+  "GET /admin/sso/providers/:providerId/project-rules": {
+    "class": "superadmin",
+    "auth": "superadmin",
+    "handler": "SsoInstanceController.listProjectRules",
+    "params": ["providerId:ssoProvider"],
+    "queryIds": [],
+    "bodyIds": [],
+    "unseeded": []
+  },
   "GET /admin/sso/providers/:providerId/rules": {
     "class": "superadmin",
     "auth": "superadmin",
@@ -2947,6 +2956,15 @@
     "bodyIds": [],
     "unseeded": []
   },
+  "GET /organizations/:id/sso/providers/:providerId/project-rules": {
+    "class": "resource-scoped",
+    "auth": "authenticated",
+    "handler": "SsoAdminController.listProjectRules",
+    "params": ["id:org", "providerId:ssoProvider"],
+    "queryIds": [],
+    "bodyIds": [],
+    "unseeded": []
+  },
   "GET /organizations/:id/sso/providers/:providerId/rules": {
     "class": "resource-scoped",
     "auth": "authenticated",
@@ -4433,6 +4451,24 @@
     "bodyIds": [],
     "unseeded": []
   },
+  "POST /admin/users/:id/disable": {
+    "class": "superadmin",
+    "auth": "superadmin",
+    "handler": "AdminController.disableUser",
+    "params": ["id:unknown"],
+    "queryIds": [],
+    "bodyIds": [],
+    "unseeded": []
+  },
+  "POST /admin/users/:id/enable": {
+    "class": "superadmin",
+    "auth": "superadmin",
+    "handler": "AdminController.enableUser",
+    "params": ["id:unknown"],
+    "queryIds": [],
+    "bodyIds": [],
+    "unseeded": []
+  },
   "POST /announcements/announcements": {
     "class": "exempt",
     "auth": "superadmin",
@@ -5656,6 +5692,15 @@
     "bodyIds": [],
     "unseeded": []
   },
+  "POST /organizations/:id/members/:memberId/enable": {
+    "class": "resource-scoped",
+    "auth": "authenticated",
+    "handler": "OrganizationsController.enableMember",
+    "params": ["id:org", "memberId:orgMember"],
+    "queryIds": [],
+    "bodyIds": [],
+    "unseeded": []
+  },
   "POST /organizations/:id/members/join": {
     "class": "resource-scoped",
     "auth": "authenticated",
@@ -6178,6 +6223,15 @@
     "bodyIds": [],
     "unseeded": []
   },
+  "PUT /admin/sso/providers/:providerId/project-rules": {
+    "class": "superadmin",
+    "auth": "superadmin",
+    "handler": "SsoInstanceController.replaceProjectRules",
+    "params": ["providerId:ssoProvider"],
+    "queryIds": [],
+    "bodyIds": [],
+    "unseeded": []
+  },
   "PUT /admin/sso/providers/:providerId/rules": {
     "class": "superadmin",
     "auth": "superadmin",
@@ -6360,6 +6414,15 @@
     "auth": "authenticated",
     "handler": "JobsController.replaceSteps",
     "params": ["id:job"],
+    "queryIds": [],
+    "bodyIds": [],
+    "unseeded": []
+  },
+  "PUT /organizations/:id/sso/providers/:providerId/project-rules": {
+    "class": "resource-scoped",
+    "auth": "authenticated",
+    "handler": "SsoAdminController.replaceProjectRules",
+    "params": ["id:org", "providerId:ssoProvider"],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []

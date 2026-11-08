@@ -15,6 +15,8 @@ function world(opts: { verifiedDomains?: string[]; settings?: Row } = {}) {
     user: [],
     organizationMember: [],
     idpGroupRule: [],
+    idpProjectRule: [],
+    projectMember: [],
     idpAutoCreateRule: [],
     federatedIdentity: [],
     scimGroupMember: [],
@@ -60,6 +62,8 @@ function world(opts: { verifiedDomains?: string[]; settings?: Row } = {}) {
       status: 'active'
     })),
     idpGroupRule: collection(tables, 'idpGroupRule', () => ({ id: randomUUID() })),
+    idpProjectRule: collection(tables, 'idpProjectRule', () => ({ id: randomUUID() })),
+    projectMember: collection(tables, 'projectMember', () => ({ id: randomUUID() })),
     idpAutoCreateRule: collection(tables, 'idpAutoCreateRule'),
     federatedIdentity: collection(
       tables,
