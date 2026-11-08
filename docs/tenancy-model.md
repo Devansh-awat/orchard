@@ -315,13 +315,13 @@ Rule for this document: where something is still unfixed it is described as hard
 - Public ports per org capped at 20 (`MAX_PUBLIC_PORTS_PER_ORG`).
 - Per-IP and per-account throttles: `ApiThrottlerGuard`, `RateLimitService`, `RedisThrottleService`, pre-auth limits, body limits, SSE limiter, ingress limits.
 
-**Required config.** Set org CPU and memory caps (without them no CPU or memory quota exists in the namespace); Redis for cross-replica throttling (the chart enables it); node pools for noisy tenants.
+**Required config.** Set org CPU and memory caps (without them no CPU or memory quota exists in the namespace). New organizations are uncapped by default; a superadmin sets the instance default for new organizations (CPU, memory, projects, environments, deployments; `admin/instance-settings/new-org-defaults`, setting `new_org_defaults`, snapshotted into the org at creation, never retroactive) and can override any one organization (`PATCH admin/organizations/:id/quota`). On an open-signup instance set these defaults; an uncapped new org can take all the node CPU and memory and create unbounded projects. Both writes are audited (`admin.new_org_defaults_updated`, `admin.org.quota_updated`). Count limits are enforced by `assertOrgCanCreate` (`apps/server/src/quotas/org-limits.ts`), with the optional `MAX_*_PER_ORG` environment ceilings on top; Redis for cross-replica throttling (the chart enables it); node pools for noisy tenants.
 
 **Not guaranteed.** No CPU or memory quota by default. Quotas are per namespace; per-org totals are API-layer aggregation. No node-level isolation by default.
 
 **Residual risk.** A tenant with no org caps can consume node CPU and memory. Window between namespace creation and the first quota sync (`UNVERIFIED` for length).
 
-**Test.** `tenant-quota.test.ts`, `tenant-abuse-quota.test.ts`, `public-exposure-quota.test.ts`, `quota-zero.test.ts`, `owner-allowance.test.ts`, `resource-limits.test.ts`, `api-throttler.test.ts`, `preauth-rate-limit.test.ts`, `body-limits.test.ts`, `sse-stream-limiter.test.ts`, `redis-throttle.test.ts`.
+**Test.** `tenant-quota.test.ts`, `tenant-abuse-quota.test.ts`, `public-exposure-quota.test.ts`, `quota-zero.test.ts`, `owner-allowance.test.ts`, `org-limits.test.ts`, `resource-limits.test.ts`, `api-throttler.test.ts`, `preauth-rate-limit.test.ts`, `body-limits.test.ts`, `sse-stream-limiter.test.ts`, `redis-throttle.test.ts`.
 
 ---
 

@@ -199,9 +199,9 @@ recognised. Anything without a default is optional unless the description says o
 | `TENANT_QUOTA_FLOOR_LOADBALANCERS` |  | Always applied, whatever the resource limits mode: the most LoadBalancer (default 20) and NodePort (default 10) Services a tenant namespace can hold, and the ephemeral-storage limit in GiB that every container gets by default (default 20, 0 turns the ephemeral-storage quota and default off). Public ports and public databases use these Service types, so 0 stops them. |
 | `TENANT_QUOTA_FLOOR_NODEPORTS` |  |  |
 | `TENANT_EPHEMERAL_STORAGE_LIMIT_GIB` |  |  |
-| `NEW_ORG_CPU` |  | Defaults for NEW organizations only, written into the org's CPU and memory caps when it is created (existing organizations are untouched). NEW_ORG_CPU defaults to 16 and NEW_ORG_MEMORY to 32Gi; 0 or "unlimited" creates new organizations uncapped. An administrator can change any organization's caps afterwards. |
+| `NEW_ORG_CPU` |  | Seed for the CPU and memory caps of NEW organizations. New organizations are uncapped unless this is set or a superadmin sets the instance default for new organizations in the admin panel (which wins over this seed). The value is written into the org's caps when it is created; existing organizations are untouched, and an administrator can change any organization's caps afterwards. 0 or "unlimited" means no cap. On an instance with open sign-up, set limits. |
 | `NEW_ORG_MEMORY` |  |  |
-| `MAX_PROJECTS_PER_ORG` |  | Most projects, extra environments (each is a namespace) and deployments one organization may hold. Defaults 500, 1000 and 2000; 0 = unlimited. An organization already above a limit keeps everything it has and just cannot create more. |
+| `MAX_PROJECTS_PER_ORG` |  | A hard ceiling on projects, extra environments (each is a namespace) and deployments for EVERY organization, whatever its own limit. Unset or 0 means no ceiling; per-organization limits are set in the admin panel. An organization already above a limit keeps everything it has and just cannot create more. |
 | `MAX_ENVIRONMENTS_PER_ORG` |  |  |
 | `MAX_DEPLOYMENTS_PER_ORG` |  |  |
 | `TENANT_SECRETS_CLUSTER_ROLE` |  | Set by the chart: the ClusterRole the server binds into each tenant namespace for secrets and configmaps. Unset, the server mints a per-namespace Role. |

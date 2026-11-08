@@ -141,16 +141,17 @@ tenant:
   # bandwidth manager, such as Cilium with bandwidthManager.enabled=true; other
   # CNIs ignore the annotation. Pods pick it up on their next rollout.
   egressBandwidth: ""
-  # Caps written into NEW organizations when they are created, as NEW_ORG_CPU
-  # and NEW_ORG_MEMORY. Empty keeps the server defaults (16 cores, 32Gi); "0" or
-  # "unlimited" creates uncapped organizations. Existing organizations are never
+  # Seed for the caps of NEW organizations, as NEW_ORG_CPU and NEW_ORG_MEMORY.
+  # Empty means new organizations are uncapped; "0" or "unlimited" also mean no
+  # cap. A superadmin can set the instance default for new organizations in the
+  # admin panel, which wins over this seed. Existing organizations are never
   # changed, and an administrator can edit any organization's caps afterwards.
   newOrgCpu: ""
   newOrgMemory: ""
-  # Most projects, extra environments (one namespace each) and deployments one
-  # organization may hold. Empty keeps the server defaults of 500, 1000 and 2000;
-  # 0 is unlimited. An organization already over a limit keeps what it has and
-  # just cannot create more.
+  # A hard ceiling on projects, extra environments (one namespace each) and
+  # deployments for every organization. Empty or 0 means no ceiling; per
+  # organization limits are set in the admin panel. An organization already over a
+  # limit keeps what it has and just cannot create more.
   maxProjectsPerOrg: ""
   maxEnvironmentsPerOrg: ""
   maxDeploymentsPerOrg: ""

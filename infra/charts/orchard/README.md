@@ -258,11 +258,11 @@ is the complete list.
 | `tenant.wildcardDomains` | `""` | `.suffix=tlsSecret` pairs generated app URLs are built from. Empty derives one from `gateway.http.appDomain`. |
 | `tenant.publicIp` | `""` | Fallback external IP publicly exposed ports and databases are published on, via `PUBLIC_EXPOSURE_IP`. An organization that sets its own overrides it. Empty means every organization must configure one before it can expose anything, and setting it here locks the admin-panel field. |
 | `tenant.egressBandwidth` | `""` | Outbound bandwidth cap per tenant pod, as `TENANT_EGRESS_BANDWIDTH` (for example `50M`), set through the `kubernetes.io/egress-bandwidth` annotation. Empty sets nothing. Only enforced where the CNI runs a bandwidth manager (Cilium with `bandwidthManager.enabled=true`); other CNIs ignore it. |
-| `tenant.newOrgCpu` | `""` | CPU cap written into NEW organizations when they are created, as `NEW_ORG_CPU`. Empty means 16 cores; `0` or `unlimited` creates uncapped organizations. Existing organizations are never changed. |
-| `tenant.newOrgMemory` | `""` | Memory cap written into NEW organizations, as `NEW_ORG_MEMORY`. Empty means `32Gi`; `0` or `unlimited` creates uncapped organizations. |
-| `tenant.maxProjectsPerOrg` | `""` | Most projects one organization may hold, as `MAX_PROJECTS_PER_ORG`. Empty means 500; `0` is unlimited. An organization already above the limit keeps what it has and cannot create more. |
-| `tenant.maxEnvironmentsPerOrg` | `""` | Most extra environments (one namespace each) per organization, as `MAX_ENVIRONMENTS_PER_ORG`. Empty means 1000; `0` is unlimited. |
-| `tenant.maxDeploymentsPerOrg` | `""` | Most deployments per organization, as `MAX_DEPLOYMENTS_PER_ORG`. Empty means 2000; `0` is unlimited. |
+| `tenant.newOrgCpu` | `""` | Seed for the CPU cap of NEW organizations, as `NEW_ORG_CPU`. Empty means uncapped; a superadmin can set an instance default in the admin panel, which wins. Existing organizations are never changed. |
+| `tenant.newOrgMemory` | `""` | Seed for the memory cap of NEW organizations, as `NEW_ORG_MEMORY`. Empty means uncapped. |
+| `tenant.maxProjectsPerOrg` | `""` | Hard ceiling on projects for every organization, as `MAX_PROJECTS_PER_ORG`. Empty or `0` means no ceiling; per-organization limits are set in the admin panel. An organization already above the limit keeps what it has and cannot create more. |
+| `tenant.maxEnvironmentsPerOrg` | `""` | Hard ceiling on extra environments (one namespace each) for every organization, as `MAX_ENVIRONMENTS_PER_ORG`. Empty or `0` means no ceiling. |
+| `tenant.maxDeploymentsPerOrg` | `""` | Hard ceiling on deployments for every organization, as `MAX_DEPLOYMENTS_PER_ORG`. Empty or `0` means no ceiling. |
 | `tenant.maxCustomDomainsPerOrg` | `""` | Most custom hostnames one organization may hold, as `MAX_CUSTOM_DOMAINS_PER_ORG`. Empty means 250; `0` is unlimited. |
 | `tenant.maxCustomDomainCreatesPerHour` | `""` | Most custom hostnames one organization may add per hour, as `MAX_CUSTOM_DOMAIN_CREATES_PER_HOUR`. Empty means 30; `0` is unlimited. With `signupMode: open`, adding a custom domain also needs a TXT proof unless `CUSTOM_DOMAIN_VERIFICATION=false` is set in `server.env`. |
 
