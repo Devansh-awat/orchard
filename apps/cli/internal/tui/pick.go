@@ -23,6 +23,7 @@ type pickModel struct {
 	height   int
 	done     bool
 	aborted  bool
+	single   bool
 }
 
 func newPickModel(title string, opts []PickOption) pickModel {
@@ -54,10 +55,13 @@ func (m pickModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "end", "G":
 			m.cursor = len(m.opts) - 1
 		case " ", "x":
-			if len(m.opts) > 0 {
+			if len(m.opts) > 0 && !m.single {
 				m.selected[m.cursor] = !m.selected[m.cursor]
 			}
 		case "a":
+			if m.single {
+				break
+			}
 			all := m.count() == len(m.opts)
 			for i := range m.selected {
 				m.selected[i] = !all
@@ -101,6 +105,12 @@ func (m pickModel) view() string {
 		if m.selected[i] {
 			box = stGreen.Render("[x]")
 		}
+		if m.single {
+			box = stMuted.Render("( )")
+			if m.selected[i] {
+				box = stGreen.Render("(•)")
+			}
+		}
 		label := o.Label
 		bar := "  "
 		if i == m.cursor {
@@ -121,6 +131,10 @@ func (m pickModel) view() string {
 	var b strings.Builder
 	b.WriteString(stAccent.Render(m.title) + "\n\n")
 	b.WriteString(strings.Join(lines, "\n") + "\n\n")
+	if m.single {
+		b.WriteString(stKey.Render("↑↓") + stMuted.Render(" move  ") + stKey.Render("enter") + stMuted.Render(" choose  ") + stKey.Render("q") + stMuted.Render(" cancel") + "\n")
+		return b.String()
+	}
 	b.WriteString(stFooter.Render(fmt.Sprintf("%d of %d selected", m.count(), len(m.opts))) + "  ")
 	b.WriteString(stKey.Render("space") + stMuted.Render(" toggle  ") + stKey.Render("a") + stMuted.Render(" all  ") + stKey.Render("enter") + stMuted.Render(" confirm  ") + stKey.Render("q") + stMuted.Render(" cancel") + "\n")
 	return b.String()
@@ -146,4 +160,24 @@ func PickMany(title string, opts []PickOption) ([]int, bool, error) {
 		return nil, false, nil
 	}
 	return m.picked(), true, nil
+}
+
+func PickOne(title string, opts []PickOption, current int) (int, bool, error) {
+	m := newPickModel(title, opts)
+	m.single = true
+	for i := range m.selected {
+		m.selected[i] = i == current
+	}
+	if current >= 0 && current < len(opts) {
+		m.cursor = current
+	}
+	final, err := tea.NewProgram(m, tea.WithOutput(os.Stderr)).Run()
+	if err != nil {
+		return 0, false, err
+	}
+	res := final.(pickModel)
+	if res.aborted || len(opts) == 0 {
+		return 0, false, nil
+	}
+	return res.cursor, true, nil
 }

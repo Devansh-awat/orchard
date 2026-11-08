@@ -65,8 +65,8 @@ func TestAPICallByOperationIDFillsPathAndQuery(t *testing.T) {
 	if !strings.Contains(out, `"phase": "live"`) {
 		t.Errorf("stdout = %q", out)
 	}
-	if _, err := os.Stat(filepath.Join(os.Getenv("ORCHARD_SPEC_CACHE_DIR"), "agent-spec.json")); err != nil {
-		t.Errorf("spec was not cached: %v", err)
+	if cached, _ := filepath.Glob(filepath.Join(os.Getenv("ORCHARD_SPEC_CACHE_DIR"), "agent-spec.*.json")); len(cached) != 1 {
+		t.Errorf("spec was not cached per instance: %v", cached)
 	}
 }
 

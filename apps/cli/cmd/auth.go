@@ -29,7 +29,7 @@ func authCmd() *cobra.Command {
 }
 
 func authLoginCmd() *cobra.Command {
-	var token, apiURL, webURL string
+	var token, apiURL, webURL, contextName string
 	var noBrowser, withToken bool
 	c := &cobra.Command{
 		Use:   "login",
@@ -37,9 +37,18 @@ func authLoginCmd() *cobra.Command {
 		Long: "Sign in through your browser (default). Orchard creates a personal API token\n" + "and sends it back over a local callback.\n\n" +
 			"Or paste a token with --token (create one in Account settings, under API\n" + "tokens), or set ORCHARD_API_TOKEN.",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, _ := config.Load()
-			if apiURL != "" {
-				cfg.APIURL = apiURL
+			cfg, err := config.Load()
+			if err != nil {
+				return err
+			}
+			if apiURL != "" || contextName != "" {
+				target := apiURL
+				if target == "" {
+					target = cfg.APIURL
+				}
+				if cfg, err = cfg.ForInstance(target, contextName); err != nil {
+					return err
+				}
 			}
 
 			// Manual token path: explicit --token, --with-token prompt, or a
@@ -69,7 +78,7 @@ func authLoginCmd() *cobra.Command {
 				if err := cfg.Save(); err != nil {
 					return err
 				}
-				output.Successf("signed in to %s as %s", cfg.APIURL, displayUser(me))
+				output.Successf("signed in to %s as %s (context %s)", cfg.APIURL, displayUser(me), cfg.Name)
 				return nil
 			}
 
@@ -91,7 +100,9 @@ func authLoginCmd() *cobra.Command {
 						return promptErr
 					}
 					base = selectedBase
-					cfg.APIURL = base
+					if cfg, err = cfg.ForInstance(base, contextName); err != nil {
+						return err
+					}
 				}
 			}
 			return webLogin(cfg, base, !noBrowser)
@@ -99,7 +110,8 @@ func authLoginCmd() *cobra.Command {
 	}
 	c.Flags().StringVar(&token, "token", "", "paste a token instead of using the browser")
 	c.Flags().BoolVar(&withToken, "with-token", false, "prompt for a token instead of using the browser")
-	c.Flags().StringVar(&apiURL, "api-url", "", "override API base URL")
+	c.Flags().StringVar(&apiURL, "api-url", "", "Orchard instance to sign in to; adds a context for it")
+	c.Flags().StringVar(&contextName, "name", "", "name for this instance's context (default: its hostname)")
 	c.Flags().StringVar(&webURL, "web-url", "", "override web app base URL (defaults to the API URL)")
 	c.Flags().BoolVar(&noBrowser, "no-browser", false, "print the URL instead of opening a browser")
 	return c

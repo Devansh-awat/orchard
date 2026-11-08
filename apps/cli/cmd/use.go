@@ -2,10 +2,13 @@ package cmd
 
 import (
 	"errors"
+	"fmt"
 	"os"
 
 	"github.com/hackclub/orchard/cli/internal/config"
+	"github.com/hackclub/orchard/cli/internal/exitcode"
 	"github.com/hackclub/orchard/cli/internal/output"
+	"github.com/hackclub/orchard/cli/internal/tui"
 	"github.com/spf13/cobra"
 )
 
@@ -79,8 +82,13 @@ func useCmd() *cobra.Command {
 func contextCmd() *cobra.Command {
 	c := &cobra.Command{
 		Use:     "context",
+		Aliases: []string{"ctx"},
 		GroupID: groupCore,
-		Short:   "Show or clear the default scope set by `orchard use`",
+		Short:   "Switch between Orchard instances and show the default scope",
+		Long: "A context is one Orchard instance: its URL, your token for it, and the default\n" +
+			"org/project/env set by `orchard use`. `orchard auth login --api-url <url>` adds\n" +
+			"one per instance. Pick the active one with `orchard context use`, or pass\n" +
+			"--context / set ORCHARD_CONTEXT for a single command.",
 	}
 	show := &cobra.Command{
 		Use:   "show",
@@ -94,6 +102,7 @@ func contextCmd() *cobra.Command {
 				return output.JSON(cfg.Context)
 			}
 			pairs := [][2]string{
+				{"context", labeled(cfg.Name, "")},
 				{"api", cfg.APIURL},
 				{"org", labeled(cfg.Context.OrgSlug, cfg.Context.OrgID)},
 				{"project", labeled(cfg.Context.ProjectSlug, cfg.Context.ProjectID)},
@@ -126,8 +135,210 @@ func contextCmd() *cobra.Command {
 			return nil
 		},
 	}
-	c.AddCommand(show, clear)
+	c.AddCommand(show, clear, contextListCmd(), contextUseCmd(), contextCurrentCmd(), contextRenameCmd(), contextRemoveCmd())
 	return c
+}
+
+func contextListCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:     "list",
+		Aliases: []string{"ls"},
+		Short:   "List the Orchard instances you have signed in to",
+		Args:    cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			f, err := config.LoadFile()
+			if err != nil {
+				return err
+			}
+			active := config.Selected(f)
+			type row struct {
+				Name     string `json:"name"`
+				APIURL   string `json:"apiUrl"`
+				Current  bool   `json:"current"`
+				SignedIn bool   `json:"signedIn"`
+				Org      string `json:"org,omitempty"`
+			}
+			rows := []row{}
+			for _, name := range f.Names() {
+				e := f.Contexts[name]
+				rows = append(rows, row{
+					Name:     name,
+					APIURL:   e.APIURL,
+					Current:  name == active,
+					SignedIn: e.Token != "",
+					Org:      e.Context.OrgSlug,
+				})
+			}
+			if fmtFlag() == output.FormatJSON {
+				return output.JSON(rows)
+			}
+			if len(rows) == 0 {
+				output.Println(output.Dim("no contexts yet: run `orchard auth login`"))
+				return nil
+			}
+			table := [][]string{}
+			for _, r := range rows {
+				mark := ""
+				if r.Current {
+					mark = "*"
+				}
+				signed := "no"
+				if r.SignedIn {
+					signed = "yes"
+				}
+				table = append(table, []string{mark, r.Name, r.APIURL, signed, r.Org})
+			}
+			output.Table([]string{"", "NAME", "URL", "SIGNED IN", "ORG"}, table)
+			return nil
+		},
+	}
+}
+
+func contextUseCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "use [name]",
+		Short: "Make a context the active one (pick from a list without a name)",
+		Args:  cobra.MaximumNArgs(1),
+		ValidArgsFunction: func(cmd *cobra.Command, args []string, _ string) ([]string, cobra.ShellCompDirective) {
+			f, _ := config.LoadFile()
+			return f.Names(), cobra.ShellCompDirectiveNoFileComp
+		},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			f, err := config.LoadFile()
+			if err != nil {
+				return err
+			}
+			names := f.Names()
+			if len(names) == 0 {
+				return errors.New("no contexts yet: run `orchard auth login`")
+			}
+			var name string
+			if len(args) == 1 {
+				name = args[0]
+			} else {
+				if !output.IsTTY() || !output.StdinIsTTY() {
+					return &exitcode.UsageError{Err: errors.New("pass a context name: `orchard context use <name>`")}
+				}
+				opts := make([]tui.PickOption, len(names))
+				current := 0
+				for i, n := range names {
+					opts[i] = tui.PickOption{Group: "Orchard instances", Label: n, Detail: f.Contexts[n].APIURL}
+					if n == f.Current {
+						current = i
+					}
+				}
+				i, ok, err := tui.PickOne("Switch Orchard context", opts, current)
+				if err != nil {
+					return err
+				}
+				if !ok {
+					return nil
+				}
+				name = names[i]
+			}
+			if _, ok := f.Contexts[name]; !ok {
+				return fmt.Errorf("no context named %q: run `orchard context list`", name)
+			}
+			f.Current = name
+			if err := f.Save(); err != nil {
+				return err
+			}
+			output.Successf("using context %s (%s)", name, f.Contexts[name].APIURL)
+			return nil
+		},
+	}
+}
+
+func contextCurrentCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "current",
+		Short: "Print the active context name",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			f, err := config.LoadFile()
+			if err != nil {
+				return err
+			}
+			name := config.Selected(f)
+			if name == "" {
+				return errors.New("no context yet: run `orchard auth login`")
+			}
+			if fmtFlag() == output.FormatJSON {
+				return output.JSON(map[string]string{"name": name, "apiUrl": f.Contexts[name].APIURL})
+			}
+			output.Println(name)
+			return nil
+		},
+	}
+}
+
+func contextRenameCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "rename <old> <new>",
+		Short: "Rename a context",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			f, err := config.LoadFile()
+			if err != nil {
+				return err
+			}
+			from, to := args[0], args[1]
+			e, ok := f.Contexts[from]
+			if !ok {
+				return fmt.Errorf("no context named %q", from)
+			}
+			if !config.ValidName(to) {
+				return fmt.Errorf("invalid context name %q: use letters, numbers, dots, dashes or underscores", to)
+			}
+			if _, taken := f.Contexts[to]; taken {
+				return fmt.Errorf("a context named %q already exists", to)
+			}
+			delete(f.Contexts, from)
+			f.Contexts[to] = e
+			if f.Current == from {
+				f.Current = to
+			}
+			if err := f.Save(); err != nil {
+				return err
+			}
+			output.Successf("renamed %s to %s", from, to)
+			return nil
+		},
+	}
+}
+
+func contextRemoveCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:     "remove <name>",
+		Aliases: []string{"rm"},
+		Short:   "Forget a context and its stored token",
+		Args:    cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			f, err := config.LoadFile()
+			if err != nil {
+				return err
+			}
+			name := args[0]
+			if _, ok := f.Contexts[name]; !ok {
+				return fmt.Errorf("no context named %q", name)
+			}
+			if err := output.Confirm(fmt.Sprintf("forget context %s and its token", name), yesFlag); err != nil {
+				return err
+			}
+			delete(f.Contexts, name)
+			if f.Current == name {
+				f.Current = ""
+				if rest := f.Names(); len(rest) > 0 {
+					f.Current = rest[0]
+				}
+			}
+			if err := f.Save(); err != nil {
+				return err
+			}
+			output.Successf("removed context %s", name)
+			return nil
+		},
+	}
 }
 
 func labeled(name, id string) string {

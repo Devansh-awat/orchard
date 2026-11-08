@@ -30,7 +30,7 @@ func apiCmd() *cobra.Command {
 		Short:   "Call any Orchard API operation, or search the API",
 		Long: "Call any /apiv1 endpoint directly, by operationId or by method and path.\n\n" +
 			"Discover operations with `orchard api search` and read their contract with\n" +
-			"`orchard api describe`. The spec is cached in ~/.orchard/agent-spec.json and\n" +
+			"`orchard api describe`. The spec is cached per instance in ~/.orchard and\n" +
 			"revalidated with an ETag, so it works offline once fetched.\n\n" +
 			"Examples:\n" +
 			"  orchard api search \"deployment logs\"\n" +
@@ -182,7 +182,7 @@ func apiDescribeCmd() *cobra.Command {
 }
 
 func loadSpec(cmd *cobra.Command, cfg *config.Config, refresh bool) (*agentspec.Spec, error) {
-	path, err := agentspec.DefaultCachePath()
+	path, err := agentspec.DefaultCachePath(cfg.APIURL)
 	if err != nil {
 		return nil, err
 	}

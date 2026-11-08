@@ -21,6 +21,7 @@ func memberCmd() *cobra.Command {
 		memberListCmd(),
 		memberInviteCmd(),
 		memberRemoveCmd(),
+		memberEnableCmd(),
 		memberSetRoleCmd(),
 		memberInvitesCmd(),
 	)
@@ -176,8 +177,8 @@ func printInviteLink(raw map[string]any) {
 func memberRemoveCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:     "remove <memberId>",
-		Aliases: []string{"rm"},
-		Short:   "Remove a member from the organization",
+		Aliases: []string{"rm", "disable"},
+		Short:   "Turn off a member's access (they stay on the list and can be turned back on)",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cl, cfg, err := client()
@@ -188,14 +189,37 @@ func memberRemoveCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			prompt := fmt.Sprintf("remove member %s from the organization and all of its projects", args[0])
+			prompt := fmt.Sprintf("turn off member %s's access to the organization and all of its projects", args[0])
 			if err := output.Confirm(prompt, yesFlag); err != nil {
 				return err
 			}
 			if err := cl.Send(cmd.Context(), http.MethodDelete, memberPath(orgID, args[0]), nil, nil); err != nil {
 				return err
 			}
-			output.Successf("removed member %s", args[0])
+			output.Successf("turned off member %s", args[0])
+			return nil
+		},
+	}
+}
+
+func memberEnableCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "enable <memberId>",
+		Short: "Turn a member's access back on (projects are not restored)",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cl, cfg, err := client()
+			if err != nil {
+				return err
+			}
+			orgID, err := requireOrg(cmd.Context(), cl, cfg)
+			if err != nil {
+				return err
+			}
+			if err := cl.Send(cmd.Context(), http.MethodPost, memberPath(orgID, args[0])+"/enable", nil, nil); err != nil {
+				return err
+			}
+			output.Successf("turned member %s back on", args[0])
 			return nil
 		},
 	}

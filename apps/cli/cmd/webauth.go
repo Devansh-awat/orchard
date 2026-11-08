@@ -142,7 +142,7 @@ func webLogin(cfg *config.Config, webBase string, openBrowserFlag bool) error {
 	if err := cfg.Save(); err != nil {
 		return err
 	}
-	output.Successf("signed in to %s as %s", cfg.APIURL, displayUser(me))
+	output.Successf("signed in to %s as %s (context %s)", cfg.APIURL, displayUser(me), cfg.Name)
 	return nil
 }
 

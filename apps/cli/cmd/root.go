@@ -19,6 +19,7 @@ var (
 	orgFlag     string
 	projectFlag string
 	envFlag     string
+	contextFlag string
 )
 
 // Version is set via -ldflags at build time.
@@ -73,6 +74,8 @@ func rootCmd() *cobra.Command {
 	root.PersistentFlags().StringVar(&orgFlag, "org", "", "organization id or slug (overrides the saved context)")
 	root.PersistentFlags().StringVar(&projectFlag, "project", "", "project id or slug (overrides the saved context)")
 	root.PersistentFlags().StringVar(&envFlag, "env", "", "environment id or name (overrides the saved context)")
+	root.PersistentFlags().StringVar(&contextFlag, "context", "", "Orchard instance context to use for this command (see `orchard context list`)")
+	cobra.OnInitialize(func() { config.Override = contextFlag })
 	root.SetFlagErrorFunc(func(_ *cobra.Command, err error) error {
 		return &exitcode.UsageError{Err: err}
 	})

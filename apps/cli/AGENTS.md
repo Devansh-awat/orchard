@@ -16,6 +16,8 @@ export ORCHARD_API_TOKEN=orch_xxx
 
 `ORCHARD_API_TOKEN` overrides any token stored in `~/.orchard/config.json`.
 
+Several instances can be signed in at once, one context each. `orchard context list` shows them, `orchard context use <name>` switches, and `--context <name>` or `ORCHARD_CONTEXT` picks one for a single command without changing the saved choice.
+
 Tokens carry scopes, and each higher scope includes the lower ones (read is a subset of deploy, deploy is a subset of exec):
 
 | scope  | allows                                                                  |
@@ -39,6 +41,7 @@ Other env vars:
 | ------------------------- | --------------------------------------------------------------------------------------------------- |
 | `ORCHARD_API_URL`         | API base. Set for any self-hosted instance (built-in default: `https://orchard.infra.hackclub.com`) |
 | `ORCHARD_API_TOKEN`       | credential, skips login                                                                             |
+| `ORCHARD_CONTEXT`         | instance context to use instead of the current one                                                 |
 | `ORCHARD_JSON=1`          | force JSON output even on a TTY                                                                     |
 | `ORCHARD_ORG`             | default org scope (id or slug)                                                                      |
 | `ORCHARD_PROJECT`         | default project scope (id or slug)                                                                  |

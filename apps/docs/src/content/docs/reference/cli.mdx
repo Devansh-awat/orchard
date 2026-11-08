@@ -15,7 +15,7 @@ brew install --cask leafdtk/tap/orchard-cli
 ```
 
 Every command accepts `-o json` for machine-readable output, and `--org` / `--env` to
-override the saved context. **419 commands** are available.
+override the saved context. **425 commands** are available.
 
 ## alert
 
@@ -195,7 +195,8 @@ orchard auth login
 
 | Flag | Type | Default | Description |
 | --- | --- | --- | --- |
-| `--api-url` | string |  | override API base URL |
+| `--api-url` | string |  | Orchard instance to sign in to; adds a context for it |
+| `--name` | string |  | name for this instance's context (default: its hostname) |
 | `--no-browser` | bool | `false` | print the URL instead of opening a browser |
 | `--token` | string |  | paste a token instead of using the browser |
 | `--web-url` | string |  | override web app base URL (defaults to the API URL) |
@@ -523,11 +524,13 @@ Aliases: `repl`
 
 ### `orchard context`
 
-Show or clear the default scope set by `orchard use`
+Switch between Orchard instances and show the default scope
 
 ```bash
 orchard context
 ```
+
+Aliases: `ctx`
 
 ### `orchard context clear`
 
@@ -537,12 +540,56 @@ Clear the default scope
 orchard context clear
 ```
 
+### `orchard context current`
+
+Print the active context name
+
+```bash
+orchard context current
+```
+
+### `orchard context list`
+
+List the Orchard instances you have signed in to
+
+```bash
+orchard context list
+```
+
+Aliases: `ls`
+
+### `orchard context remove`
+
+Forget a context and its stored token
+
+```bash
+orchard context remove <name>
+```
+
+Aliases: `rm`
+
+### `orchard context rename`
+
+Rename a context
+
+```bash
+orchard context rename <old> <new>
+```
+
 ### `orchard context show`
 
 Show the current default scope
 
 ```bash
 orchard context show
+```
+
+### `orchard context use`
+
+Make a context the active one (pick from a list without a name)
+
+```bash
+orchard context use [name]
 ```
 
 ## db
@@ -2713,6 +2760,14 @@ orchard member
 
 Aliases: `members`
 
+### `orchard member enable`
+
+Turn a member's access back on (projects are not restored)
+
+```bash
+orchard member enable <memberId>
+```
+
 ### `orchard member invite`
 
 Invite someone to the organization by email
@@ -2775,13 +2830,13 @@ Aliases: `ls`
 
 ### `orchard member remove`
 
-Remove a member from the organization
+Turn off a member's access (they stay on the list and can be turned back on)
 
 ```bash
 orchard member remove <memberId>
 ```
 
-Aliases: `rm`
+Aliases: `rm`, `disable`
 
 ### `orchard member set-role`
 

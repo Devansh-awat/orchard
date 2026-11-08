@@ -83,7 +83,12 @@ orchard auth token list
 orchard auth token revoke <tokenId>
 ```
 
-Config lives at `~/.orchard/config.json`. Overridable via env:
+Config lives at `~/.orchard/config.json`, one context per Orchard instance
+(URL, token and `orchard use` scope). `orchard auth login --api-url <url>`
+adds a context; `orchard context list|use|rename|remove` manages them and
+`--context <name>` picks one for a single command. Overridable via env:
+
+- `ORCHARD_CONTEXT`: context to use instead of the current one
 
 - `ORCHARD_API_URL`: API base (default `https://orchard.infra.hackclub.com`)
 - `ORCHARD_API_TOKEN`: token (skips `auth login`, good for CI/agents)

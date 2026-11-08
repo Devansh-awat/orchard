@@ -41,6 +41,19 @@ The command opens a browser. After you approve the request, the CLI stores a tok
 
 If you run `orchard auth login` without `--api-url`, the CLI asks which instance to use.
 
+## Work with several instances
+
+Each instance you sign in to becomes a context: its URL, your token for it, and the default organization, project and environment you set with `orchard use`. Signing in to another instance adds a context and switches to it.
+
+```bash
+orchard auth login --api-url https://orchard.acme.dev --name acme
+orchard context list
+orchard context use          # pick from a list
+orchard context use acme
+```
+
+To run a single command against another instance, pass `--context <name>` or set `ORCHARD_CONTEXT`. Rename a context with `orchard context rename` and forget one, with its token, with `orchard context remove`.
+
 To sign in on a machine with no browser, add `--no-browser`. The CLI prints a URL and the local port that it listens on. Forward that port to your own machine with `ssh -L` before you open the URL. Without a terminal, the CLI cannot ask which instance to use, so also pass `--api-url`.
 
 To authenticate a script, set a token in the environment. A token in the environment overrides a stored token.

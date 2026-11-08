@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -61,15 +62,19 @@ type Loader struct {
 	Refresh   bool
 }
 
-func DefaultCachePath() (string, error) {
+func DefaultCachePath(apiURL string) (string, error) {
+	file := "agent-spec.json"
+	if u, err := url.Parse(apiURL); err == nil && u.Host != "" {
+		file = "agent-spec." + strings.NewReplacer(":", "-", "/", "-").Replace(u.Host) + ".json"
+	}
 	if dir := os.Getenv("ORCHARD_SPEC_CACHE_DIR"); dir != "" {
-		return filepath.Join(dir, "agent-spec.json"), nil
+		return filepath.Join(dir, file), nil
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(home, ".orchard", "agent-spec.json"), nil
+	return filepath.Join(home, ".orchard", file), nil
 }
 
 func (l *Loader) now() time.Time {
