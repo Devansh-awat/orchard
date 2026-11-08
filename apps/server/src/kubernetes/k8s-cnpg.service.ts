@@ -816,30 +816,32 @@ export class K8sCnpgService implements OnApplicationBootstrap {
       stdout.on('data', (chunk: Buffer) => chunks.push(chunk));
       stderr.on('data', (chunk: Buffer) => errChunks.push(chunk));
 
-      exec.exec(
-        this.CNPG_NAMESPACE,
-        podName,
-        this.CNPG_CONTAINER,
-        ['psql', '-U', 'postgres', '-d', 'postgres', '-t', '-A', '-c', sql],
-        stdout,
-        stderr,
-        null,
-        false,
-        (status) => {
-          const output = Buffer.concat(chunks).toString('utf-8').trim();
-          const errOutput = Buffer.concat(errChunks).toString('utf-8').trim();
+      exec
+        .exec(
+          this.CNPG_NAMESPACE,
+          podName,
+          this.CNPG_CONTAINER,
+          ['psql', '-U', 'postgres', '-d', 'postgres', '-t', '-A', '-c', sql],
+          stdout,
+          stderr,
+          null,
+          false,
+          (status) => {
+            const output = Buffer.concat(chunks).toString('utf-8').trim();
+            const errOutput = Buffer.concat(errChunks).toString('utf-8').trim();
 
-          if (status.status === 'Success') {
-            resolve(output);
-          } else {
-            reject(
-              new BadRequestException(
-                `Postgres command failed: ${errOutput || status.message || 'Unknown error'}`
-              )
-            );
+            if (status.status === 'Success') {
+              resolve(output);
+            } else {
+              reject(
+                new BadRequestException(
+                  `Postgres command failed: ${errOutput || status.message || 'Unknown error'}`
+                )
+              );
+            }
           }
-        }
-      );
+        )
+        .catch(reject);
     });
   }
 

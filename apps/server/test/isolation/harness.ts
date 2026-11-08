@@ -77,6 +77,12 @@ export async function bootHarness(): Promise<Harness> {
 
   ApiThrottlerGuard.prototype.canActivate = async () => true;
 
+  // The cluster address is dead on purpose. Fail pod exec cleanly instead of opening a websocket.
+  const k8sClient = await import('@kubernetes/client-node');
+  k8sClient.Exec.prototype.exec = async () => {
+    throw new Error('pod exec is unavailable in the isolation harness');
+  };
+
   (BigInt.prototype as unknown as { toJSON: () => string }).toJSON = function (this: bigint) {
     return this.toString();
   };
