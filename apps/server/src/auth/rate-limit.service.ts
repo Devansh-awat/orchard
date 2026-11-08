@@ -33,6 +33,18 @@ export const RATE_LIMIT_CONFIGS: Record<string, RateLimitConfig> = {
     blockDurationMs: 60 * 60 * 1000
   },
   // OTP verification: max 5 attempts per email per 15 minutes, block for 30 minutes
+  // OTP sends: at most 8 mails per address and 40 per IP per hour, whatever the
+  // 15 minute windows above allow, block for 1 hour
+  otp_send_email: {
+    maxAttempts: 8,
+    windowMs: 60 * 60 * 1000,
+    blockDurationMs: 60 * 60 * 1000
+  },
+  otp_send_ip: {
+    maxAttempts: 40,
+    windowMs: 60 * 60 * 1000,
+    blockDurationMs: 60 * 60 * 1000
+  },
   otp_verify_email: {
     maxAttempts: 5,
     windowMs: 15 * 60 * 1000,

@@ -19,6 +19,11 @@ export class OtpService {
     private readonly rateLimitService: RateLimitService
   ) {}
 
+  private static readonly REQUEST_RESPONSE = {
+    success: true,
+    message: "If an account exists with this email, you'll get a code shortly."
+  };
+
   sendsEmail(): boolean {
     return this.emailService.isConfigured();
   }
@@ -33,7 +38,8 @@ export class OtpService {
    */
   async requestOtp(
     email: string,
-    ipAddress: string
+    ipAddress: string,
+    options: { deliver?: boolean } = {}
   ): Promise<{ success: boolean; message: string }> {
     if (!this.canDeliverCodes()) {
       throw new ServiceUnavailableException(
@@ -47,7 +53,13 @@ export class OtpService {
       ip: ipAddress,
       identities: [[normalizedEmail, 'email']]
     });
+    await this.rateLimitService.checkRateLimits('otp_send', {
+      ip: ipAddress,
+      identities: [[normalizedEmail, 'email']]
+    });
     if (pressured) await this.rateLimitService.slowDown();
+
+    if (options.deliver === false) return { ...OtpService.REQUEST_RESPONSE };
 
     // Invalidate any existing unused OTP codes for this email
     await this.prisma.otpCode.updateMany({
@@ -92,10 +104,7 @@ export class OtpService {
       }
     }
 
-    return {
-      success: true,
-      message: "If an account exists with this email, you'll get a code shortly."
-    };
+    return { ...OtpService.REQUEST_RESPONSE };
   }
 
   /**

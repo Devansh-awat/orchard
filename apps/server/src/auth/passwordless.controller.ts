@@ -162,11 +162,12 @@ export class PasswordlessController {
 
     const existing = await this.prisma.user.findUnique({
       where: { email: normalizeBoundedEmail(email) },
-      select: { isSuperAdmin: true }
+      select: { id: true, isSuperAdmin: true }
     });
     if (!existing?.isSuperAdmin) await this.authz.assertInstanceSsoNotEnforced('otp');
 
-    return this.otpService.requestOtp(email, ipAddress);
+    const deliver = await this.hasPrivateBetaAccess(normalizeBoundedEmail(email), existing);
+    return this.otpService.requestOtp(email, ipAddress, { deliver });
   }
 
   @Post('otp/verify')

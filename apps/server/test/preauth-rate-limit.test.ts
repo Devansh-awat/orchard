@@ -308,3 +308,48 @@ test('oversize email is rejected before any limiter or database work', async () 
   );
   assert.equal(throttle.buckets.size, 0);
 });
+
+function otpHarness() {
+  const throttle = memoryThrottle();
+  const rate = new RateLimitService({} as any, throttle as any);
+  const sent: string[] = [];
+  const created: string[] = [];
+  const otp = new OtpService(
+    {
+      otpCode: {
+        updateMany: async () => ({ count: 0 }),
+        create: async ({ data }: any) => {
+          created.push(data.email);
+          return {};
+        }
+      }
+    } as any,
+    {
+      isConfigured: () => true,
+      sendOtpEmail: async ({ recipientEmail }: any) => {
+        sent.push(recipientEmail);
+        return true;
+      }
+    } as any,
+    rate
+  );
+  return { otp, throttle, sent, created };
+}
+
+test('an address without access gets the identical response and no mail', async () => {
+  const { otp, sent, created } = otpHarness();
+  const denied = await otp.requestOtp('stranger@example.com', '203.0.113.5', { deliver: false });
+  const allowed = await otp.requestOtp('member@example.com', '203.0.113.5', { deliver: true });
+  assert.deepEqual(denied, allowed);
+  assert.deepEqual(sent, ['member@example.com']);
+  assert.deepEqual(created, ['member@example.com']);
+});
+
+test('withheld sends still count against the per-address and per-ip send caps', async () => {
+  const { otp, throttle } = otpHarness();
+  await otp.requestOtp('stranger@example.com', '203.0.113.5', { deliver: false });
+  assert.ok(throttle.buckets.has('otp_send:email:stranger@example.com'));
+  assert.ok(throttle.buckets.has('otp_send:ip:203.0.113.5'));
+  assert.equal(RATE_LIMIT_CONFIGS.otp_send_email.windowMs, 60 * 60 * 1000);
+  assert.equal(RATE_LIMIT_CONFIGS.otp_send_ip.windowMs, 60 * 60 * 1000);
+});
