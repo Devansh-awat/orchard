@@ -3,6 +3,7 @@
 	import { organizations, selectedOrganization, isSignedIn } from '$lib/stores';
 	import ErrorPage from '$lib/components/ErrorPage.svelte';
 	import EngineBanner from '$lib/components/EngineBanner.svelte';
+	import SsoSessionBanner from '$lib/components/SsoSessionBanner.svelte';
 	import OrgSsoRequired from '$lib/components/org-settings/OrgSsoRequired.svelte';
 
 	let { children } = $props();
@@ -47,5 +48,6 @@
 	{@render children()}
 {:else}
 	<EngineBanner />
+	<SsoSessionBanner />
 	{@render children()}
 {/if}

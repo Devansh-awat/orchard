@@ -526,6 +526,21 @@ export function settingsRoutes(r: Router, { store }: MockContext) {
 		};
 	});
 
+	let accountLinks = [
+		{
+			id: uid('link:acme'),
+			createdAt: store.createdAgo(60 * 24 * 3),
+			organization: { id: 'org-acme-corp', name: 'Acme Corp', slug: 'acme', avatarUrl: null },
+			email: 'ada@acme.example',
+			disabled: false,
+			loginUrl: '/acme/login'
+		}
+	];
+	r.get('/auth/links', () => accountLinks);
+	r.delete('/auth/links/:id', ({ params }) => {
+		accountLinks = accountLinks.filter((link) => link.id !== params.id);
+		return { success: true };
+	});
 	r.get('/auth/passkeys', () => ({ passkeys: [] }));
 	r.get('/auth/sessions', () => ({
 		sessions: [

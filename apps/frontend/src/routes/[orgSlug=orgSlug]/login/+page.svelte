@@ -36,8 +36,12 @@
 	});
 
 	function describeError(code: string) {
-		if (code === 'sso_link_required')
-			return "To use this organization's single sign-on with an existing account, sign in to Orchard first, then open the organization.";
+		if (code === 'sso_link_required' || code === 'sso_sign_in_first')
+			return 'This sign-in belongs to an Orchard account. Sign in to that account first, then continue with single sign-on here.';
+		if (code === 'sso_access_disabled')
+			return "Your access to this organization was turned off by its admins. Your Orchard account and other organizations aren't affected.";
+		if (code === 'sso_member_limit')
+			return 'This organization has reached its member limit. Ask an admin to make room.';
 		if (code === 'sso_not_mapped')
 			return 'Your identity provider signed you in, but none of your groups give access to this organization. Ask an admin to map one of your groups.';
 		if (code === 'sso_failed') return "Your identity provider didn't finish signing you in.";

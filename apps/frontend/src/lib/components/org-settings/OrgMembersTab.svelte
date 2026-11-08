@@ -31,6 +31,9 @@
 	interface Member {
 		id: string;
 		role: 'owner' | 'admin' | 'member' | 'guest';
+		status?: 'active' | 'disabled';
+		source?: 'invite' | 'sso' | 'scim' | 'rule' | 'direct' | null;
+		scimManaged?: boolean;
 		projects?: MemberProject[];
 		user: {
 			id: string;
@@ -39,7 +42,21 @@
 			email: string;
 			imageUrl?: string;
 			username?: string;
+			homeOrganizationId?: string | null;
+			linkedAccount?: { createdAt: string } | null;
 		};
+	}
+
+	function memberDetail(member: Member): string {
+		const parts = [member.user.email];
+		if (member.user.homeOrganizationId) {
+			parts.push(
+				member.source === 'scim' || member.scimManaged ? 'From SCIM' : 'From single sign-on'
+			);
+			if (member.user.linkedAccount) parts.push('Linked to an Orchard account');
+		}
+		if (member.status === 'disabled') parts.push('Access turned off');
+		return parts.join(' · ');
 	}
 
 	interface Invitation {
@@ -276,7 +293,7 @@
 	>
 		{#snippet cell(member, col)}
 			{#if col.id === 'member'}
-				<ItemLabel title={memberName(member) || member.user.email} detail={member.user.email}>
+				<ItemLabel title={memberName(member) || member.user.email} detail={memberDetail(member)}>
 					{#snippet leading()}
 						<Avatar
 							user={member.user}

@@ -27,6 +27,7 @@
 	import {
 		UserIdentityHero,
 		UserInvitations,
+		UserLinkedOrganizations,
 		UserGitHub,
 		UserGitProviders,
 		UserTailscale,
@@ -155,7 +156,7 @@
 			{
 				label: 'Connections',
 				items: [
-					{ id: 'connections', label: 'GitHub and Tailscale' },
+					{ id: 'connections', label: 'Connections' },
 					{ id: 'tokens', label: 'API tokens' },
 					...($instanceFeatures.mcp ? [{ id: 'mcp', label: 'MCP' }] : [])
 				]
@@ -811,6 +812,9 @@
 	{/snippet}
 
 	{#if activeTab === 'connections'}
+		{#if !$user?.homeOrganizationId && !$user?.sessionOrganizationId}
+			<UserLinkedOrganizations />
+		{/if}
 		<UserGitHub
 			index={0}
 			{loading}

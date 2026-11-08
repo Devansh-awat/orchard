@@ -15,6 +15,8 @@ export interface User {
 	isSuperAdmin?: boolean;
 	setupCompleted?: boolean;
 	seenUpdates?: string[];
+	homeOrganizationId?: string;
+	sessionOrganizationId?: string;
 }
 
 function createAuthStore() {
