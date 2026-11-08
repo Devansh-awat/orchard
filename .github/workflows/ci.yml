@@ -258,6 +258,10 @@ jobs:
         run: pnpm --filter server build
       - name: Auth-coverage snapshot test
         run: pnpm --filter server test:auth-coverage
+      - name: Isolation route matrix
+        run: pnpm --filter server test:isolation:matrix
+      - name: Uniform not-found test
+        run: pnpm --filter server exec tsx --test test/uniform-not-found.test.ts
       - name: Health copy matches packages/health
         run: pnpm --filter server exec tsx --test test/health-sync.test.ts
       - name: Grafts test
@@ -527,6 +531,8 @@ jobs:
       # stale sweep, tombstones) and the debounced crash/recovery state machine.
       - name: Engine tests
         run: pnpm --filter server test:engine
+      - name: Cross-tenant isolation replay
+        run: pnpm --filter server test:isolation
       - name: Boot server + run RBAC e2e
         run: |
           (cd apps/server && node dist/main &)
