@@ -35,7 +35,7 @@ To revoke a token, select **Revoke** on its row. Requests that use the token fai
 | Set `active` to false | Removes the membership. Orchard keeps the SCIM record, so the provider can reactivate the person with the same ID. |
 | Delete a user         | Removes the membership and the SCIM record.                                                                        |
 
-SCIM only changes the membership in this organization. It cannot delete the person's Orchard account, change their profile, sign them out, or affect their other organizations.
+SCIM only changes the membership in this organization. It cannot delete the person's Orchard account, change their profile, or affect their other organizations. Deactivating or deleting a user signs out their SSO sessions and deletes their API tokens for this organization.
 
 SCIM can add anyone's email address, including people outside your verified domains. Orchard emails the person to say which organization added them, and they can [leave the organization](/teams/organizations/#leave-an-organization) unless it manages their domain.
 
@@ -49,7 +49,25 @@ A role sent by the provider overrides a change made in the dashboard at the next
 
 If the organization's SSO connection has [group rules](/teams/sso/#map-provider-groups-to-roles), the rules decide a person's role at each sign-in and override the SCIM role.
 
-SCIM Groups in Orchard are a read-only view of organization roles. Requests that create or change a group return a `501` status. Map roles with `roles` or `userType` instead.
+## Push groups from your provider
+
+Your provider can push groups to the **Groups** endpoint. Orchard stores each group's name and members as a directory. A group has no role of its own. It counts only when an [SSO group rule](/teams/sso/#map-provider-groups-to-roles) names it, and then it works like a group claim at sign-in.
+
+When a push creates a group, renames it, changes its members, or deletes it, Orchard re-evaluates the people it touched against the connection's rules:
+
+- A person who gains a matching group gets the rule's role. A person who matches several rules gets the highest.
+- A person whose last matching group goes away loses the membership that rules gave them, and Orchard signs out their SSO sessions and deletes their API tokens for this organization. Memberships you added by hand are not removed.
+- A group never creates a membership. Add the person with a user push first. A deactivated user stays in the group but gets no access until reactivated.
+- Rules never give **Owner**, and a rule never changes an owner.
+- At sign-in, Orchard combines the groups in the sign-in with the groups the directory holds for that person.
+
+Only the token's organization is affected. A token cannot read, change, or delete another organization's groups, or add its people to a group. Group names must be 1 to 256 characters, an organization can hold up to 1,000 groups, and a group up to 10,000 members.
+
+The four built-in groups (`Owner`, `Admin`, `Member`, `Guest`, with IDs such as `role:admin`) remain a read-only view of roles. Requests that change them return a `400` status.
+
+Deactivating or deleting a user signs out their SSO sessions and deletes their API tokens for this organization, not only their membership.
+
+Orchard records `scim.group.created`, `scim.group.updated`, and `scim.group.deleted` entries in the [audit log](/teams/audit-logs/).
 
 ## Related resources
 

@@ -107,7 +107,7 @@ By default every person your connection creates gets the **Role for new members*
 
 Group rules work with OIDC and SAML connections. OAuth 2.0 connections cannot carry groups.
 
-Group rules are managed through the API in this release. The dashboard does not show them yet.
+Open **Organization settings** > **SSO** > **Group rules**. Add one rule for each group: the exact group name and a role of **Admin**, **Member**, or **Guest**. Set **Group claim** to the attribute or claim that carries the groups. **Try a sign-in** takes a list of group names and shows what the saved rules would do, including the `sso_not_mapped` refusal. The API does the same:
 
 1. Make your provider send group names. Refer to [Provider notes](#provider-notes).
 2. Preview a set of group names against the saved rules. The response lists the role each group set gives and whether the person would be let in:
@@ -139,7 +139,7 @@ These rules apply:
 - If your provider sends too many groups (over 500, or more than 16 KB of names) or tells Orchard the list was cut short (Microsoft Entra ID group overage), Orchard treats the groups as unknown, denies the sign-in, and changes nothing.
 - Editing or removing rules, or changing the group claim, signs out everyone the rules added.
 - An organization can have group rules on one connection at a time.
-- Groups are read only from the signed SAML assertion, or the validated OIDC ID token, of this organization's connection.
+- Groups are read only from the signed SAML assertion, or the validated OIDC ID token, of this organization's connection. For OIDC, Orchard also verifies the ID token signature against the provider's published keys. A provider that signs ID tokens with a shared secret (`HS256`) is accepted without that extra check, because the token comes straight from the provider's token endpoint over HTTPS.
 
 Orchard records `sso.rules.updated`, `sso.member.provisioned`, `sso.member.role_synced`, `sso.member.removed`, and `sso.login.denied` entries in the [audit log](/teams/audit-logs/), with the connection and rule IDs.
 
@@ -147,7 +147,7 @@ Orchard records `sso.rules.updated`, `sso.member.provisioned`, `sso.member.role_
 A wrong `groupClaim` denies everyone except owners. Preview your rules, and sign in with a test account before you save a change to a connection that people rely on.
 :::
 
-If you also use [SCIM](/teams/scim/) roles, group rules win at the next sign-in.
+If you also use [SCIM](/teams/scim/) roles, group rules win at the next sign-in. If your provider also pushes SCIM Groups, [their names count as groups too](/teams/scim/#push-groups-from-your-provider).
 
 ### Sign-in identity
 
@@ -194,6 +194,17 @@ Orchard creates an Ingress and a certificate for the host. If the organization h
 To offer a provider to everyone on the instance sign-in page, a superadmin can go to **Instance admin** > **Sign in**. The same page has **Require single sign-on for everyone**, which stops email codes, passkeys, and the superadmin password for everyone except superadmins.
 
 To set a provider through environment variables, refer to [Add an identity provider](/operate/finishing-setup/#add-an-identity-provider).
+
+### Route instance sign-ins into organizations
+
+On **Instance admin** > **Sign in**, **Group rules** maps groups from an instance provider to a role in any organization on the instance. Each rule names its organization. The rules above apply, including deny when a person matches none. Superadmins are exempt and rules never change them.
+
+Two settings let an instance provider do more. Only a superadmin can change them, and an organization's own provider can never use either one.
+
+- **Let providers create organizations** is off by default. When it is on, **Organizations from groups** lists groups that create an organization. The first time someone in such a group signs in, Orchard creates an organization named after the group, once, and adds an ordinary group rule for it with the role you chose. The organization has no owner until a superadmin names one. A group that later stops matching does not delete the organization. Setting the `IDP_AUTO_CREATE_ORGS` environment variable pins the switch.
+- **Superadmin group** makes people in one group on one instance provider superadmins at sign-in, and takes the role away when they leave the group. It only removes a role that the group granted, never one given by hand, and it never removes the last superadmin. Turning it off or changing it demotes everyone it granted.
+
+Orchard records `admin.sso.auto_create_orgs_toggled`, `sso.auto_create_rules.updated`, `sso.org.auto_created`, `admin.sso.superadmin_rule_updated`, `sso.superadmin.granted`, and `sso.superadmin.revoked` entries in the [audit log](/teams/audit-logs/).
 
 ## Related resources
 
