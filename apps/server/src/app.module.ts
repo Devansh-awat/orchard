@@ -4,6 +4,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { LargeBodyInterceptor } from './http/large-body.interceptor';
+import { UniformNotFoundInterceptor } from './http/uniform-not-found.interceptor';
 import {
   ApiThrottlerGuard,
   apiThrottlerLimit,
@@ -122,7 +123,8 @@ import { graftImports } from './grafts/boot';
   ],
   providers: [
     { provide: APP_GUARD, useClass: ApiThrottlerGuard },
-    { provide: APP_INTERCEPTOR, useClass: LargeBodyInterceptor }
+    { provide: APP_INTERCEPTOR, useClass: LargeBodyInterceptor },
+    { provide: APP_INTERCEPTOR, useClass: UniformNotFoundInterceptor }
   ]
 })
 export class AppModule {
