@@ -10,7 +10,6 @@ import {
   InstanceSettingsService,
   ToggleState
 } from '../instance-settings/instance-settings.service';
-import { newOrgCaps } from '../quotas/org-limits';
 import { RuleValueError, isMappableRole, ruleValue } from './group-rules';
 
 export const MAX_AUTO_CREATE_RULES = 100;
@@ -386,12 +385,13 @@ export class InstanceIdentityService {
   }
 
   private async createFor(provider: IdentityProvider, rule: AutoCreateRule) {
+    const caps = await this.settings.getNewOrgCaps();
     for (let attempt = 0; attempt < 5; attempt++) {
       const slug = slugFor(rule.value, attempt === 0 ? '' : randomBytes(2).toString('hex'));
       try {
         return await this.prisma.$transaction(async (tx) => {
           const organization = await tx.organization.create({
-            data: { name: rule.value.slice(0, 255), slug, ...newOrgCaps() }
+            data: { name: rule.value.slice(0, 255), slug, ...caps }
           });
           const claimed = await tx.idpAutoCreateRule.updateMany({
             where: { id: rule.id, organizationId: null },

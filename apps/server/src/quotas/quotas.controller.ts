@@ -22,6 +22,12 @@ import {
   parseResourceLimits
 } from '../instance-settings/instance-settings.service';
 import { AuthorizationService } from '../auth/authorization.service';
+import { AuditService } from '../audit/audit.service';
+import { validateNewOrgDefaults } from './org-limits';
+
+function actorOf(req: any) {
+  return { userId: (req.auth?.userId ?? req.user?.sub ?? null) as string | null };
+}
 
 interface CapBody {
   cpuLimitMilli?: number | null;
@@ -30,13 +36,19 @@ interface CapBody {
   maxServices?: number | null;
   defaultPodCpuMilli?: number | null;
   defaultPodMemoryBytes?: number | null;
+  maxProjects?: number | null;
+  maxEnvironments?: number | null;
+  maxDeployments?: number | null;
 }
 
 // Super-admin: edit caps on any org.
 @SuperAdmin()
 @Controller('admin/organizations')
 export class AdminQuotasController {
-  constructor(private readonly quotas: QuotasService) {}
+  constructor(
+    private readonly quotas: QuotasService,
+    private readonly audit: AuditService
+  ) {}
 
   @Get(':id/quota')
   async getOrgQuota(@Param('id') id: string) {
@@ -44,8 +56,17 @@ export class AdminQuotasController {
   }
 
   @Patch(':id/quota')
-  async updateOrgQuota(@Param('id') id: string, @Body() body: CapBody) {
-    return this.quotas.updateOrgCaps(id, body);
+  async updateOrgQuota(@Param('id') id: string, @Body() body: CapBody, @Req() req: any) {
+    const updated = await this.quotas.updateOrgCaps(id, body);
+    void this.audit.log({
+      action: 'admin.org.quota_updated',
+      actorUserId: actorOf(req).userId,
+      organizationId: id,
+      targetType: 'organization',
+      targetId: id,
+      metadata: serializeCaps(body ?? {})
+    });
+    return updated;
   }
 
   // Connect this org's quota pool with another org. Both orgs share caps + usage.
@@ -58,6 +79,41 @@ export class AdminQuotasController {
   @Post(':id/quota/disconnect')
   async disconnectQuota(@Param('id') id: string) {
     return this.quotas.unlinkOrganization(id);
+  }
+}
+
+function serializeCaps(body: CapBody): Record<string, number | null> {
+  return Object.fromEntries(Object.entries(body).map(([key, value]) => [key, value ?? null]));
+}
+
+// Super-admin: the caps a NEW organization is created with. Read when an
+// organization is created and written into it, so a change here never reaches an
+// organization that already exists. Nothing stored means uncapped.
+@SuperAdmin()
+@Controller('admin/instance-settings/new-org-defaults')
+export class AdminNewOrgDefaultsController {
+  constructor(
+    private readonly settings: InstanceSettingsService,
+    private readonly audit: AuditService
+  ) {}
+
+  @Get()
+  async get() {
+    return this.settings.getNewOrgDefaultsState();
+  }
+
+  @Patch()
+  async set(@Body() body: unknown, @Req() req: any) {
+    const value = validateNewOrgDefaults(body);
+    await this.settings.setNewOrgDefaults(value);
+    void this.audit.log({
+      action: 'admin.new_org_defaults_updated',
+      actorUserId: actorOf(req).userId,
+      targetType: 'instance',
+      targetId: 'new_org_defaults',
+      metadata: { ...value }
+    });
+    return this.settings.getNewOrgDefaultsState();
   }
 }
 

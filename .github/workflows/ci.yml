@@ -376,6 +376,8 @@ jobs:
         run: pnpm --filter server test:build-metrics
       - name: Stuck database replica tests
         run: pnpm --filter server test:cnpg-stuck-replicas
+      - name: New org default caps tests
+        run: pnpm --filter server test:org-limits
       - name: Departed owner allowance tests
         run: pnpm --filter server test:owner-allowance
       # Runtime configuration with an environment override: which value wins,

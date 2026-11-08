@@ -865,6 +865,15 @@
     "bodyIds": [],
     "unseeded": []
   },
+  "GET /admin/instance-settings/new-org-defaults": {
+    "class": "superadmin",
+    "auth": "superadmin",
+    "handler": "AdminNewOrgDefaultsController.get",
+    "params": [],
+    "queryIds": [],
+    "bodyIds": [],
+    "unseeded": []
+  },
   "GET /admin/instance-settings/resource-limits": {
     "class": "superadmin",
     "auth": "superadmin",
@@ -3671,6 +3680,15 @@
     "class": "superadmin",
     "auth": "superadmin",
     "handler": "InstanceSettingsController.setMcp",
+    "params": [],
+    "queryIds": [],
+    "bodyIds": [],
+    "unseeded": []
+  },
+  "PATCH /admin/instance-settings/new-org-defaults": {
+    "class": "superadmin",
+    "auth": "superadmin",
+    "handler": "AdminNewOrgDefaultsController.set",
     "params": [],
     "queryIds": [],
     "bodyIds": [],

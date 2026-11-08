@@ -1,5 +1,5 @@
 import { Injectable, ForbiddenException, NotFoundException } from '@nestjs/common';
-import { newOrgCaps } from '../quotas/org-limits';
+import { InstanceSettingsService } from '../instance-settings/instance-settings.service';
 import { Prisma } from '@prisma/client';
 import { randomBytes, createHash } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
@@ -11,7 +11,8 @@ export class AdminService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
-    private readonly authz: AuthorizationService
+    private readonly authz: AuthorizationService,
+    private readonly settings: InstanceSettingsService
   ) {}
 
   async getStats() {
@@ -254,7 +255,7 @@ export class AdminService {
         avatarUrl: data.avatarUrl,
         plan: data.plan,
         createdBy: primaryOwnerId,
-        ...(options.applyDefaultCaps === false ? {} : newOrgCaps())
+        ...(options.applyDefaultCaps === false ? {} : await this.settings.getNewOrgCaps())
       }
     });
 

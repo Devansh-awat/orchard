@@ -292,6 +292,11 @@ model Organization {
   maxPods          Int?    @map("max_pods")
   maxServices      Int?    @map("max_services")
 
+  // Most projects, extra environments and deployments the org may hold (null = unlimited).
+  maxProjects     Int? @map("max_projects")
+  maxEnvironments Int? @map("max_environments")
+  maxDeployments  Int? @map("max_deployments")
+
   // Per-project defaults applied via LimitRange (null = no default).
   defaultPodCpuMilli    Int?    @map("default_pod_cpu_milli")
   defaultPodMemoryBytes BigInt? @map("default_pod_memory_bytes")

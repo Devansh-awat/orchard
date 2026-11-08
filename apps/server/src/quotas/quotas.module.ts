@@ -3,7 +3,8 @@ import {
   AdminQuotasController,
   OrgQuotasController,
   AdminBackfillController,
-  AdminResourceLimitsController
+  AdminResourceLimitsController,
+  AdminNewOrgDefaultsController
 } from './quotas.controller';
 import { QuotasService } from './quotas.service';
 import { QuotaBackfillService } from './backfill.service';
@@ -18,7 +19,8 @@ import { OrganizationsModule } from '../organizations/organizations.module';
     AdminQuotasController,
     OrgQuotasController,
     AdminBackfillController,
-    AdminResourceLimitsController
+    AdminResourceLimitsController,
+    AdminNewOrgDefaultsController
   ],
   providers: [QuotasService, QuotaBackfillService],
   exports: [QuotasService]

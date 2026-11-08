@@ -605,6 +605,9 @@ export class QuotasService implements OnModuleInit {
         memoryLimitBytes: true,
         maxPods: true,
         maxServices: true,
+        maxProjects: true,
+        maxEnvironments: true,
+        maxDeployments: true,
         defaultPodCpuMilli: true,
         defaultPodMemoryBytes: true,
         quotaGroupId: true
@@ -625,6 +628,9 @@ export class QuotasService implements OnModuleInit {
         memoryLimitBytes: org.memoryLimitBytes ? Number(org.memoryLimitBytes) : null,
         maxPods: org.maxPods || null,
         maxServices: org.maxServices || null,
+        maxProjects: org.maxProjects || null,
+        maxEnvironments: org.maxEnvironments || null,
+        maxDeployments: org.maxDeployments || null,
         defaultPodCpuMilli: org.defaultPodCpuMilli || null,
         defaultPodMemoryBytes: org.defaultPodMemoryBytes ? Number(org.defaultPodMemoryBytes) : null,
         quotaGroupId: org.quotaGroupId
@@ -749,6 +755,9 @@ export class QuotasService implements OnModuleInit {
     data: Partial<Caps> & {
       defaultPodCpuMilli?: number | null;
       defaultPodMemoryBytes?: number | null;
+      maxProjects?: number | null;
+      maxEnvironments?: number | null;
+      maxDeployments?: number | null;
     }
   ) {
     assertPositiveOrBlank({
@@ -757,7 +766,10 @@ export class QuotasService implements OnModuleInit {
       'Max pods': data.maxPods,
       'Max services': data.maxServices,
       'Default CPU': data.defaultPodCpuMilli,
-      'Default memory': data.defaultPodMemoryBytes
+      'Default memory': data.defaultPodMemoryBytes,
+      'Project limit': data.maxProjects,
+      'Environment limit': data.maxEnvironments,
+      'Deployment limit': data.maxDeployments
     });
     const self = await this.prisma.organization.findUnique({
       where: { id: organizationId },
@@ -772,6 +784,9 @@ export class QuotasService implements OnModuleInit {
       }),
       ...(data.maxPods !== undefined && { maxPods: data.maxPods }),
       ...(data.maxServices !== undefined && { maxServices: data.maxServices }),
+      ...(data.maxProjects !== undefined && { maxProjects: data.maxProjects }),
+      ...(data.maxEnvironments !== undefined && { maxEnvironments: data.maxEnvironments }),
+      ...(data.maxDeployments !== undefined && { maxDeployments: data.maxDeployments }),
       ...(data.defaultPodCpuMilli !== undefined && { defaultPodCpuMilli: data.defaultPodCpuMilli }),
       ...(data.defaultPodMemoryBytes !== undefined && {
         defaultPodMemoryBytes:

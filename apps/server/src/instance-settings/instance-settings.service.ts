@@ -2,6 +2,13 @@ import { ConflictException, Injectable, Logger, OnModuleInit } from '@nestjs/com
 import { PrismaService } from '../prisma/prisma.service';
 import { tenantBackupTarget } from '../instance-config/object-storage';
 import { signupMode } from '../auth/signup-mode';
+import {
+  envNewOrgDefaults,
+  newOrgCapsData,
+  parseNewOrgDefaults,
+  type NewOrgCaps,
+  type NewOrgDefaults
+} from '../quotas/org-limits';
 
 export const USERSPACE_NODE_SCHEDULING_KEY = 'userspace_node_scheduling';
 const USERSPACE_NODE_SCHEDULING_ENV = 'USERSPACE_NODE_SCHEDULING';
@@ -18,6 +25,8 @@ export const IDP_AUTO_CREATE_ORGS_KEY = 'idp_auto_create_orgs';
 export const IDP_AUTO_CREATE_ORGS_ENV = 'IDP_AUTO_CREATE_ORGS';
 export const IDP_SUPERADMIN_PROVIDER_KEY = 'idp_superadmin_provider_id';
 export const IDP_SUPERADMIN_GROUP_KEY = 'idp_superadmin_group';
+
+export const NEW_ORG_DEFAULTS_KEY = 'new_org_defaults';
 
 export const POSTGRES_AUTO_UPDATE_KEY = 'postgres_auto_update';
 export const POSTGRES_AUTO_UPDATE_ENV = 'POSTGRES_AUTO_UPDATE';
@@ -363,5 +372,29 @@ export class InstanceSettingsService implements OnModuleInit {
       );
     }
     await this.set(IMAGE_SCANNER_KEY, value);
+  }
+
+  /**
+   * Caps a new organization is created with. A stored instance default wins; with
+   * none stored the answer is uncapped, unless the operator seeded the compute caps
+   * through NEW_ORG_CPU / NEW_ORG_MEMORY. Read at creation time only: changing this
+   * never touches an organization that already exists.
+   */
+  async getNewOrgDefaultsState(): Promise<{
+    value: NewOrgDefaults;
+    stored: NewOrgDefaults | null;
+    fallback: NewOrgDefaults;
+  }> {
+    const stored = parseNewOrgDefaults(await this.getRaw(NEW_ORG_DEFAULTS_KEY));
+    const fallback = envNewOrgDefaults();
+    return { value: stored ?? fallback, stored, fallback };
+  }
+
+  async getNewOrgCaps(): Promise<NewOrgCaps> {
+    return newOrgCapsData((await this.getNewOrgDefaultsState()).value);
+  }
+
+  async setNewOrgDefaults(value: NewOrgDefaults): Promise<void> {
+    await this.set(NEW_ORG_DEFAULTS_KEY, JSON.stringify(value));
   }
 }
