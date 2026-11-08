@@ -13,6 +13,7 @@
 		SectionCard,
 		SettingRow,
 		SettingsList,
+		Select,
 		Skeleton,
 		Spinner,
 		StatusBadge,
@@ -26,6 +27,7 @@
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import { ProviderIcon } from '$lib/components/login';
 	import { apiFetch, toasts } from '$lib/stores';
+	import GroupRulesEditor from './GroupRulesEditor.svelte';
 	import SsoProviderModal from './SsoProviderModal.svelte';
 	import { removeProviderIcon, uploadProviderIcon } from './sso-icon';
 	import type {
@@ -64,6 +66,8 @@
 	let providerToDelete = $state<SsoProvider | null>(null);
 	let showDeleteModal = $state(false);
 
+	let rulesProviderId = $state('');
+
 	let newDomain = $state('');
 	let addingDomain = $state(false);
 	let verifyingDomain = $state<string | null>(null);
@@ -83,6 +87,10 @@
 	const providers = $derived(overview?.providers ?? []);
 	const domains = $derived(overview?.domains ?? []);
 	const locked = $derived(settings ? !settings.platformEnabled : false);
+	const mappable = $derived(providers.filter((p) => p.protocol !== 'oauth2'));
+	const rulesProvider = $derived(
+		mappable.find((p) => p.id === rulesProviderId) ?? mappable[0] ?? null
+	);
 	const canEnable = $derived(providers.some((p) => p.enabled && p.usable));
 	const brandingDirty = $derived(
 		!!settings &&
@@ -534,6 +542,37 @@
 			</p>
 		{/if}
 	</SectionCard>
+
+	{#if rulesProvider && organization}
+		{#if mappable.length > 1}
+			<SectionCard title="Group rules">
+				<SettingsList>
+					<SettingRow
+						label="Connection"
+						for="{uid}-rules-provider"
+						hint="Only one connection can map groups into this organization"
+					>
+						<Select
+							id="{uid}-rules-provider"
+							value={rulesProvider.id}
+							onchange={(e: Event) =>
+								(rulesProviderId = (e.currentTarget as HTMLSelectElement).value)}
+						>
+							{#each mappable as provider (provider.id)}
+								<option value={provider.id}>{provider.name}</option>
+							{/each}
+						</Select>
+					</SettingRow>
+				</SettingsList>
+			</SectionCard>
+		{/if}
+		<GroupRulesEditor
+			baseUrl={providerUrl(rulesProvider.id)}
+			providerName={rulesProvider.name}
+			fixedOrganizationId={organization.id}
+			readonly={locked}
+		/>
+	{/if}
 
 	<SectionCard
 		title="Email domains"

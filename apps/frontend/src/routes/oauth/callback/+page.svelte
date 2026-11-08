@@ -5,6 +5,7 @@
 	import { browser } from '$app/environment';
 	import { user } from '$lib/stores';
 	import { Loader2, AlertCircle, Lock } from 'lucide-svelte';
+	import { describeSignInError } from '$lib/components/org-settings/group-rules';
 
 	let error = $state<string | null>(null);
 	let isPrivateBeta = $state(false);
@@ -17,7 +18,7 @@
 				isPrivateBeta = true;
 				signupsDisabled = errorParam === 'signups_disabled';
 			} else {
-				error = errorParam;
+				error = describeSignInError(errorParam) ?? errorParam;
 			}
 			return;
 		}

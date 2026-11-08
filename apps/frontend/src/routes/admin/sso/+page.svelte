@@ -14,6 +14,7 @@
 		SectionCard,
 		SettingRow,
 		SettingsList,
+		Select,
 		Skeleton,
 		Spinner,
 		Stack,
@@ -25,6 +26,8 @@
 		statusMeta
 	} from '$lib/components/ui';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
+	import GroupRulesEditor from '$lib/components/org-settings/GroupRulesEditor.svelte';
+	import InstanceIdentityPolicy from '$lib/components/org-settings/InstanceIdentityPolicy.svelte';
 	import SsoProviderModal from '$lib/components/org-settings/SsoProviderModal.svelte';
 	import { ProviderIcon } from '$lib/components/login';
 	import { draftToPayload } from '$lib/components/org-settings/sso-types';
@@ -80,6 +83,7 @@
 	let showDelete = $state(false);
 	let togglingOrg = $state<string | null>(null);
 	let orgFilter = $state('');
+	let rulesProviderId = $state('');
 
 	const filteredOrgs = $derived.by(() => {
 		const q = orgFilter.trim().toLowerCase();
@@ -88,6 +92,14 @@
 			(o) => o.name.toLowerCase().includes(q) || o.slug.toLowerCase().includes(q)
 		);
 	});
+
+	const mappable = $derived(
+		providers.filter((p) => p.protocol === 'oidc' || p.protocol === 'saml')
+	);
+	const rulesProvider = $derived(
+		mappable.find((p) => p.id === rulesProviderId) ?? mappable[0] ?? null
+	);
+	const orgChoices = $derived(organizations.map((o) => ({ id: o.organizationId, name: o.name })));
 
 	onMount(load);
 
@@ -458,6 +470,36 @@
 						{/if}
 					</SettingsList>
 				</SectionCard>
+			{/if}
+
+			{#if rulesProvider}
+				{#if mappable.length > 1}
+					<SectionCard
+						title="Group rules"
+						description="Map groups from a provider into organizations on this instance."
+					>
+						<SettingsList>
+							<SettingRow label="Provider" for="sso-rules-provider">
+								<Select
+									id="sso-rules-provider"
+									value={rulesProvider.id}
+									onchange={(e: Event) =>
+										(rulesProviderId = (e.currentTarget as HTMLSelectElement).value)}
+								>
+									{#each mappable as provider (provider.id)}
+										<option value={provider.id}>{provider.name}</option>
+									{/each}
+								</Select>
+							</SettingRow>
+						</SettingsList>
+					</SectionCard>
+				{/if}
+				<GroupRulesEditor
+					baseUrl={providerUrl(rulesProvider.id)}
+					providerName={rulesProvider.name}
+					organizations={orgChoices}
+				/>
+				<InstanceIdentityPolicy {providers} />
 			{/if}
 
 			<SectionCard

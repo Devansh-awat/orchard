@@ -86,6 +86,44 @@ export interface SsoOverview {
 	loginUrl: string | null;
 }
 
+export type MappableRole = 'admin' | 'member' | 'guest';
+
+export interface GroupRule {
+	id?: string;
+	organizationId: string;
+	value: string;
+	role: MappableRole;
+}
+
+export interface GroupRulesState {
+	groupClaim: string;
+	rules: GroupRule[];
+}
+
+export interface RulePreviewMatch {
+	organizationId: string;
+	role: MappableRole;
+	ruleIds: string[];
+}
+
+export interface RulePreview {
+	hasRules: boolean;
+	allowed: boolean;
+	matches: RulePreviewMatch[];
+}
+
+export interface IdentityPolicy {
+	autoCreateOrgs: { enabled: boolean; dbValue: boolean; envOverride: boolean | null };
+	superadminRule: { providerId: string; value: string } | null;
+}
+
+export interface AutoCreateRule {
+	id?: string;
+	value: string;
+	role: MappableRole;
+	organizationId?: string | null;
+}
+
 export interface ProviderDraft {
 	preset: string;
 	name: string;
