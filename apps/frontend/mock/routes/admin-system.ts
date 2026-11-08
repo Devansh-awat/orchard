@@ -318,7 +318,13 @@ export function adminSystemRoutes(r: Router, { store }: MockContext) {
 		}));
 		return projectRules;
 	});
-	let scimTokens = [
+	let scimTokens: Array<{
+		id: string;
+		name: string;
+		lastUsedAt: string | null;
+		expiresAt: string | null;
+		createdAt: string;
+	}> = [
 		{
 			id: 'iscim-1',
 			name: 'Okta',
