@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.39.0](https://github.com/hackclub/orchard/compare/cli/v0.38.0...cli/v0.39.0) (2026-11-08)
+
+
+### Features
+
+* **cli:** add orchard doctor ([8d3914d](https://github.com/hackclub/orchard/commit/8d3914da174c946e770d7e2a0d6ae185c405de33))
+* **docs:** add orchard doctor page ([08875f6](https://github.com/hackclub/orchard/commit/08875f6f9a3e1fcd9a52bcd451f8a96a5b34cd69))
+
 ## [0.38.0](https://github.com/hackclub/orchard/compare/cli/v0.37.1...cli/v0.38.0) (2026-11-05)
 
 

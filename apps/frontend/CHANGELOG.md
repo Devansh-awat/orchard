@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.83.0](https://github.com/hackclub/orchard/compare/frontend/v1.82.0...frontend/v1.83.0) (2026-11-08)
+
+
+### Features
+
+* **frontend:** admin controls for new organization limits ([fa6ea98](https://github.com/hackclub/orchard/commit/fa6ea9885a3d7fc670f0d994b018fe2869d125c9))
+* **frontend:** group rules, organization creation and superadmin group in SSO settings ([b574ffc](https://github.com/hackclub/orchard/commit/b574ffc02f91ac86c6baf17b82b4be29fdca03ff))
+
 ## [1.82.0](https://github.com/hackclub/orchard/compare/frontend/v1.81.0...frontend/v1.82.0) (2026-11-05)
 
 

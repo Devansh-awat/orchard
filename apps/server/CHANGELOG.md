@@ -1,5 +1,42 @@
 # Changelog
 
+## [2.92.0](https://github.com/hackclub/orchard/compare/server/v2.91.0...server/v2.92.0) (2026-11-08)
+
+
+### Features
+
+* **server:** add active tenant isolation self-test ([74104ac](https://github.com/hackclub/orchard/commit/74104acd199a5ab2d1f40bf915f3528dddac0c91))
+* **server:** add doctor passive configuration checks ([bd74986](https://github.com/hackclub/orchard/commit/bd74986806b8b60eb63e60d8925df1afd2db09f6))
+* **server:** add superadmin doctor routes ([bf5a153](https://github.com/hackclub/orchard/commit/bf5a1531df6bd7a0ef24a814310b7364bfbe4fe2))
+* **server:** classify every route in an isolation matrix ([923122f](https://github.com/hackclub/orchard/commit/923122f1e10d23e2aa611299def774aa2215889f))
+* **server:** default compute caps for new orgs and generous per-org count caps ([5561555](https://github.com/hackclub/orchard/commit/5561555ea75130df99af24ccf849fd6fc83e404f))
+* **server:** instance IdP org auto-create and superadmin rule ([7fb72ec](https://github.com/hackclub/orchard/commit/7fb72ecdf4ed0169a387ee1d10cd9bc35dbf4d2d))
+* **server:** optional egress bandwidth annotation on tenant pods ([8942051](https://github.com/hackclub/orchard/commit/894205140c353d31bc96e946b406763b42b86bd9))
+* **server:** replay every route as foreign principals against a seeded database ([79f377b](https://github.com/hackclub/orchard/commit/79f377b04fd237556e0c1933e7f135f31c1bede2))
+* **server:** uncapped new orgs, superadmin instance defaults and per-org count limits ([ce75ebe](https://github.com/hackclub/orchard/commit/ce75ebec0d871006d28a9284bb42e26710a65200))
+* **server:** verify the OIDC ID token signature and test the callback end to end ([0646331](https://github.com/hackclub/orchard/commit/0646331408988cb1fc37378ae77772f2c45c4cfa))
+* **server:** write SCIM Groups through the group rule resolver ([ce05c92](https://github.com/hackclub/orchard/commit/ce05c9287e627660383da17e3f2a91e24b546f9d))
+
+
+### Bug Fixes
+
+* **chart:** platform PriorityClass above tenant workloads ([a07edab](https://github.com/hackclub/orchard/commit/a07edab75ddecd6f451fe2d23a0c1a8cd66cb0c9))
+* **chart:** throttle tenant log rate per namespace in Vector ([8cdb85b](https://github.com/hackclub/orchard/commit/8cdb85b9eae71211048009725c06aaa9ae629437))
+* **server:** answer hidden and missing resources with the same 404 ([fdd64d6](https://github.com/hackclub/orchard/commit/fdd64d68e11cdc2ab7a56ee664e52c2f0fe3217e))
+* **server:** authorize before validating on routes that answered foreign ids with 400 ([0843963](https://github.com/hackclub/orchard/commit/08439637575a67f72cf0a47a3229018cd403e27b))
+* **server:** avoid control-character regex in mail label ([8d547dd](https://github.com/hackclub/orchard/commit/8d547dde4449389e117837c188bd764574deb5d0))
+* **server:** cap concurrent builds per org and claim queued builds fairly ([35a30f1](https://github.com/hackclub/orchard/commit/35a30f19c6fc1687b7b158a0a5055cb8d56e38d8))
+* **server:** cap identity provider response bodies at 1 MiB ([975b74e](https://github.com/hackclub/orchard/commit/975b74ec0045ab5e21d9c74fc110da98e0fc45eb))
+* **server:** cap multipart upload size, parts and concurrency on every upload route ([f8faaa9](https://github.com/hackclub/orchard/commit/f8faaa90ae1181c9d6ba4d7d2733fe2fe93a25c0))
+* **server:** match watch paths with minimatch and reject pathological globs ([f736bf9](https://github.com/hackclub/orchard/commit/f736bf9f14438cf90fe041e23ad1a32388eda1a7))
+* **server:** refuse checkpoint group restore and read for foreign databases ([918d08e](https://github.com/hackclub/orchard/commit/918d08e1429e0872cde52895c15d9c1cfd917c17))
+* **server:** refuse denied SSE streams with a plain 404 before the head commits ([becf1dc](https://github.com/hackclub/orchard/commit/becf1dcb949c3a6e45abdf7b0aa0c35867c69d4c))
+* **server:** reject a failed psql exec instead of hanging ([8599c1e](https://github.com/hackclub/orchard/commit/8599c1efb13ce9662b6d4b469b1be4c5151c004b))
+* **server:** require domain proof when signup is open and budget custom domains per org ([55716f1](https://github.com/hackclub/orchard/commit/55716f12a5b83d3cae501610598a16fd99764eba))
+* **server:** scope member projects to the token and gate notification scopes by project view ([459d311](https://github.com/hackclub/orchard/commit/459d311ed774ac2efba2741967770bc67d841b4b))
+* **server:** split the global invite budget by organization age and degrade instead of blocking ([5170d36](https://github.com/hackclub/orchard/commit/5170d36f988f63954e094d2458650b69a8e59cf7))
+* **server:** track mcp client use, prune unused clients, and index error group last seen ([10096ab](https://github.com/hackclub/orchard/commit/10096abd077d5dea60675d3d912f2f2ac02aa5af))
+
 ## [2.91.0](https://github.com/hackclub/orchard/compare/server/v2.90.0...server/v2.91.0) (2026-11-05)
 
 
