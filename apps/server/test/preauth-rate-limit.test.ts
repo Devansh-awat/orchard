@@ -6,7 +6,9 @@ import {
   RATE_LIMIT_CONFIGS,
   COLLAPSED_IP_MULTIPLIER,
   COLLAPSED_IP_MAX_BLOCK_MS,
-  CLEANUP_BATCH
+  CLEANUP_BATCH,
+  PRESSURE_DELAY_MS,
+  PRESSURE_MAX_SLEEPERS
 } from '../src/auth/rate-limit.service';
 import { AuthCleanupService } from '../src/auth/auth-cleanup.service';
 import { GLOBAL_LEADER_LEASE } from '../src/coordination/lease.service';
@@ -55,26 +57,74 @@ test('a public source is capped at its own per-ip limit and blocked alone', asyn
   assert.equal(await blocked(svc.checkRateLimit('203.0.113.2', 'ip', 'otp_request')), false);
 });
 
-test('one source cannot spend the global ceiling', async () => {
+test('one attacker address cannot consume the global budget or lock honest addresses out', async () => {
   const throttle = memoryThrottle();
   const svc = new RateLimitService({} as any, throttle as any);
-  for (let i = 0; i < 500; i++) {
-    await svc.checkRateLimit('203.0.113.1', 'ip', 'otp_request').catch(() => undefined);
+  const ipCap = RATE_LIMIT_CONFIGS.otp_request_ip.maxAttempts;
+  let rejected = 0;
+  for (let i = 0; i < 3100; i++) {
+    await svc
+      .checkRateLimits('otp_request', {
+        ip: '203.0.113.1',
+        identities: [[`junk${i}@example.com`, 'email']]
+      })
+      .catch(() => rejected++);
   }
+  assert.equal(rejected, 3100 - ipCap);
   const global = throttle.buckets.get('otp_request:global:all')!;
-  assert.ok(global.count <= RATE_LIMIT_CONFIGS.otp_request_ip.maxAttempts + 500);
-  assert.ok(global.count < RATE_LIMIT_CONFIGS.otp_request_global.maxAttempts);
-  assert.equal(await blocked(svc.checkRateLimit('203.0.113.9', 'ip', 'otp_request')), false);
+  assert.equal(global.count, ipCap);
+  for (let i = 0; i < 200; i++) {
+    const result = await svc.checkRateLimits('otp_request', {
+      ip: `198.51.100.${i}`,
+      identities: [[`honest${i}@example.com`, 'email']]
+    });
+    assert.equal(result.pressured, false);
+  }
 });
 
-test('the global ceiling stops a distributed flood', async () => {
+test('requests rejected on the identity bucket do not charge the global budget', async () => {
+  const throttle = memoryThrottle();
+  const svc = new RateLimitService({} as any, throttle as any);
+  const cap = RATE_LIMIT_CONFIGS.otp_request_email.maxAttempts;
+  for (let i = 0; i < cap; i++) {
+    await svc.checkRateLimits('otp_request', {
+      ip: `192.0.2.${i}`,
+      identities: [['victim@example.com', 'email']]
+    });
+  }
+  const before = throttle.buckets.get('otp_request:global:all')!.count;
+  for (let i = 0; i < 50; i++) {
+    await svc
+      .checkRateLimits('otp_request', {
+        ip: `192.0.2.${100 + i}`,
+        identities: [['victim@example.com', 'email']]
+      })
+      .catch(() => undefined);
+  }
+  assert.equal(throttle.buckets.get('otp_request:global:all')!.count, before);
+});
+
+test('a distributed flood past the ceiling degrades to a step-up instead of a hard block', async () => {
   const throttle = memoryThrottle();
   const svc = new RateLimitService({} as any, throttle as any);
   const ceiling = RATE_LIMIT_CONFIGS.otp_request_global.maxAttempts;
   for (let i = 0; i < ceiling; i++) {
-    await svc.checkRateLimit(`198.51.${(i >> 8) & 255}.${i & 255}`, 'ip', 'otp_request');
+    const result = await svc.checkRateLimits('otp_request', {
+      ip: `198.51.${(i >> 8) & 255}.${i & 255}`
+    });
+    assert.equal(result.pressured, false);
   }
-  assert.equal(await blocked(svc.checkRateLimit('192.0.2.77', 'ip', 'otp_request')), true);
+  const result = await svc.checkRateLimits('otp_request', { ip: '192.0.2.77' });
+  assert.equal(result.pressured, true);
+  assert.equal(await blocked(svc.checkRateLimit('192.0.2.77', 'ip', 'otp_request')), false);
+});
+
+test('slowDown never lets the number of sleepers grow without bound', async () => {
+  const svc = new RateLimitService({} as any, memoryThrottle() as any);
+  (svc as any).sleepers = PRESSURE_MAX_SLEEPERS;
+  const started = Date.now();
+  await svc.slowDown();
+  assert.ok(Date.now() - started < PRESSURE_DELAY_MS / 2);
 });
 
 test('a collapsed address gets a wider, shorter-lived bucket so it cannot lock everyone out for an hour', async () => {

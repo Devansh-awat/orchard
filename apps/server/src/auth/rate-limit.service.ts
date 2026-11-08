@@ -7,6 +7,8 @@ export const COLLAPSED_IP_MULTIPLIER = 10;
 export const COLLAPSED_IP_MAX_BLOCK_MS = 5 * 60 * 1000;
 export const CLEANUP_BATCH = 1000;
 export const CLEANUP_MAX_BATCHES = 20;
+export const PRESSURE_DELAY_MS = 1000;
+export const PRESSURE_MAX_SLEEPERS = 500;
 
 export interface RateLimitConfig {
   maxAttempts: number;
@@ -112,6 +114,8 @@ export type RateLimitIdentifierType = 'email' | 'ip' | 'ingress' | 'org' | 'user
 
 @Injectable()
 export class RateLimitService {
+  private sleepers = 0;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly throttle: RedisThrottleService
@@ -153,19 +157,57 @@ export class RateLimitService {
       return;
     }
 
-    if (type === 'ip') {
-      const ceiling = RATE_LIMIT_CONFIGS[`${action}_global`];
-      if (ceiling) await this.consume('all', 'global', action, ceiling);
-      if (isCollapsedAddress(identifier)) {
-        config = {
-          maxAttempts: config.maxAttempts * COLLAPSED_IP_MULTIPLIER,
-          windowMs: config.windowMs,
-          blockDurationMs: Math.min(config.blockDurationMs, COLLAPSED_IP_MAX_BLOCK_MS)
-        };
-      }
+    if (type === 'ip' && isCollapsedAddress(identifier)) {
+      config = {
+        maxAttempts: config.maxAttempts * COLLAPSED_IP_MULTIPLIER,
+        windowMs: config.windowMs,
+        blockDurationMs: Math.min(config.blockDurationMs, COLLAPSED_IP_MAX_BLOCK_MS)
+      };
     }
 
     await this.consume(identifier, type, action, config);
+  }
+
+  /**
+   * Check the per-source buckets for one request (the caller's address first,
+   * then each identity), and only when all of them pass charge the global
+   * ceiling for the action. The ceiling is a pressure signal, never a block:
+   * a source that is rejected on its own bucket cannot spend it, and crossing
+   * it asks the controller for a step-up instead of locking everyone out.
+   */
+  async checkRateLimits(
+    action: string,
+    subjects: {
+      ip?: string;
+      identities?: Array<[string, RateLimitIdentifierType]>;
+    }
+  ): Promise<{ pressured: boolean }> {
+    if (subjects.ip) await this.checkRateLimit(subjects.ip, 'ip', action);
+    for (const [identifier, type] of subjects.identities ?? []) {
+      await this.checkRateLimit(identifier, type, action);
+    }
+    const ceiling = RATE_LIMIT_CONFIGS[`${action}_global`];
+    if (!ceiling) return { pressured: false };
+    try {
+      await this.consume('all', 'global', action, ceiling);
+      return { pressured: false };
+    } catch (e) {
+      if (e instanceof HttpException && e.getStatus() === HttpStatus.TOO_MANY_REQUESTS) {
+        return { pressured: true };
+      }
+      throw e;
+    }
+  }
+
+  async slowDown(): Promise<void> {
+    if (this.sleepers >= PRESSURE_MAX_SLEEPERS) return;
+    this.sleepers += 1;
+    try {
+      const delay = PRESSURE_DELAY_MS + Math.floor(Math.random() * PRESSURE_DELAY_MS);
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    } finally {
+      this.sleepers -= 1;
+    }
   }
 
   private async consume(

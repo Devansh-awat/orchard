@@ -112,6 +112,8 @@ test('OTP verification of an unverified row discards every prior credential', as
     {} as any,
     {
       checkRateLimit: async () => {},
+      checkRateLimits: async () => ({ pressured: false }),
+      slowDown: async () => {},
       resetRateLimit: async () => {}
     } as any
   );
@@ -127,6 +129,8 @@ test('OTP verification of a verified row leaves credentials alone', async () => 
     {} as any,
     {
       checkRateLimit: async () => {},
+      checkRateLimits: async () => ({ pressured: false }),
+      slowDown: async () => {},
       resetRateLimit: async () => {}
     } as any
   );

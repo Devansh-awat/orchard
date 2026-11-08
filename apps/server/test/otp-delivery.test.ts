@@ -15,7 +15,11 @@ function service(configured: boolean) {
       return configured;
     }
   };
-  const rateLimit = { checkRateLimit: async () => undefined };
+  const rateLimit = {
+    checkRateLimit: async () => undefined,
+    checkRateLimits: async () => ({ pressured: false }),
+    slowDown: async () => undefined
+  };
   return { otp: new OtpService(prisma as any, email as any, rateLimit as any), sent };
 }
 

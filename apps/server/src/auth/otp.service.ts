@@ -42,8 +42,11 @@ export class OtpService {
 
     const normalizedEmail = email.toLowerCase().trim();
 
-    await this.rateLimitService.checkRateLimit(ipAddress, 'ip', 'otp_request');
-    await this.rateLimitService.checkRateLimit(normalizedEmail, 'email', 'otp_request');
+    const { pressured } = await this.rateLimitService.checkRateLimits('otp_request', {
+      ip: ipAddress,
+      identities: [[normalizedEmail, 'email']]
+    });
+    if (pressured) await this.rateLimitService.slowDown();
 
     // Invalidate any existing unused OTP codes for this email
     await this.prisma.otpCode.updateMany({
@@ -110,8 +113,11 @@ export class OtpService {
       throw new BadRequestException('Enter the 6-digit code.');
     }
 
-    await this.rateLimitService.checkRateLimit(ipAddress, 'ip', 'otp_verify');
-    await this.rateLimitService.checkRateLimit(normalizedEmail, 'email', 'otp_verify');
+    const { pressured } = await this.rateLimitService.checkRateLimits('otp_verify', {
+      ip: ipAddress,
+      identities: [[normalizedEmail, 'email']]
+    });
+    if (pressured) await this.rateLimitService.slowDown();
 
     const hashedCode = hashOtpCode(normalizedCode);
 

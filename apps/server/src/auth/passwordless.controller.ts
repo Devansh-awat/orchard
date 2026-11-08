@@ -294,8 +294,11 @@ export class PasswordlessController {
     const normalizedEmail = email.toLowerCase().trim();
     const ipAddress = this.getClientIp(req);
 
-    await this.rateLimit.checkRateLimit(ipAddress, 'ip', 'password_signin');
-    await this.rateLimit.checkRateLimit(normalizedEmail, 'email', 'password_signin');
+    const { pressured } = await this.rateLimit.checkRateLimits('password_signin', {
+      ip: ipAddress,
+      identities: [[normalizedEmail, 'email']]
+    });
+    if (pressured) await this.rateLimit.slowDown();
     await this.turnstile.verifyRequest(req, 'signin', ipAddress);
 
     const match = await verifySuperadminPassword(

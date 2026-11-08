@@ -168,12 +168,11 @@ export class PasskeyService {
       throw new BadRequestException('Invalid email');
     }
     const normalizedEmail = email?.trim().toLowerCase();
-    if (ipAddress) {
-      await this.rateLimitService.checkRateLimit(ipAddress, 'ip', 'passkey_auth');
-    }
-    if (normalizedEmail) {
-      await this.rateLimitService.checkRateLimit(normalizedEmail, 'email', 'passkey_auth');
-    }
+    const { pressured } = await this.rateLimitService.checkRateLimits('passkey_auth', {
+      ip: ipAddress || undefined,
+      identities: normalizedEmail ? [[normalizedEmail, 'email']] : []
+    });
+    if (pressured) await this.rateLimitService.slowDown();
 
     let allowCredentials: { id: string; transports?: AuthenticatorTransportFuture[] }[] = [];
 

@@ -106,8 +106,11 @@ export class ProtectionController {
     // under attack from locking a shared NAT out of every other deployment.
     const ip = getClientIp(req);
     const ipKey = `${body.ingressId}:${ip}`;
-    await this.rateLimit.checkRateLimit(ipKey, 'ip', 'protection_password');
-    await this.rateLimit.checkRateLimit(body.ingressId, 'ingress', 'protection_password');
+    const { pressured } = await this.rateLimit.checkRateLimits('protection_password', {
+      ip: ipKey,
+      identities: [[body.ingressId, 'ingress']]
+    });
+    if (pressured) await this.rateLimit.slowDown();
     await this.turnstile.verifyRequest(req, 'protection', ip);
 
     const valid = await this.protection.verifyPassword(body.ingressId, body.password);

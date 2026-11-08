@@ -614,8 +614,10 @@ Choose by deployment mode:
 If your load balancer SNATs clients (some `LoadBalancer` implementations do),
 every visitor arrives as the balancer's address and shares one bucket. Orchard
 widens per-IP buckets for such non-public addresses and shortens their block,
-and every sign-in action also has a global ceiling that no single source can
-spend, but the real fix is `externalTrafficPolicy: Local` or the proxy protocol.
+and every sign-in action also has a global ceiling that only requests which
+passed their own per-address and per-identity checks can spend. Crossing it never
+blocks anyone: new attempts are slowed by a second or two (and Turnstile, when
+configured, is already required of everyone). The real fix is `externalTrafficPolicy: Local` or the proxy protocol.
 
 Attempt counters for sign-in endpoints that fall back to Postgres, one-time
 codes and passkey challenges are cleaned every ten minutes by the replica holding

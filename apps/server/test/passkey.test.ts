@@ -64,6 +64,12 @@ function harness() {
     checkRateLimit: async (...args: unknown[]) => {
       rateChecks.push(args);
     },
+    checkRateLimits: async (action: string, subjects: any) => {
+      if (subjects.ip) rateChecks.push([subjects.ip, 'ip', action]);
+      for (const [id, type] of subjects.identities ?? []) rateChecks.push([id, type, action]);
+      return { pressured: false };
+    },
+    slowDown: async () => {},
     resetRateLimit: async () => {}
   };
   const service = new PasskeyService(prisma, rateLimit);
