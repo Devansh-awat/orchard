@@ -619,6 +619,13 @@ passed their own per-address and per-identity checks can spend. Crossing it neve
 blocks anyone: new attempts are slowed by a second or two (and Turnstile, when
 configured, is already required of everyone). The real fix is `externalTrafficPolicy: Local` or the proxy protocol.
 
+Per-IP buckets key IPv6 clients on their /64 (IPv4-mapped, 6to4 and Teredo addresses
+on the IPv4 they embed), so rotating addresses inside one allocation does not buy
+more attempts. When sign-up is closed or invite-only, an email code is only sent to
+an address that has an account or a pending invitation; the response is identical
+either way. Email codes are also capped per address and per IP per hour, and invite
+emails per inviter, organization, address and instance per hour.
+
 Attempt counters for sign-in endpoints that fall back to Postgres, one-time
 codes and passkey challenges are cleaned every ten minutes by the replica holding
 the cluster lease, in batches.
