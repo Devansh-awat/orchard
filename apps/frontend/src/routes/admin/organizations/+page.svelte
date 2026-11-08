@@ -65,7 +65,7 @@
 		};
 	}
 
-	type CapId = 'cpu' | 'memory' | 'pods' | 'services';
+	type CapId = 'cpu' | 'memory' | 'pods' | 'services' | 'projects' | 'environments' | 'deployments';
 
 	const COLUMNS: TableColumn<OrgItem>[] = [
 		{ id: 'organization', label: 'Organization', width: 'minmax(14rem, 1fr)' },
@@ -87,7 +87,10 @@
 		{ id: 'cpu', label: 'CPU', unit: 'millicores', example: '4000' },
 		{ id: 'memory', label: 'Memory', unit: 'MiB', example: '8192' },
 		{ id: 'pods', label: 'Max pods', unit: 'pods', example: '100' },
-		{ id: 'services', label: 'Max services', unit: 'services', example: '20' }
+		{ id: 'services', label: 'Max services', unit: 'services', example: '20' },
+		{ id: 'projects', label: 'Max projects', unit: 'projects', example: '50' },
+		{ id: 'environments', label: 'Max environments', unit: 'environments', example: '100' },
+		{ id: 'deployments', label: 'Max deployments', unit: 'deployments', example: '200' }
 	];
 
 	const CAP_MODES = [
@@ -191,7 +194,10 @@
 			cpu: { custom: false, value: '' },
 			memory: { custom: false, value: '' },
 			pods: { custom: false, value: '' },
-			services: { custom: false, value: '' }
+			services: { custom: false, value: '' },
+			projects: { custom: false, value: '' },
+			environments: { custom: false, value: '' },
+			deployments: { custom: false, value: '' }
 		};
 	}
 
@@ -226,6 +232,9 @@
 			memoryLimitBytes: number | null;
 			maxPods: number | null;
 			maxServices: number | null;
+			maxProjects: number | null;
+			maxEnvironments: number | null;
+			maxDeployments: number | null;
 			defaultPodCpuMilli: number | null;
 			defaultPodMemoryBytes: number | null;
 		};
@@ -237,7 +246,10 @@
 			cpu: capFrom(data.org.cpuLimitMilli),
 			memory: capFrom(toMi(data.org.memoryLimitBytes)),
 			pods: capFrom(data.org.maxPods),
-			services: capFrom(data.org.maxServices)
+			services: capFrom(data.org.maxServices),
+			projects: capFrom(data.org.maxProjects),
+			environments: capFrom(data.org.maxEnvironments),
+			deployments: capFrom(data.org.maxDeployments)
 		};
 		qDefaultCpu = data.org.defaultPodCpuMilli ? String(data.org.defaultPodCpuMilli) : '';
 		qDefaultMemMi = toMi(data.org.defaultPodMemoryBytes)?.toString() ?? '';
@@ -381,6 +393,9 @@
 				memoryLimitBytes: memMi === null ? null : memMi * 1024 * 1024,
 				maxPods: parseIntOrNull(capValue('pods')),
 				maxServices: parseIntOrNull(capValue('services')),
+				maxProjects: parseIntOrNull(capValue('projects')),
+				maxEnvironments: parseIntOrNull(capValue('environments')),
+				maxDeployments: parseIntOrNull(capValue('deployments')),
 				defaultPodCpuMilli: parseIntOrNull(qDefaultCpu),
 				defaultPodMemoryBytes: defMemMi === null ? null : defMemMi * 1024 * 1024
 			};
@@ -862,7 +877,10 @@
 					<Stack gap="sm">
 						<div class="group-head">
 							<SectionTitle title="Limits" size="md" />
-							<p class="hint">Limits apply across all projects in this organization.</p>
+							<p class="hint">
+								Limits apply across all projects in this organization. New organizations start with
+								the instance default, which is unlimited unless you set one under Instance settings.
+							</p>
 						</div>
 						<FieldGrid>
 							{#each CAPS as cap (cap.id)}

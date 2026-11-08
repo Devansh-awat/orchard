@@ -22,6 +22,7 @@
 	import { presence } from '$lib/utils/transitions';
 	import McpToggle from '$lib/components/admin/McpToggle.svelte';
 	import ResourceLimitsSetting from '$lib/components/admin/ResourceLimitsSetting.svelte';
+	import NewOrgDefaults from '$lib/components/admin/NewOrgDefaults.svelte';
 	import DatabaseSettings from '$lib/components/admin/DatabaseSettings.svelte';
 	import ImageScanning from '$lib/components/admin/ImageScanning.svelte';
 	import TelemetryToggle from '$lib/components/admin/TelemetryToggle.svelte';
@@ -530,6 +531,7 @@
 			{/each}
 
 			<ResourceLimitsSetting change={changes.limits} />
+			<NewOrgDefaults />
 			<McpToggle change={changes.mcp} />
 			<ImageScanning />
 			<DatabaseSettings />
