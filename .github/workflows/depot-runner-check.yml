@@ -1,0 +1,22 @@
+name: depot-runner-check
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/depot-runner-check.yml
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    strategy:
+      matrix:
+        runner: [depot-ubuntu-24.04, depot-ubuntu-24.04-arm]
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - env:
+          HAS_KEY: ${{ secrets.LEAFDBOT_PRIVATE_KEY != '' }}
+        run: 'uname -m && nproc && echo "secret visible=$HAS_KEY"'
