@@ -532,9 +532,13 @@ describe('Membership cache invalidation', () => {
       `removed member must lose access immediately, not after cache TTL (got ${res.status})`
     );
 
+    const kept = await prisma.organizationMember.findUnique({ where: { id: membershipRow!.id } });
+    assert.equal(kept?.status, 'disabled', 'removal disables the member and keeps the row');
+
     // Restore the membership so subsequent tests / teardown remain consistent.
-    await prisma.organizationMember.create({
-      data: { organizationId: fx.orgA.id, userId: fx.plainMember.id, role: 'member' }
+    await prisma.organizationMember.update({
+      where: { id: membershipRow!.id },
+      data: { status: 'active', disabledAt: null, disabledReason: null }
     });
   });
 });
@@ -887,8 +891,9 @@ describe('Org isolation', () => {
     assert.equal((await req(`/organizations/${own.id}`, pepito.token)).status, 200);
     assert.ok(await prisma.user.findUnique({ where: { id: pepito.id } }));
 
-    await prisma.organizationMember.create({
-      data: { organizationId: enforcing.id, userId: pepito.id, role: 'member' }
+    await prisma.organizationMember.update({
+      where: { id: row.id },
+      data: { status: 'active', disabledAt: null, disabledReason: null }
     });
     await prisma.user.delete({ where: { id: admin.id } });
   });
