@@ -267,7 +267,7 @@ export class SsoLoginService {
     const requestId = `_${randomBytes(20).toString('hex')}`;
     const relay = randomBytes(24).toString('hex');
     const saml = this.buildSamlClient(provider, requestId);
-    const url = await saml.getAuthorizeUrlAsync(relay, undefined, {});
+    const url = await saml.getAuthorizeUrlAsync(relay, {});
     const startToken = await this.issueStartToken(provider.id, url, sessionToken, relay);
     const record: SamlRelayRecord = {
       providerId: provider.id,
@@ -938,7 +938,7 @@ export class SsoLoginService {
 
       if (provider.protocol === SsoProtocol.saml) {
         const saml = this.buildSamlClient(provider);
-        await saml.getAuthorizeUrlAsync('', undefined, {});
+        await saml.getAuthorizeUrlAsync('', {});
       } else if (provider.protocol === SsoProtocol.oidc) {
         const openid = await this.loadOpenIdClient();
         await this.discoverOidc(provider, openid);
