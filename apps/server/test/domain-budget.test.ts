@@ -45,8 +45,6 @@ class FakePrisma {
   };
 }
 
-const at = (ms: number) => () => new Date(ms);
-
 test('proof failures are free at first and then back off exponentially to a day', () => {
   assert.equal(proofBackoffMs(1), 0);
   assert.equal(proofBackoffMs(5), 0);
