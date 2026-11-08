@@ -559,7 +559,7 @@ export class ExecSessionEngine {
     reuseId?: string
   ): void {
     if (ws.readyState !== WebSocket.OPEN) return;
-    if (overLimit(ctx.userId)) {
+    if (overLimit(ctx.userId, ctx.target)) {
       this.notify(
         ws,
         ctx.proto,

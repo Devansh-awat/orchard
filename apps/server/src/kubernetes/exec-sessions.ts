@@ -11,6 +11,10 @@ export const DETACH_GRACE_MS = Number(process.env.EXEC_DETACH_GRACE_MS ?? 10 * 6
 export const MAX_SESSIONS_PER_USER = 8;
 export const MAX_DETACHED_PER_USER = 3;
 export const MAX_SESSIONS_GLOBAL = 200;
+export const MAX_SESSIONS_PER_ORG = Math.max(
+  MAX_SESSIONS_PER_USER,
+  Math.ceil(MAX_SESSIONS_GLOBAL / 4)
+);
 export const SESSION_TAKEOVER_CODE = 4409;
 export const SESSION_LIMIT_CODE = 4429;
 
@@ -178,9 +182,23 @@ export function userSessions(userId: string): ExecSession[] {
   return out;
 }
 
-export function overLimit(userId: string): boolean {
+export function targetOrganizationId(target: ExecTarget): string | null {
+  return isPodTarget(target) ? target.organizationId : null;
+}
+
+export function orgSessionCount(organizationId: string): number {
+  let count = 0;
+  for (const s of sessions.values()) {
+    if (targetOrganizationId(s.target) === organizationId) count++;
+  }
+  return count;
+}
+
+export function overLimit(userId: string, target?: ExecTarget): boolean {
   if (sessions.size >= MAX_SESSIONS_GLOBAL) return true;
-  return userSessions(userId).length >= MAX_SESSIONS_PER_USER;
+  if (userSessions(userId).length >= MAX_SESSIONS_PER_USER) return true;
+  const organizationId = target ? targetOrganizationId(target) : null;
+  return organizationId !== null && orgSessionCount(organizationId) >= MAX_SESSIONS_PER_ORG;
 }
 
 export function oldestDetachedBeyondCap(userId: string): ExecSession[] {

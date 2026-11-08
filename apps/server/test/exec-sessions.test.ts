@@ -5,7 +5,9 @@ process.env.JWT_SECRET = 'exec-sessions-test-secret';
 
 import {
   MAX_DETACHED_PER_USER,
+  MAX_SESSIONS_PER_ORG,
   MAX_SESSIONS_PER_USER,
+  MAX_SESSIONS_GLOBAL,
   ResizableOutput,
   makeHandle,
   oldestDetachedBeyondCap,
@@ -163,4 +165,39 @@ test('terminal sizes clamp exactly like the PTY size stream', () => {
   assert.deepEqual(clampTerminalSize(120.7, 40.2), { cols: 120, rows: 40 });
   assert.deepEqual(clampTerminalSize(0, 5000), { cols: 1, rows: 1000 });
   assert.equal(clampTerminalSize(NaN, 10), null);
+});
+
+function orgSession(id: string, owner: string, organizationId: string) {
+  return {
+    ...fakeSession(id, owner, 'attached'),
+    target: {
+      kind: 'pod',
+      namespace: 'ns',
+      podName: id,
+      container: 'c',
+      projectId: 'p',
+      organizationId
+    }
+  } as unknown as ExecSession;
+}
+
+test('one organization cannot take more than its share of the global cap', () => {
+  reset();
+  for (let i = 0; i < MAX_SESSIONS_PER_ORG; i++) {
+    track(orgSession(`a${i}`, `ua${i}`, 'orgA'));
+  }
+  const target = (organizationId: string) =>
+    ({
+      kind: 'pod',
+      namespace: 'n',
+      podName: 'p',
+      container: 'c',
+      projectId: 'p',
+      organizationId
+    }) as any;
+  assert.ok(MAX_SESSIONS_PER_ORG < MAX_SESSIONS_GLOBAL);
+  assert.equal(overLimit('fresh-a-user', target('orgA')), true);
+  assert.equal(overLimit('fresh-b-user', target('orgB')), false);
+  assert.equal(overLimit('fresh-b-user'), false);
+  reset();
 });

@@ -59,6 +59,7 @@ export class TrivyScanService {
   private readonly internalUrl = (process.env.ORCHARD_INTERNAL_URL || '').replace(/\/+$/, '');
   private readonly timeoutSeconds = positiveInt(process.env.TRIVY_SCAN_TIMEOUT_SECONDS, 900);
   private readonly maxRunning = positiveInt(process.env.TRIVY_MAX_CONCURRENT_SCANS, 3);
+  private readonly maxRunningPerOrg = positiveInt(process.env.TRIVY_MAX_SCANS_PER_ORG, 1);
   private readonly topology: RegistryTopology = {
     pullRegistry: process.env.DOCKER_REGISTRY_PULL || '',
     pushRegistry: process.env.DOCKER_REGISTRY_PUSH || '',
@@ -133,6 +134,8 @@ export class TrivyScanService {
       );
     }
 
+    await this.assertOrgShare(opts.deploymentId);
+
     const token = randomBytes(32).toString('hex');
     const row = await this.prisma.imageScan.create({
       data: {
@@ -191,6 +194,38 @@ export class TrivyScanService {
         }
       });
       return scanFromRow(failed, this.staleMs, Date.now());
+    }
+  }
+
+  private async assertOrgShare(deploymentId: string): Promise<void> {
+    const deployment = await this.prisma.deployment.findUnique({
+      where: { id: deploymentId },
+      select: { project: { select: { organizationId: true } } }
+    });
+    const organizationId = deployment?.project?.organizationId;
+    if (!organizationId) return;
+    const active = await this.prisma.imageScan.findMany({
+      where: {
+        scanner: 'trivy',
+        status: 'running',
+        requestedBy: { not: null },
+        createdAt: { gt: new Date(Date.now() - this.staleMs) }
+      },
+      select: { requestedBy: true },
+      take: 100
+    });
+    if (active.length === 0) return;
+    const owners = [...new Set(active.map((r) => r.requestedBy as string))];
+    const members = await this.prisma.organizationMember.findMany({
+      where: { organizationId, userId: { in: owners } },
+      select: { userId: true }
+    });
+    const inOrg = new Set(members.map((m) => m.userId));
+    const orgRunning = active.filter((r) => inOrg.has(r.requestedBy as string)).length;
+    if (orgRunning >= Math.min(this.maxRunningPerOrg, this.maxRunning)) {
+      throw new ScanQueueFullError(
+        'Your organization already has the most scans it can run at once. Try again when one finishes.'
+      );
     }
   }
 
