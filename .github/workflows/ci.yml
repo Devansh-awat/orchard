@@ -28,6 +28,7 @@ jobs:
       chart: ${{ steps.filter.outputs.chart }}
       docs: ${{ steps.filter.outputs.docs }}
       landing: ${{ steps.filter.outputs.landing }}
+      deps: ${{ steps.filter.outputs.deps }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: dorny/paths-filter@0e4a8c6effa4802afeda77dc8d303f8176d7dfad # v3.0.4
@@ -99,6 +100,14 @@ jobs:
               - '.github/workflows/**'
             chart:
               - 'infra/charts/**'
+              - '.github/workflows/**'
+            deps:
+              - 'pnpm-lock.yaml'
+              - 'pnpm-workspace.yaml'
+              - 'package.json'
+              - 'apps/*/package.json'
+              - 'packages/*/package.json'
+              - 'grafts/*/package.json'
               - '.github/workflows/**'
 
   lint:
@@ -174,6 +183,20 @@ jobs:
       - uses: trufflesecurity/trufflehog@4dd8831c5f12599465d4d45c3c447b4018a34c85 # v3.97.9
         with:
           extra_args: --only-verified
+
+  audit:
+    needs: changes
+    if: needs.changes.outputs.deps == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Audit production dependencies
+        run: pnpm audit --prod --audit-level moderate
 
   frontend:
     needs: changes

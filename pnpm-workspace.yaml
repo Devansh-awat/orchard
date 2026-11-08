@@ -19,6 +19,11 @@ allowBuilds:
   protobufjs: true
   sharp: false
   unrs-resolver: true
+auditConfig:
+  ignoreGhsas:
+    - GHSA-p8p7-x288-28g6
+    - GHSA-w5hq-g745-h8pq
+    - GHSA-gcqx-w48m-w2h4
 overrides:
   '@peculiar/asn1-schema': 2.10.0
   '@grpc/grpc-js': ^1.14.5
