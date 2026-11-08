@@ -1,5 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from 'crypto';
+
+export const SSO_KEY_MISSING_MESSAGE =
+  "SSO isn't set up on this server: set SSO_ENCRYPTION_KEY in the server environment and restart it.";
 
 /**
  * AES-256-GCM at rest for IdP client secrets and signing certificates.
@@ -23,9 +26,7 @@ export class SsoCryptoService {
 
   encrypt(plaintext: string): string {
     if (!this.key) {
-      throw new Error(
-        "SSO_ENCRYPTION_KEY isn't configured; refusing to store SSO secrets in plaintext"
-      );
+      throw new ServiceUnavailableException(SSO_KEY_MISSING_MESSAGE);
     }
     const iv = randomBytes(16);
     const cipher = createCipheriv('aes-256-gcm', this.key, iv);
@@ -36,7 +37,7 @@ export class SsoCryptoService {
 
   decrypt(ciphertext: string): string {
     if (!this.key) {
-      throw new Error("SSO_ENCRYPTION_KEY isn't configured; can't decrypt SSO secret");
+      throw new ServiceUnavailableException(SSO_KEY_MISSING_MESSAGE);
     }
     const parts = ciphertext.split(':');
     if (parts.length !== 3) {
