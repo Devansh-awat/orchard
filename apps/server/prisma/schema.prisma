@@ -2555,10 +2555,10 @@ model GraftArtifact {
 }
 
 model McpOauthClient {
-  id           String   @id @db.VarChar(64)
-  clientSecret String?  @map("client_secret") @db.VarChar(128)
-  name         String   @db.VarChar(255)
-  redirectUris Json     @map("redirect_uris")
+  id           String    @id @db.VarChar(64)
+  clientSecret String?   @map("client_secret") @db.VarChar(128)
+  name         String    @db.VarChar(255)
+  redirectUris Json      @map("redirect_uris")
   createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
   lastUsedAt   DateTime? @map("last_used_at") @db.Timestamp(6)
 
