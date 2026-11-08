@@ -184,6 +184,8 @@ export const routes: GeneratedRoute[] = [
   { method: 'GET', path: '/databases/:id/security', auth: 'authenticated' },
   { method: 'GET', path: '/databases/:id/settings', auth: 'authenticated' },
   { method: 'PATCH', path: '/databases/:id/settings', auth: 'authenticated' },
+  { method: 'POST', path: '/databases/:id/shell', auth: 'authenticated' },
+  { method: 'DELETE', path: '/databases/:id/shell/:pod', auth: 'authenticated' },
   { method: 'POST', path: '/databases/:id/start', auth: 'authenticated' },
   { method: 'POST', path: '/databases/:id/stop', auth: 'authenticated' },
   { method: 'PATCH', path: '/databases/:id/storage', auth: 'authenticated' },
