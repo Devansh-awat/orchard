@@ -249,6 +249,7 @@ is the complete list.
 | `protection.orchardLogin` | `false` | Offer `protectionMode: orchard` ("sign in with Orchard") on tenant ingresses, via `PROTECTION_ORCHARD_LOGIN=true`. Gates selecting the mode, not enforcing it. `basic` and `password` are always available. |
 | `signupMode` | `invite_only` | Who can sign up: `open`, `invite_only` or `closed`, as `SIGNUP_MODE`. |
 | `priorityClasses.enabled` | `true` | Creates the cluster-scoped `orchard-platform` PriorityClass (value 100000) and sets it on the platform pods, so tenant workloads (default priority 0) cannot out-schedule or out-evict them. Tenants cannot choose a class, and the admission policy refuses `system-*` and `orchard-*` names in tenant namespaces. Enabling it on an existing install restarts the platform pods once, including the platform Postgres. |
+| `logs.vector.throttle.eventsPerSecond` | `2000` | Most log lines per second one tenant namespace may ship to the shared log store. Lines above the rate are dropped for that namespace only and counted in Vector's `component_discarded_events_total`. `0` turns the limit off. |
 | `tenant.storageClass` | `""` | StorageClass for tenant apps and databases, as `K8S_STORAGE_CLASS`. Empty uses the cluster default StorageClass. |
 | `tenant.ingressClass` | `""` | Ingress class of tenant apps, as `K8S_INGRESS_CLASS`. Empty falls back to `haproxy`. |
 | `tenant.certClusterIssuer` | `""` | ClusterIssuer for tenant certificates, as `CERT_CLUSTER_ISSUER`. Empty falls back to `letsencrypt-prod`. |

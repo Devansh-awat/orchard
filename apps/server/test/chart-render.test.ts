@@ -825,3 +825,32 @@ test('the tenant pod policy refuses system and platform priority classes', () =>
   assert.match(policies, /priorityClassName\.startsWith\('system-'\)/);
   assert.match(policies, /priorityClassName\.startsWith\('orchard-'\)/);
 });
+
+function vectorConfig(out: string): any {
+  const map = parsed(out).find((d) => d.kind === 'ConfigMap' && d.data?.['vector.yaml']);
+  assert.ok(map, 'vector ConfigMap rendered');
+  return loadAll(map.data['vector.yaml'])[0];
+}
+
+test(
+  'tenant logs are throttled per namespace before the shared store',
+  { skip: !helmAvailable() },
+  () => {
+    const config = vectorConfig(render([]));
+    const throttle = config.transforms.tenant_throttle;
+    assert.equal(throttle.type, 'throttle');
+    assert.deepEqual(throttle.inputs, ['tenant_shape']);
+    assert.equal(throttle.threshold, 2000);
+    assert.equal(throttle.window_secs, 1);
+    assert.equal(throttle.key_field, '{{ namespace }}');
+    assert.deepEqual(config.sinks.victorialogs.inputs, ['tenant_throttle', 'ingress_shape']);
+  }
+);
+
+test('the log throttle rate is a chart value and 0 removes it', { skip: !helmAvailable() }, () => {
+  const tuned = vectorConfig(render(['logs.vector.throttle.eventsPerSecond=500']));
+  assert.equal(tuned.transforms.tenant_throttle.threshold, 500);
+  const off = vectorConfig(render(['logs.vector.throttle.eventsPerSecond=0']));
+  assert.equal(off.transforms.tenant_throttle, undefined);
+  assert.deepEqual(off.sinks.victorialogs.inputs, ['tenant_shape', 'ingress_shape']);
+});

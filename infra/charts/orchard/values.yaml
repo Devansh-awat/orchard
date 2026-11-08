@@ -610,6 +610,13 @@ logs:
     # left off instead of re-shipping every file.
     dataDir: /var/lib/vector-orchard
     bufferEvents: 20000
+    # Most log lines per second one tenant namespace may ship to the shared log
+    # store (Vector throttle transform, keyed by namespace). Lines above it are
+    # dropped, counted in Vector's component_discarded_events_total, and only for
+    # that namespace, so one noisy app cannot push every other tenant's history
+    # out of the store. 0 turns the limit off.
+    throttle:
+      eventsPerSecond: 2000
     resources:
       requests: { cpu: "50m", memory: "128Mi" }
       limits: { cpu: "500m", memory: "512Mi" }

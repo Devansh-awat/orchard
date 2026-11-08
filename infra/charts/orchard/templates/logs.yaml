@@ -199,10 +199,20 @@ transforms:
         "ingress_pod": .kubernetes.pod_name
       })
 
+{{- $rate := int (.Values.logs.vector.throttle.eventsPerSecond | default 0) }}
+{{- if gt $rate 0 }}
+  tenant_throttle:
+    type: throttle
+    inputs: [tenant_shape]
+    threshold: {{ $rate }}
+    window_secs: 1
+    key_field: "{{ "{{ namespace }}" }}"
+{{- end }}
+
 sinks:
   victorialogs:
     type: http
-    inputs: [tenant_shape, ingress_shape]
+    inputs: [{{ if gt $rate 0 }}tenant_throttle{{ else }}tenant_shape{{ end }}, ingress_shape]
     uri: http://victorialogs.{{ .Values.metrics.namespace }}.svc.cluster.local:9428/insert/jsonline?_stream_fields=namespace,app,kind,ingress_service&_msg_field=message&_time_field=timestamp
     method: post
     compression: gzip
