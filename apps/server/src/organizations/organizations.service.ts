@@ -49,7 +49,7 @@ export function normalizeBackupEndpoint(input: string | null): string | null {
 const MAIL_LABEL_MAX = 100;
 
 function mailLabel(value: string): string {
-  return value.replace(/[\u0000-\u001f\u007f]/g, ' ').slice(0, MAIL_LABEL_MAX);
+  return value.replace(/\p{Cc}/gu, ' ').slice(0, MAIL_LABEL_MAX);
 }
 
 @Injectable()
