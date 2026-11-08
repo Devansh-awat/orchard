@@ -16,6 +16,11 @@ const SWEEP_INTERVAL_MS = 60_000;
 const SWEEP_WINDOW_MINUTES = 10;
 const STORE_LINES = 20000;
 const MAX_DEPLOYMENTS_PER_SWEEP = 40;
+export const MAX_GROUPS_PER_DEPLOYMENT = 500;
+export const MAX_GROUPS_PER_PROJECT = 5000;
+export const MAX_MESSAGE_LENGTH = 4000;
+export const MAX_STACK_LENGTH = 8000;
+export const OVERFLOW_FINGERPRINT = 'overflow';
 
 // Enough to answer "what code am I looking at": the commit for GitHub deploys,
 // and who pushed the button for manual ones.
@@ -215,6 +220,27 @@ export class ErrorIngestService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  private findGroup(deploymentId: string, fingerprint: string) {
+    return this.prisma.errorGroup.findUnique({
+      where: { deploymentId_fingerprint: { deploymentId, fingerprint } },
+      select: { id: true, lastSeenAt: true, status: true }
+    });
+  }
+
+  private async groupCounts(deploymentId: string) {
+    const deployment = await this.prisma.deployment.findUnique({
+      where: { id: deploymentId },
+      select: { projectId: true }
+    });
+    const deployments = await this.prisma.errorGroup.count({ where: { deploymentId } });
+    const project = deployment?.projectId
+      ? await this.prisma.errorGroup.count({
+          where: { deployment: { projectId: deployment.projectId } }
+        })
+      : deployments;
+    return { deployment: deployments, project };
+  }
+
   async ingest(deploymentId: string, windowMinutes = SWEEP_WINDOW_MINUTES): Promise<number> {
     const stored = await this.storedEntries(deploymentId, windowMinutes);
     const { errors } = await this.observability.getErrors(deploymentId, windowMinutes, stored);
@@ -226,17 +252,30 @@ export class ErrorIngestService implements OnModuleInit, OnModuleDestroy {
       select: { id: true }
     });
 
+    let counts: { deployment: number; project: number } | null = null;
+
     for (const group of errors) {
       const lastSeen = new Date(group.lastSeen);
       const firstSeen = new Date(group.firstSeen);
       if (Number.isNaN(lastSeen.getTime()) || Number.isNaN(firstSeen.getTime())) continue;
 
-      const existing = await this.prisma.errorGroup.findUnique({
-        where: {
-          deploymentId_fingerprint: { deploymentId, fingerprint: group.fingerprint }
-        },
-        select: { id: true, lastSeenAt: true, status: true }
-      });
+      let target = group;
+      let existing = await this.findGroup(deploymentId, target.fingerprint);
+      if (!existing) {
+        counts ??= await this.groupCounts(deploymentId);
+        if (
+          counts.deployment >= MAX_GROUPS_PER_DEPLOYMENT ||
+          counts.project >= MAX_GROUPS_PER_PROJECT
+        ) {
+          target = {
+            ...group,
+            fingerprint: OVERFLOW_FINGERPRINT,
+            type: 'other',
+            message: `Further error types, folded together after ${MAX_GROUPS_PER_DEPLOYMENT} distinct errors`
+          };
+          existing = await this.findGroup(deploymentId, OVERFLOW_FINGERPRINT);
+        }
+      }
 
       // Only the slice newer than the watermark is new; overlapping sweeps of
       // the same window would otherwise inflate the count every minute.
@@ -249,17 +288,18 @@ export class ErrorIngestService implements OnModuleInit, OnModuleDestroy {
       if (existing && newCount === 0) continue;
       savedCount++;
 
-      const sampleStack = group.samples.find((s) => s.stackTrace)?.stackTrace ?? null;
+      const sampleStack =
+        group.samples.find((s) => s.stackTrace)?.stackTrace?.slice(0, MAX_STACK_LENGTH) ?? null;
 
       const saved = await this.prisma.errorGroup.upsert({
         where: {
-          deploymentId_fingerprint: { deploymentId, fingerprint: group.fingerprint }
+          deploymentId_fingerprint: { deploymentId, fingerprint: target.fingerprint }
         },
         create: {
           deploymentId,
-          fingerprint: group.fingerprint,
-          type: group.type.slice(0, 200),
-          message: group.message,
+          fingerprint: target.fingerprint,
+          type: target.type.slice(0, 200),
+          message: target.message.slice(0, MAX_MESSAGE_LENGTH),
           totalCount: group.count,
           firstSeenAt: firstSeen,
           lastSeenAt: lastSeen,
@@ -267,7 +307,7 @@ export class ErrorIngestService implements OnModuleInit, OnModuleDestroy {
           sampleStack
         },
         update: {
-          message: group.message,
+          message: target.message.slice(0, MAX_MESSAGE_LENGTH),
           totalCount: { increment: newCount },
           lastSeenAt: lastSeen,
           sampleStack: sampleStack ?? undefined,
@@ -278,6 +318,11 @@ export class ErrorIngestService implements OnModuleInit, OnModuleDestroy {
         },
         select: { id: true }
       });
+
+      if (!existing && counts) {
+        counts.deployment++;
+        counts.project++;
+      }
 
       if (activeImage) {
         await this.prisma.errorOccurrence.upsert({

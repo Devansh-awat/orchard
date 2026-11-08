@@ -5,6 +5,7 @@ import { ProjectsModule } from '../projects/projects.module';
 import { ObservabilityService } from './observability.service';
 import { ObservabilityController } from './observability.controller';
 import { ErrorIngestService } from './error-ingest.service';
+import { ErrorRetentionService } from './error-retention.service';
 import { TimelineService } from './timeline.service';
 import { VerdictsService } from './verdicts.service';
 import { FindingsService } from './findings.service';
@@ -18,6 +19,7 @@ import { MetricsModule } from '../metrics/metrics.module';
   providers: [
     ObservabilityService,
     ErrorIngestService,
+    ErrorRetentionService,
     TimelineService,
     VerdictsService,
     FindingsService,
