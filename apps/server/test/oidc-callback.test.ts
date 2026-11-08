@@ -170,7 +170,11 @@ function makeWorld() {
   prisma.$transaction = async (arg: any) =>
     typeof arg === 'function' ? arg(prisma) : Promise.all(arg);
 
-  const audit = { log: async (e: Row) => void audits.push(e) };
+  const audit = {
+    log: async (e: Row) => {
+      audits.push(e);
+    }
+  };
   const sessions = {
     revokeSignInSessions: async (p: Row) => {
       sessionWipes.push(p);

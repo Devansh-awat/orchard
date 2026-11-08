@@ -33,6 +33,8 @@ const RESERVED_SLUGS = new Set([
   'user'
 ]);
 
+class AlreadyCreated extends Error {}
+
 type Actor = { userId: string; email?: string };
 
 export interface AutoCreateRule {
@@ -416,5 +418,3 @@ export class InstanceIdentityService {
     return null;
   }
 }
-
-class AlreadyCreated extends Error {}
