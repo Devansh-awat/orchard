@@ -3,452 +3,62 @@
     {
       "id": "allowed | DELETE /users/me/notification-settings/:scopeType/:scopeId | o1OwnerVsO2",
       "status": "accepted",
-      "reason": "Per-user notification preference keyed by scope id; the caller only ever touches their own rows and a foreign org id is a no-op ({\"cleared\":0})."
+      "reason": "Reviewed, not a leak. Deletes only the caller's own rows: the where clause is always (userId, scopeType, scopeId) with userId taken from the session, so another tenant's data is never read or written, and a foreign id answers {\"cleared\":0} exactly like an unknown one. It deliberately takes no org context so a stale override still clears after its project or org is gone."
     },
     {
       "id": "allowed | DELETE /users/me/notification-settings/:scopeType/:scopeId | o2Mcp",
       "status": "accepted",
-      "reason": "Per-user notification preference keyed by scope id; the caller only ever touches their own rows and a foreign org id is a no-op ({\"cleared\":0})."
+      "reason": "Reviewed, not a leak. Deletes only the caller's own rows: the where clause is always (userId, scopeType, scopeId) with userId taken from the session, so another tenant's data is never read or written, and a foreign id answers {\"cleared\":0} exactly like an unknown one. It deliberately takes no org context so a stale override still clears after its project or org is gone."
     },
     {
       "id": "allowed | DELETE /users/me/notification-settings/:scopeType/:scopeId | o2Session",
       "status": "accepted",
-      "reason": "Per-user notification preference keyed by scope id; the caller only ever touches their own rows and a foreign org id is a no-op ({\"cleared\":0})."
+      "reason": "Reviewed, not a leak. Deletes only the caller's own rows: the where clause is always (userId, scopeType, scopeId) with userId taken from the session, so another tenant's data is never read or written, and a foreign id answers {\"cleared\":0} exactly like an unknown one. It deliberately takes no org context so a stale override still clears after its project or org is gone."
     },
     {
       "id": "allowed | DELETE /users/me/notification-settings/:scopeType/:scopeId | o2Token",
       "status": "accepted",
-      "reason": "Per-user notification preference keyed by scope id; the caller only ever touches their own rows and a foreign org id is a no-op ({\"cleared\":0})."
+      "reason": "Reviewed, not a leak. Deletes only the caller's own rows: the where clause is always (userId, scopeType, scopeId) with userId taken from the session, so another tenant's data is never read or written, and a foreign id answers {\"cleared\":0} exactly like an unknown one. It deliberately takes no org context so a stale override still clears after its project or org is gone."
     },
     {
       "id": "allowed | DELETE /users/me/notification-settings/:scopeType/:scopeId | orgGuest",
       "status": "accepted",
-      "reason": "Per-user notification preference keyed by scope id; the caller only ever touches their own rows and a foreign org id is a no-op ({\"cleared\":0})."
+      "reason": "Reviewed, not a leak. Deletes only the caller's own rows: the where clause is always (userId, scopeType, scopeId) with userId taken from the session, so another tenant's data is never read or written, and a foreign id answers {\"cleared\":0} exactly like an unknown one. It deliberately takes no org context so a stale override still clears after its project or org is gone."
     },
     {
       "id": "allowed | DELETE /users/me/notification-settings/:scopeType/:scopeId | orgPlain",
       "status": "accepted",
-      "reason": "Per-user notification preference keyed by scope id; the caller only ever touches their own rows and a foreign org id is a no-op ({\"cleared\":0})."
+      "reason": "Reviewed, not a leak. Deletes only the caller's own rows: the where clause is always (userId, scopeType, scopeId) with userId taken from the session, so another tenant's data is never read or written, and a foreign id answers {\"cleared\":0} exactly like an unknown one. It deliberately takes no org context so a stale override still clears after its project or org is gone."
     },
     {
       "id": "allowed | DELETE /users/me/notification-settings/:scopeType/:scopeId | p2Member",
       "status": "accepted",
-      "reason": "Per-user notification preference keyed by scope id; the caller only ever touches their own rows and a foreign org id is a no-op ({\"cleared\":0})."
+      "reason": "Reviewed, not a leak. Deletes only the caller's own rows: the where clause is always (userId, scopeType, scopeId) with userId taken from the session, so another tenant's data is never read or written, and a foreign id answers {\"cleared\":0} exactly like an unknown one. It deliberately takes no org context so a stale override still clears after its project or org is gone."
     },
     {
       "id": "allowed | DELETE /users/me/notification-settings/:scopeType/:scopeId | viewer",
       "status": "accepted",
-      "reason": "Per-user notification preference keyed by scope id; the caller only ever touches their own rows and a foreign org id is a no-op ({\"cleared\":0})."
-    },
-    {
-      "id": "allowed | POST /checkpoints/groups/:groupId/restore | viewer",
-      "status": "open",
-      "reason": "A same-project viewer gets 201 with a per-database refusal list instead of a 403; nothing is restored."
+      "reason": "Reviewed, not a leak. Deletes only the caller's own rows: the where clause is always (userId, scopeType, scopeId) with userId taken from the session, so another tenant's data is never read or written, and a foreign id answers {\"cleared\":0} exactly like an unknown one. It deliberately takes no org context so a stale override still clears after its project or org is gone."
     },
     {
       "id": "allowed | PUT /users/me/notification-settings/:scopeType/:scopeId | orgGuest",
       "status": "accepted",
-      "reason": "Members setting notification preferences for the org they belong to; foreign orgs are refused."
+      "reason": "Reviewed, not a leak. In the replay the scope type is `org`, so this is a member saving their own notification preference for the org they belong to (requireOrgMember on organizationId; other orgs answer 404). Project, app, database and job scopes additionally need view access to the owning project (UserNotificationsService.resolveVisibleScope), so a project the caller cannot see answers like a missing one; see test/notification-scope-visibility.test.ts."
     },
     {
       "id": "allowed | PUT /users/me/notification-settings/:scopeType/:scopeId | orgPlain",
       "status": "accepted",
-      "reason": "Members setting notification preferences for the org they belong to; foreign orgs are refused."
+      "reason": "Reviewed, not a leak. In the replay the scope type is `org`, so this is a member saving their own notification preference for the org they belong to (requireOrgMember on organizationId; other orgs answer 404). Project, app, database and job scopes additionally need view access to the owning project (UserNotificationsService.resolveVisibleScope), so a project the caller cannot see answers like a missing one; see test/notification-scope-visibility.test.ts."
     },
     {
       "id": "allowed | PUT /users/me/notification-settings/:scopeType/:scopeId | p2Member",
       "status": "accepted",
-      "reason": "Members setting notification preferences for the org they belong to; foreign orgs are refused."
+      "reason": "Reviewed, not a leak. In the replay the scope type is `org`, so this is a member saving their own notification preference for the org they belong to (requireOrgMember on organizationId; other orgs answer 404). Project, app, database and job scopes additionally need view access to the owning project (UserNotificationsService.resolveVisibleScope), so a project the caller cannot see answers like a missing one; see test/notification-scope-visibility.test.ts."
     },
     {
       "id": "allowed | PUT /users/me/notification-settings/:scopeType/:scopeId | viewer",
       "status": "accepted",
-      "reason": "Members setting notification preferences for the org they belong to; foreign orgs are refused."
-    },
-    {
-      "id": "leak | GET /organizations/:id/members | p2Token",
-      "status": "open",
-      "reason": "A project-restricted token of an org owner sees other projects in the member list. Needs a tokenProjectIds filter in the members response."
-    },
-    {
-      "id": "oracle | DELETE /auth/passkeys/:id | o1OwnerVsO2",
-      "status": "open",
-      "reason": "Request is validated or described (400 or 403) before the caller is authorized, so a foreign id answers differently from an unknown id. Authorize first, then validate."
-    },
-    {
-      "id": "oracle | DELETE /auth/passkeys/:id | o2Session",
-      "status": "open",
-      "reason": "Request is validated or described (400 or 403) before the caller is authorized, so a foreign id answers differently from an unknown id. Authorize first, then validate."
-    },
-    {
-      "id": "oracle | DELETE /auth/passkeys/:id | orgGuest",
-      "status": "open",
-      "reason": "Request is validated or described (400 or 403) before the caller is authorized, so a foreign id answers differently from an unknown id. Authorize first, then validate."
-    },
-    {
-      "id": "oracle | DELETE /auth/passkeys/:id | orgPlain",
-      "status": "open",
-      "reason": "Request is validated or described (400 or 403) before the caller is authorized, so a foreign id answers differently from an unknown id. Authorize first, then validate."
-    },
-    {
-      "id": "oracle | DELETE /auth/passkeys/:id | p2Member",
-      "status": "open",
-      "reason": "Request is validated or described (400 or 403) before the caller is authorized, so a foreign id answers differently from an unknown id. Authorize first, then validate."
-    },
-    {
-      "id": "oracle | DELETE /deployments/:deploymentId/services/:serviceId | dualScopedMcp",
-      "status": "open",
-      "reason": "Request is validated or described (400 or 403) before the caller is authorized, so a foreign id answers differently from an unknown id. Authorize first, then validate."
-    },
-    {
-      "id": "oracle | DELETE /deployments/:deploymentId/services/:serviceId | dualScopedSession",
-      "status": "open",
-      "reason": "Request is validated or described (400 or 403) before the caller is authorized, so a foreign id answers differently from an unknown id. Authorize first, then validate."
-    },
-    {
-      "id": "oracle | DELETE /deployments/:deploymentId/services/:serviceId | dualScopedToken",
-      "status": "open",
-      "reason": "Request is validated or described (400 or 403) before the caller is authorized, so a foreign id answers differently from an unknown id. Authorize first, then validate."
-    },
-    {
-      "id": "oracle | DELETE /deployments/:deploymentId/services/:serviceId | o1OwnerVsO2",
-      "status": "open",
-      "reason": "Request is validated or described (400 or 403) before the caller is authorized, so a foreign id answers differently from an unknown id. Authorize first, then validate."
-    },
-    {
-      "id": "oracle | DELETE /deployments/:deploymentId/services/:serviceId | o2Mcp",
-      "status": "open",
-      "reason": "Request is validated or described (400 or 403) before the caller is authorized, so a foreign id answers differently from an unknown id. Authorize first, then validate."
-    },
-    {
-      "id": "oracle | DELETE /deployments/:deploymentId/services/:serviceId | o2Session",
-      "status": "open",
-      "reason": "Request is validated or described (400 or 403) before the caller is authorized, so a foreign id answers differently from an unknown id. Authorize first, then validate."
-    },
-    {
-      "id": "oracle | DELETE /deployments/:deploymentId/services/:serviceId | o2Token",
-      "status": "open",
-      "reason": "Request is validated or described (400 or 403) before the caller is authorized, so a foreign id answers differently from an unknown id. Authorize first, then validate."
-    },
-    {
-      "id": "oracle | DELETE /deployments/:deploymentId/services/:serviceId | orgGuest",
-      "status": "open",
-      "reason": "Request is validated or described (400 or 403) before the caller is authorized, so a foreign id answers differently from an unknown id. Authorize first, then validate."
-    },
-    {
-      "id": "oracle | DELETE /deployments/:deploymentId/services/:serviceId | orgPlain",
-      "status": "open",
-      "reason": "Request is validated or described (400 or 403) before the caller is authorized, so a foreign id answers differently from an unknown id. Authorize first, then validate."
-    },
-    {
-      "id": "oracle | DELETE /deployments/:deploymentId/services/:serviceId | p2Member",
-      "status": "open",
-      "reason": "Request is validated or described (400 or 403) before the caller is authorized, so a foreign id answers differently from an unknown id. Authorize first, then validate."
-    },
-    {
-      "id": "oracle | DELETE /deployments/:deploymentId/services/:serviceId | p2Token",
-      "status": "open",
-      "reason": "Request is validated or described (400 or 403) before the caller is authorized, so a foreign id answers differently from an unknown id. Authorize first, then validate."
-    },
-    {
-      "id": "oracle | GET /projects/:id/transfer-org/preview | dualScopedMcp",
-      "status": "open",
-      "reason": "Request is validated or described (400 or 403) before the caller is authorized, so a foreign id answers differently from an unknown id. Authorize first, then validate."
-    },
-    {
-      "id": "oracle | GET /projects/:id/transfer-org/preview | dualScopedSession",
-      "status": "open",
-      "reason": "Request is validated or described (400 or 403) before the caller is authorized, so a foreign id answers differently from an unknown id. Authorize first, then validate."
-    },
-    {
-      "id": "oracle | GET /projects/:id/transfer-org/preview | dualScopedToken",
-      "status": "open",
-      "reason": "Request is validated or described (400 or 403) before the caller is authorized, so a foreign id answers differently from an unknown id. Authorize first, then validate."
-    },
-    {
-      "id": "oracle | GET /projects/:id/transfer-org/preview | o1OwnerVsO2",
-      "status": "open",
-      "reason": "Request is validated or described (400 or 403) before the caller is authorized, so a foreign id answers differently from an unknown id. Authorize first, then validate."
-    },
-    {
-      "id": "oracle | GET /projects/:id/transfer-org/preview | o2Mcp",
-      "status": "open",
-      "reason": "Request is validated or described (400 or 403) before the caller is authorized, so a foreign id answers differently from an unknown id. Authorize first, then validate."
-    },
-    {
-      "id": "oracle | GET /projects/:id/transfer-org/preview | o2Session",
-      "status": "open",
-      "reason": "Request is validated or described (400 or 403) before the caller is authorized, so a foreign id answers differently from an unknown id. Authorize first, then validate."
-    },
-    {
-      "id": "oracle | GET /projects/:id/transfer-org/preview | o2Token",
-      "status": "open",
-      "reason": "Request is validated or described (400 or 403) before the caller is authorized, so a foreign id answers differently from an unknown id. Authorize first, then validate."
-    },
-    {
-      "id": "oracle | GET /projects/:id/transfer-org/preview | orgGuest",
-      "status": "open",
-      "reason": "Request is validated or described (400 or 403) before the caller is authorized, so a foreign id answers differently from an unknown id. Authorize first, then validate."
-    },
-    {
-      "id": "oracle | GET /projects/:id/transfer-org/preview | orgPlain",
-      "status": "open",
-      "reason": "Request is validated or described (400 or 403) before the caller is authorized, so a foreign id answers differently from an unknown id. Authorize first, then validate."
-    },
-    {
-      "id": "oracle | GET /projects/:id/transfer-org/preview | p2Member",
-      "status": "open",
-      "reason": "Request is validated or described (400 or 403) before the caller is authorized, so a foreign id answers differently from an unknown id. Authorize first, then validate."
-    },
-    {
-      "id": "oracle | GET /projects/:id/transfer-org/preview | p2Token",
-      "status": "open",
-      "reason": "Request is validated or described (400 or 403) before the caller is authorized, so a foreign id answers differently from an unknown id. Authorize first, then validate."
-    },
-    {
-      "id": "oracle | PATCH /organizations/:orgId/quota/projects/:projectId | orgGuest",
-      "status": "open",
-      "reason": "Request is validated or described (400 or 403) before the caller is authorized, so a foreign id answers differently from an unknown id. Authorize first, then validate."
-    },
-    {
-      "id": "oracle | PATCH /organizations/:orgId/quota/projects/:projectId | orgPlain",
-      "status": "open",
-      "reason": "Request is validated or described (400 or 403) before the caller is authorized, so a foreign id answers differently from an unknown id. Authorize first, then validate."
-    },
-    {
-      "id": "oracle | PATCH /organizations/:orgId/quota/projects/:projectId | p2Member",
-      "status": "open",
-      "reason": "Request is validated or described (400 or 403) before the caller is authorized, so a foreign id answers differently from an unknown id. Authorize first, then validate."
-    },
-    {
-      "id": "oracle | PATCH /organizations/:orgId/quota/projects/:projectId | p2Token",
-      "status": "open",
-      "reason": "Request is validated or described (400 or 403) before the caller is authorized, so a foreign id answers differently from an unknown id. Authorize first, then validate."
-    },
-    {
-      "id": "oracle | POST /auth/passkeys/:id/rename | o1OwnerVsO2",
-      "status": "open",
-      "reason": "Request is validated or described (400 or 403) before the caller is authorized, so a foreign id answers differently from an unknown id. Authorize first, then validate."
-    },
-    {
-      "id": "oracle | POST /auth/passkeys/:id/rename | o2Session",
-      "status": "open",
-      "reason": "Request is validated or described (400 or 403) before the caller is authorized, so a foreign id answers differently from an unknown id. Authorize first, then validate."
-    },
-    {
-      "id": "oracle | POST /auth/passkeys/:id/rename | orgGuest",
-      "status": "open",
-      "reason": "Request is validated or described (400 or 403) before the caller is authorized, so a foreign id answers differently from an unknown id. Authorize first, then validate."
-    },
-    {
-      "id": "oracle | POST /auth/passkeys/:id/rename | orgPlain",
-      "status": "open",
-      "reason": "Request is validated or described (400 or 403) before the caller is authorized, so a foreign id answers differently from an unknown id. Authorize first, then validate."
-    },
-    {
-      "id": "oracle | POST /auth/passkeys/:id/rename | p2Member",
-      "status": "open",
-      "reason": "Request is validated or described (400 or 403) before the caller is authorized, so a foreign id answers differently from an unknown id. Authorize first, then validate."
-    },
-    {
-      "id": "oracle | POST /compose-stacks/:id/redeploy | dualScopedMcp",
-      "status": "open",
-      "reason": "Request is validated or described (400 or 403) before the caller is authorized, so a foreign id answers differently from an unknown id. Authorize first, then validate."
-    },
-    {
-      "id": "oracle | POST /compose-stacks/:id/redeploy | dualScopedSession",
-      "status": "open",
-      "reason": "Request is validated or described (400 or 403) before the caller is authorized, so a foreign id answers differently from an unknown id. Authorize first, then validate."
-    },
-    {
-      "id": "oracle | POST /compose-stacks/:id/redeploy | dualScopedToken",
-      "status": "open",
-      "reason": "Request is validated or described (400 or 403) before the caller is authorized, so a foreign id answers differently from an unknown id. Authorize first, then validate."
-    },
-    {
-      "id": "oracle | POST /compose-stacks/:id/redeploy | o1OwnerVsO2",
-      "status": "open",
-      "reason": "Request is validated or described (400 or 403) before the caller is authorized, so a foreign id answers differently from an unknown id. Authorize first, then validate."
-    },
-    {
-      "id": "oracle | POST /compose-stacks/:id/redeploy | o2Session",
-      "status": "open",
-      "reason": "Request is validated or described (400 or 403) before the caller is authorized, so a foreign id answers differently from an unknown id. Authorize first, then validate."
-    },
-    {
-      "id": "oracle | POST /compose-stacks/:id/redeploy | orgGuest",
-      "status": "open",
-      "reason": "Request is validated or described (400 or 403) before the caller is authorized, so a foreign id answers differently from an unknown id. Authorize first, then validate."
-    },
-    {
-      "id": "oracle | POST /compose-stacks/:id/redeploy | orgPlain",
-      "status": "open",
-      "reason": "Request is validated or described (400 or 403) before the caller is authorized, so a foreign id answers differently from an unknown id. Authorize first, then validate."
-    },
-    {
-      "id": "oracle | POST /compose-stacks/:id/redeploy | p2Member",
-      "status": "open",
-      "reason": "Request is validated or described (400 or 403) before the caller is authorized, so a foreign id answers differently from an unknown id. Authorize first, then validate."
-    },
-    {
-      "id": "oracle | POST /deployments/:id/auto-deploy/enable | dualScopedMcp",
-      "status": "open",
-      "reason": "Request is validated or described (400 or 403) before the caller is authorized, so a foreign id answers differently from an unknown id. Authorize first, then validate."
-    },
-    {
-      "id": "oracle | POST /deployments/:id/auto-deploy/enable | dualScopedSession",
-      "status": "open",
-      "reason": "Request is validated or described (400 or 403) before the caller is authorized, so a foreign id answers differently from an unknown id. Authorize first, then validate."
-    },
-    {
-      "id": "oracle | POST /deployments/:id/auto-deploy/enable | dualScopedToken",
-      "status": "open",
-      "reason": "Request is validated or described (400 or 403) before the caller is authorized, so a foreign id answers differently from an unknown id. Authorize first, then validate."
-    },
-    {
-      "id": "oracle | POST /deployments/:id/auto-deploy/enable | o1OwnerVsO2",
-      "status": "open",
-      "reason": "Request is validated or described (400 or 403) before the caller is authorized, so a foreign id answers differently from an unknown id. Authorize first, then validate."
-    },
-    {
-      "id": "oracle | POST /deployments/:id/auto-deploy/enable | o2Session",
-      "status": "open",
-      "reason": "Request is validated or described (400 or 403) before the caller is authorized, so a foreign id answers differently from an unknown id. Authorize first, then validate."
-    },
-    {
-      "id": "oracle | POST /deployments/:id/auto-deploy/enable | orgGuest",
-      "status": "open",
-      "reason": "Request is validated or described (400 or 403) before the caller is authorized, so a foreign id answers differently from an unknown id. Authorize first, then validate."
-    },
-    {
-      "id": "oracle | POST /deployments/:id/auto-deploy/enable | orgPlain",
-      "status": "open",
-      "reason": "Request is validated or described (400 or 403) before the caller is authorized, so a foreign id answers differently from an unknown id. Authorize first, then validate."
-    },
-    {
-      "id": "oracle | POST /deployments/:id/auto-deploy/enable | p2Member",
-      "status": "open",
-      "reason": "Request is validated or described (400 or 403) before the caller is authorized, so a foreign id answers differently from an unknown id. Authorize first, then validate."
-    },
-    {
-      "id": "oracle | POST /deployments/:id/rebuild | dualScopedMcp",
-      "status": "open",
-      "reason": "Request is validated or described (400 or 403) before the caller is authorized, so a foreign id answers differently from an unknown id. Authorize first, then validate."
-    },
-    {
-      "id": "oracle | POST /deployments/:id/rebuild | dualScopedSession",
-      "status": "open",
-      "reason": "Request is validated or described (400 or 403) before the caller is authorized, so a foreign id answers differently from an unknown id. Authorize first, then validate."
-    },
-    {
-      "id": "oracle | POST /deployments/:id/rebuild | dualScopedToken",
-      "status": "open",
-      "reason": "Request is validated or described (400 or 403) before the caller is authorized, so a foreign id answers differently from an unknown id. Authorize first, then validate."
-    },
-    {
-      "id": "oracle | POST /deployments/:id/rebuild | o1OwnerVsO2",
-      "status": "open",
-      "reason": "Request is validated or described (400 or 403) before the caller is authorized, so a foreign id answers differently from an unknown id. Authorize first, then validate."
-    },
-    {
-      "id": "oracle | POST /deployments/:id/rebuild | o2Session",
-      "status": "open",
-      "reason": "Request is validated or described (400 or 403) before the caller is authorized, so a foreign id answers differently from an unknown id. Authorize first, then validate."
-    },
-    {
-      "id": "oracle | POST /deployments/:id/rebuild | orgGuest",
-      "status": "open",
-      "reason": "Request is validated or described (400 or 403) before the caller is authorized, so a foreign id answers differently from an unknown id. Authorize first, then validate."
-    },
-    {
-      "id": "oracle | POST /deployments/:id/rebuild | orgPlain",
-      "status": "open",
-      "reason": "Request is validated or described (400 or 403) before the caller is authorized, so a foreign id answers differently from an unknown id. Authorize first, then validate."
-    },
-    {
-      "id": "oracle | POST /deployments/:id/rebuild | p2Member",
-      "status": "open",
-      "reason": "Request is validated or described (400 or 403) before the caller is authorized, so a foreign id answers differently from an unknown id. Authorize first, then validate."
-    },
-    {
-      "id": "oracle | POST /projects/:id/transfer-org | dualScopedMcp",
-      "status": "open",
-      "reason": "Request is validated or described (400 or 403) before the caller is authorized, so a foreign id answers differently from an unknown id. Authorize first, then validate."
-    },
-    {
-      "id": "oracle | POST /projects/:id/transfer-org | dualScopedSession",
-      "status": "open",
-      "reason": "Request is validated or described (400 or 403) before the caller is authorized, so a foreign id answers differently from an unknown id. Authorize first, then validate."
-    },
-    {
-      "id": "oracle | POST /projects/:id/transfer-org | dualScopedToken",
-      "status": "open",
-      "reason": "Request is validated or described (400 or 403) before the caller is authorized, so a foreign id answers differently from an unknown id. Authorize first, then validate."
-    },
-    {
-      "id": "oracle | POST /projects/:id/transfer-org | o1OwnerVsO2",
-      "status": "open",
-      "reason": "Request is validated or described (400 or 403) before the caller is authorized, so a foreign id answers differently from an unknown id. Authorize first, then validate."
-    },
-    {
-      "id": "oracle | POST /projects/:id/transfer-org | o2Session",
-      "status": "open",
-      "reason": "Request is validated or described (400 or 403) before the caller is authorized, so a foreign id answers differently from an unknown id. Authorize first, then validate."
-    },
-    {
-      "id": "oracle | POST /projects/:id/transfer-org | orgGuest",
-      "status": "open",
-      "reason": "Request is validated or described (400 or 403) before the caller is authorized, so a foreign id answers differently from an unknown id. Authorize first, then validate."
-    },
-    {
-      "id": "oracle | POST /projects/:id/transfer-org | orgPlain",
-      "status": "open",
-      "reason": "Request is validated or described (400 or 403) before the caller is authorized, so a foreign id answers differently from an unknown id. Authorize first, then validate."
-    },
-    {
-      "id": "oracle | POST /projects/:id/transfer-org | p2Member",
-      "status": "open",
-      "reason": "Request is validated or described (400 or 403) before the caller is authorized, so a foreign id answers differently from an unknown id. Authorize first, then validate."
-    },
-    {
-      "id": "oracle | PUT /deployments/:id/github-repo | dualScopedMcp",
-      "status": "open",
-      "reason": "Request is validated or described (400 or 403) before the caller is authorized, so a foreign id answers differently from an unknown id. Authorize first, then validate."
-    },
-    {
-      "id": "oracle | PUT /deployments/:id/github-repo | dualScopedSession",
-      "status": "open",
-      "reason": "Request is validated or described (400 or 403) before the caller is authorized, so a foreign id answers differently from an unknown id. Authorize first, then validate."
-    },
-    {
-      "id": "oracle | PUT /deployments/:id/github-repo | dualScopedToken",
-      "status": "open",
-      "reason": "Request is validated or described (400 or 403) before the caller is authorized, so a foreign id answers differently from an unknown id. Authorize first, then validate."
-    },
-    {
-      "id": "oracle | PUT /deployments/:id/github-repo | o1OwnerVsO2",
-      "status": "open",
-      "reason": "Request is validated or described (400 or 403) before the caller is authorized, so a foreign id answers differently from an unknown id. Authorize first, then validate."
-    },
-    {
-      "id": "oracle | PUT /deployments/:id/github-repo | o2Session",
-      "status": "open",
-      "reason": "Request is validated or described (400 or 403) before the caller is authorized, so a foreign id answers differently from an unknown id. Authorize first, then validate."
-    },
-    {
-      "id": "oracle | PUT /deployments/:id/github-repo | orgGuest",
-      "status": "open",
-      "reason": "Request is validated or described (400 or 403) before the caller is authorized, so a foreign id answers differently from an unknown id. Authorize first, then validate."
-    },
-    {
-      "id": "oracle | PUT /deployments/:id/github-repo | orgPlain",
-      "status": "open",
-      "reason": "Request is validated or described (400 or 403) before the caller is authorized, so a foreign id answers differently from an unknown id. Authorize first, then validate."
-    },
-    {
-      "id": "oracle | PUT /deployments/:id/github-repo | p2Member",
-      "status": "open",
-      "reason": "Request is validated or described (400 or 403) before the caller is authorized, so a foreign id answers differently from an unknown id. Authorize first, then validate."
+      "reason": "Reviewed, not a leak. In the replay the scope type is `org`, so this is a member saving their own notification preference for the org they belong to (requireOrgMember on organizationId; other orgs answer 404). Project, app, database and job scopes additionally need view access to the owning project (UserNotificationsService.resolveVisibleScope), so a project the caller cannot see answers like a missing one; see test/notification-scope-visibility.test.ts."
     }
   ]
 }

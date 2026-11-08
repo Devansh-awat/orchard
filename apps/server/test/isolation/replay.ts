@@ -145,7 +145,8 @@ export function buildRequest(
   variant: Variant,
   victim: Scope,
   own: Scope | null,
-  world: World
+  world: World,
+  keepOrgLevel = false
 ): BuiltRequest | null {
   const tenantParams = route.pathParams.filter((param) => isTenantKind(param.kind));
   const pathValues: Record<string, string> = {};
@@ -166,13 +167,24 @@ export function buildRequest(
   const spray = buildSpray(route, victim, world);
   let sprayOut: Record<string, string | string[]> = spray;
   if (variant === 'missing') {
+    // A same-org principal already knows its own org exists, so the "unknown id"
+    // twin keeps the org-level ids and only invents the project-level ones.
+    // Otherwise "you are a non-admin of this org" (403) would be compared with
+    // "no such org" (404) and flagged although it reveals nothing about the project.
+    const keep = (kind: string | undefined) =>
+      keepOrgLevel && kind !== undefined && kindLevel(kind) === 'org';
     for (const key of Object.keys(pathValues)) {
-      if (isTenantKind(route.pathParams.find((p) => p.name === key)!.kind)) {
+      const kind = route.pathParams.find((p) => p.name === key)!.kind;
+      if (isTenantKind(kind) && !keep(kind)) {
         pathValues[key] = fresh(pathValues[key]);
       }
     }
     sprayOut = {};
     for (const [key, value] of Object.entries(spray)) {
+      if (keep(FIELD_KIND[key])) {
+        sprayOut[key] = value;
+        continue;
+      }
       sprayOut[key] = Array.isArray(value) ? value.map(fresh) : fresh(value);
     }
   }
@@ -275,21 +287,10 @@ export async function send(
   }
 }
 
-export function isStreamRoute(routePath: string): boolean {
-  return routePath.endsWith('/stream') || routePath.startsWith('/events/');
-}
-
 export function bucketOf(outcome: Outcome): Bucket {
   if (outcome.timedOut) return 'timeout';
   const s = outcome.status;
   if (s === 401 || s === 403 || s === 404) return 'denied';
-  if (
-    s === 200 &&
-    outcome.contentType.includes('text/event-stream') &&
-    outcome.text.startsWith('event: error')
-  ) {
-    return 'denied';
-  }
   if (s >= 200 && s < 400) return 'allowed';
   if (s >= 500 || s < 0) return 'error';
   return 'rejected';
@@ -419,14 +420,17 @@ export async function runRoute(
       )
         continue;
       if (variant === 'mixed' && principal.relation === 'anon') continue;
-      const built = buildRequest(route, variant, victim, own, ctx.world);
+      const built = buildRequest(
+        route,
+        variant,
+        victim,
+        own,
+        ctx.world,
+        variant === 'missing' && principal.relation === 'cross-project'
+      );
       if (!built) continue;
       const outcome = await send(ctx.baseUrl, built, principal.headers);
-      const streamNoData =
-        isStreamRoute(route.path) &&
-        outcome.status === 200 &&
-        !/(^|\n)data: (?!Not found)/.test(outcome.text);
-      const bucket = streamNoData ? 'denied' : bucketOf(outcome);
+      const bucket = bucketOf(outcome);
       const deny =
         cls === 'resource-scoped' &&
         hasPathScope &&
@@ -509,13 +513,7 @@ export async function runRoute(
         route.pathParams.some(
           (p) => kindLevel(p.kind) === 'project' || kindLevel(p.kind) === 'user'
         ));
-    if (
-      cls === 'resource-scoped' &&
-      foreign &&
-      missing &&
-      hiddenFromPrincipal &&
-      !isStreamRoute(route.path)
-    ) {
+    if (cls === 'resource-scoped' && foreign && missing && hiddenFromPrincipal) {
       const f = foreign.outcome;
       const m = missing.outcome;
       const markers = ctx.allMarkers;

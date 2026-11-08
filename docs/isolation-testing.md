@@ -65,6 +65,11 @@ Each failure lists the finding kind, the principal, the variant, the exact reque
 - `error-reached`: a 5xx for a principal that must be refused. The handler ran, or crashed before authorizing.
 - `leak`: the body contains another tenant's data. Check error messages first; they often interpolate ids.
 - `oracle`: "exists but not yours" and "does not exist" answer differently. Make the denial path throw the same exception as the missing path.
+
+Authorize before you validate: a `400` for a malformed or inapplicable request must come after the access check, otherwise a foreign id answers `400` where an unknown id answers `404`. For a principal who belongs to the victim's org, the unknown-id twin keeps the org id and only invents the project-level ids (they already know their org exists).
+
+Server-sent event routes (`@Sse`) are held to the same rule. Nest commits the `200 text/event-stream` head on the next macrotask whenever interceptors wrap the route, so a check awaited inside the handler loses the race and a denied caller sees an empty `200` or a `404` depending on cache state. Run the check as a guard with `@SsePreflight('method')` (`src/events/sse-preflight.guard.ts`); the replay no longer treats an empty stream as a denial.
+
 - `mutated`: the request changed a row that belongs to someone else.
 
 Fix the route and add nothing to the allowlist. If a finding is a reviewed false positive or a known open item, add its id to `isolation-exceptions.json` with `status` (`open` or `accepted`) and a `reason`. An entry that stops firing fails the run, so the list cannot rot.
@@ -72,6 +77,6 @@ Fix the route and add nothing to the allowlist. If a finding is a reviewed false
 ## Not covered
 
 - Graft routes (`greenhouse`, `forum`, `announcements`) are `exempt`: grafts are trusted by design.
-- Privilege tiers inside one project (member against admin) are not asserted; only viewer, read-scope and non-members are.
+- Privilege tiers inside one project are only asserted at the bottom (viewer, read-only token, read-scoped MCP grant against every mutating route). Member against admin is not: whether a route needs `admin`, `edit` or ownership is not recorded in the matrix, so the replay cannot know which refusals to expect. Closing it needs a per-route minimum-role column in `isolation-matrix.json`, a project-member principal, and the same expect-deny rule as `lower-role`.
 - Pod exec, WebSocket upgrades and the ingress auth proxy are covered by their own suites.
 - Observability query builders are covered by `logsql.test.ts` and `mcp-observability.test.ts`; the HTTP routes in front of them are replayed here.
