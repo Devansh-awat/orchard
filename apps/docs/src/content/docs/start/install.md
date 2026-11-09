@@ -25,7 +25,8 @@ The installer creates a single-node k3s cluster. It then installs Traefik, Cloud
 - An IPv4 address. IPv6-only servers are not supported yet. For more information, refer to [The installer stops on an IPv6-only server](/operate/troubleshooting/#the-installer-stops-on-an-ipv6-only-server).
 - Root access.
 - OpenSSL 3 or newer, which the published installer uses to check release signatures. Without it, the installer stops, unless you set `ORCHARD_ALLOW_UNSIGNED_COMMANDS=true` to install without the check.
-- At least 4 GiB of RAM and 20 GB of free disk on `/var/lib`. The installer refuses less. For real use, plan for at least 8 GiB of RAM and 40 GB of disk. A small instance with two builds and a database uses about 2.5 GiB of RAM at idle, requests up to 4.5 GiB, and uses up to 19 GB of disk. The installer warns below 8 GiB of RAM and below 60 GB of free disk.
+- At least 20 GB of free disk on `/var/lib`. The installer refuses less, and it warns below 60 GB. For real use, plan for at least 40 GB of disk.
+- 8 GiB of RAM is recommended. With less, the installer still installs and warns you, and Orchard may behave unexpectedly. At 4 GiB, image builds may not schedule. A small instance with two builds and a database uses about 2.5 GiB of RAM at idle, requests up to 4.5 GiB, and uses up to 19 GB of disk.
 - For `public` mode, ports 80 and 443 free and reachable from the internet. A domain is optional. To try Orchard without one, refer to [Try Orchard without a domain](#try-orchard-without-a-domain).
 - For `tunnel` mode, a domain and a Cloudflare Tunnel token.
 - Outbound internet access. For the hosts the installer contacts, refer to [Outbound connections](/operate/outbound-connections/).
