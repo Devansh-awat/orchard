@@ -21,7 +21,7 @@ export type MatrixEntry = {
 export type Matrix = Record<string, MatrixEntry>;
 
 export const GRAFT_REASON =
-  'Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md.';
+  'Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md.';
 
 const ID_QUERY = /(Id|Ids)$|^namespace$|^orgId$/;
 

@@ -1,6 +1,6 @@
 # Isolation testing
 
-The control-plane isolation harness in `apps/server/test/isolation/` is the permanent proof for invariants I1 (org to org), I2 (project to project), I8 (observability scoping), I9 (identity confinement) and I12 (lifecycle) in `docs/tenancy-model.md`. It has two halves.
+The control-plane isolation harness in `apps/server/test/isolation/` is the permanent proof for invariants I1 (org to org), I2 (project to project), I8 (observability scoping), I9 (identity confinement) and I12 (lifecycle) in `DEVELOPERS.md`. It has two halves.
 
 ## 1. The route matrix (pure, runs in seconds)
 

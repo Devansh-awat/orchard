@@ -1,6 +1,115 @@
-# Orchard tenancy model
+# Developing Orchard
 
-Internal spec. For each isolation boundary it states the invariant, the mechanism that enforces it now, the configuration it requires, what is not guaranteed, the residual risk, and the test that proves it. It was re-verified against `main` at commit `b9cc0373`. Every file and function named here exists at that commit. Items marked `UNVERIFIED` were not confirmed against code or a live cluster.
+This file explains how Orchard works, for people changing it. Every name here is in the code, so grep for it.
+
+- Setup, commits and pull requests are in [CONTRIBUTING.md](CONTRIBUTING.md).
+- The repo map, generated files and project rules are in [AGENTS.md](AGENTS.md).
+- How the server could split into services is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+- Running an instance is covered at <https://docs.orchard.my>.
+
+## Kubernetes is the source of truth
+
+Orchard does not own the state of the things it runs. The cluster does. Postgres holds what Orchard needs to know about those objects, plus the things Kubernetes has no concept of, such as organizations, roles and audit records.
+
+Three rules follow from that, and most engine code exists to keep them:
+
+1. If Postgres and the cluster disagree, the cluster is right.
+2. A failed read never means a resource is gone. Only a live 404 does. `readLive` in `apps/server/src/engine/consumers/live-object.ts` returns `present`, `absent` or `unknown`, and `unknown` must never be treated as `absent`.
+3. A change made with `kubectl` is adopted into Orchard's rows, not reverted. Security objects are the one exception (see [The guard shard](#the-guard-shard)).
+
+## How a request flows
+
+**Reads** mostly come from Postgres, so a page load does not call the Kubernetes API. The engine keeps that copy current.
+
+**Writes** mostly go through the apply queue (`apps/server/src/apply`). A request records the desired manifest with `ApplyQueueService.enqueue`, which upserts on a `dedupeKey` and bumps a `generation`, then returns. Workers drain the queue and retry with backoff through `ApplyExecutorService`. A newer write for the same key replaces an older one rather than queueing behind it.
+
+**Events** reach the dashboard as server-sent events over Redis Streams, and a client replays from the last event it saw after reconnecting. Without Redis, each replica delivers only its own events.
+
+## The engine
+
+`apps/server/src/engine` lists and watches every object Orchard manages, stores a copy in Postgres, and hands each change to a consumer.
+
+```
+Kubernetes API
+   | list, then watch (one informer per resource)
+   v
+engine/core/informer.ts    stores the object through EngineStore (engine/prisma-store.ts)
+   | onEvent / onListComplete
+   v
+engine/consumers/*         update Orchard's own rows
+```
+
+- **`engine/core`** is the standalone part: the list-then-watch informer, deletes, lease election and health. It imports nothing from the server except through the `EngineStore` interface, and oxlint enforces that.
+- **`engine/shards.ts`** groups resources into shards: `pods`, `cnpg`, `workloads`, `batch`, `net`, `tenancy`, `events`, `scans`, `storage` and `guard`. Each shard has its own lease (`orchard-mirror-<name>`), so one replica runs each shard, and replicas balance shards between them. Grafts add shards with `registerEngineShard`.
+- **`engine/consumers`** are Orchard-specific, one per kind.
+
+The engine stays off when `ENGINE_DISABLED=true`, when there is no kubeconfig, and when `LeaseService.canCoordinate` is false.
+
+### Writing an informer or consumer
+
+The contracts on `EngineResource` in `engine/core/informer.ts` matter:
+
+- `mapRefs` returning `{}` means the object belongs to nothing, and that gets stored. Throwing means Orchard could not tell, so the informer leaves the row alone and retries.
+- `onEvent` must throw on failure. A handler that swallows its errors tells the informer the version was applied, and nothing will ever come back for it.
+- `onListComplete` receives `refs: null` for anything it could not resolve. A pruner that sees a null has an incomplete picture and must not delete on the strength of it.
+
+Events for the same object are serialized. A full resync runs every 10 minutes (`RESYNC_INTERVAL_MS`) to repair anything a watch missed.
+
+Consumers follow a few more rules:
+
+- Removals that destroy Orchard state are confirmed after a delay. Ingresses and namespaces use `CONFIRM_AFTER_MS`, 90 seconds.
+- A row created in the last two minutes may not have its cluster object yet. Check `rowMayBePending` before treating that as drift.
+- Adoption must not echo Orchard's own writes. Consumers defer while a build or queued apply is in flight, and fields Orchard derives carry an annotation recording what it last wrote.
+
+### The guard shard
+
+`GuardConsumer` (`engine/consumers/guard.consumer.ts`) is the exception to adoption. It compares isolation objects against what `PrismaGuardDesired` (`engine/guard/desired.ts`) expects, and restores a missing or edited object after a settle window (`SETTLE_MS`), rate limited by `RestoreLimiter` and audited as `security.policy.restored`. A periodic sweep backs up the watch.
+
+## Leases and `canCoordinate`
+
+`apps/server/src/coordination/lease.service.ts` wraps Kubernetes Leases.
+
+`LeaseService.canCoordinate` is true when the process has a cluster to talk to and a namespace whose leases it can contend for, either `ORCHARD_CONTROL_NAMESPACE` or the ServiceAccount's own namespace. A laptop with a kubeconfig but no control namespace fails this check, which is the point: it cannot see the leases, so anything cluster-wide it ran would be a second, uncoordinated actor on someone else's infrastructure.
+
+Use these patterns for background work:
+
+| Work                                | Gate                                                                                             |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Runs on exactly one replica         | `canCoordinate` and `lease.isHolder(GLOBAL_LEADER_LEASE)`, or `LeaderElectionService.isLeader()` |
+| Runs on every member of the cluster | `canCoordinate`. The apply queue and build queue work this way.                                  |
+| One pass at startup on the leader   | `LeaderElectionService.onAcquired`. `isLeader()` is false until the first round trip completes.  |
+
+Never gate cluster-wide work on having a kubeconfig. `APPLY_WORKER_DISABLED=true` makes a replica enqueue only.
+
+## Tenancy and namespace boundaries
+
+Each project environment gets its own namespace, named `{org-slug}-{project-slug}-{6 hex}` and labeled `orchard.my/managed=true`. Retired names are recorded and never reused. Platform namespaces such as `orchard`, `orchard-builders` and `orchard-sandboxes` are reserved in `ProjectsService.RESERVED_NAMESPACES`.
+
+When you add a route or a tenant-reaching feature:
+
+- Authorize in the service with `AuthorizationService`. A caller with no access gets `NotFoundException`, not 403. There is no row-level security, so a missing scope check is a real hole.
+- A new route fails `auth-coverage.test.ts` until the snapshot is reviewed. `apps/server/test/isolation/` replays routes as another tenant. [docs/isolation-testing.md](docs/isolation-testing.md) explains how to classify a route.
+- `K8sNamespaceService.createNamespace` fails closed: if the default-deny policy cannot be applied, the namespace is deleted.
+
+The full set of boundaries is in [Tenancy model](#tenancy-model).
+
+## URLs are computed by the server
+
+An instance can serve on ports other than 80 and 443, so a client must never assemble a URL. `ingressPublicUrl` in `apps/server/src/projects/projects.utils.ts` builds one from the host, TLS state and the configured public ports. `scrubIngress` returns it as `url` and removes the protection secrets. A new ingress payload selects `host`, `path`, `tlsSecretName` and `entrypoints`, and maps through `scrubIngress`.
+
+## Conventions
+
+[AGENTS.md](AGENTS.md) has the rules and the generated-files table. The ones that catch people out:
+
+- Run the generators in the same change as the route, command, variable or dependency they describe.
+- Migrations go through Prisma. Never hand-write the SQL or edit an applied migration.
+- Cluster-specific values such as storage class, ingress class and registry are environment variables, not literals.
+- A typecheck error about a missing column means a stale Prisma client. Check `schema.prisma`, then regenerate.
+- Suites that write real rows refuse `localhost:5432`. See [apps/server/test/README.md](apps/server/test/README.md).
+
+## Tenancy model
+
+Internal spec. For each isolation boundary it states the invariant, the mechanism that enforces it now, the configuration it requires, what is not guaranteed, the residual risk, and the test that proves it. Its behaviour was last verified against `main` at commit `b9cc0373`. Every file, function and setting named here was checked to exist again in November 2026. Items marked `UNVERIFIED` were not confirmed against code or a live cluster.
 
 Threat model: an evil organization, an evil project editor, an evil tenant workload, an evil build, an evil IdP, a leaked org-scoped token, a prompt-injected MCP client. Trusted: the instance operator, first-party grafts, and a project editor for their own project only.
 
@@ -12,15 +121,13 @@ Related files: `docs/isolation-testing.md` (how the cross-tenant control-plane h
 
 Rule for this document: where something is still unfixed it is described as hardening guidance, not as a procedure.
 
-## Conventions
+### Conventions
 
 - Tenant namespace: `{org-slug}-{project-slug}-{6 hex}` (`ProjectsService.freshNamespace`, `apps/server/src/projects/projects.service.ts`), one per project environment (`EnvironmentsService.deconflictNamespace`). Labeled `orchard.my/managed=true`. Retired names are recorded in the `RetiredNamespace` table and never reused.
 - Control-plane namespace: `orchard` (`Values.namespace`). Other platform namespaces: `orchard-builders`, `orchard-r2-proxy`, `orchard-metrics`, `orchard-scans`, `orchard-object-storage`, `orchard-sandboxes`, `orchard-fc-builders` (reserved in `ProjectsService.RESERVED_NAMESPACES`).
 - Chart paths are under `infra/charts/orchard/`.
 
----
-
-## I1. Organization to organization, control plane (API and database)
+### I1. Organization to organization, control plane (API and database)
 
 **Invariant.** A principal with no membership in org B cannot read, list, mutate or learn the existence of any resource of org B through any route, token, session or MCP request.
 
@@ -46,9 +153,7 @@ Rule for this document: where something is still unfixed it is described as hard
 
 **Test.** Partial. `apps/server/test/org-isolation.test.ts`, `auth-coverage.test.ts`, `kubernetes-namespace-oracle.test.ts`, `auth-methods-uniform.test.ts`, `transfer-recipient-oracle.test.ts`, `rbac-coverage.test.ts` (needs `helm`). The cross-tenant sweep (every authenticated route replayed with another org's ids): `apps/server/test/isolation/`, see `docs/isolation-testing.md`.
 
----
-
-## I2. Project to project inside an org (roles, guests, tokens, MCP grants, exec)
+### I2. Project to project inside an org (roles, guests, tokens, MCP grants, exec)
 
 **Invariant.** A principal holds exactly the rights of their project role. A plain org member or guest sees only projects they belong to; a viewer cannot mutate; a project-scoped token or MCP grant cannot reach another project or act with org-level power; a minted credential never outlives or outranks its parent.
 
@@ -71,9 +176,7 @@ Rule for this document: where something is still unfixed it is described as hard
 
 **Test.** `api-token-lineage.test.ts`, `exec-token-expiry.test.ts`, `mcp-gateway-scope.test.ts`, `mcp-token-type.test.ts`, `project-member-role.test.ts`, `namespace-scope.test.ts`, `security-hardening.test.ts`, `pod-exec-policy.test.ts`, `org-scoped-personal-credentials.test.ts`. Role x token scope x MCP grant replay: `apps/server/test/isolation/` (`docs/isolation-testing.md`).
 
----
-
-## I3. Tenant network (workload to workload, workload to platform, workload to node and metadata)
+### I3. Tenant network (workload to workload, workload to platform, workload to node and metadata)
 
 **Invariant.** A pod in tenant namespace A can reach only: pods in A; DNS; the ingress controller namespaces on their serving ports; the public internet outside private, link-local and cluster-node ranges and outside mail ports; other tenants' explicitly published (`-allow-public`) pods; and the backup proxy on TCP 9000. It cannot reach the kube-apiserver, node services, cloud metadata, or any unpublished service of another tenant or of the platform. No platform pod accepts a connection from a tenant namespace.
 
@@ -112,9 +215,7 @@ Rule for this document: where something is still unfixed it is described as hard
 
 **Test.** `apps/server/test/tenant-policy.test.ts`, `network-isolation.test.ts` (serving ports, mail ports, cluster excepts, Cilium deny, guard rebuild and roll-forward), `namespace-fail-closed.test.ts`, `engine-guard.test.ts`, `database-platform-policy.test.ts`, `buildkit-daemon-policy.test.ts`, `compose-network.test.ts`, `chart-platform-policies.test.ts` and `chart-egress-policies.test.ts` (need `helm`), `public-exposure-quota.test.ts`. Live enforcement (pod A cannot reach pod B, apiserver, node): none.
 
----
-
-## I4. Tenant compute (kernel, pod shape)
+### I4. Tenant compute (kernel, pod shape)
 
 **Invariant.** Every object a tenant can cause to exist is of a shape Orchard builds; a tenant process cannot affect the host kernel or another tenant's process, and when the instance is configured for untrusted code the pod runs under a sandbox runtime.
 
@@ -146,9 +247,7 @@ Rule for this document: where something is still unfixed it is described as hard
 
 **Test.** `tenant-sandbox-uniform.test.ts`, `build-sandbox.test.ts`, `build-config.test.ts`, `build-posture.test.ts`, `pod-exec-policy.test.ts`, `tenant-abuse-quota.test.ts`, `ingress-issuer.test.ts`, `chart-render.test.ts` (needs `helm`), the CEL fixtures in `infra/charts/orchard/policies/celtest/policy_test.go` (Go). Admission policies against a live API server: documented manual procedure only (`policies/README.md`).
 
----
-
-## I5. Builds (source, secrets, caches, registry credentials)
+### I5. Builds (source, secrets, caches, registry credentials)
 
 **Invariant.** A build for project A cannot read project B's source, build secrets, cache or registry images, cannot push to another project's repository, and cannot reach the cluster.
 
@@ -180,9 +279,7 @@ Rule for this document: where something is still unfixed it is described as hard
 
 **Test.** `buildkit-daemon-policy.test.ts`, `registry-image-policy.test.ts`, `image-ref.test.ts`, `build-secrets.test.ts`, `build-arg-injection.test.ts`, `build-cache-s3.test.ts`, `image-builder-cache.test.ts`, `builder-override-access.test.ts`, `build-sandbox.test.ts`, `build-posture.test.ts`, `chart-egress-policies.test.ts`. A cross-tenant cache or registry attack against a live cluster: none.
 
----
-
-## I6. Secrets (env, DB credentials, registry credentials, tokens)
+### I6. Secrets (env, DB credentials, registry credentials, tokens)
 
 **Invariant.** A secret value is readable only by principals with edit rights on its project and by the workload it is bound to, is never returned by read APIs once written, and is not readable by other tenants at rest or in transit.
 
@@ -207,9 +304,7 @@ Rule for this document: where something is still unfixed it is described as hard
 
 **Test.** `secret-crypto-seal.test.ts`, `env-secret-write-only.test.ts`, `secret-redaction.test.ts`, `log-redaction.test.ts`, `tenant-rbac.test.ts`, `public-db-tls.test.ts`, `database-public-connection.test.ts`, `job-step-secrets.test.ts`. Fail-closed when the key is missing: none (behavior is fail-open for env vars).
 
----
-
-## I7. Storage and backups (uploads, S3/R2, CNPG, restore drills)
+### I7. Storage and backups (uploads, S3/R2, CNPG, restore drills)
 
 **Invariant.** A tenant's backup credentials, build cache keys, uploads and restore operations touch only that tenant's bucket prefix, and the platform's real object-store credentials never reach a tenant namespace.
 
@@ -228,9 +323,7 @@ Rule for this document: where something is still unfixed it is described as hard
 
 **Test.** `apps/r2-proxy/main_test.go` (41 tests, for example `TestObjectsOutsidePrefixAreRefused`, `TestMultiDeleteIsCheckedPerKey`, `TestEmptyAllowlistServesNoBucketWithPlatformCredentials`, `TestEveryAcceptedRequestIsForwardedAsAuthorizedAndSignedAsSent`), `r2-proxy-grants.test.ts`, `upload-namespace.test.ts`, `object-storage.test.ts`, `database-recovery.test.ts`, `chart-platform-policies.test.ts`. Backup and restore across tenants end to end: none.
 
----
-
-## I8. Observability (logs, metrics, events, traces, status pages)
+### I8. Observability (logs, metrics, events, traces, status pages)
 
 **Invariant.** A user sees logs, metrics, events and status of only the projects they can view; a tenant workload cannot query the platform's metrics or log stores.
 
@@ -244,9 +337,7 @@ Rule for this document: where something is still unfixed it is described as hard
 
 **Test.** `logsql.test.ts`, `logs-store.test.ts`, `status-page.test.ts`, `pod-selector.test.ts`, `ingress-metrics.test.ts`, `chart-platform-policies.test.ts`. Cross-tenant query attempt: none.
 
----
-
-## I9. Identity (SSO, SCIM, OAuth, group rules, passkeys cannot reach outside their org)
+### I9. Identity (SSO, SCIM, OAuth, group rules, passkeys cannot reach outside their org)
 
 **Invariant.** An IdP, SCIM token or SSO session belonging to org A can create, sign in or modify only identities and memberships within org A, and cannot take over an account or org of another tenant.
 
@@ -267,9 +358,7 @@ Rule for this document: where something is still unfixed it is described as hard
 
 **Test.** `sso-enforcement.test.ts`, `saml-hardening.test.ts`, `saml-trust-config.test.ts`, `saml-idp-entity-backfill.test.ts`, `scim.test.ts`, `scim-base-url.test.ts`, `group-rules.test.ts`, `identity-mapping.test.ts`, `unverified-adoption.test.ts`, `org-isolation.test.ts`, `passkey.test.ts`, `mcp-oauth-hardening.test.ts`.
 
----
-
-## I10. Ingress and browser origin (host claims, certs, cookie scope, tenant apps vs dashboard)
+### I10. Ingress and browser origin (host claims, certs, cookie scope, tenant apps vs dashboard)
 
 **Invariant.** Only the project that legitimately holds a hostname receives its traffic; a tenant app cannot read or set the dashboard's credentials, and cannot obtain a certificate for a host it does not control.
 
@@ -302,9 +391,7 @@ Rule for this document: where something is still unfixed it is described as hard
 
 **Test.** `host-claim.test.ts`, `hostname-reservation.test.ts`, `reserved-hosts.test.ts`, `reserved-generated-zones.test.ts`, `generated-host.test.ts`, `ingress-issuer.test.ts`, `client-ip.test.ts`, `protection-auth.test.ts`, `protection-bypass-paths.test.ts`, `protection-path-ambiguity.test.ts`, `protection-session-binding.test.ts`, `protection-proxy-headers.test.ts`, `protection-redirect.test.ts`, `ingress-limits.test.ts`, `xss-and-assets.test.ts`. Cookie scope against the actual app domain: none.
 
----
-
-## I11. Resource fairness (quotas, noisy neighbour, pre-auth DoS)
+### I11. Resource fairness (quotas, noisy neighbour, pre-auth DoS)
 
 **Invariant.** One tenant cannot exhaust CPU, memory, pods, volumes, load balancers or request budget in a way that degrades another tenant beyond its configured share.
 
@@ -323,9 +410,7 @@ Rule for this document: where something is still unfixed it is described as hard
 
 **Test.** `tenant-quota.test.ts`, `tenant-abuse-quota.test.ts`, `public-exposure-quota.test.ts`, `quota-zero.test.ts`, `owner-allowance.test.ts`, `org-limits.test.ts`, `resource-limits.test.ts`, `api-throttler.test.ts`, `preauth-rate-limit.test.ts`, `body-limits.test.ts`, `sse-stream-limiter.test.ts`, `redis-throttle.test.ts`.
 
----
-
-## I12. Lifecycle (delete, transfer, restore, revoke)
+### I12. Lifecycle (delete, transfer, restore, revoke)
 
 **Invariant.** After a project, environment, member, token or domain is deleted, transferred or revoked, nothing of it remains reachable by the previous owner or by a successor tenant.
 
@@ -339,11 +424,9 @@ Rule for this document: where something is still unfixed it is described as hard
 
 **Test.** `namespace-teardown-keep.test.ts`, `delete-deployment-builds.test.ts`, `org-event-stream-reauth.test.ts`, `session-jwt.test.ts`, `backup-orphans.test.ts`, `api-token-lineage.test.ts`. Transfer-then-access: none.
 
----
+### Operator decisions and requirements
 
-## Operator decisions and requirements
-
-### Operator-optional (a decision with a cost)
+#### Operator-optional (a decision with a cost)
 
 | Setting                                                                                     | What it does                                                                          | Cost or trade-off                                                                        |
 | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
@@ -359,7 +442,7 @@ Rule for this document: where something is still unfixed it is described as hard
 | `HOSTNAME_STYLE=readable`                                                                   | Readable generated hostnames                                                          | Reveals project and deployment names in DNS and CT logs                                  |
 | `TENANT_DENY_ENTITIES=none`                                                                 | Turns off the Cilium entity denies                                                    | Only if the ingress controller uses hostNetwork and apps call their own hostname         |
 
-### Operator-required (isolation does not hold without it)
+#### Operator-required (isolation does not hold without it)
 
 | Requirement                                                       | Exact setting                                                                                                                                                                                                                            | Why                                                                                                            |
 | ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
@@ -380,9 +463,7 @@ Rule for this document: where something is still unfixed it is described as hard
 | Dedicated registry account                                        | A low-privilege Harbor account, not `admin`, in `HARBOR_USERNAME`                                                                                                                                                                        | The login is shared by all tenants                                                                             |
 | Do not apply `infra/k8s/orchard-metrics/30-network-policies.yaml` | Use the chart's `platform-ingress`                                                                                                                                                                                                       | The manual file lets any namespace query VictoriaMetrics                                                       |
 
----
-
-## Cluster control plane: the server service account
+### Cluster control plane: the server service account
 
 `templates/server-rbac.yaml` grants `orchard-server` a ClusterRole (`<release>-server`) bound cluster-wide. It excludes cluster-wide Secrets and ConfigMaps but is effectively cluster-admin: it can create and exec into pods in any namespace, create roles and role bindings (including binding `<release>-tenant-secrets` anywhere), delete namespaces, network policies and admission policies, and patch nodes. The admission policies `orchard-tenant-rolebindings` and `orchard-managed-namespaces` narrow what it can do inside tenant namespaces, and they fail open.
 
@@ -390,9 +471,7 @@ Consequence: a remote code execution or SSRF in the server is a cluster takeover
 
 Test: `rbac-coverage.test.ts` pins the builder, tailscale and tenant roles against the rendered chart; no test pins the server ClusterRole.
 
----
-
-## What a tenant can learn about other tenants
+### What a tenant can learn about other tenants
 
 | Channel                                                                           | What leaks                                                                                                                                                                                                                                                             | To whom                                            | Reduce                                                                             | Acceptable?                                                            |
 | --------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- | ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
@@ -414,9 +493,7 @@ Test: `rbac-coverage.test.ts` pins the builder, tailscale and tenant roles again
 | Pod-network reachability of published services                                    | Another tenant's `-allow-public` pods answer on their ports                                                                                                                                                                                                            | Tenant pods                                        | By design; same surface as the internet                                            | Acceptable                                                             |
 | Shared node effects                                                               | Under the node runtime, kernel and resource contention side channels                                                                                                                                                                                                   | Co-located tenants                                 | gVisor or Kata, dedicated node pools                                               | Not guaranteed                                                         |
 
----
-
-## Summary table
+### Summary table
 
 | Invariant              | Mechanism now                                                                                              | Required config                                                    | Test                                                                    | Status                                                                 |
 | ---------------------- | ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ | ----------------------------------------------------------------------- | ---------------------------------------------------------------------- |

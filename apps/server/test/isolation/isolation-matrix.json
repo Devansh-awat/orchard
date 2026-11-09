@@ -7,7 +7,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "ALL /scim/v2/{*splat}": {
     "class": "public",
@@ -116,7 +116,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "DELETE /auth/links/:id": {
     "class": "resource-scoped",
@@ -315,7 +315,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "DELETE /forum/threads/:id/replies/:replyId": {
     "class": "exempt",
@@ -325,7 +325,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "DELETE /forum/threads/:id/vote": {
     "class": "exempt",
@@ -335,7 +335,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "DELETE /github/unlink": {
     "class": "own-scope-only",
@@ -354,7 +354,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "DELETE /greenhouse/sandboxes/:id": {
     "class": "exempt",
@@ -364,7 +364,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "DELETE /greenhouse/sandboxes/:id/agents/logins/:loginId": {
     "class": "exempt",
@@ -374,7 +374,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "DELETE /greenhouse/sandboxes/:id/conversations/:cid": {
     "class": "exempt",
@@ -384,7 +384,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "DELETE /greenhouse/sandboxes/:id/links/:projectId": {
     "class": "exempt",
@@ -394,7 +394,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "DELETE /greenhouse/sandboxes/:id/members/:userId": {
     "class": "exempt",
@@ -404,7 +404,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "DELETE /greenhouse/sandboxes/:id/repos/:name": {
     "class": "exempt",
@@ -414,7 +414,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "DELETE /greenhouse/sandboxes/:id/sessions/:sid": {
     "class": "exempt",
@@ -424,7 +424,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "DELETE /greenhouse/sandboxes/:id/sessions/:sid/agent-chats/:cid": {
     "class": "exempt",
@@ -434,7 +434,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "DELETE /greenhouse/sandboxes/:id/sessions/:sid/chats/:chatId": {
     "class": "exempt",
@@ -444,7 +444,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "DELETE /greenhouse/sandboxes/:id/sessions/:sid/preview-deploy": {
     "class": "exempt",
@@ -454,7 +454,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "DELETE /greenhouse/sandboxes/:id/share-links/:linkId": {
     "class": "exempt",
@@ -464,7 +464,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "DELETE /greenhouse/ssh-identities/:id": {
     "class": "exempt",
@@ -474,7 +474,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "DELETE /greenhouse/users/me/integrations/linear": {
     "class": "exempt",
@@ -484,7 +484,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "DELETE /greenhouse/users/me/integrations/slack": {
     "class": "exempt",
@@ -494,7 +494,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "DELETE /jobs/:id": {
     "class": "resource-scoped",
@@ -1161,7 +1161,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "GET /audit-logs/deployment/:id": {
     "class": "resource-scoped",
@@ -1873,7 +1873,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "GET /forum/threads": {
     "class": "exempt",
@@ -1883,7 +1883,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "GET /forum/threads/:id": {
     "class": "exempt",
@@ -1893,7 +1893,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "GET /git/oauth/:provider/callback": {
     "class": "public",
@@ -2047,7 +2047,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "GET /greenhouse/integrations/linear/issues": {
     "class": "exempt",
@@ -2057,7 +2057,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "GET /greenhouse/me/context": {
     "class": "exempt",
@@ -2067,7 +2067,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "GET /greenhouse/me/context/:itemId": {
     "class": "exempt",
@@ -2077,7 +2077,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "GET /greenhouse/sandboxes": {
     "class": "exempt",
@@ -2087,7 +2087,7 @@
     "queryIds": ["organizationId"],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "GET /greenhouse/sandboxes/:id": {
     "class": "exempt",
@@ -2097,7 +2097,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "GET /greenhouse/sandboxes/:id/agent/usage": {
     "class": "exempt",
@@ -2107,7 +2107,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "GET /greenhouse/sandboxes/:id/agents": {
     "class": "exempt",
@@ -2117,7 +2117,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "GET /greenhouse/sandboxes/:id/agents/logins": {
     "class": "exempt",
@@ -2127,7 +2127,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "GET /greenhouse/sandboxes/:id/agents/logins/:loginId": {
     "class": "exempt",
@@ -2137,7 +2137,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "GET /greenhouse/sandboxes/:id/boot": {
     "class": "exempt",
@@ -2147,7 +2147,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "GET /greenhouse/sandboxes/:id/changes": {
     "class": "exempt",
@@ -2157,7 +2157,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "GET /greenhouse/sandboxes/:id/connect": {
     "class": "exempt",
@@ -2167,7 +2167,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "GET /greenhouse/sandboxes/:id/conversations": {
     "class": "exempt",
@@ -2177,7 +2177,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "GET /greenhouse/sandboxes/:id/conversations/:cid/history": {
     "class": "exempt",
@@ -2187,7 +2187,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "GET /greenhouse/sandboxes/:id/diff": {
     "class": "exempt",
@@ -2197,7 +2197,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "GET /greenhouse/sandboxes/:id/dirs": {
     "class": "exempt",
@@ -2207,7 +2207,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "GET /greenhouse/sandboxes/:id/file": {
     "class": "exempt",
@@ -2217,7 +2217,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "GET /greenhouse/sandboxes/:id/git/branches": {
     "class": "exempt",
@@ -2227,7 +2227,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "GET /greenhouse/sandboxes/:id/git/identity": {
     "class": "exempt",
@@ -2237,7 +2237,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "GET /greenhouse/sandboxes/:id/hostkey": {
     "class": "exempt",
@@ -2247,7 +2247,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "GET /greenhouse/sandboxes/:id/issues": {
     "class": "exempt",
@@ -2257,7 +2257,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "GET /greenhouse/sandboxes/:id/links": {
     "class": "exempt",
@@ -2267,7 +2267,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "GET /greenhouse/sandboxes/:id/members": {
     "class": "exempt",
@@ -2277,7 +2277,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "GET /greenhouse/sandboxes/:id/preview-token": {
     "class": "exempt",
@@ -2287,7 +2287,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "GET /greenhouse/sandboxes/:id/repos": {
     "class": "exempt",
@@ -2297,7 +2297,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "GET /greenhouse/sandboxes/:id/sessions": {
     "class": "exempt",
@@ -2307,7 +2307,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "GET /greenhouse/sandboxes/:id/sessions/:sid": {
     "class": "exempt",
@@ -2317,7 +2317,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "GET /greenhouse/sandboxes/:id/sessions/:sid/agent-chats": {
     "class": "exempt",
@@ -2327,7 +2327,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "GET /greenhouse/sandboxes/:id/sessions/:sid/agent-chats/:cid/events": {
     "class": "exempt",
@@ -2337,7 +2337,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "GET /greenhouse/sandboxes/:id/sessions/:sid/agent-chats/:cid/stream": {
     "class": "exempt",
@@ -2347,7 +2347,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "GET /greenhouse/sandboxes/:id/sessions/:sid/authors": {
     "class": "exempt",
@@ -2357,7 +2357,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "GET /greenhouse/sandboxes/:id/sessions/:sid/chats": {
     "class": "exempt",
@@ -2367,7 +2367,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "GET /greenhouse/sandboxes/:id/sessions/:sid/checks": {
     "class": "exempt",
@@ -2377,7 +2377,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "GET /greenhouse/sandboxes/:id/sessions/:sid/comments": {
     "class": "exempt",
@@ -2387,7 +2387,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "GET /greenhouse/sandboxes/:id/sessions/:sid/ports": {
     "class": "exempt",
@@ -2397,7 +2397,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "GET /greenhouse/sandboxes/:id/sessions/:sid/scripts": {
     "class": "exempt",
@@ -2407,7 +2407,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "GET /greenhouse/sandboxes/:id/sessions/:sid/transcript": {
     "class": "exempt",
@@ -2417,7 +2417,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "GET /greenhouse/sandboxes/:id/share-links": {
     "class": "exempt",
@@ -2427,7 +2427,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "GET /greenhouse/sandboxes/:id/ssh": {
     "class": "exempt",
@@ -2437,7 +2437,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "GET /greenhouse/sandboxes/:id/usage": {
     "class": "exempt",
@@ -2447,7 +2447,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "GET /greenhouse/sandboxes/credentials": {
     "class": "exempt",
@@ -2457,7 +2457,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "GET /greenhouse/share/sandbox": {
     "class": "exempt",
@@ -2467,7 +2467,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "GET /greenhouse/share/sandbox/:token": {
     "class": "exempt",
@@ -2477,7 +2477,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "GET /greenhouse/share/sandbox/:token/sessions/:sid/changes": {
     "class": "exempt",
@@ -2487,7 +2487,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "GET /greenhouse/share/sandbox/:token/sessions/:sid/diff": {
     "class": "exempt",
@@ -2497,7 +2497,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "GET /greenhouse/share/sandbox/:token/sessions/:sid/transcript": {
     "class": "exempt",
@@ -2507,7 +2507,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "GET /greenhouse/share/sandbox/sessions/:sid/changes": {
     "class": "exempt",
@@ -2517,7 +2517,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "GET /greenhouse/share/sandbox/sessions/:sid/diff": {
     "class": "exempt",
@@ -2527,7 +2527,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "GET /greenhouse/share/sandbox/sessions/:sid/transcript": {
     "class": "exempt",
@@ -2537,7 +2537,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "GET /greenhouse/ssh-identities": {
     "class": "exempt",
@@ -2547,7 +2547,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "GET /greenhouse/users/me/integrations": {
     "class": "exempt",
@@ -2557,7 +2557,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "GET /greenhouse/users/me/integrations/linear": {
     "class": "exempt",
@@ -2567,7 +2567,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "GET /health": {
     "class": "public",
@@ -4089,7 +4089,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "PATCH /forum/threads/:id/pinned": {
     "class": "exempt",
@@ -4099,7 +4099,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "PATCH /forum/threads/:id/priority": {
     "class": "exempt",
@@ -4109,7 +4109,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "PATCH /forum/threads/:id/status": {
     "class": "exempt",
@@ -4119,7 +4119,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "PATCH /greenhouse/me/context/:itemId": {
     "class": "exempt",
@@ -4129,7 +4129,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "PATCH /greenhouse/sandboxes/:id": {
     "class": "exempt",
@@ -4139,7 +4139,7 @@
     "queryIds": [],
     "bodyIds": ["sshIdentityId"],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "PATCH /greenhouse/sandboxes/:id/conversations/:cid": {
     "class": "exempt",
@@ -4149,7 +4149,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "PATCH /greenhouse/sandboxes/:id/members/:userId": {
     "class": "exempt",
@@ -4159,7 +4159,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "PATCH /greenhouse/sandboxes/:id/sessions/:sid": {
     "class": "exempt",
@@ -4169,7 +4169,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "PATCH /greenhouse/sandboxes/:id/sessions/:sid/agent-chats/:cid": {
     "class": "exempt",
@@ -4179,7 +4179,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "PATCH /jobs/:id": {
     "class": "resource-scoped",
@@ -4558,7 +4558,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "POST /auth/logout": {
     "class": "public",
@@ -5117,7 +5117,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "POST /forum/threads/:id/replies": {
     "class": "exempt",
@@ -5127,7 +5127,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "POST /forum/threads/:id/vote": {
     "class": "exempt",
@@ -5137,7 +5137,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "POST /forum/uploads": {
     "class": "exempt",
@@ -5147,7 +5147,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "POST /git/webhooks/:connectionId": {
     "class": "public",
@@ -5184,7 +5184,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "POST /greenhouse/integrations/slack/commands": {
     "class": "exempt",
@@ -5194,7 +5194,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "POST /greenhouse/integrations/slack/events": {
     "class": "exempt",
@@ -5204,7 +5204,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "POST /greenhouse/integrations/slack/link": {
     "class": "exempt",
@@ -5214,7 +5214,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "POST /greenhouse/integrations/slack/link/preview": {
     "class": "exempt",
@@ -5224,7 +5224,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "POST /greenhouse/me/context/import": {
     "class": "exempt",
@@ -5234,7 +5234,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "POST /greenhouse/sandboxes": {
     "class": "exempt",
@@ -5244,7 +5244,7 @@
     "queryIds": [],
     "bodyIds": ["organizationId", "sshIdentityId"],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "POST /greenhouse/sandboxes/:id/agents/logins": {
     "class": "exempt",
@@ -5254,7 +5254,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "POST /greenhouse/sandboxes/:id/agents/logins/:loginId/answer": {
     "class": "exempt",
@@ -5264,7 +5264,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "POST /greenhouse/sandboxes/:id/apply/retry": {
     "class": "exempt",
@@ -5274,7 +5274,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "POST /greenhouse/sandboxes/:id/chat": {
     "class": "exempt",
@@ -5284,7 +5284,7 @@
     "queryIds": [],
     "bodyIds": ["conversationId"],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "POST /greenhouse/sandboxes/:id/context/sync": {
     "class": "exempt",
@@ -5294,7 +5294,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "POST /greenhouse/sandboxes/:id/conversations": {
     "class": "exempt",
@@ -5304,7 +5304,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "POST /greenhouse/sandboxes/:id/fork": {
     "class": "exempt",
@@ -5314,7 +5314,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "POST /greenhouse/sandboxes/:id/fs/delete": {
     "class": "exempt",
@@ -5324,7 +5324,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "POST /greenhouse/sandboxes/:id/fs/mkdir": {
     "class": "exempt",
@@ -5334,7 +5334,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "POST /greenhouse/sandboxes/:id/fs/rename": {
     "class": "exempt",
@@ -5344,7 +5344,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "POST /greenhouse/sandboxes/:id/git/branch/delete": {
     "class": "exempt",
@@ -5354,7 +5354,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "POST /greenhouse/sandboxes/:id/git/checkout": {
     "class": "exempt",
@@ -5364,7 +5364,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "POST /greenhouse/sandboxes/:id/git/commit": {
     "class": "exempt",
@@ -5374,7 +5374,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "POST /greenhouse/sandboxes/:id/git/fetch": {
     "class": "exempt",
@@ -5384,7 +5384,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "POST /greenhouse/sandboxes/:id/git/pr": {
     "class": "exempt",
@@ -5394,7 +5394,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "POST /greenhouse/sandboxes/:id/git/pull": {
     "class": "exempt",
@@ -5404,7 +5404,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "POST /greenhouse/sandboxes/:id/git/push": {
     "class": "exempt",
@@ -5414,7 +5414,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "POST /greenhouse/sandboxes/:id/git/uncommit": {
     "class": "exempt",
@@ -5424,7 +5424,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "POST /greenhouse/sandboxes/:id/links": {
     "class": "exempt",
@@ -5434,7 +5434,7 @@
     "queryIds": [],
     "bodyIds": ["environmentId", "projectId"],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "POST /greenhouse/sandboxes/:id/members": {
     "class": "exempt",
@@ -5444,7 +5444,7 @@
     "queryIds": [],
     "bodyIds": ["userId"],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "POST /greenhouse/sandboxes/:id/repos": {
     "class": "exempt",
@@ -5454,7 +5454,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "POST /greenhouse/sandboxes/:id/repos/init": {
     "class": "exempt",
@@ -5464,7 +5464,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "POST /greenhouse/sandboxes/:id/repos/link": {
     "class": "exempt",
@@ -5474,7 +5474,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "POST /greenhouse/sandboxes/:id/sessions": {
     "class": "exempt",
@@ -5484,7 +5484,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "POST /greenhouse/sandboxes/:id/sessions/:sid/agent-chats": {
     "class": "exempt",
@@ -5494,7 +5494,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "POST /greenhouse/sandboxes/:id/sessions/:sid/agent-chats/:cid/cancel": {
     "class": "exempt",
@@ -5504,7 +5504,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "POST /greenhouse/sandboxes/:id/sessions/:sid/agent-chats/:cid/config": {
     "class": "exempt",
@@ -5514,7 +5514,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "POST /greenhouse/sandboxes/:id/sessions/:sid/agent-chats/:cid/permission": {
     "class": "exempt",
@@ -5524,7 +5524,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "POST /greenhouse/sandboxes/:id/sessions/:sid/agent-chats/:cid/prompt": {
     "class": "exempt",
@@ -5534,7 +5534,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "POST /greenhouse/sandboxes/:id/sessions/:sid/agent-chats/:cid/revert": {
     "class": "exempt",
@@ -5544,7 +5544,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "POST /greenhouse/sandboxes/:id/sessions/:sid/chats": {
     "class": "exempt",
@@ -5554,7 +5554,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "POST /greenhouse/sandboxes/:id/sessions/:sid/comments": {
     "class": "exempt",
@@ -5564,7 +5564,7 @@
     "queryIds": [],
     "bodyIds": ["chatId"],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "POST /greenhouse/sandboxes/:id/sessions/:sid/git/merge": {
     "class": "exempt",
@@ -5574,7 +5574,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "POST /greenhouse/sandboxes/:id/sessions/:sid/preview-deploy": {
     "class": "exempt",
@@ -5584,7 +5584,7 @@
     "queryIds": [],
     "bodyIds": ["deploymentId", "projectId"],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "POST /greenhouse/sandboxes/:id/sessions/:sid/prompt": {
     "class": "exempt",
@@ -5594,7 +5594,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "POST /greenhouse/sandboxes/:id/sessions/:sid/run": {
     "class": "exempt",
@@ -5604,7 +5604,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "POST /greenhouse/sandboxes/:id/share-links": {
     "class": "exempt",
@@ -5614,7 +5614,7 @@
     "queryIds": [],
     "bodyIds": ["sessionId"],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "POST /greenhouse/sandboxes/:id/start": {
     "class": "exempt",
@@ -5624,7 +5624,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "POST /greenhouse/sandboxes/:id/stop": {
     "class": "exempt",
@@ -5634,7 +5634,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "POST /greenhouse/ssh-identities": {
     "class": "exempt",
@@ -5644,7 +5644,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "POST /greenhouse/ssh-identities/import-github": {
     "class": "exempt",
@@ -5654,7 +5654,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "POST /internal/image-scans/:id/result": {
     "class": "public",
@@ -6447,7 +6447,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "PUT /greenhouse/me/context": {
     "class": "exempt",
@@ -6457,7 +6457,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "PUT /greenhouse/sandboxes/:id/file": {
     "class": "exempt",
@@ -6467,7 +6467,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "PUT /greenhouse/sandboxes/:id/repos/:name/icon": {
     "class": "exempt",
@@ -6477,7 +6477,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "PUT /greenhouse/sandboxes/credentials": {
     "class": "exempt",
@@ -6487,7 +6487,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "PUT /greenhouse/users/me/integrations/linear": {
     "class": "exempt",
@@ -6497,7 +6497,7 @@
     "queryIds": [],
     "bodyIds": [],
     "unseeded": [],
-    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (docs/tenancy-model.md); graft sandboxes are covered in docs/ai-sandbox.md."
+    "reason": "Graft route. Grafts are trusted first-party code loaded only with the graft runtime, and their authority is not an isolation finding (DEVELOPERS.md); graft sandboxes are covered in docs/ai-sandbox.md."
   },
   "PUT /jobs/:id/steps": {
     "class": "resource-scoped",
