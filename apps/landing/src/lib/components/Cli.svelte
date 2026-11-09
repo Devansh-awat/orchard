@@ -9,12 +9,12 @@
 
 	const LINES: Line[] = [
 		{ kind: 'cmd', text: 'orchard auth login' },
-		{ kind: 'ok', text: 'logged in to https://orchard.example.com as leafd' },
+		{ kind: 'ok', text: 'logged in to https://myorchardinstance.orchard.my as leafd' },
 		{ kind: 'cmd', text: 'orchard import owner/repo' },
 		{ kind: 'ok', text: 'imported owner/repo as project repo' },
 		{
 			kind: 'ok',
-			text: 'will be live at https://repo.example.com (visible to your org until made public)'
+			text: 'will be live at https://repo.myorchardinstance.orchard.my (visible to your org until made public)'
 		},
 		{ kind: 'cmd', text: 'orchard deploy scale <id> 3' },
 		{ kind: 'ok', text: 'scaled <id> to 3 replicas' }
@@ -63,7 +63,7 @@
 				bind:this={terminal}
 				class="overflow-hidden rounded-2xl border-4 border-crimson bg-night-900 shadow-[0_40px_80px_-40px_rgb(120_0_20/0.55)]"
 				role="img"
-				aria-label="A terminal: orchard auth login, then orchard import owner/repo imports a repository that will be live at repo.example.com, then orchard deploy scale with the app id scales it to three replicas."
+				aria-label="A terminal: orchard auth login, then orchard import owner/repo imports a repository that will be live at repo.myorchardinstance.orchard.my, then orchard deploy scale with the app id scales it to three replicas."
 			>
 				<div
 					class="flex items-center justify-between border-b border-night-700 px-4 py-3 font-mono text-[12px] text-night-300"
