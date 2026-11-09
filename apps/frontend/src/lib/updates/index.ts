@@ -1,5 +1,16 @@
-import { marked } from 'marked';
+import { Marked } from 'marked';
+import { escapeHtml, safeHttpUrl } from '../utils/html';
 import { parseFrontmatter } from './meta';
+
+const notes = new Marked({
+	renderer: {
+		html: ({ text }) => escapeHtml(text),
+		link({ href, tokens }) {
+			return safeHttpUrl(href) ? false : this.parser.parseInline(tokens);
+		},
+		image: ({ href, text }) => (safeHttpUrl(href) ? false : escapeHtml(text))
+	}
+});
 
 export interface UpdateSection {
 	icon: string;
@@ -21,7 +32,7 @@ const HEADING = /^###\s+(?:\[([\w-]+)\]\s*)?(.+)$/;
 
 function render(markdown: string): string {
 	const trimmed = markdown.trim();
-	return trimmed ? (marked.parse(trimmed, { async: false }) as string) : '';
+	return trimmed ? (notes.parse(trimmed, { async: false }) as string) : '';
 }
 
 function parseSections(body: string): { intro: string; sections: UpdateSection[] } {
