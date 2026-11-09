@@ -57,6 +57,7 @@
 		"pixi-filters": "^6.1.5",
 		"pixi.js": "^8.19.0",
 		"posthog-js": "^1.423.2",
+		"skullet": "^0.0.3",
 		"svelte5-chartjs": "^1.0.0"
 	}
 }

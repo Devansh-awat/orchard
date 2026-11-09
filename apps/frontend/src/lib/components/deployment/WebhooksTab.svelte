@@ -9,10 +9,10 @@
 		Input,
 		SegmentedControl,
 		SectionTitle,
-		Skeleton,
 		Swap,
 		ToneTile
 	} from '$lib/components/ui';
+	import DataPane from '$lib/components/ui/DataPane.svelte';
 	import CodeBlock from '$lib/components/ui/CodeBlock.svelte';
 	import RelativeTime from '$lib/components/ui/RelativeTime.svelte';
 	import Snippet from '$lib/components/ui/Snippet.svelte';
@@ -53,6 +53,11 @@
 	const newUrl = $derived(newlyCreatedToken ? webhookUrl(newlyCreatedToken) : null);
 	const target = $derived(newUrl ?? '$WEBHOOK_URL');
 	const code = $derived(exampleCode(example, target));
+
+	const SAMPLE_TOKENS: WebhookToken[] = [
+		{ id: 's1', label: 'github-actions', createdAt: '', lastUsedAt: '2024-01-01T00:00:00Z' },
+		{ id: 's2', label: 'deploy-hook', createdAt: '', lastUsedAt: null }
+	];
 
 	function webhookUrl(token: string): string {
 		return `${window.location.origin}/apiv1/webhooks/deploy/${token}`;
@@ -122,41 +127,38 @@
 		</Alert>
 	{/if}
 
-	{#if webhookTokensLoading}
-		<ActivityGroup>
-			{#each [0, 1] as i (i)}
-				<ActivityRow>
-					{#snippet tile()}<Skeleton width="1.75rem" height="1.75rem" rounded="50%" />{/snippet}
-					{#snippet title()}<Skeleton width="8rem" height="0.75rem" />{/snippet}
-					{#snippet meta()}<Skeleton width="5rem" height="0.625rem" />{/snippet}
-				</ActivityRow>
-			{/each}
-		</ActivityGroup>
-	{:else if webhookTokens.length > 0}
-		<ActivityGroup>
-			{#each webhookTokens as token (token.id)}
-				<ActivityRow muted={!token.lastUsedAt}>
-					{#snippet tile()}
-						<ToneTile size={28}><KeyRound size={14} aria-hidden="true" /></ToneTile>
-					{/snippet}
-					{#snippet title()}<span class="name">{token.label || 'Unnamed token'}</span>{/snippet}
-					{#snippet meta()}{lastUsed(token)}{/snippet}
-					{#snippet time()}<RelativeTime date={token.createdAt} />{/snippet}
-					{#snippet actions()}
-						<Button
-							variant="ghost"
-							size="sm"
-							icon={Trash2}
-							label="Delete {token.label || 'token'}"
-							loading={deletingWebhookTokenId === token.id}
-							disabled={deletingWebhookTokenId === token.id}
-							onclick={() => askDelete(token)}
-						/>
-					{/snippet}
-				</ActivityRow>
-			{/each}
-		</ActivityGroup>
-	{/if}
+	<DataPane
+		data={webhookTokensLoading ? null : webhookTokens}
+		sample={SAMPLE_TOKENS}
+		empty={!webhookTokensLoading && webhookTokens.length === 0}
+		label="Loading webhook tokens"
+	>
+		{#snippet children(tokens: WebhookToken[])}
+			<ActivityGroup>
+				{#each tokens as token (token.id)}
+					<ActivityRow muted={!token.lastUsedAt}>
+						{#snippet tile()}
+							<ToneTile size={28}><KeyRound size={14} aria-hidden="true" /></ToneTile>
+						{/snippet}
+						{#snippet title()}<span class="name">{token.label || 'Unnamed token'}</span>{/snippet}
+						{#snippet meta()}{lastUsed(token)}{/snippet}
+						{#snippet time()}<RelativeTime date={token.createdAt} />{/snippet}
+						{#snippet actions()}
+							<Button
+								variant="ghost"
+								size="sm"
+								icon={Trash2}
+								label="Delete {token.label || 'token'}"
+								loading={deletingWebhookTokenId === token.id}
+								disabled={deletingWebhookTokenId === token.id}
+								onclick={() => askDelete(token)}
+							/>
+						{/snippet}
+					</ActivityRow>
+				{/each}
+			</ActivityGroup>
+		{/snippet}
+	</DataPane>
 
 	<div class="examples">
 		<SectionTitle title="Examples">

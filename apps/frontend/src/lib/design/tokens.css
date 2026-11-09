@@ -197,6 +197,8 @@
 
 	--skeleton-base: color-mix(in srgb, var(--ink) 9%, transparent);
 	--skeleton-sheen: color-mix(in srgb, var(--ink) 4%, transparent);
+	--skullet-base: var(--skeleton-base);
+	--skullet-highlight: var(--skeleton-sheen);
 
 	--space-1: 0.25rem;
 	--space-2: 0.5rem;

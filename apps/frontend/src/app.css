@@ -1,4 +1,5 @@
 @import 'tailwindcss';
+@import 'skullet/styles.css';
 @import './lib/design/scales.css';
 @import './lib/design/tokens.css';
 @import './lib/design/springs.css';
