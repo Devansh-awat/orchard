@@ -14,7 +14,7 @@ concurrency:
 jobs:
   upload:
     if: github.repository == 'hackclub/orchard' && github.ref == 'refs/heads/main'
-    runs-on: depot-ubuntu-latest
+    runs-on: ubuntu-latest
     environment: registry
     permissions:
       contents: read

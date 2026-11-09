@@ -16,7 +16,7 @@ concurrency:
 jobs:
   # Decide which components changed so the rest can skip natively (no runner).
   changes:
-    runs-on: depot-ubuntu-latest
+    runs-on: ubuntu-latest
     outputs:
       frontend: ${{ steps.filter.outputs.frontend }}
       server: ${{ steps.filter.outputs.server }}
@@ -113,7 +113,7 @@ jobs:
               - '.github/workflows/**'
 
   lint:
-    runs-on: depot-ubuntu-latest
+    runs-on: ubuntu-latest
     env:
       SAME_REPO: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
     steps:
@@ -167,7 +167,7 @@ jobs:
         run: node apps/frontend/scripts/check-design.mjs
 
   commitlint:
-    runs-on: depot-ubuntu-latest
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
@@ -177,7 +177,7 @@ jobs:
           configFile: ./commitlint.config.cjs
 
   secret-scan:
-    runs-on: depot-ubuntu-latest
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
@@ -189,7 +189,7 @@ jobs:
   audit:
     needs: changes
     if: needs.changes.outputs.deps == 'true'
-    runs-on: depot-ubuntu-latest
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
@@ -202,7 +202,7 @@ jobs:
   frontend:
     needs: changes
     if: needs.changes.outputs.frontend == 'true'
-    runs-on: depot-ubuntu-latest
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
@@ -221,7 +221,7 @@ jobs:
   typecheck:
     needs: changes
     if: needs.changes.outputs.frontend == 'true' || needs.changes.outputs.server == 'true' || needs.changes.outputs.contracts == 'true'
-    runs-on: depot-ubuntu-latest
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
@@ -242,7 +242,7 @@ jobs:
   server-build-test:
     needs: changes
     if: needs.changes.outputs.server == 'true'
-    runs-on: depot-ubuntu-latest
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
@@ -485,7 +485,7 @@ jobs:
   e2e:
     needs: changes
     if: needs.changes.outputs.server == 'true'
-    runs-on: depot-ubuntu-latest
+    runs-on: ubuntu-latest
     services:
       postgres:
         image: postgres:16
@@ -551,7 +551,7 @@ jobs:
   hostctl:
     needs: changes
     if: needs.changes.outputs.hostctl == 'true'
-    runs-on: depot-ubuntu-latest
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
@@ -563,7 +563,7 @@ jobs:
   go-cli:
     needs: changes
     if: needs.changes.outputs.cli == 'true'
-    runs-on: depot-ubuntu-latest
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
@@ -582,7 +582,7 @@ jobs:
   go-gateway:
     needs: changes
     if: needs.changes.outputs.gateway == 'true'
-    runs-on: depot-ubuntu-latest
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
@@ -593,7 +593,7 @@ jobs:
   go-r2-proxy:
     needs: changes
     if: needs.changes.outputs.r2_proxy == 'true'
-    runs-on: depot-ubuntu-latest
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
@@ -604,7 +604,7 @@ jobs:
   go-fc-builder:
     needs: changes
     if: needs.changes.outputs.fc_builder == 'true'
-    runs-on: depot-ubuntu-latest
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
@@ -615,7 +615,7 @@ jobs:
   go-registry:
     needs: changes
     if: needs.changes.outputs.registry == 'true'
-    runs-on: depot-ubuntu-latest
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
@@ -626,7 +626,7 @@ jobs:
   landing:
     needs: changes
     if: needs.changes.outputs.landing == 'true'
-    runs-on: depot-ubuntu-latest
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
@@ -641,7 +641,7 @@ jobs:
   docs:
     needs: changes
     if: needs.changes.outputs.docs == 'true'
-    runs-on: depot-ubuntu-latest
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
@@ -663,7 +663,7 @@ jobs:
   helm-lint:
     needs: changes
     if: needs.changes.outputs.chart == 'true'
-    runs-on: depot-ubuntu-latest
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
@@ -681,7 +681,7 @@ jobs:
     if: needs.changes.outputs.frontend == 'true' || needs.changes.outputs.server == 'true' || needs.changes.outputs.r2_proxy == 'true' || needs.changes.outputs.fc_builder == 'true'
     strategy:
       matrix:
-        runner: [depot-ubuntu-24.04, depot-ubuntu-24.04-arm]
+        runner: [ubuntu-24.04, ubuntu-24.04-arm]
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0

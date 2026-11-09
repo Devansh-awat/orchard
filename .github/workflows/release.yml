@@ -15,7 +15,7 @@ jobs:
   # notifications that need org secrets.
   release-please:
     if: github.repository == 'hackclub/orchard'
-    runs-on: depot-ubuntu-latest
+    runs-on: ubuntu-latest
     outputs:
       any: ${{ steps.rp1.outputs.releases_created || steps.rp2.outputs.releases_created || steps.rp3.outputs.releases_created }}
       platform: ${{ steps.rp1.outputs['apps/frontend--release_created'] || steps.rp2.outputs['apps/frontend--release_created'] || steps.rp3.outputs['apps/frontend--release_created'] || steps.rp1.outputs['apps/server--release_created'] || steps.rp2.outputs['apps/server--release_created'] || steps.rp3.outputs['apps/server--release_created'] || steps.rp1.outputs['apps/gateway--release_created'] || steps.rp2.outputs['apps/gateway--release_created'] || steps.rp3.outputs['apps/gateway--release_created'] || steps.rp1.outputs['apps/cli--release_created'] || steps.rp2.outputs['apps/cli--release_created'] || steps.rp3.outputs['apps/cli--release_created'] || steps.rp1.outputs['apps/r2-proxy--release_created'] || steps.rp2.outputs['apps/r2-proxy--release_created'] || steps.rp3.outputs['apps/r2-proxy--release_created'] || steps.rp1.outputs['apps/registry--release_created'] || steps.rp2.outputs['apps/registry--release_created'] || steps.rp3.outputs['apps/registry--release_created'] || steps.rp1.outputs['apps/fc-builder--release_created'] || steps.rp2.outputs['apps/fc-builder--release_created'] || steps.rp3.outputs['apps/fc-builder--release_created'] }}
@@ -174,7 +174,7 @@ jobs:
   sandbox-version:
     needs: release-please
     if: needs.release-please.outputs.sandbox == 'true' || needs.release-please.outputs.cli == 'true'
-    runs-on: depot-ubuntu-latest
+    runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
@@ -213,7 +213,7 @@ jobs:
   cli-binaries:
     needs: release-please
     if: needs.release-please.outputs.cli == 'true'
-    runs-on: depot-ubuntu-latest
+    runs-on: ubuntu-latest
     permissions:
       contents: write
       id-token: write
@@ -285,7 +285,7 @@ jobs:
   updates:
     needs: release-please
     if: needs.release-please.outputs.ui == 'true'
-    runs-on: depot-ubuntu-latest
+    runs-on: ubuntu-latest
     environment: registry
     permissions:
       contents: read
@@ -336,7 +336,7 @@ jobs:
   grafts:
     needs: release-please
     if: contains(needs.release-please.outputs.paths_released, 'grafts/')
-    runs-on: depot-ubuntu-latest
+    runs-on: ubuntu-latest
     environment: registry
     concurrency:
       group: graft-registry
@@ -405,7 +405,7 @@ jobs:
   npm-publish:
     needs: release-please
     if: github.event_name == 'workflow_dispatch' || needs.release-please.outputs.graft_sdk == 'true' || needs.release-please.outputs.graft_ui == 'true'
-    runs-on: depot-ubuntu-latest
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       id-token: write
@@ -446,7 +446,7 @@ jobs:
         && needs.image-mcp.result != 'failure'
         && needs.image-r2-proxy.result != 'failure'
         && needs.image-fc-builder.result != 'failure' }}
-    runs-on: depot-ubuntu-latest
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
@@ -483,7 +483,7 @@ jobs:
   deploy-marker:
     needs: [release-please, publish-chart]
     if: ${{ !cancelled() && needs.release-please.outputs.platform == 'true' && needs.publish-chart.result == 'success' }}
-    runs-on: depot-ubuntu-latest
+    runs-on: ubuntu-latest
     steps:
       - name: Datadog deploy markers
         env:
@@ -518,7 +518,7 @@ jobs:
   flux-notify:
     needs: [release-please, publish-chart]
     if: ${{ !cancelled() && needs.release-please.outputs.platform == 'true' && needs.publish-chart.result == 'success' }}
-    runs-on: depot-ubuntu-latest
+    runs-on: ubuntu-latest
     steps:
       - name: Trigger Flux reconcile
         env:
