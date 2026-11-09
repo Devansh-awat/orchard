@@ -50,6 +50,8 @@ Upgrading CloudNativePG does not restart your databases, because the installer t
 
 An upgrade turns on, once, features that newer releases run by default. Orchard prints each change. If you turn a feature off afterward, it stays off. For the list, refer to [New defaults on an existing host](/operate/host-commands/#new-defaults-on-an-existing-host).
 
+`orchardctl update` also sets `kernel.apparmor_restrict_unprivileged_userns` to `0` where it is `1`, such as on Ubuntu 24.04, because rootless builds need user namespaces. It skips this when `builderSandbox.enabled` or `builders.allowPrivilegedOnHost` is `true`.
+
 ## Re-run the installer
 
 You can also re-run the installer on an existing host. A re-run:

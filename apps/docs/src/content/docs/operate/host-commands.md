@@ -450,6 +450,7 @@ The command runs the following steps:
 | `/usr/local/bin/helm`, `/usr/local/bin/yq`                                     | Tools that the installer downloaded.          |
 | `/etc/rancher`, `/var/lib/rancher`                                             | What remains of k3s.                          |
 | `/var/lib/vector-orchard`, `/etc/cni`                                          | Log checkpoints and CNI configuration.        |
+| `/etc/sysctl.d/90-orchard-builds.conf`                                         | The kernel setting for rootless builds.       |
 | `~/.kube`, and helm's directories in `~/.config`, `~/.cache`, `~/.local/share` | Root's kubectl and helm state.                |
 
 If `k3s-uninstall.sh` fails, the command stops and keeps `orchardctl` and the values file, so you can run it again.
