@@ -60,7 +60,7 @@ To install Orchard on the machine:
 1. Run the installer:
 
    ```bash
-   sudo bash -c "$(curl -fsSL https://assets.orchard.my/install.sh)"
+   curl -fsSL https://assets.orchard.my/install.sh -o orchard-install.sh && sudo bash orchard-install.sh
    ```
 
 2. Answer the questions. Each question shows a default in brackets. To accept it, press Enter. For the full list, refer to [Installer questions](#installer-questions).
@@ -74,7 +74,7 @@ To install Orchard on the machine:
 The installer writes its settings to `/etc/orchard/values.yaml` and to the Orchard database. Next, [claim the instance](#claim-the-instance).
 
 :::note
-Use `bash -c` as shown. If you pipe the script into `sudo bash` with no flags, the installer cannot read your answers, so it stops before it installs anything.
+Download the script to a file and run it, as shown. If you pipe the script into `sudo bash` with no flags, the installer cannot read your answers, so it stops before it installs anything. Do not pass the script to `bash -c`, because it is too long for a single command-line argument.
 :::
 
 To read the script before you run it:
@@ -186,7 +186,7 @@ To move an instance from `sslip.io` to a domain you own:
 1. Run the installer again:
 
    ```bash
-   sudo bash -c "$(curl -fsSL https://assets.orchard.my/install.sh)"
+   curl -fsSL https://assets.orchard.my/install.sh -o orchard-install.sh && sudo bash orchard-install.sh
    ```
 
 2. On the review screen, type the number of **Dashboard**, and enter your domain. The apps domain, the MCP hostname, and the custom domains target follow it.
@@ -345,7 +345,7 @@ A `lan` install serves the dashboard on the addresses that the machine has at in
 To serve on other ports, pass `--http-port` and `--https-port`. Only `lan` mode accepts these flags.
 
 ```bash
-sudo bash -c "$(curl -fsSL https://assets.orchard.my/install.sh)" -- \
+curl -fsSL https://assets.orchard.my/install.sh -o orchard-install.sh && sudo bash orchard-install.sh \
   --mode lan --http-port 8080 --https-port 8443
 ```
 
