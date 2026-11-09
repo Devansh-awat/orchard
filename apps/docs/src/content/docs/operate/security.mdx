@@ -217,6 +217,18 @@ This setting is optional, and the default is empty, which changes nothing. Sandb
 
 The Tailscale proxy pod is created by Orchard. It uses the tenant runtime class (`TENANT_RUNTIME_CLASS`), drops all capabilities, and runs in userspace mode, so it needs neither `NET_ADMIN` nor `NET_RAW`. Its image defaults to `ghcr.io/tailscale/tailscale:latest`. Set `TAILSCALE_IMAGE` to a version tag or digest to pin it. Existing proxy pods pick up these settings when you next re-enable Tailscale on the app.
 
+## Control-plane permissions
+
+The chart creates the `orchard-server` ServiceAccount, a `<release>-server` ClusterRole, and a namespaced Role for leader-election Leases.
+
+Orchard creates tenant namespaces at runtime, so its write permissions are cluster-scoped. They cover namespaces, pods (with exec, attach, and port-forward), Deployments, Services, Ingresses, PersistentVolumeClaims, NetworkPolicies, Jobs, CronJobs, EndpointSlices, and CloudNativePG resources, plus read and patch on nodes.
+
+Secrets and ConfigMaps are not in that ClusterRole. A second ClusterRole, `<release>-tenant-secrets`, covers only those two. The server's role can `bind` that one ClusterRole by name and no other. When the server creates a tenant namespace, it adds a RoleBinding there, so it gets access to Secrets only in the namespaces it creates. The chart passes the name in `TENANT_SECRETS_CLUSTER_ROLE`. Without that variable, the server creates a Role in each namespace instead.
+
+If you set `KUBECONFIG_PATH` or `KUBECONFIG_BASE64`, the server uses the identity in that file and ignores the ServiceAccount, so the ClusterRole no longer limits it. Use the in-cluster ServiceAccount unless the control plane runs outside the cluster it manages.
+
+If Cilium is your CNI, set `cilium.enabled: true` to add the permissions for `CiliumNetworkPolicy` and `CiliumEnvoyConfig`.
+
 ## Requirements for untrusted code
 
 Code is untrusted if someone can run a process that you did not write. This includes letting other people deploy from their own repositories. In that case, set up all of the following:
