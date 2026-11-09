@@ -90,6 +90,7 @@ You can roll back the release with `helm rollback`. If the new version migrated 
 
 ## Related resources
 
+- [Back up and restore an instance](/operate/backup-and-restore/)
 - [Host commands](/operate/host-commands/)
 - [Go to production](/operate/production/)
 - [Install](/start/install/)

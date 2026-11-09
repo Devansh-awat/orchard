@@ -365,6 +365,7 @@ export default defineConfig({
               label: 'Data and logs',
               collapsed: true,
               items: [
+                { label: 'Back up and restore', slug: 'operate/backup-and-restore' },
                 { label: 'Database dumps', slug: 'operate/database-dumps' },
                 { label: 'Logs and request data', slug: 'operate/logs' },
                 { label: 'Usage reports', slug: 'operate/telemetry' },
