@@ -1,14 +1,6 @@
 <script lang="ts">
 	import { LogOut, Monitor, Smartphone } from 'lucide-svelte';
-	import {
-		Alert,
-		Badge,
-		Button,
-		List,
-		ListRow,
-		SectionCard,
-		ToneTile
-	} from '$lib/components/ui';
+	import { Alert, Badge, Button, List, ListRow, SectionCard, ToneTile } from '$lib/components/ui';
 	import DataPane from '$lib/components/ui/DataPane.svelte';
 	import RelativeTime from '$lib/components/ui/RelativeTime.svelte';
 
@@ -121,6 +113,7 @@
 										variant="ghost"
 										icon={LogOut}
 										label={`Sign out ${session.deviceName || 'this device'}`}
+										{...{ 'skullet-ignore': '' }}
 										loading={revokingSessionId === session.id}
 										onclick={() => onConfirmRevokeSession(session)}
 									/>

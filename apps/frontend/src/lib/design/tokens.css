@@ -463,6 +463,10 @@ html.motion-reduce *::after {
 	animation-iteration-count: 1 !important;
 }
 
+html.motion-reduce {
+	--skullet-animation: none;
+}
+
 html.motion-off *,
 html.motion-off *::before,
 html.motion-off *::after {

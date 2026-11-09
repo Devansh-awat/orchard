@@ -1073,8 +1073,6 @@
 	let cancelingBuild = $state(false);
 
 	let webhookTokens = $state<WebhookToken[]>([]);
-	let webhookTokensLoading = $state(false);
-	let webhookTokensFetched = $state(false);
 	let creatingWebhookToken = $state(false);
 	let deletingWebhookTokenId = $state<string | null>(null);
 	let newWebhookLabel = $state('');
@@ -2780,13 +2778,10 @@
 	$effect(() => {
 		if (deploymentId) {
 			webhookTokens = [];
-			webhookTokensFetched = false;
 		}
 	});
 
-	// Refetch webhook tokens every time the deploys tab becomes active. The
-	// first fetch shows a loading state; later ones refresh silently so the
-	// existing list stays visible.
+	// Refetch webhook tokens every time the deploys tab becomes active.
 	$effect(() => {
 		if (tabs.value === 'deploys' && deploymentId) {
 			untrack(() => fetchWebhookTokens());
@@ -2843,7 +2838,6 @@
 	});
 
 	async function fetchWebhookTokens() {
-		if (!webhookTokensFetched) webhookTokensLoading = true;
 		try {
 			const response = await apiFetch(`/apiv1/deployments/${deploymentId}/webhook-tokens`);
 			if (response.ok) {
@@ -2851,9 +2845,6 @@
 			}
 		} catch {
 			// silent
-		} finally {
-			webhookTokensLoading = false;
-			webhookTokensFetched = true;
 		}
 	}
 
@@ -3289,7 +3280,6 @@
 							{isDockerImageDeployment}
 							deploymentId={deployment.id}
 							{webhookTokens}
-							{webhookTokensLoading}
 							{creatingWebhookToken}
 							{deletingWebhookTokenId}
 							bind:newlyCreatedToken

@@ -12,16 +12,15 @@
 		Swap,
 		ToneTile
 	} from '$lib/components/ui';
-	import DataPane from '$lib/components/ui/DataPane.svelte';
 	import CodeBlock from '$lib/components/ui/CodeBlock.svelte';
 	import RelativeTime from '$lib/components/ui/RelativeTime.svelte';
 	import Snippet from '$lib/components/ui/Snippet.svelte';
 	import Widget from '$lib/components/ui/Widget.svelte';
 	import type { WebhookToken } from '$lib/types/deployment';
+	import { presence } from '$lib/utils/transitions';
 
 	let {
 		webhookTokens,
-		webhookTokensLoading,
 		creatingWebhookToken,
 		deletingWebhookTokenId,
 		newlyCreatedToken = $bindable(null),
@@ -30,7 +29,6 @@
 	}: {
 		deploymentId: string;
 		webhookTokens: WebhookToken[];
-		webhookTokensLoading: boolean;
 		creatingWebhookToken: boolean;
 		deletingWebhookTokenId: string | null;
 		newlyCreatedToken?: string | null;
@@ -53,11 +51,6 @@
 	const newUrl = $derived(newlyCreatedToken ? webhookUrl(newlyCreatedToken) : null);
 	const target = $derived(newUrl ?? '$WEBHOOK_URL');
 	const code = $derived(exampleCode(example, target));
-
-	const SAMPLE_TOKENS: WebhookToken[] = [
-		{ id: 's1', label: 'github-actions', createdAt: '', lastUsedAt: '2024-01-01T00:00:00Z' },
-		{ id: 's2', label: 'deploy-hook', createdAt: '', lastUsedAt: null }
-	];
 
 	function webhookUrl(token: string): string {
 		return `${window.location.origin}/apiv1/webhooks/deploy/${token}`;
@@ -127,15 +120,10 @@
 		</Alert>
 	{/if}
 
-	<DataPane
-		data={webhookTokensLoading ? null : webhookTokens}
-		sample={SAMPLE_TOKENS}
-		empty={!webhookTokensLoading && webhookTokens.length === 0}
-		label="Loading webhook tokens"
-	>
-		{#snippet children(tokens: WebhookToken[])}
+	{#if webhookTokens.length > 0}
+		<div in:presence out:presence>
 			<ActivityGroup>
-				{#each tokens as token (token.id)}
+				{#each webhookTokens as token (token.id)}
 					<ActivityRow muted={!token.lastUsedAt}>
 						{#snippet tile()}
 							<ToneTile size={28}><KeyRound size={14} aria-hidden="true" /></ToneTile>
@@ -157,8 +145,8 @@
 					</ActivityRow>
 				{/each}
 			</ActivityGroup>
-		{/snippet}
-	</DataPane>
+		</div>
+	{/if}
 
 	<div class="examples">
 		<SectionTitle title="Examples">

@@ -12,7 +12,6 @@
 		isDockerImageDeployment = false,
 		deploymentId,
 		webhookTokens = [],
-		webhookTokensLoading = false,
 		creatingWebhookToken = false,
 		deletingWebhookTokenId = null,
 		newlyCreatedToken = $bindable(null),
@@ -29,7 +28,6 @@
 		isDockerImageDeployment?: boolean;
 		deploymentId: string;
 		webhookTokens?: WebhookToken[];
-		webhookTokensLoading?: boolean;
 		creatingWebhookToken?: boolean;
 		deletingWebhookTokenId?: string | null;
 		newlyCreatedToken?: string | null;
@@ -45,7 +43,6 @@
 		<WebhooksTab
 			{deploymentId}
 			{webhookTokens}
-			{webhookTokensLoading}
 			{creatingWebhookToken}
 			{deletingWebhookTokenId}
 			bind:newlyCreatedToken
