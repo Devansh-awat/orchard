@@ -1,7 +1,8 @@
 # Orchard: Agent Guide
 
 Orchard is a PaaS that installs into a Kubernetes cluster you own. This file is for agents changing
-this repo. To drive a running instance through the CLI, read `apps/cli/AGENTS.md` instead.
+this repo. To drive a running instance through the CLI, read `apps/cli/AGENTS.md` instead. For how
+the system works, read `DEVELOPERS.md`.
 
 ## Code style
 

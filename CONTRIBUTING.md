@@ -59,6 +59,8 @@ install/               one-command installer
 docs/                  design and architecture notes
 ```
 
+To learn how the system works before you change it, read [DEVELOPERS.md](DEVELOPERS.md).
+
 ## Commits
 
 release-please reads your commits to decide versions and changelogs, so they follow
