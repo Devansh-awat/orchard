@@ -103,6 +103,10 @@ func (p *peer) notify(method string, params any) error {
 }
 
 func (p *peer) call(ctx context.Context, method string, params any, out any) error {
+	return p.callThen(ctx, method, params, out, nil)
+}
+
+func (p *peer) callThen(ctx context.Context, method string, params any, out any, sent func()) error {
 	raw, err := json.Marshal(params)
 	if err != nil {
 		return err
@@ -125,6 +129,9 @@ func (p *peer) call(ctx context.Context, method string, params any, out any) err
 		delete(p.pending, key)
 		p.mu.Unlock()
 		return err
+	}
+	if sent != nil {
+		sent()
 	}
 	select {
 	case msg, ok := <-ch:

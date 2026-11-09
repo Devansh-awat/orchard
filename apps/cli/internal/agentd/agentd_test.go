@@ -434,6 +434,38 @@ func TestPromptsSentDuringATurnQueueAndCancelClearsThem(t *testing.T) {
 	}
 }
 
+func TestACancelThatBeatsThePromptToTheAgentStillCancelsIt(t *testing.T) {
+	release := make(chan struct{})
+	reached := make(chan struct{}, 1)
+	beforePrompt = func() {
+		reached <- struct{}{}
+		<-release
+	}
+	t.Cleanup(func() { beforePrompt = func() {} })
+
+	h := newHarness(t)
+	repo := filepath.Join(h.home, "app")
+	gitRepo(t, repo)
+	c := h.dial()
+	st := createChat(t, c, repo, nil)
+	c.must("chat.prompt", map[string]any{"chatId": st.ID, "text": "slow"}, nil)
+	select {
+	case <-reached:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the turn never reached the agent")
+	}
+	c.must("chat.cancel", map[string]any{"chatId": st.ID}, nil)
+	close(release)
+	c.waitFor("cancelled turn", func(ev []Event, _ []rpcMessage) bool {
+		for _, e := range ev {
+			if e.ChatID == st.ID && e.Kind == "turn.end" && strings.Contains(string(e.Data), "cancelled") {
+				return true
+			}
+		}
+		return false
+	})
+}
+
 func TestRevertRestoresTheWorktreeToACheckpoint(t *testing.T) {
 	h := newHarness(t)
 	repo := filepath.Join(h.home, "app")

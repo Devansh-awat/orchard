@@ -264,7 +264,7 @@ func (p *AgentProc) Reattach(ctx context.Context, sessionID, cwd string, mcp []j
 	return nil, false, rpcErr(codeUnavailable, "%s can't reopen an earlier chat", p.spec.Label)
 }
 
-func (p *AgentProc) Prompt(ctx context.Context, sessionID string, blocks []json.RawMessage, meta map[string]any) (string, error) {
+func (p *AgentProc) Prompt(ctx context.Context, sessionID string, blocks []json.RawMessage, meta map[string]any, sent ...func()) (string, error) {
 	params := map[string]any{"sessionId": sessionID, "prompt": blocks}
 	if len(meta) > 0 {
 		params["_meta"] = meta
@@ -272,7 +272,11 @@ func (p *AgentProc) Prompt(ctx context.Context, sessionID string, blocks []json.
 	var out struct {
 		StopReason string `json:"stopReason"`
 	}
-	if err := p.peer.call(ctx, "session/prompt", params, &out); err != nil {
+	var after func()
+	if len(sent) > 0 {
+		after = sent[0]
+	}
+	if err := p.peer.callThen(ctx, "session/prompt", params, &out, after); err != nil {
 		return "", err
 	}
 	if out.StopReason == "" {

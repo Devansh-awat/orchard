@@ -126,7 +126,11 @@ func runFakeAgent() {
 			}
 			f.mu.Unlock()
 		case "session/prompt":
-			go f.prompt(msg.ID, session, p)
+			ch := make(chan struct{})
+			f.mu.Lock()
+			f.cancel[session] = ch
+			f.mu.Unlock()
+			go f.prompt(msg.ID, session, p, ch)
 		default:
 			f.send(map[string]any{"jsonrpc": "2.0", "id": msg.ID, "error": map[string]any{"code": -32601, "message": "nope"}})
 		}
@@ -145,7 +149,7 @@ func loadHistory(cwd, session string) []string {
 	return strings.Split(strings.TrimSpace(string(raw)), "\n")
 }
 
-func (f *fakeAgent) prompt(id json.RawMessage, session string, p map[string]any) {
+func (f *fakeAgent) prompt(id json.RawMessage, session string, p map[string]any, cancelled chan struct{}) {
 	text := ""
 	if blocks, ok := p["prompt"].([]any); ok && len(blocks) > 0 {
 		if b, ok := blocks[0].(map[string]any); ok {
@@ -187,12 +191,8 @@ func (f *fakeAgent) prompt(id json.RawMessage, session string, p map[string]any)
 		f.update(session, map[string]any{"sessionUpdate": "tool_call_update", "toolCallId": "t2", "status": status})
 	}
 	if text == "slow" {
-		ch := make(chan struct{})
-		f.mu.Lock()
-		f.cancel[session] = ch
-		f.mu.Unlock()
 		select {
-		case <-ch:
+		case <-cancelled:
 			reply("cancelled")
 			return
 		case <-time.After(10 * time.Second):

@@ -75,12 +75,13 @@ type pendingPerm struct {
 }
 
 type Chat struct {
-	d    *Daemon
-	dir  string
-	mu   sync.Mutex
-	meta ChatMeta
-	seq  int64
-	log  *os.File
+	d      *Daemon
+	dir    string
+	mu     sync.Mutex
+	sendMu sync.Mutex
+	meta   ChatMeta
+	seq    int64
+	log    *os.File
 
 	proc        *AgentProc
 	starting    chan struct{}
@@ -609,6 +610,8 @@ func (c *Chat) ensureProc(ctx context.Context) (*AgentProc, error) {
 	return proc, nil
 }
 
+var beforePrompt = func() {}
+
 func (c *Chat) runTurn(blocks []json.RawMessage, meta map[string]any, ownsTurn bool, gen int) {
 	ctx := context.Background()
 	finish := func(kind string, data any) {
@@ -646,15 +649,26 @@ func (c *Chat) runTurn(blocks []json.RawMessage, meta map[string]any, ownsTurn b
 		c.appendLocked("turn.start", nil, nil)
 		c.mu.Unlock()
 	}
+	beforePrompt()
+	c.sendMu.Lock()
 	c.mu.Lock()
 	sessionID := c.meta.AgentSessionID
 	cancelled := c.cancelGen != gen || c.deleted
 	c.mu.Unlock()
 	if cancelled {
+		c.sendMu.Unlock()
 		finish("turn.end", map[string]string{"stopReason": "cancelled"})
 		return
 	}
-	stop, err := proc.Prompt(ctx, sessionID, blocks, meta)
+	unlocked := false
+	release := func() {
+		if !unlocked {
+			unlocked = true
+			c.sendMu.Unlock()
+		}
+	}
+	stop, err := proc.Prompt(ctx, sessionID, blocks, meta, release)
+	release()
 	if err != nil {
 		c.mu.Lock()
 		if !c.deleted {
@@ -683,18 +697,21 @@ func (d *Daemon) cancel(chatID string, author *Author) (any, error) {
 		return nil, err
 	}
 	c.mu.Lock()
-	defer c.mu.Unlock()
 	c.queue = nil
 	c.cancelGen++
 	for id, p := range c.perms {
 		close(p.answer)
 		delete(c.perms, id)
 	}
-	if c.proc != nil {
-		_ = c.proc.Cancel(c.meta.AgentSessionID)
-	}
+	proc, sessionID := c.proc, c.meta.AgentSessionID
 	c.appendLocked("cancel", author, nil)
 	c.setActivityLocked()
+	c.mu.Unlock()
+	if proc != nil {
+		c.sendMu.Lock()
+		_ = proc.Cancel(sessionID)
+		c.sendMu.Unlock()
+	}
 	return map[string]bool{"ok": true}, nil
 }
 
