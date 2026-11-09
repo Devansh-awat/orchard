@@ -11,6 +11,10 @@ If you run a modified version of Orchard that other people use over a network, y
 
 The AGPL adds no further requirement if you run an unmodified version.
 
+## Names and logos
+
+The AGPL covers Orchard's code, not the Orchard and Hack Club names and logos. If you distribute a modified version, rebrand it first. Running unmodified copies and saying factually what your software works with is fine. See [TRADEMARK.md](https://github.com/hackclub/orchard/blob/main/TRADEMARK.md).
+
 ## Third-party notices
 
 Each part of Orchard includes the copyright notices and license texts of the open-source software built into it.
