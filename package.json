@@ -2,6 +2,7 @@
   "name": "orchard",
   "version": "1.0.0",
   "private": true,
+  "license": "AGPL-3.0-only",
   "packageManager": "pnpm@11.1.2",
   "scripts": {
     "dev": "pnpm --parallel --stream --filter frontend --filter server --filter gateway dev",
