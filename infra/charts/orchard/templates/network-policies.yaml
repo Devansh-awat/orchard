@@ -32,6 +32,40 @@ spec:
         - namespaceSelector:
             matchExpressions:
               {{- include "orchard.trustedNamespaceExpressions" $ | nindent 14 }}
+{{- $pushers := list }}
+{{- if $.Values.builders.enabled }}{{- $pushers = append $pushers (dict "name" "builds" "from" $.Values.builders.namespace "targets" $.Values.builders.registryEgress) }}{{- end }}
+{{- if $.Values.fcBuilder.enabled }}{{- $pushers = append $pushers (dict "name" "fc-builds" "from" $.Values.fcBuilder.namespace "targets" $.Values.fcBuilder.registryEgress) }}{{- end }}
+{{- if $.Values.trivy.enabled }}{{- $pushers = append $pushers (dict "name" "scans" "from" $.Values.trivy.namespace "targets" $.Values.builders.registryEgress) }}{{- end }}
+{{- range $pusher := $pushers }}
+{{- range $index, $target := ($pusher.targets | default list) }}
+{{- if and (eq $target.namespace $ns) $target.podLabels }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: platform-allow-registry-{{ $pusher.name }}-{{ $index }}
+  namespace: {{ $ns }}
+  labels:
+    {{- include "orchard.labels" (dict "root" $ "name" "platform-ingress") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- toYaml $target.podLabels | nindent 6 }}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ $pusher.from }}
+      {{- with $target.ports }}
+      ports:
+        {{- range . }}
+        - { port: {{ .port }}, protocol: {{ .protocol | default "TCP" }} }
+        {{- end }}
+      {{- end }}
+{{- end }}
+{{- end }}
+{{- end }}
 {{- if $ciliumPolicies }}
 ---
 # Cilium sends traffic from its Gateway and from other nodes with the host,
