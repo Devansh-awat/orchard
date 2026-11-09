@@ -350,7 +350,7 @@ usage() {
   Versions and images
     --chart <ref>                ORCHARD_CHART          helm chart, OCI ref or local path
     --chart-version <semver>     ORCHARD_VERSION        pin the chart version and its images
-    --image-tag <tag>            ORCHARD_IMAGE_TAG      image tag for server and frontend
+    --image-tag <tag>            ORCHARD_IMAGE_TAG      moving tag for server and frontend, such as latest
     --image-pull-policy <policy> ORCHARD_IMAGE_PULL_POLICY
     --image-registry <host>      ORCHARD_IMAGE_REGISTRY
     --image-repository <path>    ORCHARD_IMAGE_REPOSITORY
@@ -550,6 +550,12 @@ detect_arch() {
     aarch64|arm64) ARCH=arm64 ;;
     *) die "amd64 or arm64 only; this is $(uname -m)" ;;
   esac
+}
+
+check_image_tag() {
+  answer_given --image-tag ORCHARD_IMAGE_TAG || return 0
+  [[ "$IMAGE_TAG" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+$ ]] || return 0
+  die "--image-tag $IMAGE_TAG is a release version, and the server and frontend are versioned separately. To install that release, use --chart-version ${IMAGE_TAG#v}"
 }
 
 answer_given() {
@@ -4267,6 +4273,7 @@ EOF
 main() {
   parse_args "$@"
   load_previous_answers
+  check_image_tag
 
   if [ "$ASSUME_YES" != true ] && ! open_prompt_fd; then
     warn "$PROMPT_BLOCKED"

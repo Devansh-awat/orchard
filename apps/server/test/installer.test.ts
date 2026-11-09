@@ -2335,3 +2335,19 @@ test('a pinned chart version keeps the images it ships with', () => {
     frontendTag('main')
   );
 });
+
+test('a release version is refused as an image tag', () => {
+  const box = sandbox();
+  try {
+    const check = (env: string, tag: string) =>
+      box.attempt(`${env}; IMAGE_TAG=${tag}; check_image_tag`);
+    const refused = check('FLAGS_GIVEN=" --image-tag "', 'v2.85.0');
+    assert.notEqual(refused.status, 0);
+    assert.match(refused.stdout + refused.stderr, /--chart-version 2\.85\.0/);
+    assert.equal(check('FLAGS_GIVEN=" --image-tag "', 'latest').status, 0);
+    assert.equal(check('FLAGS_GIVEN=" --image-tag "', 'e2e').status, 0);
+    assert.equal(check('FLAGS_GIVEN=" "', '2.85.0').status, 0, 'a saved tag is not an answer');
+  } finally {
+    box.cleanup();
+  }
+});
