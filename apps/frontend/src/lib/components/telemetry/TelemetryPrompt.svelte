@@ -3,7 +3,12 @@
 	import { page } from '$app/stores';
 	import { isSignedIn, isSuperAdmin, showOnboarding, telemetry, toasts, user } from '$lib/stores';
 	import { Modal, Button } from '$lib/components/ui';
-	import { TELEMETRY_PITCH, TELEMETRY_SENT, TELEMETRY_NEVER } from '$lib/telemetry';
+	import {
+		TELEMETRY_PITCH,
+		TELEMETRY_SENT,
+		TELEMETRY_NEVER,
+		TELEMETRY_DOCS_URL
+	} from '$lib/telemetry';
 	import TelemetryPayload from './TelemetryPayload.svelte';
 
 	const quietRoutes = ['/setup', '/invite', '/oauth', '/sso', '/cli', '/mcp', '/auth/protect'];
@@ -74,7 +79,12 @@
 			{/each}
 		</ul>
 
-		<p class="tp-never">{TELEMETRY_NEVER}</p>
+		<p class="tp-never">
+			{TELEMETRY_NEVER}
+			<a class="tp-never-link" href={TELEMETRY_DOCS_URL} target="_blank" rel="noreferrer"
+				>See what is sent</a
+			>
+		</p>
 
 		<button class="tp-peek" onclick={() => (showPayload = !showPayload)}>
 			{showPayload ? 'Hide the report' : 'See the exact report'}
@@ -170,5 +180,10 @@
 		gap: 0.5rem;
 		width: 100%;
 		padding-top: 1rem;
+	}
+	.tp-never-link {
+		color: var(--text-link);
+		text-decoration: underline;
+		text-underline-offset: 2px;
 	}
 </style>

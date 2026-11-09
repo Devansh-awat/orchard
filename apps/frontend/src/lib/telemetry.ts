@@ -10,8 +10,9 @@ export const TELEMETRY_SENT: string[] = [
 	'For an unexpected server error, its type, the route pattern, and the file, function and line in Orchard where it happened.'
 ];
 
-export const TELEMETRY_NEVER =
-	"Only counts and yes/no answers. No names, emails, domains, repositories, environment variables, logs or error messages. IP addresses aren't stored. Every report has a random ID made for this instance. Nothing in it identifies you.";
+export const TELEMETRY_NEVER = 'Orchard collects nothing from users unless statistics are enabled.';
+
+export const TELEMETRY_DOCS_URL = 'https://docs.orchard.my/operate/telemetry/';
 
 export const TELEMETRY_ENV_NOTE =
 	'Set ORCHARD_TELEMETRY=false to turn this off and lock the setting.';

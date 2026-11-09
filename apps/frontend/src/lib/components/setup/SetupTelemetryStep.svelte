@@ -1,7 +1,12 @@
 <script lang="ts">
 	import { Button } from '$lib/components/ui';
 	import { telemetry, toasts } from '$lib/stores';
-	import { TELEMETRY_PITCH, TELEMETRY_SENT, TELEMETRY_NEVER } from '$lib/telemetry';
+	import {
+		TELEMETRY_PITCH,
+		TELEMETRY_SENT,
+		TELEMETRY_NEVER,
+		TELEMETRY_DOCS_URL
+	} from '$lib/telemetry';
 	import TelemetryPayload from '$lib/components/telemetry/TelemetryPayload.svelte';
 
 	let { onDone }: { onDone: () => Promise<void> | void } = $props();
@@ -36,7 +41,12 @@
 				<li>{item}</li>
 			{/each}
 		</ul>
-		<p class="tele-never">{TELEMETRY_NEVER}</p>
+		<p class="tele-never">
+			{TELEMETRY_NEVER}
+			<a class="tele-never-link" href={TELEMETRY_DOCS_URL} target="_blank" rel="noreferrer"
+				>See what is sent</a
+			>
+		</p>
 
 		<div class="tele-peek">
 			<Button variant="ghost" size="sm" onclick={() => (showPayload = !showPayload)}>
@@ -109,5 +119,10 @@
 		border: 1px solid var(--setup-line);
 		background: rgba(255, 255, 255, 0.55);
 		color: var(--setup-ink);
+	}
+	.tele-never-link {
+		color: var(--text-link);
+		text-decoration: underline;
+		text-underline-offset: 2px;
 	}
 </style>

@@ -9,7 +9,7 @@
 		SettingsList,
 		ToggleRow
 	} from '$lib/components/ui';
-	import { TELEMETRY_SENT, TELEMETRY_NEVER } from '$lib/telemetry';
+	import { TELEMETRY_SENT, TELEMETRY_NEVER, TELEMETRY_DOCS_URL } from '$lib/telemetry';
 	import TelemetryPayload from '$lib/components/telemetry/TelemetryPayload.svelte';
 
 	let saving = $state(false);
@@ -69,7 +69,12 @@
 					<li>{item}</li>
 				{/each}
 			</ul>
-			<p class="never">{TELEMETRY_NEVER}</p>
+			<p class="never">
+				{TELEMETRY_NEVER}
+				<a class="never-link" href={TELEMETRY_DOCS_URL} target="_blank" rel="noreferrer"
+					>See what is sent</a
+				>
+			</p>
 
 			<Disclosure title="See the exact report" bind:open={showPayload}>
 				{#if showPayload}
@@ -109,5 +114,10 @@
 		corner-shape: var(--corner);
 		background: var(--bg-sunken);
 		color: var(--text-default);
+	}
+	.never-link {
+		color: var(--text-link);
+		text-decoration: underline;
+		text-underline-offset: 2px;
 	}
 </style>
