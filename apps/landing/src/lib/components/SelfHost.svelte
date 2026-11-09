@@ -24,7 +24,11 @@
 		{
 			title: 'Open source',
 			body: 'Every line of Orchard is public under the',
-			link: { label: 'AGPL', href: links.license, after: ' (the graft SDK is MIT), and it always will be.' }
+			link: {
+				label: 'AGPL',
+				href: links.license,
+				after: ' (the graft SDK is MIT), and it always will be.'
+			}
 		}
 	];
 

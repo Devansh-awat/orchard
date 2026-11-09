@@ -819,11 +819,7 @@
 				class:tile-on={active === 6}
 				class="tile lg:col-span-3"
 			>
-				{@render head(
-					History,
-					'Rollbacks',
-					'Mess something up? Go back to an earlier build.'
-				)}
+				{@render head(History, 'Rollbacks', 'Mess something up? Go back to an earlier build.')}
 				<div class="window h-[150px]" aria-hidden="true">
 					<div
 						class="grid h-full grid-cols-2 items-center gap-3 px-4 sm:grid-cols-[minmax(0,1fr)_minmax(10rem,1.2fr)_minmax(0,1fr)]"
