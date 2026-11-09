@@ -75,7 +75,9 @@ credits.
 ## Conventions
 
 - Commits are Conventional Commits, checked by commitlint in CI, and release-please cuts per-service
-  releases from them. Use `feat:`, `fix:` or `chore:`, subject line only. The scope picks the service
+  releases from them. Use `feat:`, `fix:` or `chore:`, subject line only. The one
+  exception is pull requests from contributors, whose commits need a `Signed-off-by` trailer for the
+  DCO (`git commit -s`). The scope picks the service
   (allowed scopes are in `commitlint.config.cjs`), and an unscoped `feat:` or `fix:` bumps every
   service.
 - Migrations: `pnpm --filter server prisma:migrate`. Never hand-write migration SQL or edit an
