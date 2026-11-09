@@ -83,7 +83,7 @@
 		'set_env_vars',
 		'create_ingress',
 		'get_deployment_metrics',
-		'restore_database_backup'
+		'restore_database'
 	];
 	const TOOLS_B = [
 		'analyze_deployment_resources',

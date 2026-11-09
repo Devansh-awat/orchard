@@ -822,7 +822,7 @@
 				{@render head(
 					History,
 					'Rollbacks',
-					'Mess something up? Go back to any build in one click.'
+					'Mess something up? Go back to an earlier build.'
 				)}
 				<div class="window h-[150px]" aria-hidden="true">
 					<div

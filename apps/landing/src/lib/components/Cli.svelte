@@ -16,8 +16,8 @@
 			kind: 'ok',
 			text: 'will be live at https://repo.orchard.my (visible to your org until made public)'
 		},
-		{ kind: 'cmd', text: 'orchard deploy scale repo 3' },
-		{ kind: 'ok', text: 'scaled repo to 3 replicas' }
+		{ kind: 'cmd', text: 'orchard deploy scale <id> 3' },
+		{ kind: 'ok', text: 'scaled <id> to 3 replicas' }
 	];
 
 	let terminal = $state<HTMLElement | null>(null);
@@ -63,7 +63,7 @@
 				bind:this={terminal}
 				class="overflow-hidden rounded-2xl border-4 border-crimson bg-night-900 shadow-[0_40px_80px_-40px_rgb(120_0_20/0.55)]"
 				role="img"
-				aria-label="A terminal: orchard auth login, then orchard import owner/repo imports a repository that will be live at repo.orchard.my, then orchard deploy scale repo 3 scales it to three replicas."
+				aria-label="A terminal: orchard auth login, then orchard import owner/repo imports a repository that will be live at repo.orchard.my, then orchard deploy scale with the app id scales it to three replicas."
 			>
 				<div
 					class="flex items-center justify-between border-b border-night-700 px-4 py-3 font-mono text-[12px] text-night-300"

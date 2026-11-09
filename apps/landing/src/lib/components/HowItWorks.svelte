@@ -49,7 +49,7 @@
 		},
 		{
 			title: "It's live",
-			body: 'You get an HTTPS URL. Every push after that ships itself.',
+			body: 'You get an HTTPS URL. With the GitHub App, every push ships itself.',
 			ms: 5500
 		}
 	];

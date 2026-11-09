@@ -50,7 +50,7 @@
 		},
 		{
 			title: 'Node pools',
-			body: 'Run AI apps on the GPU box and everything else on the cheap ones.',
+			body: 'Run heavy apps on the big box and everything else on the cheap ones.',
 			yaml: 'kind: Deployment\nspec:\n  template:\n    spec:\n      tolerations:\n        - key: gpu\n          effect: NoSchedule',
 			at: [-26, -22, 12],
 			tilt: 3
