@@ -87,6 +87,17 @@ x-orchard-protection-bypass: <secret>
 
 Orchard removes this header before the request reaches your app.
 
+## How operators enable each type
+
+**Password** and **Username and password** work on every cluster. For **Username and password**, the server checks whether the cluster has the `cilium.io` API group and whether it may create `ciliumenvoyconfigs`:
+
+- With Cilium, Orchard adds an Envoy basic authentication filter in front of the Service. The password covers every path to that Service.
+- Without Cilium, Orchard's protection proxy checks the credentials. The proxy protects the HTTP route, so a pod that can reach the app directly is not affected. To limit that, add a NetworkPolicy.
+
+To force the choice, set `CILIUM_ENABLED` to `true` or `false` on the server.
+
+To let people choose **Project members** on their own domains, set `protection.orchardLogin: true` in the chart. It needs `FRONTEND_URL` to be reachable from where the app is served. The value only controls whether people can choose this type. Turning it off does not remove protection from hosts that already use it, and generated URLs can still start with **Project members**.
+
 ## Limitations
 
 Protection covers HTTP. Raw TCP and UDP ports do not pass through the proxy, so protection does not apply to them.
