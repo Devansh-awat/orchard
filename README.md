@@ -96,7 +96,8 @@ Browse the [Directory](https://docs.orchard.my/directory/) or [Troubleshooting](
 
 ## License
 
-[AGPL-3.0](LICENSE).
+[AGPL-3.0](LICENSE). The license covers the code, not the Orchard and Hack Club names and logos: see
+[TRADEMARK.md](TRADEMARK.md).
 
 ---
 
