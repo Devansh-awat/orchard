@@ -368,7 +368,7 @@ degrades to local-only delivery plus polling.
 | Key | Default | Description |
 |---|---|---|
 | `redis.enabled` | `true` | Deploy Redis and inject `REDIS_URL` into the server. |
-| `redis.image` | `redis:7.4.11-alpine` | Image. |
+| `redis.image` | `redis:8.10.3-alpine` | Image. |
 | `redis.storage` / `storageClass` | `1Gi` / cluster default | The data PVC. |
 | `redis.url` | `""` | Use this URL for `REDIS_URL` instead of the in-cluster Service. |
 | `redis.auth.enabled` | `true` | Require a password. The chart mints one into the `redis-auth` Secret on first install and keeps it on upgrades. Not used with `redis.url`. |

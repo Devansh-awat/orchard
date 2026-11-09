@@ -132,7 +132,7 @@ func values(t *testing.T, raw string) *cli.Values {
 
 func TestReportLeavesAnImageTheUserSet(t *testing.T) {
 	report := reportImage(bundledImage{path: "redis.image", patchOnly: true},
-		values(t, "redis: {image: 'redis:7.4.11-alpine'}"),
+		values(t, "redis: {image: 'redis:8.10.3-alpine'}"),
 		values(t, "redis: {image: 'my.registry/redis:6.0.0'}"),
 		values(t, "{}"),
 		func(string) ([]string, error) { t.Fatal("no registry call for a pinned image"); return nil, nil },
@@ -167,9 +167,9 @@ func TestReportNeverGoesBelowTheChartOrTheLastVersion(t *testing.T) {
 func TestReportKeepsTheVersionWhenARegistryFails(t *testing.T) {
 	failure := errors.New("no route")
 	report := reportImage(bundledImage{path: "redis.image"},
-		values(t, "redis: {image: 'redis:7.4.11-alpine'}"), values(t, "{}"), values(t, "{}"),
+		values(t, "redis: {image: 'redis:8.10.3-alpine'}"), values(t, "{}"), values(t, "{}"),
 		func(string) ([]string, error) { return nil, failure }, nil)
-	if !errors.Is(report.err, failure) || report.chosen != "redis:7.4.11-alpine" {
+	if !errors.Is(report.err, failure) || report.chosen != "redis:8.10.3-alpine" {
 		t.Errorf("got %+v", report)
 	}
 }
