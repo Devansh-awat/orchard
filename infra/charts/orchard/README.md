@@ -681,7 +681,7 @@ outside Orchard.
 |---|---|---|
 | `metrics.enabled` | `true` | Install the orchard-metrics stack. |
 | `metrics.namespace` | `orchard-metrics` | Namespace for the metrics stack. Referenced inside the vmagent scrape config and remote-write URL. |
-| `metrics.clusterLabel` | `leafycluster` | `cluster` label vmagent stamps on every series. |
+| `metrics.clusterLabel` | `orchard` | `cluster` label vmagent stamps on every series. |
 | `metrics.ingress.traefik.namespaces` | `[traefik]` | Namespaces vmagent scrapes the Traefik pods from. Matches the installer. Set to where your own Traefik runs (k3s's bundled one is in `kube-system`). Also sent to the server as `INGRESS_METRICS_TRAEFIK_NAMESPACE`. |
 | `metrics.ingress.traefik.labels` | `{app.kubernetes.io/name: traefik}` | Pod labels that identify the Traefik pods. Combined with the namespace, so a tenant pod with the same label elsewhere is ignored. |
 | `metrics.ingress.traefik.portName` | `metrics` | Container port name of Traefik's Prometheus entrypoint. |

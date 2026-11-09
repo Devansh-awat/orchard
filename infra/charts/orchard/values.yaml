@@ -544,7 +544,7 @@ metrics:
   namespace: orchard-metrics
   # The `cluster` label vmagent stamps on every series. Changing it starts new
   # series, so history before the change stops matching queries that select on it.
-  clusterLabel: leafycluster
+  clusterLabel: orchard
   # Which pods are the real ingress controller. vmagent scrapes only these
   # namespaces and labels, so a tenant pod that copies a label cannot feed
   # forged request or error series. Defaults match the installer (Traefik in
