@@ -44,7 +44,7 @@ func (p *orchardProvider) Schema(_ context.Context, _ provider.SchemaRequest, re
 		Description: "Manage Orchard projects, apps, databases, domains and jobs. Works with Terraform and OpenTofu.",
 		Attributes: map[string]schema.Attribute{
 			"api_url": schema.StringAttribute{
-				Description: "Base URL of the Orchard instance. Falls back to ORCHARD_API_URL, then the CLI config, then the built-in default.",
+				Description: "Base URL of the Orchard instance. Falls back to ORCHARD_API_URL, then the CLI config.",
 				Optional:    true,
 			},
 			"token": schema.StringAttribute{
@@ -71,7 +71,11 @@ func (p *orchardProvider) Configure(ctx context.Context, req provider.ConfigureR
 		token = firstNonEmpty(token, saved.Token)
 	}
 	if apiURL == "" {
-		apiURL = config.DefaultAPIURL
+		resp.Diagnostics.AddError(
+			"No Orchard URL",
+			"Set `api_url` on the provider, export ORCHARD_API_URL, or run `orchard auth login --api-url <url>` first.",
+		)
+		return
 	}
 	if token == "" {
 		resp.Diagnostics.AddError(
