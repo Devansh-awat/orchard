@@ -775,13 +775,22 @@ sudo orchardctl uninstall
 
 The command asks you to type a phrase that names the instance. It removes k3s, the values file that holds your secrets, the update timer, the host commands, Helm, and yq. For the full list, refer to [Host commands](/operate/host-commands/#uninstall).
 
+Backups stored off this machine, your DNS records, and the rules that the installer opened in ufw or firewalld stay in place.
+
 To uninstall from an existing cluster:
 
 ```bash
 helm uninstall orchard -n orchard
 ```
 
-The release does not include the namespaces that Orchard created for apps and databases. Delete those namespaces yourself.
+The release does not include the namespaces that Orchard created for apps and databases. List them, check the list, and then delete them:
+
+```bash
+kubectl get namespaces -l orchard.my/managed=true
+kubectl delete namespaces -l orchard.my/managed=true
+```
+
+A `network` namespace that the chart created also remains. The operators that you installed, such as CloudNativePG, cert-manager, and Traefik, stay in place. Remove them only if nothing else uses them.
 
 ## Next steps
 
