@@ -174,7 +174,9 @@ Then it turns on, once, what newer releases do by default: metrics, the log
 store, the Orchard image scanner and, when no object storage is configured
 anywhere, an S3 store on this server for database backups. Only keys missing from
 the values file are filled in, apart from metrics.enabled and r2Proxy.enabled,
-which older installers wrote as false themselves. Each change is printed. A
+which older installers wrote as false themselves. An install with the bundled
+zot registry but no builders.registryEgress entry for it gets one, since builds
+can't push without it. Each change is printed. A
 hostDefaults key records that this ran, so turning something back off sticks.
 
 Then helm upgrade --install with your values file, waits for each deployment to

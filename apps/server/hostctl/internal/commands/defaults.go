@@ -309,6 +309,8 @@ func migrateValues(c *cli.Context) error {
 	}
 	changes := applyHostDefaults(values, facts)
 	changes = append(changes, retrofitInstallMode(values)...)
+	_, zotErr := c.KubectlOut("get", "svc", "zot", "-o", "name")
+	changes = append(changes, retrofitZotEgress(values, c.Env.Namespace, zotErr == nil)...)
 	volumes := reconcileStatefulVolumes(c, values)
 	if len(changes) == 0 && !volumes {
 		return nil

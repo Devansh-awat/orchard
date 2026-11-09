@@ -86,6 +86,23 @@ func upsert(values *cli.Values, d Destination) {
 	values.SetList(egressPath, append(kept, d.toMap()))
 }
 
+func zotDestination(namespace string) Destination {
+	return Destination{Namespace: namespace, Labels: map[string]string{"app": "zot"}, Ports: []int{5000}}
+}
+
+func retrofitZotEgress(values *cli.Values, namespace string, zotExists bool) []string {
+	if !zotExists {
+		return nil
+	}
+	for _, item := range values.List(egressPath) {
+		if entry, ok := item.(map[string]any); ok && entry["namespace"] == namespace {
+			return nil
+		}
+	}
+	upsert(values, zotDestination(namespace))
+	return []string{fmt.Sprintf("%s: builds may push to zot in %s on 5000", egressPath, namespace)}
+}
+
 func Registry() *cli.Command {
 	return &cli.Command{
 		Name:    "registry",
@@ -138,11 +155,7 @@ Changes are written but not deployed. Add --apply to upgrade afterwards.
 
 			case "zot":
 				// What install.sh deploys: zot in the release namespace on 5000.
-				upsert(values, Destination{
-					Namespace: c.Env.Namespace,
-					Labels:    map[string]string{"app": "zot"},
-					Ports:     []int{5000},
-				})
+				upsert(values, zotDestination(c.Env.Namespace))
 
 			case "allow":
 				d, err := parseDestination(args[1:])
