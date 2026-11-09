@@ -188,6 +188,12 @@ kubectl get challenges -A
 
 **Fix:** On the host, run [`sudo orchardctl login`](/operate/host-commands/#login) or [`sudo orchardctl password set`](/operate/host-commands/#password). To add email, refer to [Set up email](/operate/finishing-setup/#set-up-email).
 
+On a Helm install, print a one-time sign-in link with the following command. To sign in as someone other than the first superadmin, add `--email <ADDRESS>`.
+
+```bash
+kubectl -n orchard exec deploy/server -- node dist/scripts/mint-login-link.js
+```
+
 ## Control plane
 
 ### The installer stops on an IPv6-only server
@@ -243,6 +249,41 @@ sudo orchardctl claim --url mango
 ```bash
 kubectl -n <TENANT_NAMESPACE> get events --sort-by=.lastTimestamp
 ```
+
+### An upgrade says a Certificate cannot be imported
+
+```txt
+Error: UPGRADE FAILED: Unable to continue with update: Certificate "orchard-tls" in namespace "orchard" exists and cannot be imported into the current release: invalid ownership metadata
+```
+
+**Cause:** You created the object by hand, and the chart now manages it.
+
+**Fix:** Give the object to Helm, then run the upgrade again. This keeps the certificate that is already issued.
+
+```bash
+kubectl -n orchard label certificate orchard-tls app.kubernetes.io/managed-by=Helm
+kubectl -n orchard annotate certificate orchard-tls \
+  meta.helm.sh/release-name=orchard \
+  meta.helm.sh/release-namespace=orchard
+```
+
+### An upgrade says another operation is in progress
+
+```txt
+Error: UPGRADE FAILED: another operation (install/upgrade/rollback) is in progress
+```
+
+**Cause:** An earlier Helm operation was interrupted, and the release is stuck in a pending state.
+
+**Fix:** Find the last revision with the status `deployed`, and roll back to it. Then upgrade again.
+
+```bash
+sudo helm -n orchard history orchard
+sudo helm -n orchard rollback orchard <REVISION>
+sudo orchardctl update
+```
+
+If the stuck revision is the first install, there is nothing to roll back to. Uninstall the release, and install it again.
 
 ## Still stuck?
 
