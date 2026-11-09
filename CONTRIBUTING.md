@@ -81,6 +81,24 @@ The scope picks the service that gets released, and the allowed scopes are in
 `commitlint.config.cjs`. An unscoped `feat:` or `fix:` bumps every service. Breaking changes need a
 `!` (`feat!:`) and a `BREAKING CHANGE:` footer.
 
+## Sign your commits
+
+Orchard uses the [Developer Certificate of Origin](DCO). Signing off a commit certifies that you
+wrote it or otherwise have the right to submit it under the project's license. Add the line with `-s`:
+
+```bash
+git commit -s -m "fix(server): stop thingy crashing on Tuesdays"
+```
+
+Git adds `Signed-off-by: Your Name <you@example.com>`, using your configured name and email. It must
+match the commit's author email, and it is the only thing that goes in the commit body. A check on
+each pull request verifies it. If you forgot, sign off the whole branch and force-push it:
+
+```bash
+git rebase --signoff origin/main
+git push --force-with-lease
+```
+
 ## Pull requests
 
 - Branch from `main`, open PRs against `main`.
