@@ -21,6 +21,7 @@ concurrency:
 
 jobs:
   validate:
+    if: github.event_name != 'schedule' || github.repository == 'hackclub/orchard'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
