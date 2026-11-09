@@ -80,9 +80,10 @@ curl "https://orchard.example.com/apiv1/auth/me" \
   --header "Authorization: Bearer <API_TOKEN>"
 ```
 
-To use a token with the CLI, set the `ORCHARD_API_TOKEN` environment variable:
+To use a token with the CLI, set the `ORCHARD_API_URL` and `ORCHARD_API_TOKEN` environment variables:
 
 ```bash
+export ORCHARD_API_URL=https://orchard.example.com
 export ORCHARD_API_TOKEN=<API_TOKEN>
 ```
 

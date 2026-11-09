@@ -39,7 +39,11 @@ orchard auth login --api-url https://orchard.example.com
 
 The command opens a browser. After you approve the request, the CLI stores a token in `~/.orchard/config.json`.
 
-If you run `orchard auth login` without `--api-url`, the CLI asks which instance to use. Enter the URL of your instance. The default answer is Hack Club's own instance.
+The CLI has no default instance. If no instance is set up and you run `orchard auth login` without `--api-url`, the CLI asks for the URL of your instance. The CLI checks that the URL is an Orchard instance, adds a context for it, and continues to sign-in. The first command that needs an instance does the same.
+
+After the first sign-in, `orchard auth login` signs in to the current context. To add another instance, pass `--api-url`.
+
+Without a terminal or in CI, the CLI never asks. If no instance is set up, the command stops with an error. Pass `--api-url` to `orchard auth login` or set `ORCHARD_API_URL`.
 
 ## Work with several instances
 
@@ -54,9 +58,9 @@ orchard context use acme
 
 To run a single command against another instance, pass `--context <name>` or set `ORCHARD_CONTEXT`. Rename a context with `orchard context rename` and forget one, with its token, with `orchard context remove`.
 
-To sign in on a machine with no browser, add `--no-browser`. The CLI prints a URL and the local port that it listens on. Forward that port to your own machine with `ssh -L` before you open the URL. Without a terminal, the CLI cannot ask which instance to use, so also pass `--api-url`.
+To sign in on a machine with no browser, add `--no-browser`. The CLI prints a URL and the local port that it listens on. Forward that port to your own machine with `ssh -L` before you open the URL. Without a terminal, the CLI cannot ask which instance to use, so also pass `--api-url` or set `ORCHARD_API_URL`.
 
-To authenticate a script, set a token in the environment. A token in the environment overrides a stored token.
+To authenticate a script, set the instance URL and a token in the environment. A token in the environment overrides a stored token.
 
 ```bash
 export ORCHARD_API_URL=https://orchard.example.com
