@@ -2315,3 +2315,23 @@ test('rootless builds are allowed only where the host blocks them', () => {
     box.cleanup();
   }
 });
+
+test('a pinned chart version keeps the images it ships with', () => {
+  const rendered = (setup: string) => {
+    const box = sandbox();
+    try {
+      box.run(`mkdir -p "${box.state}"; ${setup}; write_values`);
+      return readFileSync(join(box.state, 'values.yaml'), 'utf8');
+    } finally {
+      box.cleanup();
+    }
+  };
+  const frontendTag = (tag: string) =>
+    new RegExp(`^frontend:\\n  replicas: 1\\n  image:\\n    tag: ${tag}`, 'm');
+  assert.match(rendered('ORCHARD_VERSION='), frontendTag('latest'));
+  assert.doesNotMatch(rendered('ORCHARD_VERSION=2.85.0'), frontendTag('.'));
+  assert.match(
+    rendered('ORCHARD_VERSION=2.85.0; FLAGS_GIVEN=" --image-tag "; IMAGE_TAG=main'),
+    frontendTag('main')
+  );
+});
