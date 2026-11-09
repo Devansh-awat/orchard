@@ -69,6 +69,12 @@ Deactivating or deleting a user signs out their SSO sessions and deletes their A
 
 Orchard records `scim.group.created`, `scim.group.updated`, and `scim.group.deleted` entries in the [audit log](/teams/audit-logs/).
 
+## Provision accounts for the whole instance
+
+To provision accounts from a company directory, a superadmin creates an instance SCIM token at **Instance admin** > **Sign in**. Point your provider's SCIM connector at `https://<your-host>/apiv1/scim/instance/v2`.
+
+The connector creates accounts, renames them, and turns them off. Instance rules decide which organizations people join when they sign in. Organization tokens do not work on this endpoint, and instance tokens do not work on an organization's endpoint.
+
 ## Related resources
 
 - [Set up SSO](/teams/sso/)
