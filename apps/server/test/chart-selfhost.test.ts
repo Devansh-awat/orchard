@@ -195,3 +195,29 @@ test('the frontend learns the vanity domain and where the api really is', { skip
   assert.match(env, /name: PUBLIC_BASE_DOMAIN, value: "apps.example.com"/);
   assert.match(env, /name: PUBLIC_PLATFORM_ORIGIN, value: "https:\/\/orchard.example.com"/);
 });
+
+test('node exporter serves its metrics to vmagent with credentials', { skip }, () => {
+  const docs = parsed(render(['metrics.enabled=true'], minimal));
+  const secret = docs.find((d) => d.kind === 'Secret' && d.metadata.name === 'node-exporter-auth');
+  assert.ok(secret, 'the credentials secret renders');
+  const password = Buffer.from(secret.data.password, 'base64').toString();
+  const web = Buffer.from(secret.data['web.yml'], 'base64').toString();
+  assert.match(web, /^basic_auth_users:\n  vmagent: \$2[aby]\$/);
+  assert.ok(!web.includes(password), 'the web config holds only a hash');
+
+  const exporter = docs.find((d) => d.kind === 'DaemonSet' && d.metadata.name === 'node-exporter');
+  assert.ok(
+    exporter.spec.template.spec.containers[0].args.includes(
+      '--web.config.file=/etc/node-exporter/web.yml'
+    )
+  );
+
+  const agent = docs.find((d) => d.kind === 'Deployment' && d.metadata.name === 'vmagent');
+  const mounts = agent.spec.template.spec.containers[0].volumeMounts.map((m: any) => m.mountPath);
+  assert.ok(mounts.includes('/etc/node-exporter-auth'));
+  const config = docs.find((d) => d.kind === 'ConfigMap' && d.metadata.name === 'vmagent-config');
+  assert.match(
+    Object.values(config.data).join('\n') as string,
+    /job_name: node-exporter\n\s+basic_auth:\n\s+username: vmagent\n\s+password_file: \/etc\/node-exporter-auth\/password/
+  );
+});

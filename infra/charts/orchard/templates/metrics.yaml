@@ -234,6 +234,25 @@ spec:
             capabilities: { drop: ["ALL"] }
             seccompProfile: { type: RuntimeDefault }
 ---
+{{- $nodeExporterAuth := lookup "v1" "Secret" $ns "node-exporter-auth" }}
+{{- $nodeExporterPassword := randAlphaNum 40 }}
+{{- $nodeExporterWeb := printf "basic_auth_users:\n  vmagent: %s\n" (bcrypt $nodeExporterPassword) }}
+{{- if and $nodeExporterAuth $nodeExporterAuth.data (index $nodeExporterAuth.data "password") (index $nodeExporterAuth.data "web.yml") }}
+{{- $nodeExporterPassword = index $nodeExporterAuth.data "password" | b64dec }}
+{{- $nodeExporterWeb = index $nodeExporterAuth.data "web.yml" | b64dec }}
+{{- end }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: node-exporter-auth
+  namespace: {{ $ns }}
+  labels:
+    app: node-exporter
+type: Opaque
+data:
+  password: {{ $nodeExporterPassword | b64enc | quote }}
+  web.yml: {{ $nodeExporterWeb | b64enc | quote }}
+---
 apiVersion: v1
 kind: Service
 metadata:
@@ -274,6 +293,7 @@ spec:
           image: {{ .Values.metrics.nodeExporter.image }}
           args:
             - "--web.listen-address=$(HOST_IP):9100"
+            - "--web.config.file=/etc/node-exporter/web.yml"
             - "--path.procfs=/host/proc"
             - "--path.sysfs=/host/sys"
             - "--path.rootfs=/host/root"
@@ -291,6 +311,7 @@ spec:
             - { name: proc,   mountPath: /host/proc, readOnly: true }
             - { name: sys,    mountPath: /host/sys,  readOnly: true }
             - { name: rootfs, mountPath: /host/root, readOnly: true, mountPropagation: HostToContainer }
+            - { name: auth, mountPath: /etc/node-exporter, readOnly: true }
           resources:
             {{- toYaml .Values.metrics.nodeExporter.resources | nindent 12 }}
           securityContext:
@@ -303,6 +324,12 @@ spec:
         - { name: proc,   hostPath: { path: /proc } }
         - { name: sys,    hostPath: { path: /sys } }
         - { name: rootfs, hostPath: { path: / } }
+        - name: auth
+          secret:
+            secretName: node-exporter-auth
+            defaultMode: 0444
+            items:
+              - { key: web.yml, path: web.yml }
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -371,6 +398,9 @@ data:
             action: keep
 
       - job_name: node-exporter
+        basic_auth:
+          username: vmagent
+          password_file: /etc/node-exporter-auth/password
         kubernetes_sd_configs:
           - role: endpoints
             namespaces: { names: [{{ $ns }}] }
@@ -544,6 +574,7 @@ spec:
           volumeMounts:
             - { name: config, mountPath: /config }
             - { name: tmp,    mountPath: /tmp/vmagent }
+            - { name: node-exporter-auth, mountPath: /etc/node-exporter-auth, readOnly: true }
           readinessProbe:
             httpGet: { path: /health, port: http }
             initialDelaySeconds: 5
@@ -565,4 +596,10 @@ spec:
           configMap: { name: vmagent-config }
         - name: tmp
           emptyDir: { sizeLimit: 1Gi }
+        - name: node-exporter-auth
+          secret:
+            secretName: node-exporter-auth
+            defaultMode: 0444
+            items:
+              - { key: password, path: password }
 {{- end }}
