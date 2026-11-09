@@ -62,7 +62,7 @@
     "test:domains": "tsx --test test/domain-derivation.test.ts",
     "test:scim": "tsx --test test/scim.test.ts",
     "test:org-isolation": "tsx --test test/org-isolation.test.ts",
-    "test:security-hardening": "tsx --test test/security-hardening.test.ts",
+    "test:security-hardening": "tsx --test test/security-hardening.test.ts test/sign-in-location.test.ts",
     "test:compose": "tsx --test test/compose-build.test.ts test/compose-default-branch.test.ts test/compose-network.test.ts test/compose-redeploy.test.ts test/compose-volume-name.test.ts",
     "test:invite-link": "tsx --test test/invite-link.test.ts",
     "test:notifications": "tsx --test test/notification-routing.test.ts test/notification-url-guard.test.ts test/notification-scope-visibility.test.ts",

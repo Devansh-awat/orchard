@@ -8,13 +8,11 @@ import { deviceLabel } from './org-scoped-devices';
 
 export const ACCOUNT_DISABLED = 'account_disabled';
 
-// M-1: Geo enrichment uses ipwho.is over HTTPS with a short timeout. Plain HTTP
-// would leak every login IP in cleartext and let a network attacker forge the
-// "location" stored against the session, enabling social-engineering vectors
-// via the "Active sessions" UI. The leak-to-third-party tradeoff is accepted as
-// the price of avoiding a local DB.
-
 const GEO_LOOKUP_TIMEOUT_MS = 1500;
+
+export function signInLocationEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  return (env.SIGN_IN_LOCATION_LOOKUP || '').trim().toLowerCase() === 'true';
+}
 
 export const MCP_SESSION_AUTH_METHOD = 'mcp';
 
@@ -366,11 +364,11 @@ export class SessionsService {
 
   /**
    * Look up approximate location from IP via ipwho.is over HTTPS. Returns
-   * null for private/local IPs, on timeout, or on any error: geolocation
+   * null when the lookup is off, for private/local IPs, on timeout, or on any error: geolocation
    * is best-effort and must never block auth.
    */
   private async lookupLocation(ip: string): Promise<string | null> {
-    if (!ip || ip === 'unknown' || this.isPrivateIp(ip)) return null;
+    if (!signInLocationEnabled() || !ip || ip === 'unknown' || this.isPrivateIp(ip)) return null;
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), GEO_LOOKUP_TIMEOUT_MS);
