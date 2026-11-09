@@ -72,6 +72,10 @@ Each mount function receives `host`, the graft's interface to Orchard's UI.
 
 `@orchardlabs/graft-ui` is Orchard's component kit, packaged for grafts. It includes components such as `Button`, `SectionCard`, `Field`, `Input`, `Select`, `Modal`, and `EmptyState`.
 
+:::note
+`@orchardlabs/graft-sdk` is MIT licensed, so a graft that only imports it can use any license. `@orchardlabs/graft-ui` is licensed under AGPL-3.0-only. A graft that imports `@orchardlabs/graft-ui` must be released under a license compatible with AGPL-3.0-only, and the AGPL's source-sharing terms apply to it. To use another license, build the graft's UI with `@orchardlabs/graft-sdk` and your own components.
+:::
+
 Orchard sets theme colors, fonts, and spacing as CSS variables on the page. You can use `var(--text-muted)` and `var(--bg-surface)` in a graft's own styles.
 
 A graft bundles its copy of the kit. A graft built against an older Orchard keeps that version's components until you rebuild it. Colors and fonts follow the instance.

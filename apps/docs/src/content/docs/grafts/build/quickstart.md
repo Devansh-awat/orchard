@@ -82,7 +82,7 @@ Keep the private key secret. To let people trust your grafts, share the public k
 
 ## Licenses
 
-`@orchardlabs/graft-sdk` is MIT licensed, so your graft can use any license. `@orchardlabs/graft-ui` is a copy of Orchard's components and is licensed under AGPL-3.0-only. A graft that bundles it shares that license.
+`@orchardlabs/graft-sdk` is MIT licensed, so a graft that only imports it can use any license. `@orchardlabs/graft-ui` is licensed under AGPL-3.0-only. A graft that imports `@orchardlabs/graft-ui` must be released under a license compatible with AGPL-3.0-only, and the AGPL's source-sharing terms apply to it. To use another license, build the graft's UI with `@orchardlabs/graft-sdk` and your own components.
 
 ## Next steps
 
