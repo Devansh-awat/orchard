@@ -27,7 +27,7 @@
 			link: {
 				label: 'AGPL',
 				href: links.license,
-				after: ' (the graft SDK is MIT), and it always will be.'
+				after: ' (the graft SDK is MIT).'
 			}
 		}
 	];
