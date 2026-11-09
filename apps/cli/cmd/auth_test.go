@@ -434,3 +434,23 @@ func TestUserAvatarDeleteRefusesWithoutYes(t *testing.T) {
 		t.Errorf("server saw %d requests, want 0", len(rec.reqs))
 	}
 }
+
+func TestSessionTableLeavesOutAnEmptyLocationColumn(t *testing.T) {
+	headers, rows := sessionTable([]map[string]any{{"id": "s1", "location": nil, "ipAddress": "1.2.3.4"}})
+	if strings.Contains(strings.Join(headers, ","), "location") {
+		t.Fatalf("no session has a location, but the headers are %v", headers)
+	}
+	if len(rows[0]) != len(headers) {
+		t.Fatalf("row has %d cells for %d headers", len(rows[0]), len(headers))
+	}
+}
+
+func TestSessionTableMarksASessionWithoutALocation(t *testing.T) {
+	headers, rows := sessionTable([]map[string]any{
+		{"id": "s1", "location": "Boston, US"},
+		{"id": "s2"},
+	})
+	if headers[2] != "location" || rows[0][2] != "Boston, US" || rows[1][2] != "-" {
+		t.Fatalf("headers %v rows %v", headers, rows)
+	}
+}

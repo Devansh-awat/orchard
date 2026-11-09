@@ -413,26 +413,43 @@ func authSessionListCmd() *cobra.Command {
 			if fmtFlag() == output.FormatJSON {
 				return output.JSON(raw)
 			}
-			rows := [][]string{}
-			for _, s := range asList(raw["sessions"]) {
-				cur := ""
-				if b, _ := s["isCurrent"].(bool); b {
-					cur = "✓"
-				}
-				rows = append(rows, []string{
-					pick(s, "id"),
-					pick(s, "deviceName"),
-					pick(s, "location"),
-					pick(s, "ipAddress"),
-					pick(s, "authMethod"),
-					pick(s, "lastActiveAt"),
-					cur,
-				})
-			}
-			output.Table([]string{"id", "device", "location", "ip", "method", "last active", "current"}, rows)
+			headers, rows := sessionTable(asList(raw["sessions"]))
+			output.Table(headers, rows)
 			return nil
 		},
 	}
+}
+
+func sessionTable(sessions []map[string]any) ([]string, [][]string) {
+	located := false
+	for _, s := range sessions {
+		if pick(s, "location") != "" {
+			located = true
+			break
+		}
+	}
+	headers := []string{"id", "device"}
+	if located {
+		headers = append(headers, "location")
+	}
+	headers = append(headers, "ip", "method", "last active", "current")
+	rows := [][]string{}
+	for _, s := range sessions {
+		cur := ""
+		if b, _ := s["isCurrent"].(bool); b {
+			cur = "✓"
+		}
+		row := []string{pick(s, "id"), pick(s, "deviceName")}
+		if located {
+			where := pick(s, "location")
+			if where == "" {
+				where = "-"
+			}
+			row = append(row, where)
+		}
+		rows = append(rows, append(row, pick(s, "ipAddress"), pick(s, "authMethod"), pick(s, "lastActiveAt"), cur))
+	}
+	return headers, rows
 }
 
 func authSessionRevokeCmd() *cobra.Command {
