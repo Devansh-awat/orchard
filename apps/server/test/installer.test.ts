@@ -2351,3 +2351,24 @@ test('a release version is refused as an image tag', () => {
     box.cleanup();
   }
 });
+
+test('low memory warns and never stops the install', () => {
+  const box = sandbox();
+  try {
+    const meminfo = join(box.dir, 'meminfo');
+    const check = (kb: number) => {
+      writeFileSync(meminfo, `MemTotal: ${kb} kB\n`);
+      const result = box.attempt(`MEMINFO_FILE=${meminfo}; check_memory`);
+      assert.equal(result.status, 0, result.stderr);
+      return result.stdout + result.stderr;
+    };
+    for (const kb of [1048576, 2969684, 4082884]) {
+      const out = check(kb);
+      assert.match(out, /below the recommended 8Gi/);
+      assert.match(out, /image builds may not schedule/);
+    }
+    assert.doesNotMatch(check(8126464), /below the recommended/);
+  } finally {
+    box.cleanup();
+  }
+});

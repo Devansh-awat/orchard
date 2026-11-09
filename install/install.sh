@@ -70,6 +70,7 @@ LOCAL_IPS6=''
 BEHIND_NAT=true
 CLOUD=''
 DMI_DIR=${ORCHARD_DMI_DIR:-/sys/class/dmi/id}
+MEMINFO_FILE=${ORCHARD_MEMINFO_FILE:-/proc/meminfo}
 ORCHARD_PUBLIC_IP=${ORCHARD_PUBLIC_IP:-}
 ORCHARD_INGRESS_CNAME=${ORCHARD_INGRESS_CNAME:-}
 INGRESS_MODE=''
@@ -552,6 +553,14 @@ detect_arch() {
   esac
 }
 
+check_memory() {
+  MEM_MB=$(awk '/MemTotal/ {print int($2/1024)}' "$MEMINFO_FILE")
+  if [ "$MEM_MB" -lt 7500 ]; then
+    warn "${MEM_MB}Mi of memory is below the recommended 8Gi, so Orchard may behave unexpectedly. At 4Gi, image builds may not schedule."
+  fi
+  info "memory: ${MEM_MB}Mi"
+}
+
 check_image_tag() {
   answer_given --image-tag ORCHARD_IMAGE_TAG || return 0
   [[ "$IMAGE_TAG" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+$ ]] || return 0
@@ -677,10 +686,7 @@ preflight() {
     die "the installer checks release signatures and needs OpenSSL 3 or newer. Upgrade it, or set ORCHARD_ALLOW_UNSIGNED_COMMANDS=true to install without the check"
   fi
 
-  MEM_MB=$(awk '/MemTotal/ {print int($2/1024)}' /proc/meminfo)
-  [ "$MEM_MB" -ge 3500 ] || die "need at least 4Gi of RAM, found ${MEM_MB}Mi"
-  [ "$MEM_MB" -ge 7500 ] || warn "8Gi is the comfortable floor; builds may be tight at ${MEM_MB}Mi"
-  info "memory: ${MEM_MB}Mi"
+  check_memory
 
   DISK_GB=$(df -BG --output=avail /var/lib 2>/dev/null | tail -1 | tr -dc '0-9')
   DISK_GB=${DISK_GB:-0}
