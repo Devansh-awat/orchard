@@ -65,6 +65,7 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV NO_PROXY=localhost,127.0.0.1
 ENV no_proxy=localhost,127.0.0.1
+ENV CHECKPOINT_DISABLE=1
 
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
 COPY --from=builder /app/apps/server/package.json ./apps/server/package.json
