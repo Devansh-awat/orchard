@@ -22,7 +22,7 @@ detail.
 If you just want the command, you need a Linux server with an IPv4 address, at least 4 GB of RAM and 20 GB of free disk:
 
 ```bash
-sudo bash -c "$(curl -fsSL https://assets.orchard.my/install.sh)"
+curl -fsSL https://assets.orchard.my/install.sh -o orchard-install.sh && sudo bash orchard-install.sh
 ```
 
 ![Installing Orchard on a Linux server](.github/assets/install.gif)

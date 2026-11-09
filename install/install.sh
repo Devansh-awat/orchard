@@ -486,8 +486,7 @@ prompt_hint() {
   {
     printf '\n      %sOrchard has a few questions before it installs anything.%s\n' "$C_GREY" "$C_RESET"
     printf '      %sRun it with your terminal attached:%s\n' "$C_GREY" "$C_RESET"
-    # shellcheck disable=SC2016  # the $( ) is part of the command we are printing
-    printf '        sudo bash -c "$(curl -fsSL %s)"\n' "$INSTALL_URL"
+    printf '        curl -fsSL %s -o orchard-install.sh && sudo bash orchard-install.sh\n' "$INSTALL_URL"
     printf '      %sor pass the answers as flags. --yes takes the default for the rest:%s\n' "$C_GREY" "$C_RESET"
     printf '        curl -fsSL %s | sudo bash -s -- --yes --mode public --domain orchard.example.com\n' "$INSTALL_URL"
     printf '\n'

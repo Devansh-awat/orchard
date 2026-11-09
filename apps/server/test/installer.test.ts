@@ -2278,3 +2278,15 @@ exit 0
     box.cleanup();
   }
 });
+
+test('install commands run the script from a file', () => {
+  const root = resolve(__dirname, '../../..');
+  for (const file of [
+    'install/install.sh',
+    'install/README.md',
+    'README.md',
+    'apps/landing/src/lib/links.ts'
+  ]) {
+    assert.doesNotMatch(readFileSync(join(root, file), 'utf8'), /bash -c "\$\(curl/, file);
+  }
+});

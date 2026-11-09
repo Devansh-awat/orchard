@@ -3,7 +3,7 @@
 For a single Linux box with an IPv4 address and nothing on it yet:
 
 ```bash
-sudo bash -c "$(curl -fsSL https://assets.orchard.my/install.sh)"
+curl -fsSL https://assets.orchard.my/install.sh -o orchard-install.sh && sudo bash orchard-install.sh
 ```
 
 IPv6-only servers are not supported yet. On a server with no IPv4 address, the

@@ -30,6 +30,7 @@ export const links = {
 export const installPrompt =
 	'Install Orchard on my server following https://docs.orchard.my/start/install.md. Ask me before anything that is not reversible.';
 
-export const installScript = 'sudo bash -c "$(curl -fsSL https://assets.orchard.my/install.sh)"';
+export const installScript =
+	'curl -fsSL https://assets.orchard.my/install.sh -o orchard-install.sh && sudo bash orchard-install.sh';
 
 export const brewInstall = 'brew install --cask leafdtk/tap/orchard-cli';
