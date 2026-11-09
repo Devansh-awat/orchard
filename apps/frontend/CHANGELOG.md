@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.85.1](https://github.com/hackclub/orchard/compare/frontend/v1.85.0...frontend/v1.85.1) (2026-11-09)
+
+
+### Bug Fixes
+
+* **frontend:** render release notes as plain markdown ([a39ed25](https://github.com/hackclub/orchard/commit/a39ed2572c71e5bd455ee8027cf1449e00f6fe02))
+
 ## [1.85.0](https://github.com/hackclub/orchard/compare/frontend/v1.84.0...frontend/v1.85.0) (2026-11-09)
 
 

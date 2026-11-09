@@ -1,5 +1,20 @@
 # Changelog
 
+## [2.94.1](https://github.com/hackclub/orchard/compare/server/v2.94.0...server/v2.94.1) (2026-11-09)
+
+
+### Bug Fixes
+
+* **chart:** scrape node exporter with credentials ([e055c51](https://github.com/hackclub/orchard/commit/e055c5164978bce07048cced7755af4382613217))
+* **install:** enable rootless builds on ubuntu ([5d84df6](https://github.com/hackclub/orchard/commit/5d84df64ba4063b74820e4b09060a578abd806b4))
+* **install:** mention sandboxes in the summary ([d5b5080](https://github.com/hackclub/orchard/commit/d5b508053ebfed4b54d3c7a052783d0bbd00ed08))
+* **install:** pin images with the chart version ([7587077](https://github.com/hackclub/orchard/commit/7587077f9149a2879ff16415201980615d9e8451))
+* **install:** refuse release tags for image-tag ([2850cfa](https://github.com/hackclub/orchard/commit/2850cfa367e39748aeb2ea87c821b6315733cf88))
+* **install:** run the installer from a file ([4fbbca7](https://github.com/hackclub/orchard/commit/4fbbca7d8a06a29dc02ecc93a30a810c72e8f410))
+* **install:** verify host commands on first install ([5f78f15](https://github.com/hackclub/orchard/commit/5f78f158c5c8e0fcf0596fdae52cabed15fbf2f5))
+* **server:** disable prisma checkpoint ([f4b906e](https://github.com/hackclub/orchard/commit/f4b906e9cf5eea76af51f0db6e47234de7d5dc15))
+* **server:** require signed registry indexes ([0adcccf](https://github.com/hackclub/orchard/commit/0adcccf1126c494714814364e960860af85a3918))
+
 ## [2.94.0](https://github.com/hackclub/orchard/compare/server/v2.93.1...server/v2.94.0) (2026-11-09)
 
 

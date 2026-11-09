@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.41.1](https://github.com/hackclub/orchard/compare/cli/v0.41.0...cli/v0.41.1) (2026-11-09)
+
+
+### Bug Fixes
+
+* **docs:** correct cli install and login notes ([3305c4f](https://github.com/hackclub/orchard/commit/3305c4fe520716e54ce13b50ea2aacaf4a379868))
+
 ## [0.41.0](https://github.com/hackclub/orchard/compare/cli/v0.40.1...cli/v0.41.0) (2026-11-09)
 
 
