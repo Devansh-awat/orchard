@@ -284,20 +284,7 @@ func TestBootstrapNeedsAnOpensslThatCanVerify(t *testing.T) {
 
 func TestInstallerNeedsAnOpensslThatCanVerify(t *testing.T) {
 	oldOpenssl(t)
-	raw, err := os.ReadFile("../../../../../install/install.sh")
-	if err != nil {
-		t.Fatal(err)
-	}
-	var functions strings.Builder
-	for _, name := range []string{"openssl_checks_signatures", "verify_bootstrap"} {
-		body := regexp.MustCompile(`(?ms)^` + name + `\(\) \{.*?^\}`).Find(raw)
-		if body == nil {
-			t.Fatalf("install.sh no longer defines %s", name)
-		}
-		functions.Write(body)
-		functions.WriteString("\n")
-	}
-	script := functions.String() + `RELEASE_KEYS=key
+	script := installerFunctions(t, "openssl_checks_signatures", "verify_bootstrap") + `RELEASE_KEYS=key
 unsigned_commands_allowed() { echo false; }
 warn() { echo "$*"; }
 verify_bootstrap /dev/null

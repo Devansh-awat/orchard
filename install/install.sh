@@ -4106,6 +4106,19 @@ EOF
   fi
 }
 
+sandboxes_on() {
+  [ "$(yq -r '.tenantSandbox.enabled == true and .builderSandbox.enabled == true' "$VALUES_FILE" 2>/dev/null)" = true ]
+}
+
+sandbox_notice() {
+  sandboxes_on && return 0
+  printf '\n  %sBefore anyone else deploys here%s\n' "$C_BOLD" "$C_RESET"
+  note "This install is not safe for tenants you don't trust. Without the sandboxes,"
+  note "code deployed here shares this machine's kernel with your data and secrets."
+  note "Turn on tenantSandbox and builderSandbox first:"
+  note "https://github.com/hackclub/orchard/blob/main/install/README.md"
+}
+
 summary() {
   local scheme=https suffix=$HTTPS_SUFFIX
   if [ "$USE_TLS" = false ]; then
@@ -4201,6 +4214,8 @@ EOF
   printf '\n'
   note "Setup then asks for a passkey or a password. With no email configured there"
   note "are no sign-in codes. If you get locked out, run: sudo orchardctl login"
+
+  sandbox_notice
 
   printf '\n  %sNext, in the dashboard%s\n' "$C_BOLD" "$C_RESET"
   note "Setup walks you through what is left: your organization, the GitHub App,"
