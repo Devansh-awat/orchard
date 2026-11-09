@@ -1,5 +1,24 @@
 # Changelog
 
+## [2.93.0](https://github.com/hackclub/orchard/compare/server/v2.92.0...server/v2.93.0) (2026-11-09)
+
+
+### Features
+
+* **server:** disable instead of delete and idp project rules ([7c9881b](https://github.com/hackclub/orchard/commit/7c9881b6c083594214676ca74d6d0051e33cd967))
+* **server:** expose sso grants and drop added comments ([09da5d9](https://github.com/hackclub/orchard/commit/09da5d964869e4a8dac4b51bb3ad292a32be21a0))
+* **server:** instance scim, org unlink and grant-scoped tokens ([9a67d27](https://github.com/hackclub/orchard/commit/9a67d270cf47b7cf9551ccf11fc9d69ba7cb31c3))
+* **server:** org-owned identities, session grants and account links ([d7c6679](https://github.com/hackclub/orchard/commit/d7c667920492a9fe8da94ac27ab0b6f317c26d24))
+* **server:** passkey-only accounts and mailbox owner warning ([6da31c1](https://github.com/hackclub/orchard/commit/6da31c15c81addf9c7720352413b2053939465e0))
+* **server:** scope account emails and add org identity schema ([38833cd](https://github.com/hackclub/orchard/commit/38833cd53d056e18a974a880e2a8b52f3cee35f7))
+
+
+### Bug Fixes
+
+* **server:** clear error when sso key is missing ([d772916](https://github.com/hackclub/orchard/commit/d7729165ae853513910dc91be77fde4fe5a5ef05))
+* **server:** close idp trust and domain takeover gaps ([dd6f7eb](https://github.com/hackclub/orchard/commit/dd6f7ebd91dfd632b70b3d1da47f971357bc0e18))
+* **server:** rbac e2e expects disabled members to keep their row ([b89a521](https://github.com/hackclub/orchard/commit/b89a5211b800d070384aaa57ba7d7142da2f8fa9))
+
 ## [2.92.0](https://github.com/hackclub/orchard/compare/server/v2.91.0...server/v2.92.0) (2026-11-08)
 
 

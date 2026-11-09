@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.40.0](https://github.com/hackclub/orchard/compare/cli/v0.39.0...cli/v0.40.0) (2026-11-09)
+
+
+### Features
+
+* **cli:** contexts for multiple orchard instances ([065e172](https://github.com/hackclub/orchard/commit/065e1729710b9f3e2623f9187581e66c0155fcbe))
+
 ## [0.39.0](https://github.com/hackclub/orchard/compare/cli/v0.38.0...cli/v0.39.0) (2026-11-08)
 
 

@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.84.0](https://github.com/hackclub/orchard/compare/frontend/v1.83.0...frontend/v1.84.0) (2026-11-09)
+
+
+### Features
+
+* **frontend:** hide unused work orgs, instance scim and unlink ([fa7a5d4](https://github.com/hackclub/orchard/commit/fa7a5d4613963e508b29d9b0827dfbe6c267b5f8))
+* **frontend:** linked work orgs and sso identity hints ([167eecb](https://github.com/hackclub/orchard/commit/167eecb46207095f69e299a02ff32b4a80e9ebcc))
+* **frontend:** org-limited tokens from sso sessions ([f82f2f2](https://github.com/hackclub/orchard/commit/f82f2f2275ad23995df23039911839665688a25d))
+* **frontend:** passkey-only sign-in and domain owner notice ([6a06da3](https://github.com/hackclub/orchard/commit/6a06da3d8c28158a959baf8fe884a5f6834bf50d))
+* **frontend:** trust-email toggle for instance saml ([8993e89](https://github.com/hackclub/orchard/commit/8993e898d423176fe55e1e5237c250bb1ee7ae2e))
+* **frontend:** turn access off and on, project access rules ([bb7c2fe](https://github.com/hackclub/orchard/commit/bb7c2fe39560b2f6893661cd347e7ed977d61946))
+
+
+### Bug Fixes
+
+* **frontend:** type the mock instance scim tokens ([928ec3e](https://github.com/hackclub/orchard/commit/928ec3ef6b346ee94406063959b211fe73f66436))
+
 ## [1.83.0](https://github.com/hackclub/orchard/compare/frontend/v1.82.0...frontend/v1.83.0) (2026-11-08)
 
 
