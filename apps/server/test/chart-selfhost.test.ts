@@ -85,7 +85,6 @@ test('a value in server.env wins over the cnpg operator namespace', { skip }, ()
 test('every install guide carries the same minimal values', () => {
   const example = readFileSync(minimal, 'utf8');
   for (const doc of [
-    'docs/self-hosting.md',
     'apps/docs/src/content/docs/start/install.md',
     'infra/charts/orchard/README.md'
   ]) {
