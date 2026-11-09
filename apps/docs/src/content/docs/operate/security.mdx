@@ -221,7 +221,7 @@ The Tailscale proxy pod is created by Orchard. It uses the tenant runtime class 
 
 Code is untrusted if someone can run a process that you did not write. This includes letting other people deploy from their own repositories. In that case, set up all of the following:
 
-- **`builderSandbox` with Kata:** Without it, builds run arbitrary Dockerfiles with host-level privileges. This is the most important item.
+- **`builderSandbox` with Kata:** Without it, builds run arbitrary Dockerfiles rootless, on the host kernel. This is the most important item.
 - **`tenantSandbox` with gVisor:** Without it, a compromised app shares a kernel with everything else on the node.
 - **Quotas:** Refer to [Set quotas](/teams/quotas/).
 - **Node pools:** Refer to [Manage nodes and pools](/operate/nodes/).

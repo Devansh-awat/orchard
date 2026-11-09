@@ -25,7 +25,7 @@ The installer creates a single-node k3s cluster. It then installs Traefik, Cloud
 - An IPv4 address. IPv6-only servers are not supported yet. For more information, refer to [The installer stops on an IPv6-only server](/operate/troubleshooting/#the-installer-stops-on-an-ipv6-only-server).
 - Root access.
 - OpenSSL 3 or newer, which the published installer uses to check release signatures. Without it, the installer stops, unless you set `ORCHARD_ALLOW_UNSIGNED_COMMANDS=true` to install without the check.
-- At least 4 GiB of RAM and 20 GB of free disk. Orchard recommends 8 GiB of RAM and 60 GB of disk.
+- At least 4 GiB of RAM and 20 GB of free disk on `/var/lib`. The installer refuses less. For real use, plan for at least 8 GiB of RAM and 40 GB of disk. A small instance with two builds and a database uses about 2.5 GiB of RAM at idle, requests up to 4.5 GiB, and uses up to 19 GB of disk. The installer warns below 8 GiB of RAM and below 60 GB of free disk.
 - For `public` mode, ports 80 and 443 free and reachable from the internet. A domain is optional. To try Orchard without one, refer to [Try Orchard without a domain](#try-orchard-without-a-domain).
 - For `tunnel` mode, a domain and a Cloudflare Tunnel token.
 - Outbound internet access. For the hosts the installer contacts, refer to [Outbound connections](/operate/outbound-connections/).
@@ -264,6 +264,8 @@ Backups on the server sit on the same disk as your databases. If the server is l
 
 A host installed before these defaults existed receives them on its next `sudo orchardctl update`. The MCP endpoint is the exception. To turn it on, run `sudo orchardctl mcp enable --apply`. For more information, refer to [New defaults on an existing host](/operate/host-commands/#new-defaults-on-an-existing-host).
 
+On a machine where `kernel.apparmor_restrict_unprivileged_userns` is `1`, such as Ubuntu 24.04, the installer sets it to `0` in `/etc/sysctl.d/90-orchard-builds.conf`, because rootless builds need user namespaces. It skips this when `builderSandbox.enabled` or `builders.allowPrivilegedOnHost` is `true`.
+
 ### Sizing
 
 The installer sizes build concurrency and volumes from the machine.
@@ -318,7 +320,7 @@ To change an answer that you gave the installer:
 
 | Item                                                   | What to do                                                                                                                                                                                                                                                |
 | ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Sandboxed builds and tenant isolation                  | Install gVisor or Kata on the node, then set `tenantSandbox` and `builderSandbox` in `/etc/orchard/values.yaml`. Without them, image builds run with host-level privileges.                                                                               |
+| Sandboxed builds and tenant isolation                  | Install gVisor or Kata on the node, then set `tenantSandbox` and `builderSandbox` in `/etc/orchard/values.yaml`. Without them, image builds run rootless, and builds and apps share the host kernel.                                                      |
 | DNS for your own domain                                | The installer prints the records and checks them, but you create them. To check them later, go to **Instance admin** > **Networking**. For more information, refer to [Point DNS at this instance](/operate/finishing-setup/#point-dns-at-this-instance). |
 | Off-server backups                                     | The installer asks for S3 storage, and you can add it later. Refer to [Add S3 storage](/operate/storage/).                                                                                                                                                |
 | Multiple nodes, and public TCP or UDP in `tunnel` mode | Use the [Helm chart](#install-on-an-existing-cluster).                                                                                                                                                                                                    |
