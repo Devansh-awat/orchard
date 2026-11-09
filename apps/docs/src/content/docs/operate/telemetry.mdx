@@ -1,37 +1,66 @@
 ---
 title: Manage anonymous usage reports
-description: Understand what an Orchard instance sends in its anonymous usage reports, and turn the reports on or off.
+description: Understand exactly what an Orchard instance sends in its anonymous usage reports, when it sends them, and how to turn them on or off.
 sidebar:
   order: 9
 ---
 
 import { Tabs, TabItem } from '@astrojs/starlight/components';
 
-An Orchard instance can send an anonymous report to the Orchard team once a day. The reports are off until a superadmin turns them on.
+An Orchard instance can send anonymous reports to the Orchard team. Reports are off until a superadmin turns them on, or until an operator sets `ORCHARD_TELEMETRY` to `true`.
 
 The setting is separate from [`POSTHOG_API_KEY`](/reference/configuration/), which sends analytics to your own PostHog project.
 
-## What a report contains
+Reports go to `https://us.i.posthog.com`. If you restrict outbound traffic, this is the host to allow. Only a server running with `NODE_ENV=production` sends reports. Orchard's images set this value.
 
-- The versions of Orchard and Node.js, and the CPU architecture.
-- The number of users, and the number of users active in the last day, week, and month.
-- The number of organizations, projects, apps, databases, jobs, and nodes, and similar counts from installed grafts.
-- The number of builds that succeeded and failed in the last 24 hours.
-- Whether GitHub, email, backups, SSO, MCP, and node scheduling are turned on.
-- For an unexpected server error: its type, the route pattern, and the file, function, and line in Orchard where it happened.
+## When reports are sent
+
+| Report       | When                                                                                                                                                                                         |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Daily report | One server pod, the leader, checks every hour and sends at most one report every 23 hours. If a superadmin turns reports on in the dashboard, Orchard sends the first report at that moment. |
+| Error report | When an unexpected server error happens, up to 60 each hour for each server pod.                                                                                                             |
+
+## What the daily report contains
+
+| Field                                                                                                                  | Content                                                                              |
+| ---------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `version`, `node_version`, `arch`                                                                                      | The versions of Orchard and Node.js, and the CPU architecture.                       |
+| `users_total`                                                                                                          | The number of users.                                                                 |
+| `users_active_1d`, `users_active_7d`, `users_active_30d`                                                               | The number of users active in the last day, 7 days, and 30 days.                     |
+| `organizations`, `projects`, `databases`, `jobs`, `nodes`                                                              | The number of each.                                                                  |
+| `deployments`, `deployments_running`                                                                                   | The number of apps, and the number of apps that are not stopped.                     |
+| Counts from installed grafts                                                                                           | A number for each counter that an installed graft registers.                         |
+| `builds_succeeded_24h`, `builds_failed_24h`                                                                            | The number of builds that succeeded and failed in the last 24 hours.                 |
+| `feature_github_app`, `feature_email`, `feature_backups`, `feature_sso`, `feature_mcp`, `feature_userspace_scheduling` | Whether the GitHub App, email, backups, SSO, MCP, and node scheduling are turned on. |
+
+## What an error report contains
+
+Orchard sends an error report for a response with a 5xx status, for an exception that Orchard did not handle, and for an error outside a request.
+
+| Field                        | Content                                                                                                                                  |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| Error type                   | The class name of the error, such as `TypeError`.                                                                                        |
+| Stack frames                 | Up to 40 frames, each with the function name, the file, the line, and the column. Files are paths inside Orchard or its dependencies.    |
+| `version`                    | The version of Orchard.                                                                                                                  |
+| `error_code`                 | The error code, only if it is a Prisma code, a system code, or a Node.js code, such as `P2002`, `ECONNRESET`, or `ERR_INVALID_ARG_TYPE`. |
+| `http_method`, `http_status` | The method and status of the request.                                                                                                    |
+| `http_route`                 | The route pattern, such as `/deployments/:id`. It is not the requested URL.                                                              |
+| `context_type`               | The kind of context, for an error outside a request.                                                                                     |
 
 ## What a report does not contain
 
-Reports do not contain names, email addresses, domains, repositories, environment variables, logs, or error messages. IP addresses are not stored.
+Reports do not contain names, email addresses, domains, repositories, environment variables, logs, or error messages.
 
-Each report carries a random ID that Orchard creates for the instance.
+Orchard does not add an IP address to a report, and it turns off PostHog's GeoIP lookup for each report. PostHog receives each report from your server's address, as any web service does.
 
-Reports go to `https://us.i.posthog.com`.
+Each report carries a random ID that Orchard creates for the instance. Reports do not create a person profile in PostHog.
 
 ## Read the exact report
 
 1. Go to **Instance admin** > **Configuration**.
 2. In **Anonymous usage reports**, select **See the exact report**.
+
+This shows the daily report with this instance's values. It does not show error reports, which use the fields listed earlier.
 
 ## Turn reports on or off
 
@@ -41,23 +70,34 @@ Reports go to `https://us.i.posthog.com`.
 1. Go to **Instance admin** > **Configuration**.
 2. In **Anonymous usage reports**, turn **Share anonymous reports** on or off.
 
-You can also answer the prompt that superadmins see during setup or after setup.
+You can also answer the prompt that superadmins see during setup or after setup. Nothing is sent until someone answers.
+
+After you turn reports off, every server pod stops sending within a minute.
 
 </TabItem>
 <TabItem label="Environment variable">
 
 Set `ORCHARD_TELEMETRY` on the server. This value overrides the dashboard setting and locks it.
 
-| Value   | Effect                                                 |
-| ------- | ------------------------------------------------------ |
-| `false` | Reports are off.                                       |
-| `true`  | Reports are on, and superadmins do not see the prompt. |
-| Not set | A superadmin decides in the dashboard.                 |
+| Value           | Effect                                                 |
+| --------------- | ------------------------------------------------------ |
+| `false`         | Reports are off.                                       |
+| `true`          | Reports are on, and superadmins do not see the prompt. |
+| Any other value | Treated as not set.                                    |
+| Not set         | A superadmin decides in the dashboard.                 |
 
 On an installer host, run the following command:
 
 ```sh
 sudo orchardctl env set ORCHARD_TELEMETRY false --apply
+```
+
+On a Helm install, add the variable to `server.env` in your values file:
+
+```yaml
+server:
+  env:
+    - { name: ORCHARD_TELEMETRY, value: 'false' }
 ```
 
 </TabItem>
