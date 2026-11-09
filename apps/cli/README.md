@@ -20,19 +20,17 @@ The cask is `orchard-cli` because homebrew core already owns the name
 `orchard`.
 
 Prebuilt binaries for macOS/Linux/Windows live on the public
-[orchard-releases](https://github.com/LeafdTK/orchard-releases/releases) repo
-(the source monorepo is private, so binaries publish separately). Installer:
+[orchard-releases](https://github.com/LeafdTK/orchard-releases/releases) repo.
+Installer:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/LeafdTK/orchard-releases/main/install.sh | sh
 ```
 
-From source:
+From a clone of the repository, in `apps/cli`:
 
 ```sh
 go build -o orchard .
-# or install onto PATH
-go install github.com/hackclub/orchard/cli@latest
 ```
 
 ## Auth

@@ -39,7 +39,7 @@ orchard auth login --api-url https://orchard.example.com
 
 The command opens a browser. After you approve the request, the CLI stores a token in `~/.orchard/config.json`.
 
-If you run `orchard auth login` without `--api-url`, the CLI asks which instance to use.
+If you run `orchard auth login` without `--api-url`, the CLI asks which instance to use. Enter the URL of your instance. The default answer is Hack Club's own instance.
 
 ## Work with several instances
 
