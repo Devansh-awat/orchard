@@ -44,16 +44,14 @@ Orchard sends an error report for a response with a 5xx status, for an exception
 | `version`                    | The version of Orchard.                                                                                                                  |
 | `error_code`                 | The error code, only if it is a Prisma code, a system code, or a Node.js code, such as `P2002`, `ECONNRESET`, or `ERR_INVALID_ARG_TYPE`. |
 | `http_method`, `http_status` | The method and status of the request.                                                                                                    |
-| `http_route`                 | The route pattern, such as `/deployments/:id`. It is not the requested URL.                                                              |
+| `http_route`                 | The route pattern, such as `/deployments/:id`.                                                                                           |
 | `context_type`               | The kind of context, for an error outside a request.                                                                                     |
 
-## What a report does not contain
+## What Orchard collects
 
-Reports do not contain names, email addresses, domains, repositories, environment variables, logs, or error messages.
+Orchard collects nothing from users unless statistics are enabled. The usage reports on this page are those statistics.
 
-Orchard does not add an IP address to a report, and it turns off PostHog's GeoIP lookup for each report. PostHog receives each report from your server's address, as any web service does.
-
-Each report carries a random ID that Orchard creates for the instance. Reports do not create a person profile in PostHog.
+Each report carries a random ID that Orchard creates for the instance.
 
 ## Read the exact report
 
