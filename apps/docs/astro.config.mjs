@@ -344,6 +344,7 @@ export default defineConfig({
                 { label: 'Architecture', slug: 'operate/architecture' },
                 { label: 'Nodes and pools', slug: 'operate/nodes' },
                 { label: 'Upgrades', slug: 'operate/upgrades' },
+                { label: 'Scale the control plane', slug: 'operate/scale-control-plane' },
                 { label: 'Size older workloads', slug: 'operate/backfill' },
                 { label: 'Run Greenhouse', slug: 'operate/greenhouse' }
               ]
