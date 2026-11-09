@@ -27,6 +27,7 @@ The installer creates a single-node k3s cluster. It then installs Traefik, Cloud
 - At least 4 GiB of RAM and 20 GB of free disk. Orchard recommends 8 GiB of RAM and 60 GB of disk.
 - For `public` mode, ports 80 and 443 free and reachable from the internet. A domain is optional. To try Orchard without one, refer to [Try Orchard without a domain](#try-orchard-without-a-domain).
 - For `tunnel` mode, a domain and a Cloudflare Tunnel token.
+- Outbound internet access. For the hosts the installer contacts, refer to [Outbound connections](/operate/outbound-connections/).
 
 Do not run the installer inside a Docker container. k3s cannot nest its overlayfs snapshotter there.
 
@@ -122,7 +123,7 @@ A      *.apps.example.com    203.0.113.10
 A      mcp.example.com       203.0.113.10
 ```
 
-The installer then queries public DNS resolvers and shows the status of each record. It does not wait in silence, and it does not stop the install. You can choose **Check again**, **Continue anyway**, **Skip DNS for now**, or **Change an answer**.
+To find the machine's public address, the installer asks `api.ipify.org`, `ipv4.icanhazip.com`, and `api6.ipify.org`. It then queries public DNS resolvers, `1.1.1.1` and `8.8.8.8` directly or `cloudflare-dns.com` and `dns.google` over HTTPS, and shows the status of each record. It does not wait in silence, and it does not stop the install. You can choose **Check again**, **Continue anyway**, **Skip DNS for now**, or **Change an answer**.
 
 | Status        | Meaning                                         | What to do                                                                  |
 | ------------- | ----------------------------------------------- | --------------------------------------------------------------------------- |

@@ -365,7 +365,8 @@ export default defineConfig({
               items: [
                 { label: 'Database dumps', slug: 'operate/database-dumps' },
                 { label: 'Logs and request data', slug: 'operate/logs' },
-                { label: 'Usage reports', slug: 'operate/telemetry' }
+                { label: 'Usage reports', slug: 'operate/telemetry' },
+                { label: 'Outbound connections', slug: 'operate/outbound-connections' }
               ]
             },
             {
