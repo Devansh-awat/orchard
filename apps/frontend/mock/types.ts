@@ -91,6 +91,7 @@ export interface MockDeployment {
 	environmentId: string;
 	name: string;
 	displayName: string | null;
+	icon?: string | null;
 	status: string;
 	buildStatus: 'none' | 'pending' | 'building' | 'succeeded' | 'failed' | 'canceled';
 	buildStep: BuildStep | null;

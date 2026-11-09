@@ -1373,6 +1373,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         id: true,
         name: true,
         displayName: true,
+        icon: true,
         namespace: true,
         status: true,
         buildStatus: true,
@@ -7074,6 +7075,31 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     }
 
     return this.addInternalUrlsToDeployment(createdDeployment);
+  }
+
+  async uploadDeploymentIcon(
+    deploymentId: string,
+    file: Express.Multer.File,
+    storageService: { uploadImage: (file: Express.Multer.File, folder: string) => Promise<string> },
+    clerkId: string,
+    userData?: {
+      email?: string;
+      username?: string;
+      firstName?: string;
+      lastName?: string;
+      imageUrl?: string;
+    }
+  ) {
+    const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
+    if (!user) throw new NotFoundException('User not found');
+    const deployment = await this.prisma.deployment.findUnique({
+      where: { id: deploymentId },
+      select: { id: true, projectId: true }
+    });
+    if (!deployment) throw new NotFoundException('App not found');
+    await this.authz.requireProjectEdit(deployment.projectId, user.id, 'update app picture');
+    const icon = await storageService.uploadImage(file, `app-icons/${deploymentId}`);
+    return this.prisma.deployment.update({ where: { id: deploymentId }, data: { icon } });
   }
 
   async createDeploymentFromGitHub(

@@ -170,6 +170,7 @@ export function deploymentSummary(store: Store, d: MockDeployment) {
 		id: d.id,
 		name: d.name,
 		displayName: d.displayName,
+		icon: d.icon ?? null,
 		status: d.status,
 		buildStatus: d.buildStatus,
 		image: d.image,

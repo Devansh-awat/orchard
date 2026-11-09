@@ -13,6 +13,7 @@
 		shape = 'square',
 		id = undefined,
 		disabled = false,
+		removable = true,
 		fallback = undefined
 	}: {
 		value?: string | null;
@@ -22,6 +23,7 @@
 		shape?: 'square' | 'wide';
 		id?: string;
 		disabled?: boolean;
+		removable?: boolean;
 		fallback?: Snippet;
 	} = $props();
 
@@ -58,7 +60,7 @@
 			<Button size="sm" loading={busy} {disabled} onclick={() => input?.click()}>
 				{value ? 'Replace' : 'Upload'}
 			</Button>
-			{#if value}
+			{#if value && removable}
 				<Button
 					size="sm"
 					variant="ghost"

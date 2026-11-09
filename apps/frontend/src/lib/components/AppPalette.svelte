@@ -99,7 +99,11 @@
 					label: d.displayName || d.name,
 					sublabel: host ?? d.project?.name,
 					kind: 'deployment',
-					icon: knownIcon(d.image) ?? d.faviconUrl ?? (host ? favUrl(host.split('/')[0]) : null),
+					icon:
+						d.icon ??
+						knownIcon(d.image) ??
+						d.faviconUrl ??
+						(host ? favUrl(host.split('/')[0]) : null),
 					project: d.project?.name,
 					projectIcon: d.project ? icons.get(d.project.id) : null,
 					status: resourceStatus(d.status, d.buildStatus),

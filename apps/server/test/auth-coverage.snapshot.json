@@ -553,6 +553,7 @@
   "POST /deployments/:id/bindings": "authenticated",
   "POST /deployments/:id/build-context": "authenticated",
   "POST /deployments/:id/cancel": "authenticated",
+  "POST /deployments/:id/icon": "authenticated",
   "POST /deployments/:id/ingresses": "authenticated",
   "POST /deployments/:id/rebuild": "authenticated",
   "POST /deployments/:id/restart": "authenticated",

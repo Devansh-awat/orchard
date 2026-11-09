@@ -11,6 +11,7 @@ import { finalize, type Observable } from 'rxjs';
 const MB = 1024 * 1024;
 
 export const AVATAR_UPLOAD_BYTES = 5 * MB;
+export const APP_ICON_UPLOAD_BYTES = 2 * MB;
 export const PROJECT_ICON_UPLOAD_BYTES = 2 * MB;
 export const PROJECT_BACKGROUND_UPLOAD_BYTES = 8 * MB;
 export const BUILD_CONTEXT_UPLOAD_BYTES = 100 * MB;

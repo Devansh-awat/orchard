@@ -22,7 +22,8 @@
 		Lock,
 		Network,
 		Radio,
-		ShieldCheck
+		ShieldCheck,
+		ImagePlus
 	} from 'lucide-svelte';
 	import { rawToEnvVars } from '$lib/utils/format';
 	import ProjectSwitcher from '$lib/components/ProjectSwitcher.svelte';
@@ -224,6 +225,9 @@
 	let dockerfileInputTimeout: ReturnType<typeof setTimeout> | null = null;
 
 	let name = $state('');
+	let appIconFile = $state<File | null>(null);
+	let appIconPreview = $state('');
+	let appIconInput = $state<HTMLInputElement | null>(null);
 	let image = $state('');
 	let imagePullPolicy = $state<'Always' | 'IfNotPresent' | 'auto'>('auto');
 	let imageStartCommand = $state('');
@@ -975,6 +979,17 @@
 			}
 
 			const deployment = await response.json();
+			if (appIconFile) {
+				const form = new FormData();
+				form.append('file', appIconFile);
+				const iconResponse = await apiFetch(`/apiv1/deployments/${deployment.id}/icon`, {
+					method: 'POST',
+					body: form
+				});
+				if (!iconResponse.ok) {
+					toasts.add({ title: "App created, but its picture couldn't be saved", color: 'error' });
+				}
+			}
 
 			toasts.add({
 				title: 'App created',
@@ -1427,16 +1442,47 @@
 							</Stack>
 						</Swap>
 
-						<Field label="Name" for="nd-name">
-							<Input
-								id="nd-name"
-								size="lg"
-								bind:value={name}
-								oninput={() => (nameTouched = true)}
-								placeholder="app-name"
-								mono
+						<div class="app-name-picture">
+							<Field label="Name" for="nd-name">
+								<Input
+									id="nd-name"
+									size="lg"
+									bind:value={name}
+									oninput={() => (nameTouched = true)}
+									placeholder="app-name"
+									mono
+								/>
+							</Field>
+							<input
+								class="sr-only"
+								bind:this={appIconInput}
+								type="file"
+								accept="image/jpeg,image/png,image/gif,image/webp"
+								onchange={(event) => {
+									const file = (event.currentTarget as HTMLInputElement).files?.[0];
+									if (file && file.size <= 2 * 1024 * 1024) {
+										appIconFile = file;
+										appIconPreview = URL.createObjectURL(file);
+									} else if (file) {
+										toasts.add({ title: 'Use an image under 2 MB', color: 'error' });
+									}
+								}}
 							/>
-						</Field>
+							<Button
+								variant="secondary"
+								size="lg"
+								type="button"
+								class="app-picture"
+								onclick={() => appIconInput?.click()}
+							>
+								{#snippet leading()}
+									{#if appIconPreview}<img src={appIconPreview} alt="" />{:else}<ImagePlus
+											size={18}
+										/>{/if}
+								{/snippet}
+								{appIconFile ? 'Change app picture' : 'Add app picture'}
+							</Button>
+						</div>
 
 						{#if isRepoSource}
 							<Field label="Build with">
@@ -1765,3 +1811,18 @@
 		</form>
 	{/if}
 </Page>
+
+<style>
+	.app-name-picture {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) max-content;
+		align-items: end;
+		gap: var(--space-3);
+	}
+	:global(.app-picture img) {
+		width: 2rem;
+		height: 2rem;
+		border-radius: var(--radius-sm);
+		object-fit: cover;
+	}
+</style>

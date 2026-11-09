@@ -252,6 +252,7 @@ export const routes: GeneratedRoute[] = [
   { method: 'GET', path: '/deployments/:id/github-deployments', auth: 'authenticated' },
   { method: 'PUT', path: '/deployments/:id/github-repo', auth: 'authenticated' },
   { method: 'PUT', path: '/deployments/:id/health-check', auth: 'authenticated' },
+  { method: 'POST', path: '/deployments/:id/icon', auth: 'authenticated' },
   { method: 'PATCH', path: '/deployments/:id/image', auth: 'authenticated' },
   { method: 'GET', path: '/deployments/:id/image-history', auth: 'authenticated' },
   { method: 'GET', path: '/deployments/:id/image-history/:imageHistoryId/logs', auth: 'authenticated' },

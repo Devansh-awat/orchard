@@ -5,6 +5,7 @@
 		GitCommitHorizontal,
 		Github,
 		Globe,
+		ImagePlus,
 		Loader2,
 		Pencil,
 		Square,
@@ -44,6 +45,8 @@
 		onStop,
 		onStart,
 		onRename,
+		onChangePicture,
+		uploadingPicture = false,
 		onShowDeleteModal,
 		onTriggerActionAnim,
 		onViewBuildLogs,
@@ -74,6 +77,8 @@
 		onStop: () => void;
 		onStart: () => void;
 		onRename?: () => void;
+		onChangePicture?: () => void;
+		uploadingPicture?: boolean;
 		onShowDeleteModal: () => void;
 		onTriggerActionAnim: (id: string) => void;
 		onViewBuildLogs: () => void;
@@ -134,6 +139,9 @@
 
 {#snippet identity()}
 	<div class="dh-identity">
+		{#if deployment.icon}
+			<img class="dh-app-icon" src={deployment.icon} alt="" />
+		{/if}
 		<h1 class="dh-name" title={deployment.displayName || deployment.name}>
 			{deployment.displayName || deployment.name}
 		</h1>
@@ -212,6 +220,15 @@
 			{/if}
 			{#if onRename}
 				<MenuItem icon={Pencil} onclick={onRename}>Rename</MenuItem>
+			{/if}
+			{#if onChangePicture}
+				<MenuItem icon={ImagePlus} disabled={uploadingPicture} onclick={onChangePicture}>
+					{uploadingPicture
+						? 'Uploading picture…'
+						: deployment.icon
+							? 'Change app picture'
+							: 'Add app picture'}
+				</MenuItem>
 			{/if}
 			<MenuSeparator />
 			<MenuItem icon={Trash2} danger disabled={deleting} onclick={onShowDeleteModal}>
@@ -414,6 +431,13 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+	}
+	.dh-app-icon {
+		width: 2rem;
+		height: 2rem;
+		border-radius: var(--radius-md);
+		object-fit: cover;
+		flex: none;
 	}
 	.dh-actions {
 		display: flex;

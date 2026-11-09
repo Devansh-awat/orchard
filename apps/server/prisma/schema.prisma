@@ -742,6 +742,7 @@ model Deployment {
   // creation because it is baked into the k8s object names (Deployment,
   // Service, selectors, env Secret). Render displayName ?? name.
   displayName          String?            @map("display_name") @db.VarChar(255)
+  icon                 String?            @db.VarChar(500)
   namespace            String             @db.VarChar(100)
   image                String?            @db.VarChar(500)
   replicas             Int                @default(1)

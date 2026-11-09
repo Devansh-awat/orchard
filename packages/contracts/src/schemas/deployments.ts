@@ -285,6 +285,7 @@ const deploymentBase = z
     projectId: z.string(),
     name: z.string(),
     namespace: z.string(),
+    icon: z.string().nullable().optional(),
     image: z.string().nullable().optional(),
     replicas: z.number(),
     stopped: z.boolean(),
@@ -410,6 +411,7 @@ const deploymentSummary = z
     name: z.string(),
     status: z.string(),
     buildStatus: z.string(),
+    icon: z.string().nullable().optional(),
     image: z.string().nullable().optional(),
     githubRepo: z.string().nullable().optional(),
     githubBranch: z.string().nullable().optional(),
@@ -655,6 +657,11 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
     summary: 'Get a deployment with live pods, services, ingresses, and image history',
     scope: 'read',
     response: deploymentDetail
+  },
+  'POST /deployments/:id/icon': {
+    summary: 'Upload an app picture',
+    scope: 'deploy',
+    response: deploymentBase
   },
   'DELETE /deployments/:id': {
     summary: 'Delete a deployment and all its Kubernetes resources',

@@ -23,7 +23,14 @@
 		formatBuildElapsed,
 		sanitizeLogs
 	} from '$lib/components/deployment/deployment-helpers';
-	import { Modal, Skeleton, resourceStatus, statusMeta } from '$lib/components/ui';
+	import {
+		Field,
+		ImageField,
+		Modal,
+		Skeleton,
+		resourceStatus,
+		statusMeta
+	} from '$lib/components/ui';
 	import {
 		apiFetch,
 		toasts,
@@ -144,6 +151,7 @@
 	interface Deployment {
 		id: string;
 		name: string;
+		icon?: string | null;
 		status: string;
 		buildStatus?: string;
 		buildStep?: string | null;
@@ -592,6 +600,9 @@
 	let rebuilding = $state(false);
 	let renameOpen = $state(false);
 	let renamingApp = $state(false);
+	let appPictureOpen = $state(false);
+	let appPictureValue = $state<string | null>(null);
+	let uploadingAppPicture = $state(false);
 	let savingEnv = $state(false);
 	let savingVolumes = $state(false);
 	let savingAdvanced = $state(false);
@@ -2219,6 +2230,45 @@
 		}
 	}
 
+	function openAppPicture() {
+		appPictureValue = deployment?.icon ?? null;
+		appPictureOpen = true;
+	}
+
+	async function uploadAppPicture(file: File): Promise<string | null> {
+		const currentDeployment = deployment;
+		if (!currentDeployment) return null;
+
+		try {
+			const form = new FormData();
+			form.append('file', file);
+			const response = await apiFetch(`/apiv1/deployments/${currentDeployment.id}/icon`, {
+				method: 'POST',
+				body: form
+			});
+			if (!response.ok) {
+				const data = await response.json().catch(() => ({}));
+				throw new Error(data.message || "Couldn't update app picture");
+			}
+			const updated = await response.json();
+			if (typeof updated.icon !== 'string') throw new Error("Couldn't update app picture");
+			const icon = updated.icon;
+			if (deployment?.id === currentDeployment.id) deployment = { ...deployment, icon };
+			queryClient.setQueryData<Deployment>(['deployment', currentDeployment.id], (current) =>
+				current ? { ...current, icon } : current
+			);
+			toasts.add({ title: 'App picture updated', color: 'success' });
+			return icon;
+		} catch (error) {
+			toasts.add({
+				title: "Couldn't update app picture",
+				description: error instanceof Error ? error.message : 'Upload failed',
+				color: 'error'
+			});
+			return null;
+		}
+	}
+
 	function handleDeploymentUpdated(updated: Deployment) {
 		if (deployment) mergeInto(deployment, updated);
 		else deployment = updated;
@@ -3039,6 +3089,18 @@
 				</div>
 			{/if}
 
+			<Modal bind:open={appPictureOpen} title="App picture" size="sm">
+				<Field label="Picture" for="app-picture-input">
+					<ImageField
+						id="app-picture-input"
+						bind:value={appPictureValue}
+						bind:busy={uploadingAppPicture}
+						upload={uploadAppPicture}
+						accept="image/jpeg,image/png,image/gif,image/webp"
+						removable={false}
+					/>
+				</Field>
+			</Modal>
 			<DeploymentHeader
 				{deployment}
 				{headerCollapsed}
@@ -3060,6 +3122,8 @@
 				onStop={() => (showStopModal = true)}
 				onStart={() => lifecycleAction('start')}
 				onRename={() => (renameOpen = true)}
+				onChangePicture={openAppPicture}
+				uploadingPicture={uploadingAppPicture}
 				onShowDeleteModal={() => (showDeleteModal = true)}
 				onTriggerActionAnim={triggerActionAnim}
 				onViewBuildLogs={handleViewBuildLogs}

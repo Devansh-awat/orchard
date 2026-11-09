@@ -569,6 +569,20 @@ export function deploymentRoutes(r: Router, { store }: MockContext) {
 		'/deployments/:id',
 		withDep((d) => deploymentDetail(store, d))
 	);
+	r.post(
+		'/deployments/:id/icon',
+		withDep((d, { body }) => {
+			const file = body?.files?.file;
+			if (!file) return reply(400, { message: 'No file provided' });
+			if (!['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(file.type)) {
+				return reply(400, { message: 'Use a JPEG, PNG, GIF or WebP image' });
+			}
+			if (file.data.length > 2 * MIB) return reply(400, { message: 'Use a file under 2 MB' });
+			d.icon = `data:${file.type};base64,${file.data.toString('base64')}`;
+			changed(d);
+			return deploymentDetail(store, d);
+		})
+	);
 	r.get(
 		'/deployments/:id/pods-live',
 		withDep((d) => {

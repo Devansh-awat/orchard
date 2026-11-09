@@ -128,6 +128,7 @@ export interface Deployment {
 	id: string;
 	name: string;
 	displayName?: string | null;
+	icon?: string | null;
 	status: string;
 	buildStatus?: string;
 	buildStep?: string | null;

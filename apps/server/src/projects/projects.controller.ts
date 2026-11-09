@@ -1,5 +1,6 @@
 import { Idempotent } from '../idempotency/idempotency.interceptor';
 import {
+  APP_ICON_UPLOAD_BYTES,
   BUILD_CONTEXT_UPLOAD_BYTES,
   BuildContextUploadSlots,
   ImageUploadSlots,
@@ -1089,8 +1090,29 @@ export class DeploymentsController {
     private readonly metricsService: MetricsService,
     private readonly logCapture: PodLogCaptureService,
     private readonly rightsizing: RightsizingService,
-    private readonly recovery: DatabaseRecoveryService
+    private readonly recovery: DatabaseRecoveryService,
+    private readonly storageService: StorageService
   ) {}
+
+  @Post(':id/icon')
+  @UseInterceptors(ImageUploadSlots, FileInterceptor('file', uploadLimits(APP_ICON_UPLOAD_BYTES)))
+  async uploadDeploymentIcon(
+    @Param('id') id: string,
+    @UploadedFile() file: Express.Multer.File,
+    @Request() req
+  ) {
+    if (!file) throw new BadRequestException('No file provided');
+    if (!['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(file.mimetype)) {
+      throw new BadRequestException('Use a JPEG, PNG, GIF or WebP image');
+    }
+    return this.deployments.uploadDeploymentIcon(id, file, this.storageService, req.user.sub, {
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
+    });
+  }
 
   @Get(':id/build-runs')
   async getBuildRuns(@Param('id') id: string, @Request() req, @Query('limit') limitStr?: string) {
