@@ -1,0 +1,9 @@
+*.sh text eol=lf
+apps/server/hostbin/* text eol=lf
+
+pnpm-lock.yaml linguist-generated=true
+packages/contracts/openapi.json linguist-generated=true
+apps/docs/openapi.generated.json linguist-generated=true
+apps/landing/src/lib/credits.generated.json linguist-generated=true
+**/THIRD_PARTY_NOTICES.txt linguist-generated=true
+**/third-party-notices.txt linguist-generated=true
