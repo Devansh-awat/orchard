@@ -9,7 +9,7 @@ description: Deploy and manage apps, databases, scheduled jobs, domains, and log
 
 ## Setup
 
-- Auth: `export ORCHARD_API_TOKEN=orch_xxx` (mint via `orchard auth token create --name x --scope deploy --expires-in 30d`, or web Settings, API Tokens). Scopes nest: read < deploy < exec (exec covers `pod exec/shell`, `db psql`).
+- Auth: `export ORCHARD_API_URL=https://orchard.example.com ORCHARD_API_TOKEN=orch_xxx` (mint via `orchard auth token create --name x --scope deploy --expires-in 30d`, or web Settings, API Tokens). Scopes nest: read < deploy < exec (exec covers `pod exec/shell`, `db psql`).
 - Scope: flags `--org/--project/--env` beat env vars `ORCHARD_ORG/PROJECT/ENV`, which beat the saved `orchard use ...` context. Values are ids or slugs.
 
 ## Output and exit codes

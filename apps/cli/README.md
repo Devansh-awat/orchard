@@ -58,7 +58,7 @@ exactly what this flow produces.
 orchard auth login --token orch_xxx     # paste a token
 orchard auth login --with-token         # prompt for one
 orchard auth login --no-browser         # print the URL instead of opening it
-ORCHARD_API_TOKEN=orch_xxx orchard ...  # skip login entirely (agents/CI)
+ORCHARD_API_URL=https://orchard.example.com ORCHARD_API_TOKEN=orch_xxx orchard ...  # skip login entirely (agents/CI)
 ```
 
 `--no-browser` still finishes through a callback to a random port on `localhost`,
@@ -70,7 +70,7 @@ ssh -L <port>:127.0.0.1:<port> <remote-host>
 ```
 
 Without a terminal there is nobody to ask which instance you mean, so pass
-`--api-url <url>` as well.
+`--api-url <url>` or set `ORCHARD_API_URL` as well.
 
 Tokens carry scopes (`read`, `deploy`, `exec`; each includes the previous) and
 live at most 90 days. Mint and manage them from the CLI:
@@ -88,7 +88,7 @@ adds a context; `orchard context list|use|rename|remove` manages them and
 
 - `ORCHARD_CONTEXT`: context to use instead of the current one
 
-- `ORCHARD_API_URL`: API base (default `https://orchard.infra.hackclub.com`)
+- `ORCHARD_API_URL`: API base. There is no built-in default, so set it wherever no context is saved
 - `ORCHARD_API_TOKEN`: token (skips `auth login`, good for CI/agents)
 - `ORCHARD_JSON=1`: force JSON output even on a TTY
 - `ORCHARD_ORG` / `ORCHARD_PROJECT` / `ORCHARD_ENV`: default scope

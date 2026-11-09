@@ -8,11 +8,14 @@ Orchard is a self-hostable app platform: deployments, databases, domains, schedu
 
 ## Auth for headless use
 
-Set a token in the environment and skip login entirely:
+Set the instance URL and a token in the environment and skip login entirely:
 
 ```sh
+export ORCHARD_API_URL=https://orchard.example.com
 export ORCHARD_API_TOKEN=orch_xxx
 ```
+
+There is no built-in instance. With nothing saved and no `ORCHARD_API_URL`, a command run without a terminal or in CI never prompts: it exits 1 naming `--api-url` and `ORCHARD_API_URL`.
 
 `ORCHARD_API_TOKEN` overrides any token stored in `~/.orchard/config.json`.
 
@@ -33,13 +36,13 @@ orchard auth token create --name agent --scope deploy --expires-in 30d
 orchard auth token create --name ci --scope read --project my-app   # project-restricted
 ```
 
-Or create one in the web UI under Settings, API Tokens. Interactive humans can also run `orchard auth login` (browser flow) or `orchard auth login --token orch_xxx`. Add `--api-url <url>` to log in to a self-hosted instance.
+Or create one in the web UI under Settings, API Tokens. Interactive humans can also run `orchard auth login` (browser flow) or `orchard auth login --token orch_xxx`. The first login asks for the instance URL on a terminal; add `--api-url <url>` to skip the question or to add another instance.
 
 Other env vars:
 
 | var                       | effect                                                                                              |
 | ------------------------- | --------------------------------------------------------------------------------------------------- |
-| `ORCHARD_API_URL`         | API base. Set for any self-hosted instance (built-in default: `https://orchard.infra.hackclub.com`) |
+| `ORCHARD_API_URL`         | API base. Required wherever no context is saved; there is no built-in default                       |
 | `ORCHARD_API_TOKEN`       | credential, skips login                                                                             |
 | `ORCHARD_CONTEXT`         | instance context to use instead of the current one                                                 |
 | `ORCHARD_JSON=1`          | force JSON output even on a TTY                                                                     |
