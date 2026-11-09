@@ -4,7 +4,7 @@ set -euo pipefail
 CLUSTER=${ORCHARD_CLUSTER:-orchard-dev}
 HTTP_PORT=8080
 HTTPS_PORT=8443
-GATEWAY_API_VERSION=v1.2.1
+GATEWAY_API_VERSION=v1.6.1
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 step() { printf '\n\033[1;32m==> %s\033[0m\n' "$*"; }
