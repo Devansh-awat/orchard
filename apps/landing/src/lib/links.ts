@@ -18,6 +18,7 @@ export const links = {
 	notices: '/third-party-notices.txt',
 	changelog: 'https://github.com/hackclub/orchard/blob/main/CHANGELOG.md',
 	security: 'https://docs.orchard.my/operate/security/',
+	telemetry: 'https://docs.orchard.my/operate/telemetry/',
 	issues: 'https://github.com/hackclub/orchard/issues/new',
 	hackclub: 'https://hackclub.com',
 	joinHackClub: 'https://slack.hackclub.com',

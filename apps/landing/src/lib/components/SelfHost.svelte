@@ -15,7 +15,8 @@
 		},
 		{
 			title: 'Your data stays yours',
-			body: 'Your apps and databases live on machines you own. We never see any of it.'
+			body: 'Your apps and databases live on machines you own. Orchard collects nothing from users unless',
+			link: { label: 'statistics are enabled', href: links.telemetry, after: '.' }
 		},
 		{
 			title: 'Costs nothing',
