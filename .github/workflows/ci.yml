@@ -115,7 +115,7 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     env:
-      SAME_REPO: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+      SAME_REPO: ${{ github.event.pull_request.head.repo.full_name == github.repository && secrets.LEAFDBOT_PRIVATE_KEY != '' }}
     steps:
       - uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
         id: app-token
