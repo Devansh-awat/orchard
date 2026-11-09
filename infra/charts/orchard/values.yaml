@@ -50,6 +50,9 @@ frontend:
     maxReplicas: 6
     targetCPUUtilizationPercentage: 75
     targetMemoryUtilizationPercentage: null
+  # Where the dashboard's Source link points. Empty means the upstream repository.
+  # Set this if you run a modified version of Orchard.
+  sourceUrl: ""
   env: []
 
 # How the server finds the real client address behind your ingress. Every

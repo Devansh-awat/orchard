@@ -737,6 +737,12 @@ test(
   }
 );
 
+test('the dashboard source link is set at runtime', { skip: !helmAvailable() }, () => {
+  assert.doesNotMatch(render([]), /PUBLIC_SOURCE_URL/);
+  const out = render(['frontend.sourceUrl=https://git.example.com/me/orchard']);
+  assert.match(out, /PUBLIC_SOURCE_URL, value: "https:\/\/git\.example\.com\/me\/orchard"/);
+});
+
 test('per-database public db certificates are opt-in', { skip: !helmAvailable() }, () => {
   assert.doesNotMatch(render([]), /PUBLIC_DB_TLS_MODE/);
   const out = render(['publicTls.db.mode=perDatabase']);

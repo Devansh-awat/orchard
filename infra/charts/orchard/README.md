@@ -297,6 +297,7 @@ run a Datadog agent.
 | `frontend.image.name` | `frontend` | Image name suffix. |
 | `frontend.image.tag` | `""` | Tag override; empty falls back to `Chart.AppVersion`. Use `sha-<commit>` to pin. |
 | `frontend.service.port` | `3000` | ClusterIP Service port. |
+| `frontend.sourceUrl` | `""` | Where the dashboard's Source link points, as `PUBLIC_SOURCE_URL`. Empty means the upstream repository. |
 | `frontend.resources` | requests `50m/128Mi`, limits `1/1Gi` | Standard k8s resource block. |
 | `frontend.autoscaling.enabled` | `false` | HPA on CPU. Needs metrics-server. When on, `replicas` is omitted from the Deployment so upgrades don't fight the HPA. |
 | `frontend.autoscaling.minReplicas` / `maxReplicas` | `2` / `6` | Bounds. |

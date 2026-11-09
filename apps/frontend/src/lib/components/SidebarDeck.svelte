@@ -5,6 +5,8 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { browser } from '$app/environment';
+	import { env } from '$env/dynamic/public';
+	import { sourceUrl } from '$lib/source-url';
 	import { graftHost } from '$lib/grafts/host.svelte';
 	import {
 		Sprout,
@@ -19,6 +21,7 @@
 		LogOut,
 		KeyRound,
 		Scale,
+		Code,
 		SquareTerminal,
 		Sun,
 		Palette
@@ -310,6 +313,8 @@
 	$effect(() => {
 		if ($isSuperAdmin) instanceChecklist.load();
 	});
+
+	const sourceHref = sourceUrl(env.PUBLIC_SOURCE_URL);
 </script>
 
 {#if isMobile && $mobileNavOpen}
@@ -435,6 +440,7 @@
 			<MenuItem icon={Scale} href="/third-party-notices.txt" target="_blank" rel="noopener"
 				>Open source licenses</MenuItem
 			>
+			<MenuItem icon={Code} href={sourceHref} target="_blank" rel="noopener">Source</MenuItem>
 			<MenuSeparator />
 			<MenuItem icon={LogOut} danger onclick={() => user.signOut()}>Sign out</MenuItem>
 		{/snippet}

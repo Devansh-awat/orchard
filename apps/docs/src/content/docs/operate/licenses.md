@@ -7,7 +7,7 @@ Orchard is licensed under the [GNU Affero General Public License v3.0](https://g
 
 ## Modified versions
 
-If you run a modified version of Orchard that other people use over a network, you must offer those people the source code of your version. A link in your instance's interface or documentation is one way to do this.
+If you run a modified version of Orchard that other people use over a network, you must offer those people the source code of your version. A link in your instance's interface or documentation is one way to do this. If you run a modified version, point the **Source** link in the account menu at your source with `PUBLIC_SOURCE_URL` on the frontend, or `frontend.sourceUrl` in the Helm chart.
 
 The AGPL adds no further requirement if you run an unmodified version.
 

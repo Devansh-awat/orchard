@@ -37,6 +37,9 @@ spec:
             {{- with (include "orchard.mcpUrl" .) }}
             - { name: PUBLIC_MCP_URL, value: {{ . | quote }} }
             {{- end }}
+            {{- if and .Values.frontend.sourceUrl (not (include "orchard.envHas" (dict "env" .Values.frontend.env "key" "PUBLIC_SOURCE_URL"))) }}
+            - { name: PUBLIC_SOURCE_URL, value: {{ .Values.frontend.sourceUrl | quote }} }
+            {{- end }}
             {{- if not (include "orchard.envHas" (dict "env" .Values.frontend.env "key" "PUBLIC_APP_DOMAIN")) }}
             {{- with (include "orchard.appDomain" .) }}
             - { name: PUBLIC_APP_DOMAIN, value: {{ . | quote }} }
