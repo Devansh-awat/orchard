@@ -77,6 +77,8 @@
 
 	const DRIVES = [
 		{ name: 'Kubernetes', license: 'Apache-2.0', url: 'https://kubernetes.io' },
+		{ name: 'k3s', license: 'Apache-2.0', url: 'https://k3s.io' },
+		{ name: 'Helm', license: 'Apache-2.0', url: 'https://helm.sh' },
 		{ name: 'BuildKit', license: 'Apache-2.0', url: 'https://github.com/moby/buildkit' },
 		{ name: 'Railpack', license: 'MIT', url: 'https://github.com/railwayapp/railpack' },
 		{ name: 'Kata Containers', license: 'Apache-2.0', url: 'https://katacontainers.io' },
@@ -91,7 +93,23 @@
 			url: 'https://github.com/haproxytech/kubernetes-ingress'
 		},
 		{ name: 'Harbor', license: 'Apache-2.0', url: 'https://goharbor.io' },
+		{ name: 'zot', license: 'Apache-2.0', url: 'https://zotregistry.dev' },
+		{ name: 'VersityGW', license: 'Apache-2.0', url: 'https://github.com/versity/versitygw' },
+		{ name: 'Trivy', license: 'Apache-2.0', url: 'https://trivy.dev' },
 		{ name: 'VictoriaMetrics', license: 'Apache-2.0', url: 'https://victoriametrics.com' },
+		{
+			name: 'VictoriaLogs',
+			license: 'Apache-2.0',
+			url: 'https://victoriametrics.com/products/victorialogs/'
+		},
+		{ name: 'Vector', license: 'MPL-2.0', url: 'https://vector.dev' },
+		{ name: 'gVisor', license: 'Apache-2.0', url: 'https://gvisor.dev' },
+		{ name: 'Firecracker', license: 'Apache-2.0', url: 'https://firecracker-microvm.github.io' },
+		{
+			name: 'cloudflared',
+			license: 'Apache-2.0',
+			url: 'https://github.com/cloudflare/cloudflared'
+		},
 		{ name: 'Tailscale', license: 'BSD-3-Clause', url: 'https://tailscale.com' },
 		{
 			name: 'crane',
