@@ -158,7 +158,7 @@ install them.
 1. Install the Gateway API CRDs:
 
    ```bash
-   kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.2.1/standard-install.yaml
+   kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.6.1/standard-install.yaml
    ```
 
 2. Install CloudNativePG and cert-manager:
