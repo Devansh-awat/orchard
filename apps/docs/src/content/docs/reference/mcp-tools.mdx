@@ -549,12 +549,12 @@ Before using this tool:
 
 **toolset: deployments · open-world**
 
-Deploy an application by pasting a full GitHub repository URL. Use this when the user gives you a link (e.g. https://github.com/owner/repo or https://github.com/owner/repo/tree/branch) rather than an owner/repo pair.
+Deploy an application by pasting a full GitHub repository URL. Use this when the user gives you a link (e.g. `https://github.com/owner/repo` or `https://github.com/owner/repo/tree/branch`) rather than an owner/repo pair.
 Accepted URL shapes:
-- https://github.com/&lt;owner&gt;/&lt;repo&gt;
-- https://github.com/&lt;owner&gt;/&lt;repo&gt;.git
-- https://github.com/&lt;owner&gt;/&lt;repo&gt;/tree/&lt;branch&gt;
-- https://github.com/&lt;owner&gt;/&lt;repo&gt;/blob/&lt;branch&gt;/&lt;path&gt;
+- `https://github.com/<owner>/<repo>`
+- `https://github.com/<owner>/<repo>.git`
+- `https://github.com/<owner>/<repo>/tree/<branch>`
+- `https://github.com/<owner>/<repo>/blob/<branch>/<path>`
 - git@github.com:&lt;owner&gt;/&lt;repo&gt;.git
 The branch is auto-derived from /tree/&lt;branch&gt; or /blob/&lt;branch&gt; segments when present; otherwise it falls back to the branch parameter (default: main).
 Before calling, you should still confirm with list_github_deploy_targets that the caller's account is linked and the repo owner has the Orchard GitHub App installed. The other guidance from deploy_from_github (env vars, databases, ingress, port detection, buildFromRoot) applies here too.

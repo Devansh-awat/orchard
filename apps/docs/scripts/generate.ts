@@ -32,13 +32,24 @@ function fence(lang: string, body: string) {
  * style placeholders. Anything interpolated outside a code fence goes through
  * here: angle brackets become entities, pipes are escaped for tables.
  */
-function esc(text: unknown): string {
-  return String(text ?? '')
+function escapeMarkup(text: string): string {
+  return text
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/\|/g, '\\|')
     .replace(/\{/g, '&#123;')
-    .replace(/\}/g, '&#125;')
+    .replace(/\}/g, '&#125;');
+}
+
+function esc(text: unknown): string {
+  return escapeMarkup(String(text ?? '')).trim();
+}
+
+function prose(text: unknown): string {
+  return String(text ?? '')
+    .split(/(https?:\/\/[^\s)]*[^\s).,;:])/)
+    .map((part, i) => (i % 2 ? `\`${part.replace(/\|/g, '\\|')}\`` : escapeMarkup(part)))
+    .join('')
     .trim();
 }
 
@@ -173,7 +184,7 @@ Tools the connection's scope cannot run are hidden. See [MCP](/mcp/) for details
 
       body += `### \`${t.name}\`\n\n`;
       if (hints.length) body += `**${hints.join(' · ')}**\n\n`;
-      if (t.description) body += `${esc(t.description)}\n\n`;
+      if (t.description) body += `${prose(t.description)}\n\n`;
 
       const props = (t.input as any)?.properties ?? {};
       const required: string[] = (t.input as any)?.required ?? [];
@@ -189,7 +200,7 @@ Tools the connection's scope cannot run are hidden. See [MCP](/mcp/) for details
             : spec.anyOf
               ? 'any'
               : 'object';
-          const desc = esc(spec.description);
+          const desc = prose(spec.description);
           body += `| \`${p}\` | ${type} | ${required.includes(p) ? 'yes' : 'no'} | ${desc} |\n`;
         }
         body += '\n';
@@ -354,7 +365,7 @@ recognised. Anything without a default is optional unless the description says o
     body += `## ${s}\n\n| Variable | Default | Description |\n| --- | --- | --- |\n`;
     for (const e of rows) {
       const def = e.value ? `\`${esc(e.value)}\`` : '';
-      const desc = esc(e.notes.join(' '));
+      const desc = prose(e.notes.join(' '));
       body += `| \`${e.key}\` | ${def} | ${desc} |\n`;
     }
     body += '\n';
