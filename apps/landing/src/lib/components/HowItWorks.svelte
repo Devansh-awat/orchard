@@ -618,7 +618,7 @@
 														<span
 															class="flex items-center gap-1.5 rounded-full border border-[#e8e4e4] px-3 py-1 font-mono text-[11px] text-[#b8323f]"
 														>
-															site.orchard.my <ExternalLink size={10} />
+															site.example.com <ExternalLink size={10} />
 														</span>
 													</p>
 
@@ -731,7 +731,7 @@
 														<p
 															class="mt-2 inline-flex items-center gap-1 rounded-full bg-[#f4f1f1] px-2.5 py-1 text-[11px] text-[#3a3233]"
 														>
-															site.orchard.my <ExternalLink size={10} />
+															site.example.com <ExternalLink size={10} />
 														</p>
 													</div>
 													<span class="flex items-center gap-2">

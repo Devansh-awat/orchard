@@ -67,7 +67,7 @@
 	const DOMAINS = [
 		{ host: 'site.hackclub.dev', redirect: '' },
 		{ host: 'www.site.hackclub.dev', redirect: 'site.hackclub.dev' },
-		{ host: 'site.orchard.my', redirect: '' }
+		{ host: 'site.example.com', redirect: '' }
 	];
 
 	const PINGS = [
@@ -611,7 +611,7 @@
 										<span>Type</span><span>Name</span><span>Value</span>
 									</p>
 									<p class="mt-0.5 grid grid-cols-[46px_40px_1fr_auto] items-center">
-										<span>CNAME</span><span>site</span><span>orchard.my</span><Copy
+										<span>CNAME</span><span>site</span><span>orchard.example.com</span><Copy
 											size={10}
 											class="text-[#75696b]"
 										/>

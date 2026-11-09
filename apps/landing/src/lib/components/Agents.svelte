@@ -65,7 +65,7 @@
 		}
 	];
 	const OUTRO =
-		'site is live at https://site.orchard.my with Postgres attached. Both replicas are passing health checks.';
+		'site is live at https://site.example.com with Postgres attached. Both replicas are passing health checks.';
 
 	const GLYPHS = ['·', '✢', '✳', '✶', '✻', '✽', '✻', '✶', '✳', '✢'];
 
