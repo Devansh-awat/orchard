@@ -47,7 +47,7 @@ These were not tested on this path: backups with the `objectStorage` values, MCP
 public database exposure, more than one node, and other ingress controllers.
 
 To install the prerequisites, including the commands and a ClusterIssuer example,
-refer to [`docs/self-hosting.md`](../../../docs/self-hosting.md#install-the-prerequisites).
+refer to [Install the prerequisites](https://docs.orchard.my/start/install/#install-the-prerequisites).
 
 **1. Create the namespaces and the Secret.** The Secret holds two values the
 server needs at boot. `jwt` signs sessions and must be at least 32 characters.
@@ -163,7 +163,7 @@ inside the cluster, or configure external storage. Refer to
 This was not tested on this path.
 
 For the steps in full, refer to
-[`docs/self-hosting.md`](../../../docs/self-hosting.md#turn-on-image-builds).
+[Turn on image builds](https://docs.orchard.my/start/install/#turn-on-image-builds).
 
 Inspect what will be applied first:
 
@@ -171,7 +171,7 @@ Inspect what will be applied first:
 helm template orchard oci://ghcr.io/hackclub/orchard/charts/orchard -f my-values.yaml | less
 ```
 
-[`docs/self-hosting.md`](../../../docs/self-hosting.md) walks through the rest.
+[Install on an existing cluster](https://docs.orchard.my/start/install/#install-on-an-existing-cluster) walks through the rest.
 
 ---
 
@@ -934,7 +934,7 @@ Upgrading across the 2026-09 security release:
   BuildKit config. If you pushed to a plaintext registry other than the
   internal Harbor, list it.
 - identity-provider-initiated SAML sign-in stops working, and org owners only
-  sign in through providers they created; see the self-hosting guide.
+  sign in through providers they created; see https://docs.orchard.my/teams/sso/.
 
 Upgrading to the release with cluster-neutral storage defaults:
 

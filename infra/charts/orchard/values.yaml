@@ -205,7 +205,7 @@ tenant:
   #
   # Per host costs one issuance each, against Let's Encrypt's 50 per registered
   # domain per week (eTLD+1, so every subdomain shares one budget). Past roughly
-  # 50 URLs a week, set up a wildcard instead — see docs/self-hosting.md.
+  # 50 URLs a week, set up a wildcard instead — see https://docs.orchard.my/operate/wildcard-certificates/.
   wildcardDomains: ""
 
 # Cilium-specific features: per-tenant CiliumNetworkPolicy and the
@@ -217,7 +217,7 @@ tenant:
 # the server probes the cluster instead of assuming, and picks the enforcement
 # point for basic auth from the answer: the Envoy filter where Cilium is
 # available, Orchard's own protection proxy where it isn't. Basic auth works
-# either way. See "Basic auth on an ingress" in docs/self-hosting.md.
+# either way. See https://docs.orchard.my/deploy/protection/.
 cilium:
   enabled: false
 
