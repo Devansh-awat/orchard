@@ -48,7 +48,6 @@ jobs:
               - '.oxlintrc.json'
               - '.oxfmtrc.json'
               - '.github/workflows/**'
-              - '.depot/workflows/**'
             server:
               - 'apps/server/**'
               - 'packages/contracts/**'
@@ -62,36 +61,28 @@ jobs:
               - '.oxlintrc.json'
               - '.oxfmtrc.json'
               - '.github/workflows/**'
-              - '.depot/workflows/**'
             hostctl:
               - 'apps/server/hostctl/**'
               - '.github/workflows/**'
-              - '.depot/workflows/**'
             gateway:
               - 'apps/gateway/**'
               - '.github/workflows/**'
-              - '.depot/workflows/**'
             cli:
               - 'apps/cli/**'
               - '.github/workflows/**'
-              - '.depot/workflows/**'
             contracts:
               - 'packages/contracts/**'
               - 'scripts/typecheck.mjs'
               - '.github/workflows/**'
-              - '.depot/workflows/**'
             r2_proxy:
               - 'apps/r2-proxy/**'
               - '.github/workflows/**'
-              - '.depot/workflows/**'
             fc_builder:
               - 'apps/fc-builder/**'
               - '.github/workflows/**'
-              - '.depot/workflows/**'
             registry:
               - 'apps/registry/**'
               - '.github/workflows/**'
-              - '.depot/workflows/**'
             docs:
               - 'apps/docs/**'
               - 'apps/frontend/src/lib/design/**'
@@ -103,18 +94,15 @@ jobs:
               - '.oxlintrc.json'
               - '.oxfmtrc.json'
               - '.github/workflows/**'
-              - '.depot/workflows/**'
             landing:
               - 'apps/landing/**'
               - 'pnpm-lock.yaml'
               - '.oxlintrc.json'
               - '.oxfmtrc.json'
               - '.github/workflows/**'
-              - '.depot/workflows/**'
             chart:
               - 'infra/charts/**'
               - '.github/workflows/**'
-              - '.depot/workflows/**'
             deps:
               - 'pnpm-lock.yaml'
               - 'pnpm-workspace.yaml'
@@ -123,7 +111,60 @@ jobs:
               - 'packages/*/package.json'
               - 'grafts/*/package.json'
               - '.github/workflows/**'
-              - '.depot/workflows/**'
+
+  lint:
+    runs-on: depot-ubuntu-latest
+    env:
+      SAME_REPO: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+    steps:
+      - uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
+        id: app-token
+        if: env.SAME_REPO == 'true'
+        with:
+          app-id: 1090304
+          private-key: ${{ secrets.LEAFDBOT_PRIVATE_KEY }}
+          permission-contents: write
+          repositories: ${{ github.event.repository.name }}
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        if: env.SAME_REPO == 'true'
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          ref: ${{ github.head_ref }}
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        if: env.SAME_REPO != 'true'
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Oxfmt (auto-fix + self-commit)
+        id: fmt
+        if: env.SAME_REPO == 'true'
+        run: |
+          pnpm exec oxfmt
+          if git diff --quiet; then echo "already formatted"; exit 0; fi
+          if ! pnpm exec oxfmt --check >/dev/null 2>&1; then
+            echo "oxfmt output failed re-validation — refusing to commit" >&2
+            git checkout -- .; exit 1
+          fi
+          git config user.name "leafdbot[bot]"
+          git config user.email "192038741+leafdbot[bot]@users.noreply.github.com"
+          git commit -am "chore(ci): apply formatter fixes"
+          echo "committed=true" >> "$GITHUB_OUTPUT"
+      - name: Push formatter fixes
+        if: env.SAME_REPO == 'true' && steps.fmt.outputs.committed == 'true'
+        env:
+          TOKEN: ${{ steps.app-token.outputs.token }}
+        run: git push "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:refs/heads/${GITHUB_HEAD_REF}"
+      - name: Oxfmt (check only)
+        if: env.SAME_REPO != 'true'
+        run: pnpm format:check
+      - name: Oxlint
+        run: pnpm exec oxlint --quiet --format github
+      - name: Design guardrails
+        run: node apps/frontend/scripts/check-design.mjs
 
   commitlint:
     runs-on: depot-ubuntu-latest
@@ -537,7 +578,7 @@ jobs:
           { go vet ./... && go test ./... -count=1; } 2>&1 | tee /tmp/go-cli.log
           status=${PIPESTATUS[0]}
           grep -E -- '--- FAIL|^FAIL|panic:|_test\.go:[0-9]+|\.go:[0-9]+:[0-9]+:' /tmp/go-cli.log | head -40 | while IFS= read -r line; do echo "::error::${line}"; done
-          exit $status
+          exit "$status"
 
   go-gateway:
     needs: changes

@@ -34,11 +34,11 @@ jobs:
           - arch: amd64
             uname: x86_64
             node: x64
-            runner: ubuntu-24.04
+            runner: depot-ubuntu-24.04
           - arch: arm64
             uname: aarch64
             node: arm64
-            runner: ubuntu-24.04-arm
+            runner: depot-ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 90
     env:
