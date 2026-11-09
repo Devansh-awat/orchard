@@ -193,6 +193,7 @@ ORCHARD_ADDON_UPDATES=off in /etc/orchard/env.
 			if err := harden(c); err != nil {
 				return err
 			}
+			allowRootlessBuilds(c, usernsProcPath, usernsSysctlConf, c.Run)
 			if err := migrateValues(c); err != nil {
 				return err
 			}

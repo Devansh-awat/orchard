@@ -2290,3 +2290,28 @@ test('install commands run the script from a file', () => {
     assert.doesNotMatch(readFileSync(join(root, file), 'utf8'), /bash -c "\$\(curl/, file);
   }
 });
+
+test('rootless builds are allowed only where the host blocks them', () => {
+  const box = sandbox();
+  try {
+    const conf = join(box.dir, 'builds.conf');
+    const value = join(box.dir, 'value');
+    const calls = join(box.dir, 'sysctl-calls');
+    writeFileSync(
+      join(box.dir, 'sysctl'),
+      `#!/bin/sh\nif [ "$1" = -n ]; then cat "${value}"; exit 0; fi\necho "$*" >> "${calls}"\n`
+    );
+    chmodSync(join(box.dir, 'sysctl'), 0o755);
+
+    writeFileSync(value, '0\n');
+    box.run(`SYSCTL_CONF=${conf}; allow_rootless_builds`);
+    assert.equal(existsSync(conf), false, 'a host that allows them is left alone');
+
+    writeFileSync(value, '1\n');
+    box.run(`SYSCTL_CONF=${conf}; allow_rootless_builds`);
+    assert.match(readFileSync(conf, 'utf8'), /apparmor_restrict_unprivileged_userns = 0/);
+    assert.match(readFileSync(calls, 'utf8'), /apparmor_restrict_unprivileged_userns=0/);
+  } finally {
+    box.cleanup();
+  }
+});

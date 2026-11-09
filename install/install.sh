@@ -10,6 +10,7 @@ IMAGE_REGISTRY=${ORCHARD_IMAGE_REGISTRY:-ghcr.io}
 IMAGE_REPOSITORY=${ORCHARD_IMAGE_REPOSITORY:-hackclub/orchard}
 STATE_DIR=${ORCHARD_STATE_DIR:-/etc/orchard}
 VALUES_FILE="$STATE_DIR/values.yaml"
+SYSCTL_CONF=${ORCHARD_SYSCTL_CONF:-/etc/sysctl.d/90-orchard-builds.conf}
 REGISTRIES_FILE=${ORCHARD_REGISTRIES_FILE:-/etc/rancher/k3s/registries.yaml}
 
 K3S_VERSION=${K3S_VERSION:-}
@@ -2913,9 +2914,25 @@ configure_firewall() {
   fi
 }
 
+allow_rootless_builds() {
+  local key=kernel.apparmor_restrict_unprivileged_userns
+  [ "$(sysctl -n "$key" 2>/dev/null)" = 1 ] || return 0
+  if [ -f "$VALUES_FILE" ] \
+    && [ "$(yq -r '.builderSandbox.enabled == true or .builders.allowPrivilegedOnHost == true' "$VALUES_FILE" 2>/dev/null)" = true ]; then
+    return 0
+  fi
+  printf '%s = 0\n' "$key" > "$SYSCTL_CONF"
+  if sysctl -q -w "$key=0"; then
+    info "allowed user namespaces so builds can run rootless"
+  else
+    warn "couldn't set $key to 0; builds fail until it is"
+  fi
+}
+
 install_k3s() {
   step
   configure_firewall
+  allow_rootless_builds
 
   if command -v k3s >/dev/null 2>&1; then
     info "k3s already installed, leaving it alone"
@@ -4239,7 +4256,7 @@ EOF
   if [ "$INGRESS_MODE" = tunnel ]; then
     warn "Tunnel mode carries HTTP only, so public databases and raw TCP ports are off."
   fi
-  warn "Builds run with host-level privileges. Only give build access to people you trust."
+  warn "Builds share this machine's kernel. Only give build access to people you trust."
   printf '\n'
 }
 

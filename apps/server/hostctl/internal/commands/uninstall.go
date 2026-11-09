@@ -71,7 +71,7 @@ func layoutFor(env cli.Env) hostLayout {
 		SystemdDir:   "/etc/systemd/system",
 		K3sUninstall: "/usr/local/bin/k3s-uninstall.sh",
 		Rancher:      []string{"/etc/rancher", "/var/lib/rancher"},
-		Runtime:      []string{"/var/lib/vector-orchard", "/etc/cni"},
+		Runtime:      []string{"/var/lib/vector-orchard", "/etc/cni", usernsSysctlConf},
 		Homes:        homes,
 	}
 }
