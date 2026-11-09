@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.40.1](https://github.com/hackclub/orchard/compare/cli/v0.40.0...cli/v0.40.1) (2026-11-09)
+
+
+### Bug Fixes
+
+* **cli:** never lose a cancel that races the prompt ([229cfd2](https://github.com/hackclub/orchard/commit/229cfd215097558c39441f6f59f5cf6b1ffd955a))
+
 ## [0.40.0](https://github.com/hackclub/orchard/compare/cli/v0.39.0...cli/v0.40.0) (2026-11-09)
 
 

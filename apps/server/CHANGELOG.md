@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.93.1](https://github.com/hackclub/orchard/compare/server/v2.93.0...server/v2.93.1) (2026-11-09)
+
+
+### Bug Fixes
+
+* **server:** orchardctl update adds the zot push rule when missing ([2591037](https://github.com/hackclub/orchard/commit/2591037a6a38a68c6496f82503b02d6919446361))
+
 ## [2.93.0](https://github.com/hackclub/orchard/compare/server/v2.92.0...server/v2.93.0) (2026-11-09)
 
 
