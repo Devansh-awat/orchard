@@ -722,7 +722,7 @@ preflight() {
   if [ ! -d "$STATE_DIR" ] && command -v kubectl >/dev/null 2>&1 && kubectl cluster-info >/dev/null 2>&1; then
     warn "an existing Kubernetes cluster is reachable from this shell."
     warn "This installer creates its own k3s cluster and won't touch it."
-    warn "To install into that cluster instead, use the Helm chart: docs/self-hosting.md"
+    warn "To install into that cluster instead, use the Helm chart: https://docs.orchard.my/start/install/#install-on-an-existing-cluster"
     if [ "$(ask 'Continue and create a new k3s cluster? (yes/no)' no)" != yes ]; then
       die "stopped so the existing cluster is left alone"
     fi
