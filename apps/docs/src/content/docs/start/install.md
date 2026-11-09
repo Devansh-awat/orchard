@@ -442,12 +442,13 @@ These were not tested on this path: MCP, public database exposure, more than one
 
 You also need these domains:
 
-| Domain               | Setting            | Purpose                                                                |
-| -------------------- | ------------------ | ---------------------------------------------------------------------- |
-| Dashboard domain     | `ingress.host`     | The dashboard                                                          |
-| App domain           | `APP_DOMAIN`       | Wildcard DNS that points at your ingress controller's load balancer IP |
-| Ingress CNAME target | `INGRESS_CNAME`    | The target for users' custom domains                                   |
-| Database domain      | `PUBLIC_DB_DOMAIN` | Optional wildcard for publicly exposed databases                       |
+| Domain               | Setting                    | Purpose                                                                |
+| -------------------- | -------------------------- | ---------------------------------------------------------------------- |
+| Dashboard domain     | `ingress.host`             | The dashboard                                                          |
+| App domain           | `APP_DOMAIN`               | Wildcard DNS that points at your ingress controller's load balancer IP |
+| Ingress CNAME target | `INGRESS_CNAME`            | The target for users' custom domains                                   |
+| Database domain      | `PUBLIC_DB_DOMAIN`         | Optional wildcard for publicly exposed databases                       |
+| Public port domain   | `PUBLIC_DEPLOYMENT_DOMAIN` | Optional wildcard for publicly exposed ports                           |
 
 ### Install the prerequisites
 

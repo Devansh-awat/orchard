@@ -14,6 +14,19 @@ You do not need this guide in these cases:
 - **`tunnel` mode:** Cloudflare serves the certificate for your names. For what it covers, refer to [Install Orchard](/start/install/).
 - **An `sslip.io` name:** You cannot create the DNS records that DNS-01 needs. Use your own domain.
 
+## When you need a wildcard
+
+Without a wildcard, each URL uses one certificate from Let's Encrypt's limits:
+
+| Limit                                     | Value                                      |
+| ----------------------------------------- | ------------------------------------------ |
+| Certificates per registered domain        | 50 per 7 days, refilling 1 per 202 minutes |
+| Duplicate certificates for the same names | 5 per 7 days                               |
+| New orders per account                    | 300 per 3 hours                            |
+| Failed validations                        | 5 per name per hour                        |
+
+The first limit is shared by every name under the registered domain, so `apps.example.com`, `orchard.example.com`, and every generated URL all count against `example.com`. Past about 50 new URLs a week, use a wildcard.
+
 ## Prerequisites
 
 - cert-manager installed in the cluster. The installer includes it in `public` and `lan` mode.
