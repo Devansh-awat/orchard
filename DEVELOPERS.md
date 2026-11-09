@@ -117,7 +117,7 @@ Principals: instance superadmin; org owner / admin / member / guest; project adm
 
 Grafts are trusted by design. Graft code authority is out of scope; only signature, revocation and labeling signals matter.
 
-Related files: `docs/isolation-testing.md` (how the cross-tenant control-plane harness works and how to classify a new route), `docs/isolation-invariants.json` (machine-readable index), `docs/vercel-comparison.md`, operator page `apps/docs/src/content/docs/operate/tenancy-and-isolation.md`, network and kernel details in `apps/docs/src/content/docs/operate/security.mdx`.
+Related files: `docs/isolation-testing.md` (how the cross-tenant control-plane harness works and how to classify a new route), `docs/isolation-invariants.json` (machine-readable index), operator page `apps/docs/src/content/docs/operate/tenancy-and-isolation.md`, network and kernel details in `apps/docs/src/content/docs/operate/security.mdx`.
 
 Rule for this document: where something is still unfixed it is described as hardening guidance, not as a procedure.
 
