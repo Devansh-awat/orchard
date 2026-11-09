@@ -77,7 +77,7 @@ resource "orchard_database" "db" {
 resource "orchard_deployment" "web" {
   project_id = orchard_project.midnight.id
   name       = "web"
-  image      = "ghcr.io/hackclub/midnight-web:1.4.0"
+  image      = "ghcr.io/acme/midnight-web:1.4.0"
   port       = 3000
   replicas   = 2
 }
@@ -101,7 +101,7 @@ resource "orchard_job" "nightly" {
 
   steps {
     name    = "report"
-    image   = "ghcr.io/hackclub/midnight-report:1.0.0"
+    image   = "ghcr.io/acme/midnight-report:1.0.0"
     command = "node report.js"
   }
 }

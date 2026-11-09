@@ -751,7 +751,7 @@ gh attestation verify install.sh --bundle install.sh.sigstore.jsonl --owner hack
 To verify a container image:
 
 ```sh
-gh attestation verify oci://ghcr.io/hackclub/orchard/server:2.69.0 --owner hackclub --bundle-from-oci
+gh attestation verify oci://ghcr.io/hackclub/orchard/server:<version> --owner hackclub --bundle-from-oci
 ```
 
 CLI downloads include `attestation.sigstore.jsonl` on the release page. Orchard signs [grafts](/grafts/overview/) in the Extension Marketplace with its own key and checks the signature on every install.

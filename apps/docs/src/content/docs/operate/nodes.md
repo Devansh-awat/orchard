@@ -58,7 +58,7 @@ A node with no assignments accepts workloads from any organization.
 2. Select the node.
 3. In **Organization assignments**, select an **Organization**.
 4. In **Mode**, select `allow` or `deny`.
-5. (Optional) Set **Max services**, **CPU limit, for example 2 or 500m**, and **Memory limit, for example 4Gi**.
+5. (Optional) Set **Max services**, **CPU limit** (for example, `2` or `500m`), and **Memory limit** (for example, `4Gi`).
 6. Select **Save assignment**.
 
 An organization with at least one `allow` assignment runs only on its allowed nodes. An organization never runs on a node with a `deny` assignment.

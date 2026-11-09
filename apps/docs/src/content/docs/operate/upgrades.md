@@ -67,8 +67,10 @@ Run the following command:
 
 ```bash
 helm upgrade orchard oci://ghcr.io/hackclub/orchard/charts/orchard \
-  --namespace orchard -f my-values.yaml
+  --namespace orchard -f my-values.yaml --server-side=false
 ```
+
+On Helm 3, leave out `--server-side=false`, because Helm 3 does not have this flag. For the reason Helm 4 needs it, refer to [Upgrade the chart](/start/install/#upgrade-the-chart).
 
 In automated pipelines, add `--version` to pin a chart version.
 

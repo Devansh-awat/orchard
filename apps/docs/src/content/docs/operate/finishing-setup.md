@@ -208,7 +208,7 @@ To change the registry that Orchard pushes to, or to install Orchard in a cluste
 
 A network policy limits builders to DNS and public IP addresses on ports 80 and 443. A build runs code from a repository, so it must not reach the Orchard API or database. Add a registry inside the cluster or on a private address explicitly.
 
-The chart defaults describe the Hack Club cluster: Harbor in a `harbor` namespace and an HAProxy load balancer. Replace them with your own values.
+The chart defaults assume Harbor in a `harbor` namespace and an HAProxy load balancer. Replace them with your own values.
 
 ```yaml
 builders:

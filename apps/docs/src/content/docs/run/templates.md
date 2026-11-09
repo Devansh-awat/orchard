@@ -40,7 +40,7 @@ metadata:
   version: '1.0.0'
   category: cms
   tags: ['blog', 'cms']
-  author: LeafdTK
+  author: your-github-handle
 
 parameters:
   - name: appName

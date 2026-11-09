@@ -171,8 +171,10 @@ The one-command installer uses one machine, so that machine is a single point of
 
 ```bash
 helm upgrade orchard oci://ghcr.io/hackclub/orchard/charts/orchard \
-  --version <VERSION> -n orchard -f my-values.yaml
+  --version <VERSION> -n orchard -f my-values.yaml --server-side=false
 ```
+
+On Helm 3, leave out `--server-side=false`.
 
 ## Verify the configuration
 

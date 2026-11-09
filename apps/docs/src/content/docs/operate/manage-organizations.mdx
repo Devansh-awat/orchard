@@ -30,14 +30,17 @@ Superadmins can create organizations, set their resource quotas, and delete them
 
 Orchard applies these limits across all projects in the organization. Kubernetes enforces them when it admits a pod.
 
-| Field                              | Description                                                                                          |
-| ---------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| **CPU (millicores)**               | The total CPU for the organization.                                                                  |
-| **Memory (MiB)**                   | The total memory for the organization.                                                               |
-| **Max pods**                       | The total number of pods.                                                                            |
-| **Max services**                   | The total number of services.                                                                        |
-| **Default CPU / pod (millicores)** | The CPU request for containers that do not specify one. Required if CPU or memory quotas are set.    |
-| **Default memory / pod (MiB)**     | The memory request for containers that do not specify one. Required if CPU or memory quotas are set. |
+| Field                      | Description                                                                                                       |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| **CPU**                    | The total CPU for the organization, in millicores.                                                                |
+| **Memory**                 | The total memory for the organization, in MiB.                                                                    |
+| **Max pods**               | The total number of pods.                                                                                         |
+| **Max services**           | The total number of services.                                                                                     |
+| **Max projects**           | The total number of projects.                                                                                     |
+| **Max environments**       | The total number of environments.                                                                                 |
+| **Max deployments**        | The total number of apps.                                                                                         |
+| **Default CPU per pod**    | The CPU request, in millicores, for containers that do not specify one. Required if CPU or memory quotas are set. |
+| **Default memory per pod** | The memory request, in MiB, for containers that do not specify one. Required if CPU or memory quotas are set.     |
 
 ## Share a quota between organizations
 
