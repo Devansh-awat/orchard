@@ -667,6 +667,10 @@ preflight() {
   detect_arch
   info "architecture: $ARCH"
 
+  if [ -n "$RELEASE_KEYS" ] && [ "$(unsigned_commands_allowed)" != true ] && ! openssl_checks_signatures; then
+    die "the installer checks release signatures and needs OpenSSL 3 or newer. Upgrade it, or set ORCHARD_ALLOW_UNSIGNED_COMMANDS=true to install without the check"
+  fi
+
   MEM_MB=$(awk '/MemTotal/ {print int($2/1024)}' /proc/meminfo)
   [ "$MEM_MB" -ge 3500 ] || die "need at least 4Gi of RAM, found ${MEM_MB}Mi"
   [ "$MEM_MB" -ge 7500 ] || warn "8Gi is the comfortable floor; builds may be tight at ${MEM_MB}Mi"
@@ -2754,7 +2758,7 @@ databaseDumps:
 EOF
 }
 
-RELEASE_KEYS=""
+RELEASE_KEYS="MCowBQYDK2VwAyEAGZ/AMiI95EFw93YNrsui6YQg3FMqdUVZ1FQh/+k92co="
 
 # Images from anywhere but a published Orchard release have no signature to check.
 unsigned_commands_allowed() {
@@ -2769,13 +2773,17 @@ unsigned_commands_allowed() {
   fi
 }
 
+openssl_checks_signatures() {
+  openssl pkeyutl -help 2>&1 | grep -q rawin
+}
+
 verify_bootstrap() {
   local script=$1 dir key sum verified=false
   [ -n "$RELEASE_KEYS" ] || return 0
   [ "$(unsigned_commands_allowed)" = true ] && return 0
-  if ! openssl pkeyutl -help 2>&1 | grep -q rawin; then
-    warn "this openssl can't check release signatures; orchardctl checks later updates itself"
-    return 0
+  if ! openssl_checks_signatures; then
+    warn "this openssl can't check release signatures; not installing the host commands"
+    return 1
   fi
   dir=$(mktemp -d)
   kubectl -n orchard exec deploy/server -- cat /app/hostbin/hostbin.manifest > "$dir/manifest" 2>/dev/null || true

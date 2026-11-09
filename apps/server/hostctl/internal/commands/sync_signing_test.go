@@ -190,7 +190,7 @@ func TestEveryPlaceTrustsTheSameKeys(t *testing.T) {
 		t.Fatalf("orchard-sync-commands trusts %q, orchardctl trusts %q", got, want)
 	}
 	installer := shellKeys(t, "../../../../../install/install.sh")
-	if len(installer) > 0 && strings.Join(installer, " ") != want {
+	if strings.Join(installer, " ") != want {
 		t.Fatalf("install.sh trusts %v, orchardctl trusts %q", installer, want)
 	}
 }
@@ -204,6 +204,11 @@ func runBootstrap(t *testing.T, img *imageFixture, extraEnv ...string) (string, 
 	if !bytes.Contains(help, []byte("rawin")) {
 		t.Skip("needs an openssl with -rawin")
 	}
+	return execBootstrap(t, img, extraEnv...)
+}
+
+func execBootstrap(t *testing.T, img *imageFixture, extraEnv ...string) (string, string, error) {
+	t.Helper()
 	raw, err := os.ReadFile("../../../hostbin/orchard-sync-commands")
 	if err != nil {
 		t.Fatal(err)
@@ -250,5 +255,54 @@ func TestBootstrapChecksTheSignature(t *testing.T) {
 	os.Remove(filepath.Join(unsigned.dir, release.SignatureFile))
 	if _, _, err := runBootstrap(t, unsigned); err == nil {
 		t.Fatal("the bootstrap accepted an unsigned image")
+	}
+}
+
+func oldOpenssl(t *testing.T) {
+	t.Helper()
+	bin := t.TempDir()
+	if err := os.WriteFile(filepath.Join(bin, "openssl"), []byte("#!/bin/sh\necho 'Usage: pkeyutl [options]'\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+}
+
+func TestBootstrapNeedsAnOpensslThatCanVerify(t *testing.T) {
+	oldOpenssl(t)
+	img := newImage(t, "2.90.0")
+	installed, out, err := execBootstrap(t, img)
+	if err == nil || installed != "" {
+		t.Fatalf("installed without checking the signature:\n%s", out)
+	}
+	if !strings.Contains(out, "OpenSSL 3") {
+		t.Fatalf("the refusal should say what is needed:\n%s", out)
+	}
+	if installed, out, err := execBootstrap(t, img, "ORCHARD_ALLOW_UNSIGNED_COMMANDS=true"); err != nil || installed == "" {
+		t.Fatalf("the opt-out should still install: %v\n%s", err, out)
+	}
+}
+
+func TestInstallerNeedsAnOpensslThatCanVerify(t *testing.T) {
+	oldOpenssl(t)
+	raw, err := os.ReadFile("../../../../../install/install.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var functions strings.Builder
+	for _, name := range []string{"openssl_checks_signatures", "verify_bootstrap"} {
+		body := regexp.MustCompile(`(?ms)^` + name + `\(\) \{.*?^\}`).Find(raw)
+		if body == nil {
+			t.Fatalf("install.sh no longer defines %s", name)
+		}
+		functions.Write(body)
+		functions.WriteString("\n")
+	}
+	script := functions.String() + `RELEASE_KEYS=key
+unsigned_commands_allowed() { echo false; }
+warn() { echo "$*"; }
+verify_bootstrap /dev/null
+`
+	if out, err := exec.Command("bash", "-c", script).CombinedOutput(); err == nil {
+		t.Fatalf("the installer accepted a bootstrap it could not verify:\n%s", out)
 	}
 }
