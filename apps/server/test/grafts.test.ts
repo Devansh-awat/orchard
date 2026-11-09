@@ -824,7 +824,8 @@ describe('trust tiers', () => {
         ]),
         ORCHARD_GRAFTS_DIR: dest,
         ORCHARD_GRAFT_TRUST: trustPolicy,
-        ORCHARD_GRAFT_MARKETPLACE_URL: market
+        ORCHARD_GRAFT_MARKETPLACE_URL: market,
+        ORCHARD_REGISTRY_SIGNATURE: 'auto'
       }) as NodeJS.ProcessEnv;
 
     const ok = await syncGrafts(env('signed'));

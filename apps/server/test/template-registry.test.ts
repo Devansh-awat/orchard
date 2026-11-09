@@ -1,10 +1,14 @@
-import test from 'node:test';
+import test, { beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { createHash } from 'node:crypto';
 import type { AddressInfo } from 'node:net';
 import { TemplateEngineService } from '../src/templates/template-engine.service';
 import { TemplatesService, registryUrl } from '../src/templates/templates.service';
+
+beforeEach(() => {
+  process.env.ORCHARD_REGISTRY_SIGNATURE = 'auto';
+});
 
 const ghost = `apiVersion: leaf/v1
 kind: Template
@@ -204,7 +208,6 @@ test('an unsigned catalogue is accepted while the registry publishes no signatur
     '/templates/ghost/1.2.0/template.yaml': ghost
   });
   process.env.TEMPLATE_REGISTRY_URL = registry.url;
-  delete process.env.ORCHARD_REGISTRY_SIGNATURE;
   const settings: Record<string, string> = {};
   try {
     const first = fakePrisma({}, settings);
@@ -222,19 +225,18 @@ test('an unsigned catalogue is accepted while the registry publishes no signatur
   }
 });
 
-test('ORCHARD_REGISTRY_SIGNATURE=required refuses an unsigned catalogue', async () => {
+test('an unsigned catalogue is refused by default', async () => {
   const registry = await fakeRegistry({
     '/templates/index.json': goodIndex,
     '/templates/ghost/1.2.0/template.yaml': ghost
   });
   process.env.TEMPLATE_REGISTRY_URL = registry.url;
-  process.env.ORCHARD_REGISTRY_SIGNATURE = 'required';
+  delete process.env.ORCHARD_REGISTRY_SIGNATURE;
   try {
     const { prisma, writes } = fakePrisma({});
     assert.deepEqual(await service(prisma).syncRegistry(), { synced: 0, skipped: 0 });
     assert.equal(writes.length, 0);
   } finally {
-    delete process.env.ORCHARD_REGISTRY_SIGNATURE;
     registry.close();
   }
 });

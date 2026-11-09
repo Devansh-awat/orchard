@@ -23,7 +23,7 @@ export class MissingRegistryObject extends Error {}
 export function registrySignaturePolicyFromEnv(
   env: NodeJS.ProcessEnv = process.env
 ): RegistrySignaturePolicy {
-  const value = (env[REGISTRY_SIGNATURE_ENV] || 'auto').trim().toLowerCase();
+  const value = (env[REGISTRY_SIGNATURE_ENV] || 'required').trim().toLowerCase();
   if (value === 'auto' || value === 'required') return value;
   throw new Error(`${REGISTRY_SIGNATURE_ENV} must be auto or required (got "${value}")`);
 }
@@ -62,7 +62,9 @@ export function verifyRegistryIndex(input: {
   const now = input.now ?? new Date();
   if (signature === null) {
     if (policy === 'required') {
-      throw new Error(`${name} is unsigned and ${REGISTRY_SIGNATURE_ENV}=required`);
+      throw new Error(
+        `${name} is unsigned. To use a registry you run yourself, set ${REGISTRY_SIGNATURE_ENV}=auto`
+      );
     }
     if (state?.signed) {
       throw new Error(

@@ -126,7 +126,7 @@ test('unsigned is accepted only in auto mode and only before a signed copy was s
   assert.match(v.warnings[0], /NOT signed/);
   assert.throws(
     () => verifyRegistryIndex({ ...base, state: null, policy: 'required' }),
-    /required/
+    /ORCHARD_REGISTRY_SIGNATURE=auto/
   );
   assert.throws(
     () => verifyRegistryIndex({ ...base, state: { sequence: 1, signed: true }, policy: 'auto' }),
@@ -134,8 +134,9 @@ test('unsigned is accepted only in auto mode and only before a signed copy was s
   );
 });
 
-test('the policy env defaults to auto and rejects junk', () => {
-  assert.equal(registrySignaturePolicyFromEnv({}), 'auto');
+test('the policy env defaults to required, allows auto and rejects junk', () => {
+  assert.equal(registrySignaturePolicyFromEnv({}), 'required');
+  assert.equal(registrySignaturePolicyFromEnv({ ORCHARD_REGISTRY_SIGNATURE: 'auto' }), 'auto');
   assert.equal(
     registrySignaturePolicyFromEnv({ ORCHARD_REGISTRY_SIGNATURE: 'Required' }),
     'required'
@@ -193,17 +194,23 @@ test('fetchRevoked keeps the last accepted revocation list when the catalog stop
   };
   try {
     writeFileSync(join(dir, 'grafts/index.json'), JSON.stringify({ revoked: ['AA'] }));
-    const first = await fetchRevoked(dir, false, { env: {}, store });
+    const first = await fetchRevoked(dir, false, {
+      env: { ORCHARD_REGISTRY_SIGNATURE: 'auto' },
+      store
+    });
     assert.deepEqual([...(first.revoked ?? [])], ['sha256:aa']);
 
     writeFileSync(join(dir, 'grafts/index.json'), JSON.stringify({ revoked: [] }));
     writeFileSync(join(dir, 'grafts/index.json.sig'), Buffer.alloc(64, 2).toString('base64'));
-    const forged = await fetchRevoked(dir, false, { env: {}, store });
+    const forged = await fetchRevoked(dir, false, {
+      env: { ORCHARD_REGISTRY_SIGNATURE: 'auto' },
+      store
+    });
     assert.deepEqual([...(forged.revoked ?? [])], ['sha256:aa']);
     assert.match(forged.warning ?? '', /last accepted revocation list/);
 
     const strict = await fetchRevoked(dir, false, {
-      env: { ORCHARD_REGISTRY_SIGNATURE: 'required' },
+      env: {},
       store: { load: async () => null, save: async () => undefined }
     });
     assert.equal(strict.revoked, null);
