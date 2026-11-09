@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -35,20 +34,16 @@ func authLoginCmd() *cobra.Command {
 		Use:   "login",
 		Short: "Authenticate with Orchard",
 		Long: "Sign in through your browser (default). Orchard creates a personal API token\n" + "and sends it back over a local callback.\n\n" +
-			"Or paste a token with --token (create one in Account settings, under API\n" + "tokens), or set ORCHARD_API_TOKEN.",
+			"Or paste a token with --token (create one in Account settings, under API\n" + "tokens), or set ORCHARD_API_TOKEN.\n\n" +
+			"The first time, it asks for your instance's URL and adds a context for it.\n" +
+			"Without a terminal, pass --api-url or set ORCHARD_API_URL. To sign in to\n" + "another instance later, pass --api-url.",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.Load()
 			if err != nil {
 				return err
 			}
-			if apiURL != "" || contextName != "" {
-				target := apiURL
-				if target == "" {
-					target = cfg.APIURL
-				}
-				if cfg, err = cfg.ForInstance(target, contextName); err != nil {
-					return err
-				}
+			if cfg, err = loginInstance(cmd.Context(), cfg, apiURL, contextName); err != nil {
+				return err
 			}
 
 			// Manual token path: explicit --token, --with-token prompt, or a
@@ -86,75 +81,18 @@ func authLoginCmd() *cobra.Command {
 			// API unless overridden.
 			base := webURL
 			if base == "" {
-				if apiURL != "" {
-					base = apiURL
-				} else if noBrowser && !output.StdinIsTTY() {
-					savedBase, baseErr := headlessLoginBaseURL(cfg.APIURL)
-					if baseErr != nil {
-						return baseErr
-					}
-					base = savedBase
-				} else {
-					selectedBase, promptErr := chooseLoginBaseURL(os.Stdin, os.Stderr)
-					if promptErr != nil {
-						return promptErr
-					}
-					base = selectedBase
-					if cfg, err = cfg.ForInstance(base, contextName); err != nil {
-						return err
-					}
-				}
+				base = cfg.APIURL
 			}
 			return webLogin(cfg, base, !noBrowser)
 		},
 	}
 	c.Flags().StringVar(&token, "token", "", "paste a token instead of using the browser")
 	c.Flags().BoolVar(&withToken, "with-token", false, "prompt for a token instead of using the browser")
-	c.Flags().StringVar(&apiURL, "api-url", "", "Orchard instance to sign in to; adds a context for it")
+	c.Flags().StringVar(&apiURL, "api-url", "", "Orchard instance to sign in to; adds a context for it. Needed without a terminal unless ORCHARD_API_URL is set")
 	c.Flags().StringVar(&contextName, "name", "", "name for this instance's context (default: its hostname)")
 	c.Flags().StringVar(&webURL, "web-url", "", "override web app base URL (defaults to the API URL)")
 	c.Flags().BoolVar(&noBrowser, "no-browser", false, "print the URL instead of opening a browser")
 	return c
-}
-
-// headlessLoginBaseURL picks the instance when there is nobody to ask. Falling
-// back to the default would send a self-hoster to the wrong Orchard.
-func headlessLoginBaseURL(saved string) (string, error) {
-	if saved == "" || saved == config.DefaultAPIURL {
-		return "", errors.New("--no-browser without a terminal needs to know which Orchard to use: pass --api-url <url>")
-	}
-	return saved, nil
-}
-
-func chooseLoginBaseURL(in io.Reader, out io.Writer) (string, error) {
-	r := bufio.NewReader(in)
-	fmt.Fprintln(out, "Where do you want to sign in?")
-	fmt.Fprintln(out, "1) Hack Club Orchard")
-	fmt.Fprintln(out, "2) Self-hosted Orchard")
-	fmt.Fprint(out, "Choose an Orchard instance [1]: ")
-	choice, err := r.ReadString('\n')
-	if err != nil && len(choice) == 0 {
-		return "", fmt.Errorf("couldn't read Orchard instance choice: %w", err)
-	}
-	choice = strings.TrimSpace(choice)
-	if choice == "" || choice == "1" {
-		return config.DefaultAPIURL, nil
-	}
-	if choice != "2" {
-		return "", fmt.Errorf("invalid Orchard instance choice %q: choose 1 or 2", choice)
-	}
-
-	fmt.Fprint(out, "Base URL: ")
-	base, err := r.ReadString('\n')
-	if err != nil && len(base) == 0 {
-		return "", fmt.Errorf("couldn't read self-hosted base URL: %w", err)
-	}
-	base = strings.TrimRight(strings.TrimSpace(base), "/")
-	parsed, err := url.Parse(base)
-	if err != nil || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {
-		return "", fmt.Errorf("invalid self-hosted base URL %q: use an http:// or https:// URL", base)
-	}
-	return base, nil
 }
 
 func authStatusCmd() *cobra.Command {
@@ -185,7 +123,14 @@ func authLogoutCmd() *cobra.Command {
 		Use:   "logout",
 		Short: "Remove the stored token",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, _ := config.Load()
+			cfg, err := config.Load()
+			if err != nil {
+				return err
+			}
+			if !cfg.HasInstance() && cfg.Name == "" {
+				output.Successf("logged out")
+				return nil
+			}
 			cfg.Token = ""
 			if err := cfg.Save(); err != nil {
 				return err

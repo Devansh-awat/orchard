@@ -12,7 +12,7 @@ import (
 	"strings"
 )
 
-var DefaultAPIURL = "https://orchard.infra.hackclub.com"
+var DefaultAPIURL string
 
 var Override string
 
@@ -95,12 +95,15 @@ func LoadFile() (*File, error) {
 		return f, nil
 	}
 	data, rerr := os.ReadFile(p)
-	if rerr != nil {
+	if errors.Is(rerr, os.ErrNotExist) {
 		return f, nil
+	}
+	if rerr != nil {
+		return f, fmt.Errorf("couldn't read %s: %w", p, rerr)
 	}
 	var raw legacyFile
 	if err := json.Unmarshal(data, &raw); err != nil {
-		return f, nil
+		return f, fmt.Errorf("couldn't parse %s: %w: fix or remove the file", p, err)
 	}
 	for name, e := range raw.Contexts {
 		if ValidName(name) {
@@ -132,9 +135,8 @@ func (f *File) Names() []string {
 }
 
 func (f *File) FindByURL(apiURL string) (string, bool) {
-	want := strings.TrimRight(apiURL, "/")
 	for _, name := range f.Names() {
-		if strings.TrimRight(f.Contexts[name].APIURL, "/") == want {
+		if sameURL(f.Contexts[name].APIURL, apiURL) {
 			return name, true
 		}
 	}
@@ -184,7 +186,10 @@ func Selected(f *File) string {
 }
 
 func Load() (*Config, error) {
-	f, _ := LoadFile()
+	f, err := LoadFile()
+	if err != nil {
+		return nil, err
+	}
 	name := Selected(f)
 	c := &Config{Name: name, APIURL: DefaultAPIURL}
 	if e, ok := f.Contexts[name]; ok {
@@ -230,17 +235,20 @@ func (c *Config) ForInstance(apiURL, name string) (*Config, error) {
 	if name != "" && !ValidName(name) {
 		return nil, fmt.Errorf("invalid context name %q: use letters, numbers, dots, dashes or underscores", name)
 	}
-	f, _ := LoadFile()
+	f, err := LoadFile()
+	if err != nil {
+		return nil, err
+	}
 	if name != "" {
 		if e, ok := f.Contexts[name]; ok {
-			if strings.TrimRight(e.APIURL, "/") != apiURL {
+			if !sameURL(e.APIURL, apiURL) {
 				return nil, fmt.Errorf("context %q already points at %s", name, e.APIURL)
 			}
 			return &Config{Name: name, APIURL: e.APIURL, Token: e.Token, Context: e.Context, MakeCurrent: true}, nil
 		}
 		return &Config{Name: name, APIURL: apiURL, MakeCurrent: true}, nil
 	}
-	if strings.TrimRight(c.APIURL, "/") == apiURL && c.Name != "" {
+	if e, ok := f.Contexts[c.Name]; ok && c.Name != "" && sameURL(e.APIURL, apiURL) && sameURL(c.APIURL, apiURL) {
 		c.MakeCurrent = true
 		return c, nil
 	}
@@ -250,6 +258,8 @@ func (c *Config) ForInstance(apiURL, name string) (*Config, error) {
 	}
 	return &Config{Name: f.UniqueName(NameForURL(apiURL)), APIURL: apiURL, MakeCurrent: true}, nil
 }
+
+func (c *Config) HasInstance() bool { return c.APIURL != "" }
 
 func (c *Config) RequireToken() error {
 	if c.Token == "" {

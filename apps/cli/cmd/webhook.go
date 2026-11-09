@@ -4,7 +4,6 @@ import (
 	"net/http"
 
 	"github.com/hackclub/orchard/cli/internal/api"
-	"github.com/hackclub/orchard/cli/internal/config"
 	"github.com/hackclub/orchard/cli/internal/output"
 	"github.com/spf13/cobra"
 )
@@ -32,7 +31,7 @@ func webhookDeployCmd() *cobra.Command {
 			"deployments only).",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.Load()
+			cfg, err := instanceConfig(cmd.Context())
 			if err != nil {
 				return err
 			}

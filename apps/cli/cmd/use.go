@@ -103,7 +103,7 @@ func contextCmd() *cobra.Command {
 			}
 			pairs := [][2]string{
 				{"context", labeled(cfg.Name, "")},
-				{"api", cfg.APIURL},
+				{"api", labeled("", cfg.APIURL)},
 				{"org", labeled(cfg.Context.OrgSlug, cfg.Context.OrgID)},
 				{"project", labeled(cfg.Context.ProjectSlug, cfg.Context.ProjectID)},
 				{"env", labeled(cfg.Context.EnvName, cfg.Context.EnvID)},
@@ -126,6 +126,10 @@ func contextCmd() *cobra.Command {
 			cfg, err := config.Load()
 			if err != nil {
 				return err
+			}
+			if !cfg.HasInstance() && cfg.Name == "" {
+				output.Successf("context cleared")
+				return nil
 			}
 			cfg.Context = config.Context{}
 			if err := cfg.Save(); err != nil {

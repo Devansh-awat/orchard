@@ -10,50 +10,7 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/hackclub/orchard/cli/internal/config"
 )
-
-func TestChooseLoginBaseURL(t *testing.T) {
-	tests := []struct {
-		name    string
-		input   string
-		want    string
-		wantErr bool
-	}{
-		{name: "Hack Club Orchard", input: "\n", want: "https://orchard.infra.hackclub.com"},
-		{name: "Self-Hosted Orchard", input: "2\nhttps://dashboard.automiq.me/\n", want: "https://dashboard.automiq.me"},
-		{name: "Invalid choice", input: "3\n", wantErr: true},
-		{name: "Invalid URL", input: "2\nnot-a-url\n", wantErr: true},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := chooseLoginBaseURL(strings.NewReader(tt.input), io.Discard)
-			if tt.wantErr {
-				if err == nil {
-					t.Fatal("expected error")
-				}
-				return
-			}
-			if err != nil {
-				t.Fatalf("chooseLoginBaseURL: %v", err)
-			}
-			if got != tt.want {
-				t.Fatalf("base URL = %q, want %q", got, tt.want)
-			}
-		})
-	}
-}
-
-func TestHeadlessLoginNeedsAnInstance(t *testing.T) {
-	if _, err := headlessLoginBaseURL(config.DefaultAPIURL); err == nil || !strings.Contains(err.Error(), "--api-url") {
-		t.Fatalf("default instance: err = %v, want it to name --api-url", err)
-	}
-	got, err := headlessLoginBaseURL("https://orchard.example.com")
-	if err != nil || got != "https://orchard.example.com" {
-		t.Fatalf("saved instance: got %q, err %v", got, err)
-	}
-}
 
 func runLoginWithoutTerminal(t *testing.T, args ...string) error {
 	t.Helper()
@@ -83,7 +40,7 @@ func TestNoBrowserWithoutTerminalAsksForAnInstanceNotAToken(t *testing.T) {
 }
 
 func TestLoginWithoutTerminalNamesTheWaysIn(t *testing.T) {
-	err := runLoginWithoutTerminal(t)
+	err := runLoginWithoutTerminal(t, "--api-url", startOrchard(t).URL)
 	if err == nil {
 		t.Fatal("expected an error with nothing on stdin")
 	}

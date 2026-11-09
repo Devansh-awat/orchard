@@ -146,7 +146,7 @@ func fmtFlag() output.Format { return output.Resolve(outputFlag) }
 
 // client loads config and returns an authenticated API client.
 func client() (*api.Client, *config.Config, error) {
-	cfg, err := config.Load()
+	cfg, err := signedInConfig(context.Background())
 	if err != nil {
 		return nil, nil, err
 	}

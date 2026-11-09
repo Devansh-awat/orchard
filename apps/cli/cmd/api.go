@@ -121,7 +121,7 @@ func apiSearchCmd() *cobra.Command {
 			"  orchard api search \"database connection\" -o json | jq -r '.[0].operationId'",
 		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.Load()
+			cfg, err := instanceConfig(cmd.Context())
 			if err != nil {
 				return err
 			}
@@ -157,7 +157,7 @@ func apiDescribeCmd() *cobra.Command {
 		Short: "Show an operation's params, body and response schema",
 		Args:  cobra.RangeArgs(1, 2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.Load()
+			cfg, err := instanceConfig(cmd.Context())
 			if err != nil {
 				return err
 			}
