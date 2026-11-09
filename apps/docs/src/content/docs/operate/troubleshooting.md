@@ -208,6 +208,12 @@ IPv6-only servers are not supported yet. This server has no IPv4 address.
 
 To try anyway, add `--allow-ipv6-only` when you run the installer. `--yes` does not imply this flag. NAT64 in front of an IPv4 server is unsupported, and Orchard has not tested it.
 
+### The installer stops partway
+
+**Cause:** A step failed. The installer prints the step and the error.
+
+**Fix:** Correct the problem, then [run the installer again](/start/install/#run-the-installer-again). It reads your current settings and continues from them. Do not delete `/etc/orchard/values.yaml` to get past a failure, because a new file means new secrets, and Orchard cannot read data encrypted with the old ones.
+
 ### A tunnel install fails with a handshake error
 
 ```txt
