@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.1.0](https://github.com/hackclub/orchard/compare/fc-builder/v1.0.4...fc-builder/v1.1.0) (2026-11-09)
+
+
+### Features
+
+* **frontend:** pilot skullet measured skeletons ([a65a915](https://github.com/hackclub/orchard/commit/a65a9154d6cdd0dac30043d6b5df3b2b9e8b6336))
+
+
+### Bug Fixes
+
+* **frontend:** finish skullet pilot states ([5a75e4e](https://github.com/hackclub/orchard/commit/5a75e4e40cdb8f0798f50743ed1229baf0aaa653))
+
 ## [1.0.4](https://github.com/hackclub/orchard/compare/fc-builder/v1.0.3...fc-builder/v1.0.4) (2026-11-05)
 
 
