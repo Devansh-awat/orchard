@@ -370,6 +370,7 @@ data:
             action: drop
 
       - job_name: kubernetes-kubelet
+        scrape_interval: 60s
         scheme: https
         tls_config:
           insecure_skip_verify: true
