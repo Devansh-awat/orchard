@@ -33,6 +33,11 @@ function cluster(
   } = {}
 ) {
   const state = { lease: opts.lease ?? null } as { lease: Lease | null };
+  let version = 1000;
+  const stamp = (lease: Lease) => {
+    lease.metadata.resourceVersion = String(++version);
+    return lease;
+  };
   const calls = { reads: 0, replaces: [] as Lease[], creates: [] as any[] };
   const api = {
     readNamespacedLease: async (name: string, namespace: string) => {
@@ -48,16 +53,19 @@ function cluster(
     replaceNamespacedLease: async (_name: string, _ns: string, body: Lease) => {
       const err = opts.replaceFails?.();
       if (err) throw err;
+      if (state.lease && body.metadata.resourceVersion !== state.lease.metadata.resourceVersion) {
+        throw httpError(409);
+      }
       calls.replaces.push(structuredClone(body));
-      state.lease = structuredClone(body);
-      return { body };
+      state.lease = stamp(structuredClone(body));
+      return { body: structuredClone(state.lease) };
     },
     createNamespacedLease: async (_ns: string, body: Lease) => {
       const err = opts.createFails?.();
       if (err) throw err;
       calls.creates.push(body);
-      state.lease = structuredClone(body);
-      return { body };
+      state.lease = stamp(structuredClone(body));
+      return { body: structuredClone(state.lease) };
     }
   };
   const kc = {
@@ -237,7 +245,8 @@ test('a conflicting renewal drops the lease at once', async () => {
 
 test('one failed renewal is tolerated and two in a row give the lease up', async () => {
   let failing = false;
-  const c = cluster({ readFails: () => (failing ? new Error('apiserver unreachable') : null) });
+  const unreachable = () => (failing ? new Error('apiserver unreachable') : null);
+  const c = cluster({ readFails: unreachable, replaceFails: unreachable });
   const { e, events, tick } = elector(c.kc);
   e.start();
   await flush();
@@ -252,7 +261,8 @@ test('one failed renewal is tolerated and two in a row give the lease up', async
 
 test('a successful renewal resets the failure count', async () => {
   let failing = false;
-  const c = cluster({ readFails: () => (failing ? new Error('blip') : null) });
+  const blip = () => (failing ? new Error('blip') : null);
+  const c = cluster({ readFails: blip, replaceFails: blip });
   const { e, tick } = elector(c.kc);
   e.start();
   await flush();

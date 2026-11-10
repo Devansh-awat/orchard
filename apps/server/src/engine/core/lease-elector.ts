@@ -65,6 +65,8 @@ export class LeaseElector extends EventEmitter implements Elector {
 
   private validUntil = 0;
 
+  private held?: k8s.V1Lease;
+
   private renewFailures = 0;
 
   private stopped = true;
@@ -75,8 +77,8 @@ export class LeaseElector extends EventEmitter implements Elector {
     this.namespace = opts.namespace;
     this.name = opts.name;
     this.identity = opts.identity;
-    this.leaseDurationSeconds = opts.leaseDurationSeconds ?? 15;
-    this.renewIntervalMs = opts.renewIntervalMs ?? 5_000;
+    this.leaseDurationSeconds = opts.leaseDurationSeconds ?? 30;
+    this.renewIntervalMs = opts.renewIntervalMs ?? 10_000;
     this.shouldAcquire = opts.shouldAcquire;
     this.logger = opts.logger ?? consoleLogger(`LeaseElector:${opts.name}`);
   }
@@ -113,6 +115,7 @@ export class LeaseElector extends EventEmitter implements Elector {
   }
 
   private async release(): Promise<void> {
+    this.held = undefined;
     try {
       const { body: lease } = await this.api.readNamespacedLease(this.name, this.namespace);
       if (lease.spec?.holderIdentity !== this.identity) return;
@@ -129,6 +132,7 @@ export class LeaseElector extends EventEmitter implements Elector {
     if (this.stopped) return;
     this.dropIfStale();
     const started = Date.now();
+    if (this.holding && this.held && (await this.renewHeld(started))) return;
     try {
       const lease = await this.readLease();
       if (this.stopped) return;
@@ -145,7 +149,7 @@ export class LeaseElector extends EventEmitter implements Elector {
       if (holder === this.identity) {
         lease.spec!.renewTime = new k8s.V1MicroTime();
         lease.spec!.leaseDurationSeconds = this.leaseDurationSeconds;
-        await this.api.replaceNamespacedLease(this.name, this.namespace, lease);
+        await this.replace(lease);
         this.onRenewed(false, started);
         return;
       }
@@ -161,7 +165,7 @@ export class LeaseElector extends EventEmitter implements Elector {
           renewTime: new k8s.V1MicroTime(),
           leaseTransitions: (lease.spec?.leaseTransitions ?? 0) + 1
         };
-        await this.api.replaceNamespacedLease(this.name, this.namespace, lease);
+        await this.replace(lease);
         this.onRenewed(true, started);
         return;
       }
@@ -180,6 +184,24 @@ export class LeaseElector extends EventEmitter implements Elector {
     }
   }
 
+  private async renewHeld(started: number): Promise<boolean> {
+    const lease = this.held!;
+    lease.spec!.renewTime = new k8s.V1MicroTime();
+    try {
+      await this.replace(lease);
+      this.onRenewed(false, started);
+      return true;
+    } catch {
+      this.held = undefined;
+      return false;
+    }
+  }
+
+  private async replace(lease: k8s.V1Lease): Promise<void> {
+    const { body } = await this.api.replaceNamespacedLease(this.name, this.namespace, lease);
+    this.held = body;
+  }
+
   private async readLease(): Promise<k8s.V1Lease | null> {
     try {
       const { body } = await this.api.readNamespacedLease(this.name, this.namespace);
@@ -193,7 +215,7 @@ export class LeaseElector extends EventEmitter implements Elector {
   }
 
   private async createLease(): Promise<void> {
-    await this.api.createNamespacedLease(this.namespace, {
+    const { body } = await this.api.createNamespacedLease(this.namespace, {
       metadata: { name: this.name, namespace: this.namespace },
       spec: {
         holderIdentity: this.identity,
@@ -203,6 +225,7 @@ export class LeaseElector extends EventEmitter implements Elector {
         leaseTransitions: 0
       }
     });
+    this.held = body;
   }
 
   private isExpired(lease: k8s.V1Lease): boolean {
@@ -231,6 +254,7 @@ export class LeaseElector extends EventEmitter implements Elector {
   }
 
   private setHolding(value: boolean): void {
+    if (!value) this.held = undefined;
     if (this.holding === value) return;
     this.holding = value;
     if (!value) this.logger.log('lost lease');
