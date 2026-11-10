@@ -11,11 +11,15 @@ import { PodLogCaptureService } from '../../kubernetes/pod-log-capture.service';
 import { cnpgScheduleName, K8sCnpgService } from '../../kubernetes/k8s-cnpg.service';
 import { clusterSnapshot, WRITE_GUARD_ANNOTATION } from '../../kubernetes/cnpg-status';
 import {
+  DB_STATS_METRIC_QUERIES,
+  dbStatsFromMetrics,
   nodeDiskPressure,
+  SampledDbStats,
   storagePressure,
   storagePressureDetail,
   type StoragePressureInput
 } from '../../kubernetes/db-stats';
+import { VictoriaMetricsService } from '../../metrics/victoria-metrics.service';
 import {
   dataVolumesOf,
   fullerOf,
@@ -47,7 +51,8 @@ const FRESH_TRANSITION_MS = 10 * 60 * 1000;
 const CRASH_CONFIRM_MS = 30_000;
 const RECOVER_CONFIRM_MS = 60_000;
 const STATS_MIN_GAP_MS = 10 * 1000;
-
+const STATS_REFRESH_MS = 60 * 1000;
+const STATS_QUERY_TIMEOUT_MS = 10 * 1000;
 const DATA_DIR_MEASURE_EVERY_MS = 5 * 60 * 1000;
 const CONFIRM_AFTER_MS = 90 * 1000;
 const SETTLING_STATUSES = new Set(['deleting', 'restoring', 'provisioning', 'error']);
@@ -99,7 +104,11 @@ export class CnpgConsumer implements OnModuleDestroy {
 
   private lastDataDirMeasure = new Map<string, number>();
 
+  private lastNodeDisk = new Map<string, DiskUsage>();
+
   private readonly sampling = new Set<string>();
+
+  private readonly vm = new VictoriaMetricsService();
 
   private readonly scheduleAbsentSince = new Map<string, number>();
 
@@ -540,6 +549,8 @@ export class CnpgConsumer implements OnModuleDestroy {
       try {
         let guardUsage: DiskUsage = volume;
         if (volume.shared) {
+          this.lastNodeDisk ??= new Map();
+          this.lastNodeDisk.set(db.id, volume);
           const own = measuredAllowance(db);
           await this.trackStorage(ctx, {
             volumeUsedBytes: own?.usedBytes ?? null,
@@ -550,13 +561,17 @@ export class CnpgConsumer implements OnModuleDestroy {
           });
           guardUsage = fullerOf(volume, own);
         } else {
-          await this.prisma.database.update({
-            where: { id: db.id },
-            data: {
-              volumeUsedBytes: BigInt(Math.round(volume.usedBytes)),
-              volumeCapacityBytes: BigInt(Math.round(volume.capacityBytes))
-            }
-          });
+          const volumeUsedBytes = BigInt(Math.round(volume.usedBytes));
+          const volumeCapacityBytes = BigInt(Math.round(volume.capacityBytes));
+          if (
+            db.volumeUsedBytes !== volumeUsedBytes ||
+            db.volumeCapacityBytes !== volumeCapacityBytes
+          ) {
+            await this.prisma.database.update({
+              where: { id: db.id },
+              data: { volumeUsedBytes, volumeCapacityBytes }
+            });
+          }
           await this.trackStorage(ctx, {
             volumeUsedBytes: volume.usedBytes,
             volumeCapacityBytes: volume.capacityBytes,
@@ -620,12 +635,22 @@ export class CnpgConsumer implements OnModuleDestroy {
             select: {
               id: true,
               namespace: true,
+              dbName: true,
               projectId: true,
               project: { select: { organizationId: true } }
             }
           }
         }
       });
+      const fromMetrics = await this.statsFromMetrics(
+        primaries
+          .filter((p) => p.database.namespace)
+          .map((p) => ({
+            namespace: p.database.namespace!,
+            pod: p.name,
+            dbName: p.database.dbName
+          }))
+      );
       for (const p of primaries) {
         if (!p.database.namespace) continue;
         await this.sampleStats(
@@ -635,7 +660,8 @@ export class CnpgConsumer implements OnModuleDestroy {
             projectId: p.database.projectId
           },
           p.name,
-          p.database.namespace
+          p.database.namespace,
+          fromMetrics.get(`${p.database.namespace}/${p.name}`)
         );
       }
     } catch (err) {
@@ -643,7 +669,28 @@ export class CnpgConsumer implements OnModuleDestroy {
     }
   }
 
-  async sampleStats(ctx: Ctx, pod: string, namespace: string): Promise<void> {
+  private async statsFromMetrics(
+    primaries: { namespace: string; pod: string; dbName: string }[]
+  ): Promise<Map<string, SampledDbStats>> {
+    if (primaries.length === 0) return new Map();
+    try {
+      const [size, connections, walPending] = await Promise.all([
+        this.vm.queryInstantVector(DB_STATS_METRIC_QUERIES.size, STATS_QUERY_TIMEOUT_MS),
+        this.vm.queryInstantVector(DB_STATS_METRIC_QUERIES.connections, STATS_QUERY_TIMEOUT_MS),
+        this.vm.queryInstantVector(DB_STATS_METRIC_QUERIES.walPending, STATS_QUERY_TIMEOUT_MS)
+      ]);
+      return dbStatsFromMetrics(primaries, { size, connections, walPending });
+    } catch {
+      return new Map();
+    }
+  }
+
+  async sampleStats(
+    ctx: Ctx,
+    pod: string,
+    namespace: string,
+    sampled?: SampledDbStats
+  ): Promise<void> {
     const now = Date.now();
     if (now - (this.lastSample.get(ctx.databaseId) ?? 0) < STATS_MIN_GAP_MS) return;
     if (this.sampling.has(ctx.databaseId)) return;
@@ -654,55 +701,89 @@ export class CnpgConsumer implements OnModuleDestroy {
         select: {
           dbName: true,
           storageSize: true,
+          sizeBytes: true,
+          connections: true,
+          statsAt: true,
           volumeUsedBytes: true,
-          volumeCapacityBytes: true
+          volumeCapacityBytes: true,
+          walPendingSegments: true
         }
       });
       if (!db) return;
       this.lastDataDirMeasure ??= new Map();
+      this.lastNodeDisk ??= new Map();
       const measureDataDir =
         now - (this.lastDataDirMeasure.get(ctx.databaseId) ?? 0) >= DATA_DIR_MEASURE_EVERY_MS;
-      const stats = await this.cnpg.sampleDatabaseStats(namespace, pod, db.dbName, {
-        measureDataDir
-      });
+      const executed =
+        !sampled || measureDataDir
+          ? await this.cnpg.sampleDatabaseStats(namespace, pod, db.dbName, { measureDataDir })
+          : null;
+      const stats = executed ?? sampled;
       if (!stats) return;
       this.lastSample.set(ctx.databaseId, Date.now());
-      if (stats.shared && measureDataDir) this.lastDataDirMeasure.set(ctx.databaseId, now);
+      if (executed && measureDataDir) this.lastDataDirMeasure.set(ctx.databaseId, now);
       const allowance = parseMemory(db.storageSize ?? '');
       const previous =
-        allowance > 0 && db.volumeUsedBytes != null && Number(db.volumeCapacityBytes) === allowance
-          ? { usedBytes: Number(db.volumeUsedBytes), capacityBytes: allowance }
+        db.volumeUsedBytes != null && db.volumeCapacityBytes != null
+          ? { usedBytes: Number(db.volumeUsedBytes), capacityBytes: Number(db.volumeCapacityBytes) }
           : null;
-      const own: DiskUsage | null = !stats.shared
-        ? stats.volumeUsedBytes == null || stats.volumeCapacityBytes == null
-          ? null
-          : { usedBytes: stats.volumeUsedBytes, capacityBytes: stats.volumeCapacityBytes }
-        : !(allowance > 0)
-          ? null
-          : stats.shared.dataDirBytes == null
-            ? previous
-            : { usedBytes: stats.shared.dataDirBytes, capacityBytes: allowance };
-      await this.prisma.database.update({
-        where: { id: ctx.databaseId },
-        data: {
-          sizeBytes: BigInt(Math.round(stats.sizeBytes)),
-          connections: stats.connections,
-          statsAt: new Date(),
-          volumeUsedBytes: own ? BigInt(Math.round(own.usedBytes)) : null,
-          volumeCapacityBytes: own ? BigInt(Math.round(own.capacityBytes)) : null,
-          walPendingSegments: stats.walPendingSegments ?? null
+      const previousOwn =
+        allowance > 0 && previous && previous.capacityBytes === allowance ? previous : null;
+      let own: DiskUsage | null;
+      if (!executed) {
+        own = previous;
+      } else if (!executed.shared) {
+        this.lastNodeDisk.delete(ctx.databaseId);
+        own =
+          executed.volumeUsedBytes == null || executed.volumeCapacityBytes == null
+            ? null
+            : { usedBytes: executed.volumeUsedBytes, capacityBytes: executed.volumeCapacityBytes };
+      } else {
+        if (executed.volumeUsedBytes != null && executed.volumeCapacityBytes != null) {
+          this.lastNodeDisk.set(ctx.databaseId, {
+            usedBytes: executed.volumeUsedBytes,
+            capacityBytes: executed.volumeCapacityBytes
+          });
         }
-      });
-      this.scheduleEmit(ctx, { stats: true });
+        own = !(allowance > 0)
+          ? null
+          : executed.shared.dataDirBytes == null
+            ? previousOwn
+            : { usedBytes: executed.shared.dataDirBytes, capacityBytes: allowance };
+      }
+      const nodeDisk = this.lastNodeDisk.get(ctx.databaseId);
+      const sizeBytes = BigInt(Math.round(stats.sizeBytes));
+      const volumeUsedBytes = own ? BigInt(Math.round(own.usedBytes)) : null;
+      const volumeCapacityBytes = own ? BigInt(Math.round(own.capacityBytes)) : null;
+      const walPendingSegments = stats.walPendingSegments ?? null;
+      const unchanged =
+        db.sizeBytes === sizeBytes &&
+        db.connections === stats.connections &&
+        db.volumeUsedBytes === volumeUsedBytes &&
+        db.volumeCapacityBytes === volumeCapacityBytes &&
+        db.walPendingSegments === walPendingSegments &&
+        !!db.statsAt &&
+        Date.now() - db.statsAt.getTime() < STATS_REFRESH_MS;
+      if (!unchanged) {
+        await this.prisma.database.update({
+          where: { id: ctx.databaseId },
+          data: {
+            sizeBytes,
+            connections: stats.connections,
+            statsAt: new Date(),
+            volumeUsedBytes,
+            volumeCapacityBytes,
+            walPendingSegments
+          }
+        });
+        this.scheduleEmit(ctx, { stats: true });
+      }
       await this.trackStorage(ctx, {
         volumeUsedBytes: own?.usedBytes ?? null,
         volumeCapacityBytes: own?.capacityBytes ?? null,
-        walPendingSegments: stats.walPendingSegments,
-        ...(stats.shared
-          ? {
-              nodeDiskUsedBytes: stats.volumeUsedBytes,
-              nodeDiskCapacityBytes: stats.volumeCapacityBytes
-            }
+        walPendingSegments,
+        ...(nodeDisk
+          ? { nodeDiskUsedBytes: nodeDisk.usedBytes, nodeDiskCapacityBytes: nodeDisk.capacityBytes }
           : {})
       });
     } catch (err) {

@@ -135,3 +135,47 @@ export function storagePressureDetail(input: StoragePressureInput): string {
   }
   return parts.join(' and ');
 }
+
+export interface MetricSample {
+  metric: Record<string, string>;
+  value: number;
+}
+
+export const DB_STATS_METRIC_QUERIES = {
+  size: 'max by (namespace, pod, datname) (cnpg_pg_database_size_bytes)',
+  connections: 'sum by (namespace, pod, datname) (cnpg_backends_total)',
+  walPending: 'max by (namespace, pod) (cnpg_collector_pg_wal_archive_status{value="ready"})'
+} as const;
+
+export function dbStatsFromMetrics(
+  primaries: { namespace: string; pod: string; dbName: string }[],
+  samples: { size: MetricSample[]; connections: MetricSample[]; walPending: MetricSample[] }
+): Map<string, SampledDbStats> {
+  const key = (...parts: (string | undefined)[]) => parts.join('/');
+  const index = (list: MetricSample[], withDb: boolean) => {
+    const out = new Map<string, number>();
+    for (const s of list) {
+      const { namespace, pod, datname } = s.metric;
+      if (!namespace || !pod || (withDb && !datname)) continue;
+      out.set(withDb ? key(namespace, pod, datname) : key(namespace, pod), s.value);
+    }
+    return out;
+  };
+  const size = index(samples.size, true);
+  const connections = index(samples.connections, true);
+  const walPending = index(samples.walPending, false);
+  const out = new Map<string, SampledDbStats>();
+  for (const p of primaries) {
+    const sizeBytes = size.get(key(p.namespace, p.pod, p.dbName));
+    const pending = walPending.get(key(p.namespace, p.pod));
+    if (sizeBytes == null || pending == null) continue;
+    out.set(key(p.namespace, p.pod), {
+      sizeBytes,
+      connections: Math.round(connections.get(key(p.namespace, p.pod, p.dbName)) ?? 0),
+      walPendingSegments: Math.round(pending),
+      volumeCapacityBytes: null,
+      volumeUsedBytes: null
+    });
+  }
+  return out;
+}

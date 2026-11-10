@@ -423,8 +423,9 @@ test('a database on the node disk is measured with du at most every five minutes
   await svc.sampleStats(ctx, 'db-1-1', 'ns');
   assert.deepEqual(asked, [true, false]);
   assert.equal(updates[0].volumeUsedBytes, BigInt(2 * 1024 ** 3));
-  assert.equal(updates[1].volumeUsedBytes, BigInt(2 * 1024 ** 3));
-  assert.equal(updates[1].volumeCapacityBytes, BigInt(10 * 1024 ** 3));
+  assert.equal(updates.length, 1);
+  assert.equal(row.volumeUsedBytes, BigInt(2 * 1024 ** 3));
+  assert.equal(row.volumeCapacityBytes, BigInt(10 * 1024 ** 3));
 
   svc.lastSample.clear();
   svc.lastDataDirMeasure.set('db-1', Date.now() - 6 * 60 * 1000);

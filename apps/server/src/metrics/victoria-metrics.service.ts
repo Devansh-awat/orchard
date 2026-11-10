@@ -99,6 +99,18 @@ export class VictoriaMetricsService {
     label: string,
     timeoutMs = QUERY_TIMEOUT_MS
   ): Promise<Map<string, number>> {
+    const out = new Map<string, number>();
+    for (const r of await this.queryInstantVector(promql, timeoutMs)) {
+      const key = r.metric[label];
+      if (key) out.set(key, r.value);
+    }
+    return out;
+  }
+
+  async queryInstantVector(
+    promql: string,
+    timeoutMs = QUERY_TIMEOUT_MS
+  ): Promise<{ metric: Record<string, string>; value: number }[]> {
     const params = new URLSearchParams({ query: promql });
     const url = `${this.base}/api/v1/query?${params}`;
     let res: Response;
@@ -117,11 +129,10 @@ export class VictoriaMetricsService {
     if (body.status !== 'success') {
       throw new MetricsStoreError(`metrics store returned ${body.status}`);
     }
-    const out = new Map<string, number>();
+    const out: { metric: Record<string, string>; value: number }[] = [];
     for (const r of body.data?.result ?? []) {
-      const key = r.metric?.[label];
       const v = Number(r.value[1]);
-      if (key && Number.isFinite(v)) out.set(key, v);
+      if (Number.isFinite(v)) out.push({ metric: r.metric ?? {}, value: v });
     }
     return out;
   }

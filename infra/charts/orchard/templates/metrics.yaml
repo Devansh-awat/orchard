@@ -431,7 +431,7 @@ data:
             target_label: cluster
         metric_relabel_configs:
           - source_labels: [__name__]
-            regex: 'cnpg_(backends_total|pg_replication_lag|pg_database_size_bytes|pg_stat_database_(xact_commit|xact_rollback|blks_hit|blks_read|deadlocks))'
+            regex: 'cnpg_(backends_total|pg_replication_lag|pg_database_size_bytes|pg_stat_database_(xact_commit|xact_rollback|blks_hit|blks_read|deadlocks)|collector_pg_wal_archive_status)'
             action: keep
 
       - job_name: kubernetes-pods
