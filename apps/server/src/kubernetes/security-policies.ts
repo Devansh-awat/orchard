@@ -235,7 +235,7 @@ export function tenantDenyPolicy(
       //   4. Reach the public internet, but NOT link-local / cloud
       //      metadata (169.254.0.0/16), the RFC1918 ranges the platform's own
       //      infra lives on, or the addresses of the cluster's own nodes and
-      //      apiserver (which can be public), and not outbound mail ports.
+      //      apiserver (which can be public).
       //   5. Reach other Orchard tenant namespaces. Those namespaces are
       //      still default-deny on ingress, so this only lands on what a
       //      tenant has explicitly published via an `-allow-public`
