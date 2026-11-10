@@ -6,6 +6,7 @@ import { AuditService } from '../../audit/audit.service';
 import { OrgEventsService } from '../../events/org-events.service';
 import { KubernetesService } from '../../kubernetes/kubernetes.service';
 import { EngineEventType, EngineObjectKey } from '../core/informer';
+import { observedInMirror } from '../prisma-store';
 import { K8S_DELETED_REASON } from './workload.consumer';
 import { LiveState, readLive } from './live-object';
 import {
@@ -139,7 +140,12 @@ export class IngressConsumer {
       if (live.has(key)) continue;
       orphans.set(key, [...(orphans.get(key) ?? []), row]);
     }
-    for (const rows of orphans.values()) {
+    if (orphans.size === 0) return;
+    const observed = await this.observed(
+      [...orphans.values()].map(([row]) => ({ namespace: row.namespace, name: row.name }))
+    );
+    for (const [key, rows] of orphans) {
+      if (!observed.has(key)) continue;
       const { namespace, name } = rows[0];
       const state = await this.liveIngress(namespace, name);
       if (state === 'present') this.keptUnlabeled(namespace, name);
@@ -395,6 +401,10 @@ export class IngressConsumer {
     return readLive(this.kubernetes, this.logger, (kc) =>
       kc.makeApiClient(k8s.NetworkingV1Api).readNamespacedIngress(name, namespace)
     );
+  }
+
+  protected observed(keys: { namespace: string; name: string }[]): Promise<Set<string>> {
+    return observedInMirror(this.prisma, 'Ingress', keys);
   }
 
   private keptUnlabeled(namespace: string, name: string): void {

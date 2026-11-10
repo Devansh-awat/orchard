@@ -20,7 +20,11 @@ function ingressRow(id: string, name: string, path = '/') {
   };
 }
 
-function buildIngress(rows: ReturnType<typeof ingressRow>[], live: Record<string, Live>) {
+function buildIngress(
+  rows: ReturnType<typeof ingressRow>[],
+  live: Record<string, Live>,
+  observed?: string[]
+) {
   const deleted: string[] = [];
   const audits: any[] = [];
   const reads: string[] = [];
@@ -47,6 +51,12 @@ function buildIngress(rows: ReturnType<typeof ingressRow>[], live: Record<string
     reads.push(`${ns}/${name}`);
     return live[`${ns}/${name}`] ?? 'absent';
   };
+  (consumer as any).observed = async (keys: { namespace: string; name: string }[]) =>
+    new Set(
+      keys
+        .map((k) => `${k.namespace}/${k.name}`)
+        .filter((key) => observed === undefined || observed.includes(key))
+    );
   return { consumer, deleted, audits, reads };
 }
 
@@ -89,6 +99,17 @@ test('the list prune checks each missing object once and only drops the gone one
   await consumer.pruneStaleRows([{ namespace: 'acme', name: 'seen', refs: {} }]);
   assert.deepEqual(deleted.sort(), ['i1', 'i2']);
   assert.deepEqual(reads.sort(), ['acme/flaky', 'acme/gone', 'acme/unlabeled']);
+});
+
+test('the list prune leaves rows alone when this cluster never had their ingress', async () => {
+  const { consumer, deleted, reads } = buildIngress(
+    [ingressRow('i1', 'restored'), ingressRow('i2', 'deleted'), ingressRow('i3', 'seen')],
+    {},
+    ['acme/deleted']
+  );
+  await consumer.pruneStaleRows([{ namespace: 'acme', name: 'seen', refs: {} }]);
+  assert.deepEqual(deleted, ['i2']);
+  assert.deepEqual(reads, ['acme/deleted']);
 });
 
 function serviceRow(name: string) {
