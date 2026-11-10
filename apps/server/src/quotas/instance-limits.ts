@@ -14,11 +14,11 @@ interface LimitSpec {
   envQuantity: boolean;
 }
 
-const count = (
+const count = <F extends LimitFallback>(
   env: string,
-  fallback: LimitFallback,
+  fallback: F,
   opts: Partial<Omit<LimitSpec, 'env' | 'fallback'>> = {}
-): LimitSpec => ({
+): LimitSpec & { fallback: F } => ({
   env,
   fallback,
   min: 1,

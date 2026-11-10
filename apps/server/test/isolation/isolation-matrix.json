@@ -865,6 +865,15 @@
     "bodyIds": [],
     "unseeded": []
   },
+  "GET /admin/instance-limits": {
+    "class": "superadmin",
+    "auth": "superadmin",
+    "handler": "InstanceLimitsController.get",
+    "params": [],
+    "queryIds": [],
+    "bodyIds": [],
+    "unseeded": []
+  },
   "GET /admin/instance-settings/custom-domain-verification": {
     "class": "superadmin",
     "auth": "superadmin",
@@ -6300,6 +6309,15 @@
     "auth": "superadmin",
     "handler": "InstanceConfigController.save",
     "params": ["id:unknown"],
+    "queryIds": [],
+    "bodyIds": [],
+    "unseeded": []
+  },
+  "PUT /admin/instance-limits": {
+    "class": "superadmin",
+    "auth": "superadmin",
+    "handler": "InstanceLimitsController.save",
+    "params": [],
     "queryIds": [],
     "bodyIds": [],
     "unseeded": []
