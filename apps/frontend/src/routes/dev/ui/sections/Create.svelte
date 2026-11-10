@@ -60,7 +60,7 @@
 			hint: 'Managed, with backups',
 			image: IMG_ICONS.postgres
 		},
-		{ id: 'redis', label: 'Redis', hint: 'Valkey cache', image: IMG_ICONS.redis }
+		{ id: 'redis', label: 'Redis', image: IMG_ICONS.redis }
 	];
 
 	let busy = $state<string | null>(null);
