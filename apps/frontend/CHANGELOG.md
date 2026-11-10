@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.86.0](https://github.com/hackclub/orchard/compare/frontend/v1.85.1...frontend/v1.86.0) (2026-11-09)
+
+
+### Features
+
+* **frontend:** add source link to account menu ([5eb4acd](https://github.com/hackclub/orchard/commit/5eb4acd128555c0ae02fbe18c44d3a7ddf7bb74e))
+
+
+### Bug Fixes
+
+* **frontend:** simplify the telemetry statement ([e897fe3](https://github.com/hackclub/orchard/commit/e897fe3d5a661a1cb771f3ff65397bb3ad32a6c3))
+
 ## [1.85.1](https://github.com/hackclub/orchard/compare/frontend/v1.85.0...frontend/v1.85.1) (2026-11-09)
 
 

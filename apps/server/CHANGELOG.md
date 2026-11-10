@@ -1,5 +1,20 @@
 # Changelog
 
+## [2.95.0](https://github.com/hackclub/orchard/compare/server/v2.94.1...server/v2.95.0) (2026-11-09)
+
+
+### Features
+
+* **docs:** add DEVELOPERS.md with tenancy model ([8a258ca](https://github.com/hackclub/orchard/commit/8a258cae272dc030db772b30a625496f01ec378b))
+* **frontend:** add source link to account menu ([5eb4acd](https://github.com/hackclub/orchard/commit/5eb4acd128555c0ae02fbe18c44d3a7ddf7bb74e))
+
+
+### Bug Fixes
+
+* **chart:** move redis to 8.10.3 ([4fe5857](https://github.com/hackclub/orchard/commit/4fe5857557f47e112f00a461726f40e4281d4c87))
+* **install:** warn on low memory instead of stopping ([f9f588e](https://github.com/hackclub/orchard/commit/f9f588eb42f716c03f86600c59d6a379fe2b9a77))
+* **server:** make sign-in location lookup opt-in ([29c0cc8](https://github.com/hackclub/orchard/commit/29c0cc8c9e3f8fa19502fb022fd588b821312482))
+
 ## [2.94.1](https://github.com/hackclub/orchard/compare/server/v2.94.0...server/v2.94.1) (2026-11-09)
 
 

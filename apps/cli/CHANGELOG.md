@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.42.0](https://github.com/hackclub/orchard/compare/cli/v0.41.1...cli/v0.42.0) (2026-11-09)
+
+
+### Features
+
+* **cli:** ask for the instance on first run ([5dd05b8](https://github.com/hackclub/orchard/commit/5dd05b8e4c6186fec30b610f680e6a6b581d6441))
+
+
+### Bug Fixes
+
+* **cli:** hide empty session location column ([9f00ef4](https://github.com/hackclub/orchard/commit/9f00ef499465efcf5085b4802f4561d15edab00f))
+* **cli:** require a url in the tofu provider ([3a18970](https://github.com/hackclub/orchard/commit/3a18970bc6b5bdcad1f6f2a88d9473cbf8b9b3db))
+
 ## [0.41.1](https://github.com/hackclub/orchard/compare/cli/v0.41.0...cli/v0.41.1) (2026-11-09)
 
 
