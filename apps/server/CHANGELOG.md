@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.95.1](https://github.com/hackclub/orchard/compare/server/v2.95.0...server/v2.95.1) (2026-11-10)
+
+
+### Bug Fixes
+
+* **server:** drop the mirror on a cluster change ([af72be8](https://github.com/hackclub/orchard/commit/af72be801e4319609da06c64bd3da45045b03ace))
+* **server:** keep ingress rows the mirror never saw ([7a3dc27](https://github.com/hackclub/orchard/commit/7a3dc27748461120514c5ce3d1f0a68963e29807))
+* **server:** keep projects whose namespace was never seen ([2aee5a6](https://github.com/hackclub/orchard/commit/2aee5a6bf97b9c835c775b49c7d32aef18e538e5))
+* **server:** stop denying smtp egress from tenants ([70d54bf](https://github.com/hackclub/orchard/commit/70d54bfb25800392711fa941b54c98abdbeb3a03))
+
 ## [2.95.0](https://github.com/hackclub/orchard/compare/server/v2.94.1...server/v2.95.0) (2026-11-09)
 
 

@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.86.1](https://github.com/hackclub/orchard/compare/frontend/v1.86.0...frontend/v1.86.1) (2026-11-10)
+
+
+### Bug Fixes
+
+* **frontend:** drop stale Valkey hint ([160b69f](https://github.com/hackclub/orchard/commit/160b69fdcd890ed2c8679f8da1974dde3f103091))
+
 ## [1.86.0](https://github.com/hackclub/orchard/compare/frontend/v1.85.1...frontend/v1.86.0) (2026-11-09)
 
 
