@@ -473,6 +473,71 @@ export function adminSystemRoutes(r: Router, { store }: MockContext) {
 		sectionView(params.id) ? save(params.id, body) : notFound('Unknown configuration section')
 	);
 
+	const limitSpecs: {
+		name: string;
+		env: string;
+		unit: 'count' | 'GiB';
+		min: number;
+		offable: boolean;
+		fallback: number | 'off' | 'auto';
+	}[] = [
+		{ name: 'publicPortsPerOrg', env: 'MAX_PUBLIC_PORTS_PER_ORG', fallback: 20 },
+		{ name: 'customDomainsPerOrg', env: 'MAX_CUSTOM_DOMAINS_PER_ORG', fallback: 250 },
+		{ name: 'customDomainCreatesPerHour', env: 'MAX_CUSTOM_DOMAIN_CREATES_PER_HOUR', fallback: 30 },
+		{ name: 'projectsPerOrg', env: 'MAX_PROJECTS_PER_ORG', fallback: 'off' as const },
+		{ name: 'environmentsPerOrg', env: 'MAX_ENVIRONMENTS_PER_ORG', fallback: 'off' as const },
+		{ name: 'deploymentsPerOrg', env: 'MAX_DEPLOYMENTS_PER_ORG', fallback: 'off' as const },
+		{ name: 'buildsPerOrg', env: 'MAX_CONCURRENT_BUILDS_PER_ORG', fallback: 'auto' as const },
+		{ name: 'scansPerOrg', env: 'TRIVY_MAX_SCANS_PER_ORG', fallback: 1 },
+		{ name: 'volumeSizeGiB', env: 'MAX_VOLUME_SIZE', fallback: 200, unit: 'GiB' as const },
+		{ name: 'databaseReplicas', env: 'MAX_DATABASE_REPLICAS', fallback: 5, offable: false },
+		{
+			name: 'namespaceLoadBalancers',
+			env: 'TENANT_QUOTA_FLOOR_LOADBALANCERS',
+			fallback: 20,
+			min: 0
+		},
+		{ name: 'namespaceNodePorts', env: 'TENANT_QUOTA_FLOOR_NODEPORTS', fallback: 10, min: 0 },
+		{
+			name: 'ephemeralStorageGiB',
+			env: 'TENANT_EPHEMERAL_STORAGE_LIMIT_GIB',
+			fallback: 20,
+			unit: 'GiB' as const
+		}
+	].map((spec) => ({ unit: 'count' as const, min: 1, offable: true, ...spec }));
+	const pinnedLimits: Record<string, number | 'off'> = { databaseReplicas: 3 };
+	const storedLimits: Record<string, number | 'off'> = { customDomainsPerOrg: 100 };
+	let storedNodePorts: boolean | null = null;
+	const limitsView = () => ({
+		limits: limitSpecs.map((spec) => ({
+			...spec,
+			stored: storedLimits[spec.name] ?? null,
+			value: pinnedLimits[spec.name] ?? storedLimits[spec.name] ?? spec.fallback,
+			pinned: spec.name in pinnedLimits
+		})),
+		nodePortExposure: {
+			env: 'TENANT_NODEPORT_EXPOSURE',
+			enabled: storedNodePorts ?? true,
+			stored: storedNodePorts,
+			pinned: false
+		}
+	});
+	r.get('/admin/instance-limits', () => limitsView());
+	r.put('/admin/instance-limits', ({ body }) => {
+		for (const [name, value] of Object.entries(body?.limits ?? {})) {
+			if (name in pinnedLimits) {
+				return reply(409, {
+					statusCode: 409,
+					message: `${name} is set by the environment, so you can't change it here`
+				});
+			}
+			if (value === null || value === '') delete storedLimits[name];
+			else storedLimits[name] = value === 'off' ? 'off' : Number(value);
+		}
+		if (body && 'nodePortExposure' in body) storedNodePorts = body.nodePortExposure;
+		return limitsView();
+	});
+
 	let mcp = true;
 	const mcpView = () => ({ enabled: mcp, dbValue: mcp, envOverride: null });
 	r.get('/admin/instance-settings/mcp', () => mcpView());

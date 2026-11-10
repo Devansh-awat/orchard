@@ -39,6 +39,7 @@
 				railItem('/admin', 'Overview'),
 				railItem('/admin/instance', 'Configuration'),
 				railItem('/admin/networking', 'Networking'),
+				railItem('/admin/limits', 'Limits'),
 				railItem('/admin/nodes', 'Nodes'),
 				railItem('/admin/usage', 'Usage'),
 				railItem('/admin/grafts', 'Grafts')
