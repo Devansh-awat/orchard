@@ -433,6 +433,65 @@ test('a delete whose handler threw is retried from its tombstone', async () => {
   assert.equal(await prisma.k8sObjectTombstone.count({ where: { shard: SHARD } }), 0);
 });
 
+function namespaceRow(uid: string, name: string) {
+  return {
+    uid,
+    apiVersion: 'v1',
+    kind: 'Namespace',
+    namespace: '',
+    name,
+    resourceVersion: '1',
+    derivedVersion: '1',
+    shard: SHARD,
+    manifest: { metadata: { uid, name } },
+    refs: {}
+  };
+}
+
+async function recordedAgainst(clusterUid: string) {
+  const store = new PrismaEngineStore(prisma as never);
+  await store.write([namespaceRow(clusterUid, 'kube-system')]);
+  cluster = [obj('uid-a', 'ing-a'), obj('uid-b', 'ing-b')];
+  await listAndSync(newInformer());
+  seenEvents = [];
+  return store;
+}
+
+test('a mirror restored onto another cluster is discarded, not reported as deletes', async () => {
+  const store = await recordedAgainst('cluster-a');
+  await prisma.k8sObjectTombstone.create({
+    data: { uid: 'uid-old', shard: SHARD, kind: KIND, manifest: obj('uid-old', 'ing-old') as never }
+  });
+
+  assert.equal(await store.dropForeignMirror('cluster-b'), true);
+  assert.equal(await prisma.k8sObject.count(), 0);
+  assert.equal(await prisma.k8sObjectTombstone.count(), 0);
+
+  cluster = [];
+  await listAndSync(newInformer());
+  assert.deepEqual(seenEvents, []);
+});
+
+test('a mirror on its own cluster is kept and still reports a missing object', async () => {
+  const store = await recordedAgainst('cluster-a');
+
+  assert.equal(await store.dropForeignMirror('cluster-a'), false);
+  assert.equal(await prisma.k8sObject.count({ where: { shard: SHARD } }), 3);
+
+  cluster = [obj('uid-a', 'ing-a')];
+  await listAndSync(newInformer());
+  assert.deepEqual(seenEvents, [{ type: 'delete', name: 'ing-b' }]);
+});
+
+test('a mirror that never recorded a cluster is kept as it is', async () => {
+  const store = new PrismaEngineStore(prisma as never);
+  cluster = [obj('uid-a', 'ing-a')];
+  await listAndSync(newInformer());
+
+  assert.equal(await store.dropForeignMirror('cluster-a'), false);
+  assert.equal(await prisma.k8sObject.count({ where: { shard: SHARD } }), 1);
+});
+
 test('the stale sweep survives an object count past the bind-parameter ceiling', async () => {
   // One parameter per uid would exceed Postgres' 65535-parameter limit here;
   // the sweep binds the whole set as a single array.

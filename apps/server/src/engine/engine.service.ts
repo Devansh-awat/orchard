@@ -2,7 +2,7 @@ import { Injectable, Logger, OnApplicationBootstrap, OnModuleDestroy } from '@ne
 import * as k8s from '@kubernetes/client-node';
 import { KubernetesService } from '../kubernetes/kubernetes.service';
 import { engineDisabled } from './engine-disabled';
-import { PrismaEngineStore } from './prisma-store';
+import { CLUSTER_IDENTITY_NAMESPACE, PrismaEngineStore } from './prisma-store';
 import { PrismaService } from '../prisma/prisma.service';
 import { resolveNamespaceScope } from '../projects/namespace-scope';
 import { GLOBAL_LEADER_LEASE, LeaseService } from '../coordination/lease.service';
@@ -47,6 +47,8 @@ const TRANSITION_RETENTION_DAYS = 30;
 const CLUSTER_EVENT_RETENTION_DAYS = 30;
 const NS_REF_TTL_MS = 10 * 60 * 1000;
 const NS_REF_NEGATIVE_TTL_MS = 30 * 1000;
+const VERIFY_RETRY_MS = 5_000;
+const VERIFY_RETRY_MAX_MS = 60_000;
 
 interface ShardRuntime {
   def: EngineShard;
@@ -93,6 +95,10 @@ export class EngineService implements OnApplicationBootstrap, OnModuleDestroy {
   private lastStale = false;
 
   private enabled = false;
+
+  private destroyed = false;
+
+  private verifyTimer?: ReturnType<typeof setTimeout>;
 
   private readonly store: PrismaEngineStore;
 
@@ -189,9 +195,7 @@ export class EngineService implements OnApplicationBootstrap, OnModuleDestroy {
       this.shards.set(def.name, runtime);
     }
 
-    await this.upsertPresence();
-    await this.refreshPresence();
-    for (const runtime of this.shards.values()) runtime.elector.start();
+    void this.startOnVerifiedMirror();
 
     this.timers = [
       setInterval(() => {
@@ -234,7 +238,46 @@ export class EngineService implements OnApplicationBootstrap, OnModuleDestroy {
     );
   }
 
+  private async startOnVerifiedMirror(): Promise<void> {
+    let delay = VERIFY_RETRY_MS;
+    while (!this.destroyed) {
+      try {
+        const clusterUid = await this.clusterUid();
+        if (await this.store.dropForeignMirror(clusterUid)) {
+          this.logger.warn(
+            `the mirror was recorded against another cluster (${CLUSTER_IDENTITY_NAMESPACE} is now ${clusterUid}); discarded it and rebuilding from this cluster`
+          );
+        }
+        break;
+      } catch (err) {
+        this.logger.warn(
+          `could not check which cluster the mirror belongs to, shards stay down until it can: ${(err as Error)?.message ?? err}`
+        );
+        await new Promise<void>((resolve) => {
+          this.verifyTimer = setTimeout(resolve, delay);
+          this.verifyTimer.unref?.();
+        });
+        delay = Math.min(delay * 2, VERIFY_RETRY_MAX_MS);
+      }
+    }
+    if (this.destroyed) return;
+    await this.upsertPresence();
+    await this.refreshPresence();
+    for (const runtime of this.shards.values()) runtime.elector.start();
+  }
+
+  protected async clusterUid(): Promise<string> {
+    const { body } = await this.kubernetes
+      .kc!.makeApiClient(k8s.CoreV1Api)
+      .readNamespace(CLUSTER_IDENTITY_NAMESPACE);
+    const uid = body?.metadata?.uid;
+    if (!uid) throw new Error(`namespace ${CLUSTER_IDENTITY_NAMESPACE} has no uid`);
+    return uid;
+  }
+
   async onModuleDestroy() {
+    this.destroyed = true;
+    if (this.verifyTimer) clearTimeout(this.verifyTimer);
     for (const t of this.timers) clearInterval(t);
     for (const runtime of this.shards.values()) {
       await this.stopShard(runtime);

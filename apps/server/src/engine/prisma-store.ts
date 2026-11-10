@@ -2,6 +2,8 @@ import { Prisma } from '@prisma/client';
 import type { PrismaService } from '../prisma/prisma.service';
 import { EngineRefs, EngineRow, EngineStore, StoredRow, Tombstone } from './core/store';
 
+export const CLUSTER_IDENTITY_NAMESPACE = 'kube-system';
+
 const REF_COLUMNS = ['deploymentId', 'projectId', 'databaseId', 'jobId'] as const;
 
 function refsOf(row: Record<(typeof REF_COLUMNS)[number], string | null>): EngineRefs {
@@ -247,5 +249,27 @@ export class PrismaEngineStore implements EngineStore {
 
   async forget(uid: string): Promise<void> {
     await this.prisma.$executeRaw`DELETE FROM "k8s_object_tombstones" WHERE "uid" = ${uid}`;
+  }
+
+  async dropForeignMirror(clusterUid: string): Promise<boolean> {
+    return this.prisma.$transaction(
+      async (tx) => {
+        const foreign = await tx.$executeRaw`
+          DELETE FROM "k8s_objects"
+          WHERE "kind" = 'Namespace'
+            AND "api_version" = 'v1'
+            AND "namespace" = ''
+            AND "name" = ${CLUSTER_IDENTITY_NAMESPACE}
+            AND "uid" <> ${clusterUid}
+        `;
+        if (foreign === 0) return false;
+        await tx.k8sObject.deleteMany({});
+        await tx.k8sObjectTombstone.deleteMany({});
+        await tx.k8sWorkload.deleteMany({});
+        await tx.k8sMirrorHeartbeat.deleteMany({});
+        return true;
+      },
+      { timeout: 120_000 }
+    );
   }
 }
