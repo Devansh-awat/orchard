@@ -19,7 +19,7 @@ Install Orchard, connect a GitHub repo, and your app is live on your own server.
 **Please follow the [install guide](https://docs.orchard.my/start/install/).** It covers every step in
 detail.
 
-If you just want the command, you need a Linux server with an IPv4 address, at least 4 GB of RAM and 20 GB of free disk:
+If you just want the command, you need a Linux server with an IPv4 address and 20 GB of free disk. 8 GB of RAM is recommended; with less, the installer warns and carries on, but Orchard may behave unexpectedly:
 
 ```bash
 curl -fsSL https://assets.orchard.my/install.sh -o orchard-install.sh && sudo bash orchard-install.sh
