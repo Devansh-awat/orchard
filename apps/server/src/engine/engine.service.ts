@@ -34,7 +34,7 @@ import { ScanJobConsumer } from './consumers/scan-job.consumer';
 const PRESENCE_PREFIX = 'replica:';
 const PRESENCE_INTERVAL_MS = 10_000;
 const BALANCE_INTERVAL_MS = 15_000;
-const FLUSH_INTERVAL_MS = 10_000;
+const FLUSH_INTERVAL_MS = 20_000;
 const RESYNC_INTERVAL_MS = 10 * 60 * 1000;
 const RETENTION_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const DB_STATS_INTERVAL_MS = 30_000;
@@ -511,13 +511,20 @@ export class EngineService implements OnApplicationBootstrap, OnModuleDestroy {
   }
 
   private async flushHeartbeats(): Promise<void> {
-    for (const runtime of this.shards.values()) {
-      if (!runtime.elector.isHolder()) continue;
-      await this.writeHeartbeat(runtime, this.lease.replicaIdentity);
-    }
+    const held = [...this.shards.values()].filter((r) => r.elector.isHolder());
+    if (held.length === 0) return;
+    await this.prisma
+      .$transaction(
+        held.map((runtime) => this.heartbeatUpsert(runtime, this.lease.replicaIdentity))
+      )
+      .catch(() => {});
   }
 
   private async writeHeartbeat(runtime: ShardRuntime, holder: string): Promise<void> {
+    await this.heartbeatUpsert(runtime, holder).catch(() => {});
+  }
+
+  private heartbeatUpsert(runtime: ShardRuntime, holder: string) {
     const failures = lastingFailures(runtime.activity.unhealthy, Date.now());
     const data = {
       holder,
@@ -533,13 +540,11 @@ export class EngineService implements OnApplicationBootstrap, OnModuleDestroy {
               .join('; ')
               .slice(0, 300)
     };
-    await this.prisma.k8sMirrorHeartbeat
-      .upsert({
-        where: { shard: runtime.def.name },
-        create: { shard: runtime.def.name, ...data },
-        update: data
-      })
-      .catch(() => {});
+    return this.prisma.k8sMirrorHeartbeat.upsert({
+      where: { shard: runtime.def.name },
+      create: { shard: runtime.def.name, ...data },
+      update: data
+    });
   }
 
   private async checkStaleness(): Promise<void> {
