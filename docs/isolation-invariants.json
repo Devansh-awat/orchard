@@ -70,7 +70,7 @@
   {
     "id": "I3",
     "title": "Tenant network",
-    "invariant": "A tenant pod reaches only its own namespace, DNS, ingress namespaces on serving ports, the public internet outside private ranges, node and apiserver addresses and mail ports, other tenants' published pods and the backup proxy; no platform pod accepts a connection from a tenant namespace.",
+    "invariant": "A tenant pod reaches only its own namespace, DNS, ingress namespaces on serving ports, the public internet outside private ranges, node and apiserver addresses, other tenants' published pods and the backup proxy; no platform pod accepts a connection from a tenant namespace.",
     "mechanism_files": [
       "apps/server/src/kubernetes/security-policies.ts",
       "apps/server/src/kubernetes/cluster-addresses.ts",

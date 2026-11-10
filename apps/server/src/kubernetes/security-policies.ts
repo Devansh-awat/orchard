@@ -32,8 +32,6 @@ export const TENANT_PRIVATE_EGRESS_EXCEPT = [
   '100.64.0.0/10'
 ];
 
-export const TENANT_ABUSE_PORTS = [25, 465, 587, 2525];
-
 export const TENANT_DENY_ENTITIES = ['host', 'remote-node', 'kube-apiserver'];
 
 function portList(raw: string | undefined, fallback: number[]): number[] {
@@ -53,7 +51,7 @@ export function tenantIngressPorts(): number[] {
 }
 
 export function tenantBlockedEgressPorts(): number[] {
-  return portList(process.env.TENANT_EGRESS_BLOCK_PORTS, TENANT_ABUSE_PORTS);
+  return portList(process.env.TENANT_EGRESS_BLOCK_PORTS, []);
 }
 
 export function tenantDenyEntities(): string[] {

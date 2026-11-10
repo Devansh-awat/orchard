@@ -61,7 +61,35 @@ test('TENANT_INGRESS_PORTS overrides the serving ports', () => {
   }
 });
 
-test('the internet rule skips mail ports and keeps every other TCP and UDP port', () => {
+function withBlockPorts(value: string | undefined, run: () => void) {
+  const saved = process.env.TENANT_EGRESS_BLOCK_PORTS;
+  if (value === undefined) delete process.env.TENANT_EGRESS_BLOCK_PORTS;
+  else process.env.TENANT_EGRESS_BLOCK_PORTS = value;
+  try {
+    run();
+  } finally {
+    if (saved === undefined) delete process.env.TENANT_EGRESS_BLOCK_PORTS;
+    else process.env.TENANT_EGRESS_BLOCK_PORTS = saved;
+  }
+}
+
+const tcpCovered = (rule: any, port: number) =>
+  rule.ports === undefined ||
+  rule.ports.some(
+    (p: any) => p.protocol === 'TCP' && port >= p.port && port <= (p.endPort ?? p.port)
+  );
+
+test('tenants reach the internet on mail ports by default', () => {
+  withBlockPorts(undefined, () => {
+    const internet = toInternet(tenantDenyPolicy('acme', { ingressNamespaces }));
+    assert.equal(internet.ports, undefined);
+    for (const port of [25, 465, 587, 2525]) assert.equal(tcpCovered(internet, port), true);
+    const deny = ciliumDenyPolicy('acme');
+    assert.ok(deny.spec.egressDeny.every((rule: any) => rule.toPorts === undefined));
+  });
+});
+
+test('egressPortsAvoiding leaves out exactly the blocked TCP ports', () => {
   assert.deepEqual(egressPortsAvoiding([25, 465, 587, 2525]), [
     { protocol: 'TCP', port: 1, endPort: 24 },
     { protocol: 'TCP', port: 26, endPort: 464 },
@@ -75,26 +103,24 @@ test('the internet rule skips mail ports and keeps every other TCP and UDP port'
     { protocol: 'TCP', port: 4, endPort: 65534 },
     { protocol: 'UDP' }
   ]);
-  const internet = toInternet(tenantDenyPolicy('acme', { ingressNamespaces }));
-  const covered = (port: number) =>
-    internet.ports.some(
-      (p: any) => p.protocol === 'TCP' && port >= p.port && port <= (p.endPort ?? p.port)
-    );
-  for (const port of [25, 465, 587, 2525]) assert.equal(covered(port), false);
-  for (const port of [22, 80, 443, 3306, 5432, 6379, 26, 2526, 65535]) {
-    assert.equal(covered(port), true);
-  }
 });
 
-test('mail ports can be allowed again', () => {
-  const saved = process.env.TENANT_EGRESS_BLOCK_PORTS;
-  process.env.TENANT_EGRESS_BLOCK_PORTS = 'none';
-  try {
+test('TENANT_EGRESS_BLOCK_PORTS still blocks the ports an operator lists', () => {
+  withBlockPorts('25,bogus,587', () => {
+    const internet = toInternet(tenantDenyPolicy('acme', { ingressNamespaces }));
+    for (const port of [25, 587]) assert.equal(tcpCovered(internet, port), false);
+    for (const port of [22, 80, 443, 465, 2525, 65535]) {
+      assert.equal(tcpCovered(internet, port), true);
+    }
+    const deny = ciliumDenyPolicy('acme');
+    assert.deepEqual(
+      deny.spec.egressDeny[1].toPorts[0].ports.map((p: any) => p.port),
+      ['25', '587']
+    );
+  });
+  withBlockPorts('none', () => {
     assert.equal(toInternet(tenantDenyPolicy('acme', { ingressNamespaces })).ports, undefined);
-  } finally {
-    if (saved === undefined) delete process.env.TENANT_EGRESS_BLOCK_PORTS;
-    else process.env.TENANT_EGRESS_BLOCK_PORTS = saved;
-  }
+  });
 });
 
 test('cluster addresses join the except list of the internet rule', () => {
@@ -154,10 +180,6 @@ test('the cilium deny keeps tenants off host, remote nodes and the apiserver but
   assert.equal(policy.metadata.name, CILIUM_DENY_POLICY);
   assert.equal(policy.metadata.labels['orchard.my/managed'], 'true');
   assert.deepEqual(policy.spec.egressDeny[0].toEntities, ['host', 'remote-node', 'kube-apiserver']);
-  assert.deepEqual(
-    policy.spec.egressDeny[1].toPorts[0].ports.map((p: any) => p.port),
-    ['25', '465', '587', '2525']
-  );
   assert.deepEqual(policy.spec.endpointSelector.matchExpressions, [
     { key: 'cnpg.io/cluster', operator: 'DoesNotExist' }
   ]);
