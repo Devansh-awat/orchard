@@ -273,3 +273,28 @@ export class PrismaEngineStore implements EngineStore {
     );
   }
 }
+
+export async function observedInMirror(
+  prisma: PrismaService,
+  kind: string,
+  keys: { namespace: string; name: string }[]
+): Promise<Set<string>> {
+  if (keys.length === 0) return new Set();
+  const namespaces = keys.map((k) => k.namespace);
+  const names = keys.map((k) => k.name);
+  const rows = await prisma.$queryRaw<{ namespace: string; name: string }[]>`
+    SELECT o."namespace", o."name"
+    FROM "k8s_objects" AS o
+    JOIN unnest(${namespaces}::varchar[], ${names}::varchar[]) AS k("namespace", "name")
+      ON o."namespace" = k."namespace" AND o."name" = k."name"
+    WHERE o."kind" = ${kind}
+    UNION
+    SELECT k."namespace", k."name"
+    FROM "k8s_object_tombstones" AS t
+    JOIN unnest(${namespaces}::varchar[], ${names}::varchar[]) AS k("namespace", "name")
+      ON coalesce(t."manifest"->'metadata'->>'namespace', '') = k."namespace"
+      AND t."manifest"->'metadata'->>'name' = k."name"
+    WHERE t."kind" = ${kind}
+  `;
+  return new Set(rows.map((r) => `${r.namespace}/${r.name}`));
+}

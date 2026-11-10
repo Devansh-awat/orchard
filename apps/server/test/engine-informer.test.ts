@@ -2,7 +2,8 @@ import { test, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { testPrismaClient } from './support/test-database';
 import { EngineInformer } from '../src/engine/core/informer';
-import { PrismaEngineStore } from '../src/engine/prisma-store';
+import { observedInMirror, PrismaEngineStore } from '../src/engine/prisma-store';
+import { NamespaceConsumer } from '../src/engine/consumers/namespace.consumer';
 import { PodConsumer } from '../src/engine/consumers/pod.consumer';
 import { computePodStatus } from '../src/engine/pod-status';
 
@@ -490,6 +491,64 @@ test('a mirror that never recorded a cluster is kept as it is', async () => {
 
   assert.equal(await store.dropForeignMirror('cluster-a'), false);
   assert.equal(await prisma.k8sObject.count({ where: { shard: SHARD } }), 1);
+});
+
+test('only namespaces the mirror holds or has buried count as observed', async () => {
+  const store = new PrismaEngineStore(prisma as never);
+  await store.write([namespaceRow('ns-live', 'test-restore-live')]);
+  await store.bury(
+    SHARD,
+    'Namespace',
+    { uid: 'ns-gone', manifest: { metadata: { uid: 'ns-gone', name: 'test-restore-gone' } } },
+    true
+  );
+
+  const observed = await observedInMirror(prisma as never, 'Namespace', [
+    { namespace: '', name: 'test-restore-live' },
+    { namespace: '', name: 'test-restore-gone' },
+    { namespace: '', name: 'test-restore-never' }
+  ]);
+  assert.deepEqual([...observed].sort(), ['/test-restore-gone', '/test-restore-live']);
+});
+
+test('the namespace prune keeps a restored project and still removes a buried one', async () => {
+  await prisma.project.update({
+    where: { id: projectId },
+    data: { createdAt: new Date(Date.now() - 60 * 60 * 1000) }
+  });
+  const removed: string[] = [];
+  const consumer = new NamespaceConsumer(
+    prisma as never,
+    {} as never,
+    {
+      get: () => ({
+        deleteProjectFromCluster: async (id: string) => {
+          removed.push(id);
+        },
+        deleteEnvironmentFromCluster: async (id: string) => {
+          removed.push(id);
+        }
+      })
+    } as never
+  );
+  (consumer as unknown as { confirmAfterMs: number }).confirmAfterMs = 0;
+  (consumer as unknown as { liveState: () => Promise<string> }).liveState = async () => 'absent';
+  const seen = [{ namespace: '', name: 'kube-system', refs: {} }];
+
+  await consumer.pruneMissing(seen);
+  await consumer.pruneMissing(seen);
+  assert.ok(!removed.includes(projectId), 'a namespace this cluster never had is not a delete');
+
+  await new PrismaEngineStore(prisma as never).bury(
+    SHARD,
+    'Namespace',
+    { uid: 'ns-mirror', manifest: { metadata: { uid: 'ns-mirror', name: NS } } },
+    true
+  );
+  await consumer.pruneMissing(seen);
+  await consumer.pruneMissing(seen);
+  assert.ok(removed.includes(projectId), 'a namespace this cluster had and lost is a delete');
+  consumer.onModuleDestroy();
 });
 
 test('the stale sweep survives an object count past the bind-parameter ceiling', async () => {

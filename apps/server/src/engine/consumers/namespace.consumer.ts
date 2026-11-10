@@ -6,7 +6,8 @@ import { KubernetesService } from '../../kubernetes/kubernetes.service';
 import { EnvironmentsService } from '../../projects/environments.service';
 import { ProjectsService } from '../../projects/projects.service';
 import { EngineEventType, EngineObjectKey } from '../core/informer';
-import { K8S_DELETED_REASON } from './workload.consumer';
+import { observedInMirror } from '../prisma-store';
+import { K8S_DELETED_REASON, RemovalPending } from './workload.consumer';
 
 const SETTLE_GRACE_MS = 5 * 60 * 1000;
 const CONFIRM_AFTER_MS = 90 * 1000;
@@ -45,7 +46,9 @@ export class NamespaceConsumer implements OnModuleDestroy {
       this.clearPending(name);
       return;
     }
-    await this.handleGone(name, 'watch');
+    if ((await this.handleGone(name, 'watch')) === 'waiting') {
+      throw new RemovalPending(`removal for namespace ${name} awaiting confirmation`);
+    }
   }
 
   async pruneMissing(seen: EngineObjectKey[]): Promise<void> {
@@ -75,7 +78,16 @@ export class NamespaceConsumer implements OnModuleDestroy {
       ...projects.map((p) => p.namespace),
       ...environments.map((e) => e.namespace)
     ]);
-    const missing = [...owned].filter((namespace) => !live.has(namespace));
+    const absent = [...owned].filter((namespace) => !live.has(namespace));
+    if (absent.length === 0) return;
+    const observed = await this.observed(absent);
+    const unobserved = absent.filter((namespace) => !observed.has(namespace));
+    if (unobserved.length > 0) {
+      this.logger.warn(
+        `${unobserved.length} Orchard namespaces were never seen in this cluster (${unobserved.slice(0, 5).join(', ')}${unobserved.length > 5 ? ', ...' : ''}), so their projects and environments are kept. Redeploy them, or remove them from Orchard by hand.`
+      );
+    }
+    const missing = absent.filter((namespace) => observed.has(namespace));
     if (missing.length === 0) return;
     if (missing.length > MAX_MISSING_PER_PASS) {
       this.logger.error(
@@ -88,11 +100,24 @@ export class NamespaceConsumer implements OnModuleDestroy {
     }
   }
 
-  private async handleGone(namespace: string, source: 'watch' | 'list' | 'recheck'): Promise<void> {
+  protected async observed(namespaces: string[]): Promise<Set<string>> {
+    const seen = await observedInMirror(
+      this.prisma,
+      'Namespace',
+      namespaces.map((name) => ({ namespace: '', name }))
+    );
+    return new Set(namespaces.filter((name) => seen.has(`/${name}`)));
+  }
+
+  private async handleGone(
+    namespace: string,
+    source: 'watch' | 'list' | 'recheck'
+  ): Promise<'settled' | 'waiting'> {
     const owner = await this.ownerOf(namespace);
+    if (owner === 'settling') return 'waiting';
     if (!owner) {
       this.clearPending(namespace);
-      return;
+      return 'settled';
     }
 
     const state = await this.liveState(namespace);
@@ -103,13 +128,13 @@ export class NamespaceConsumer implements OnModuleDestroy {
         );
       }
       this.clearPending(namespace);
-      return;
+      return 'settled';
     }
     if (state === 'unknown') {
       this.logger.warn(
         `namespace ${namespace} looks deleted (${source}) but the apiserver could not confirm it; leaving ${owner.kind} ${owner.id} alone until it can`
       );
-      return;
+      return 'waiting';
     }
 
     const existing = this.pending.get(namespace);
@@ -125,9 +150,9 @@ export class NamespaceConsumer implements OnModuleDestroy {
       this.logger.warn(
         `namespace ${namespace} is gone from the cluster (${source}); ${owner.kind} ${owner.id} (${owner.name}) will be removed if it is still gone in ${Math.round(this.confirmAfterMs / 1000)}s`
       );
-      return;
+      return 'waiting';
     }
-    if (now - existing.firstAbsentAt < this.confirmAfterMs) return;
+    if (now - existing.firstAbsentAt < this.confirmAfterMs) return 'waiting';
 
     this.clearPending(namespace);
     const cause = {
@@ -143,18 +168,19 @@ export class NamespaceConsumer implements OnModuleDestroy {
       );
       const projects = this.moduleRef.get(ProjectsService, { strict: false });
       await projects.deleteProjectFromCluster(owner.id, cause);
-      return;
+      return 'settled';
     }
     this.logger.warn(
       `namespace ${namespace} confirmed deleted in the cluster; removing environment ${owner.id} (${owner.name})`
     );
     const environments = this.moduleRef.get(EnvironmentsService, { strict: false });
     await environments.deleteEnvironmentFromCluster(owner.id, cause);
+    return 'settled';
   }
 
   private async ownerOf(
     namespace: string
-  ): Promise<{ kind: 'project' | 'environment'; id: string; name: string } | null> {
+  ): Promise<{ kind: 'project' | 'environment'; id: string; name: string } | 'settling' | null> {
     const cutoff = this.graceCutoff();
     const project = await this.prisma.project.findFirst({
       where: { namespace },
@@ -165,7 +191,7 @@ export class NamespaceConsumer implements OnModuleDestroy {
         this.logger.warn(
           `namespace ${namespace} is gone but project ${project.id} is younger than the settle window; leaving it`
         );
-        return null;
+        return 'settling';
       }
       return { kind: 'project', id: project.id, name: project.name };
     }
@@ -178,7 +204,7 @@ export class NamespaceConsumer implements OnModuleDestroy {
       this.logger.warn(
         `namespace ${namespace} is gone but environment ${environment.id} is younger than the settle window; leaving it`
       );
-      return null;
+      return 'settling';
     }
     return { kind: 'environment', id: environment.id, name: environment.name };
   }
