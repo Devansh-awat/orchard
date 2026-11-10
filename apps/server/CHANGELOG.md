@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.95.2](https://github.com/hackclub/orchard/compare/server/v2.95.1...server/v2.95.2) (2026-11-10)
+
+
+### Bug Fixes
+
+* **server:** drop stale mail port egress comment ([56df7c0](https://github.com/hackclub/orchard/commit/56df7c0a1569f6ba5e6cef1abd11cd4ad8416a37))
+
 ## [2.95.1](https://github.com/hackclub/orchard/compare/server/v2.95.0...server/v2.95.1) (2026-11-10)
 
 
