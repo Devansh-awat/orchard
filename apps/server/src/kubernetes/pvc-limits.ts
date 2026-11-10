@@ -1,5 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 import { parseMemory } from './quantity';
+import { resolveLimit } from '../quotas/instance-limits';
 
 export const DEFAULT_MAX_VOLUME_SIZE = '200Gi';
 
@@ -9,13 +10,16 @@ const VOLUME_QUANTITY = /^\d+(\.\d+)?(Ki|Mi|Gi|Ti|K|M|G|T)?$/;
 
 const DNS1123_LABEL = /^[a-z0-9]([-a-z0-9]*[a-z0-9])?$/;
 
-export function maxVolumeSize(env: NodeJS.ProcessEnv = process.env): string {
+export function maxVolumeSize(env: NodeJS.ProcessEnv = process.env): string | null {
   const configured = env.MAX_VOLUME_SIZE?.trim();
-  return configured && VOLUME_QUANTITY.test(configured) ? configured : DEFAULT_MAX_VOLUME_SIZE;
+  if (configured) return VOLUME_QUANTITY.test(configured) ? configured : DEFAULT_MAX_VOLUME_SIZE;
+  const limit = resolveLimit('volumeSizeGiB', env);
+  return typeof limit === 'number' ? `${limit}Gi` : null;
 }
 
 export function maxVolumeBytes(env: NodeJS.ProcessEnv = process.env): number {
-  return parseMemory(maxVolumeSize(env));
+  const size = maxVolumeSize(env);
+  return size === null ? Number.POSITIVE_INFINITY : parseMemory(size);
 }
 
 export function assertVolumeQuantity(size: unknown): string {

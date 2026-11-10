@@ -20,6 +20,7 @@ import {
   trivyErrorMessage,
   type StoredScan
 } from './trivy-report';
+import { resolveLimit } from '../quotas/instance-limits';
 
 export class ScanQueueFullError extends Error {}
 
@@ -59,7 +60,6 @@ export class TrivyScanService {
   private readonly internalUrl = (process.env.ORCHARD_INTERNAL_URL || '').replace(/\/+$/, '');
   private readonly timeoutSeconds = positiveInt(process.env.TRIVY_SCAN_TIMEOUT_SECONDS, 900);
   private readonly maxRunning = positiveInt(process.env.TRIVY_MAX_CONCURRENT_SCANS, 3);
-  private readonly maxRunningPerOrg = positiveInt(process.env.TRIVY_MAX_SCANS_PER_ORG, 1);
   private readonly topology: RegistryTopology = {
     pullRegistry: process.env.DOCKER_REGISTRY_PULL || '',
     pushRegistry: process.env.DOCKER_REGISTRY_PUSH || '',
@@ -222,7 +222,9 @@ export class TrivyScanService {
     });
     const inOrg = new Set(members.map((m) => m.userId));
     const orgRunning = active.filter((r) => inOrg.has(r.requestedBy as string)).length;
-    if (orgRunning >= Math.min(this.maxRunningPerOrg, this.maxRunning)) {
+    const perOrg = resolveLimit('scansPerOrg');
+    const cap = typeof perOrg === 'number' ? Math.min(perOrg, this.maxRunning) : this.maxRunning;
+    if (orgRunning >= cap) {
       throw new ScanQueueFullError(
         'Your organization already has the most scans it can run at once. Try again when one finishes.'
       );

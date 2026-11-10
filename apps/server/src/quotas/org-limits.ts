@@ -1,6 +1,7 @@
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import type { PrismaService } from '../prisma/prisma.service';
 import { parseCpu, parseMemory } from '../kubernetes/quantity';
+import { countLimit } from './instance-limits';
 
 export type OrgCountKind = 'projects' | 'environments' | 'deployments';
 
@@ -113,20 +114,16 @@ export function newOrgCapsData(defaults: NewOrgDefaults): NewOrgCaps {
 }
 
 /**
- * A hard per-org ceiling an operator can pin in the environment. Unset or 0 means no
- * ceiling; the per-org value on the organization row is what normally applies.
+ * A hard per-org ceiling set under Admin -> Limits or pinned in the environment. Off
+ * means no ceiling; the per-org value on the organization row is what normally applies.
  */
 export function orgCountCeilings(
   env: NodeJS.ProcessEnv = process.env
 ): Record<OrgCountKind, number> {
-  const read = (raw: string | undefined) => {
-    const parsed = Number(raw?.trim());
-    return raw?.trim() && Number.isInteger(parsed) && parsed > 0 ? parsed : 0;
-  };
   return {
-    projects: read(env.MAX_PROJECTS_PER_ORG),
-    environments: read(env.MAX_ENVIRONMENTS_PER_ORG),
-    deployments: read(env.MAX_DEPLOYMENTS_PER_ORG)
+    projects: countLimit('projectsPerOrg', env),
+    environments: countLimit('environmentsPerOrg', env),
+    deployments: countLimit('deploymentsPerOrg', env)
   };
 }
 

@@ -1,15 +1,13 @@
 import { BadRequestException } from '@nestjs/common';
 import type { PrismaService } from '../prisma/prisma.service';
+import { countLimit, INSTANCE_LIMITS, nodePortExposureEnabled } from '../quotas/instance-limits';
 
-export const DEFAULT_MAX_PUBLIC_PORTS_PER_ORG = 20;
+export { nodePortExposureEnabled };
+
+export const DEFAULT_MAX_PUBLIC_PORTS_PER_ORG = INSTANCE_LIMITS.publicPortsPerOrg.fallback;
 
 export function maxPublicPortsPerOrg(env: NodeJS.ProcessEnv = process.env): number {
-  const parsed = Number(env.MAX_PUBLIC_PORTS_PER_ORG);
-  return Number.isInteger(parsed) && parsed >= 0 ? parsed : DEFAULT_MAX_PUBLIC_PORTS_PER_ORG;
-}
-
-export function nodePortExposureEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
-  return env.TENANT_NODEPORT_EXPOSURE?.trim().toLowerCase() !== 'false';
+  return countLimit('publicPortsPerOrg', env);
 }
 
 export function assertWithinPublicPortLimit(used: number, limit = maxPublicPortsPerOrg()): void {

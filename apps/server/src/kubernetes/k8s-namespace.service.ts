@@ -3,6 +3,7 @@ import {
   Logger,
   BadRequestException,
   OnModuleInit,
+  Optional,
   ServiceUnavailableException
 } from '@nestjs/common';
 import { REGISTRY_PREFIX_LABEL } from './registry-image-policy';
@@ -11,6 +12,7 @@ import { clusterPods, clusterServiceCounts, type SnapshotRead } from './cluster-
 import { PrismaService } from '../prisma/prisma.service';
 import { KubernetesService } from './kubernetes.service';
 import { LeaseService } from '../coordination/lease.service';
+import { InstanceConfigService } from '../instance-config/instance-config.service';
 import { tenantSecretsBinding, tenantSecretsRole } from './tenant-rbac';
 import {
   tenantLimitRange,
@@ -62,7 +64,8 @@ export class K8sNamespaceService implements OnModuleInit {
   constructor(
     private readonly prisma: PrismaService,
     private readonly kubernetes: KubernetesService,
-    private readonly lease: LeaseService
+    private readonly lease: LeaseService,
+    @Optional() private readonly instanceConfig?: InstanceConfigService
   ) {}
 
   /**
@@ -75,6 +78,7 @@ export class K8sNamespaceService implements OnModuleInit {
    * Backgrounded and swallowed: this must never hold up or fail startup.
    */
   onModuleInit(): void {
+    this.instanceConfig?.onLimitsChange(() => this.reapplyAbuseGuards());
     if (!this.lease.canCoordinate) return;
     setTimeout(() => {
       this.reconcileTenantNetworkPolicies()
@@ -560,12 +564,7 @@ export class K8sNamespaceService implements OnModuleInit {
    * leaves every existing one broken. Certificates for those keep failing with
    * no visible cause, because nothing re-runs on its own.
    */
-  async reconcileTenantNetworkPolicies(): Promise<{ updated: string[]; failed: string[] }> {
-    this.ensureKubeConfig();
-    const api = this.kc.makeApiClient(k8s.CoreV1Api);
-    const updated: string[] = [];
-    const failed: string[] = [];
-
+  private async tenantNamespaceNames(api: k8s.CoreV1Api): Promise<Set<string>> {
     const names = new Set<string>();
     for (const selector of TENANT_NAMESPACE_LABEL_SELECTORS) {
       const namespaces = await api.listNamespace(
@@ -579,6 +578,36 @@ export class K8sNamespaceService implements OnModuleInit {
         if (ns.metadata?.name) names.add(ns.metadata.name);
       }
     }
+    return names;
+  }
+
+  async reapplyAbuseGuards(): Promise<{ updated: number; failed: string[] }> {
+    if (!this.lease.canCoordinate) return { updated: 0, failed: [] };
+    this.ensureKubeConfig();
+    if (!this.kc) return { updated: 0, failed: [] };
+    const api = this.kc.makeApiClient(k8s.CoreV1Api);
+    const failed: string[] = [];
+    let updated = 0;
+    for (const name of await this.tenantNamespaceNames(api)) {
+      try {
+        await this.applyAbuseGuards(name);
+        updated += 1;
+      } catch (e: any) {
+        this.logger.warn(`couldn't apply the abuse quota for ${name}: ${e?.message}`);
+        failed.push(name);
+      }
+    }
+    if (updated) this.logger.log(`re-applied the namespace quota to ${updated} namespace(s)`);
+    return { updated, failed };
+  }
+
+  async reconcileTenantNetworkPolicies(): Promise<{ updated: string[]; failed: string[] }> {
+    this.ensureKubeConfig();
+    const api = this.kc.makeApiClient(k8s.CoreV1Api);
+    const updated: string[] = [];
+    const failed: string[] = [];
+
+    const names = await this.tenantNamespaceNames(api);
 
     for (const name of names) {
       try {

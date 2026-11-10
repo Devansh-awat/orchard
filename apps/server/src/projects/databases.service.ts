@@ -1,4 +1,5 @@
 import { assertOrgCanExposePublicPort } from './public-exposure-quota';
+import { INSTANCE_LIMITS, resolveLimit } from '../quotas/instance-limits';
 import { assertValidVolumeSize } from '../kubernetes/pvc-limits';
 import {
   Injectable,
@@ -268,8 +269,8 @@ export class DatabasesService {
   // extra instance is a full pod plus its own PVC, so self-hosters running on
   // a small cluster will want this lower, and a big one, higher.
   get maxReplicas(): number {
-    const raw = Number.parseInt(process.env.MAX_DATABASE_REPLICAS || '', 10);
-    return Number.isFinite(raw) && raw >= 1 ? raw : 5;
+    const limit = resolveLimit('databaseReplicas');
+    return typeof limit === 'number' ? limit : INSTANCE_LIMITS.databaseReplicas.fallback;
   }
 
   /** Validate a user-supplied replica count against the instance ceiling. */

@@ -740,6 +740,79 @@
         ]
       }
     },
+    "/admin/instance-limits": {
+      "get": {
+        "description": "Auth: superadmin",
+        "operationId": "admin_instance_limits_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {},
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "GET /admin/instance-limits",
+        "tags": [
+          "admin"
+        ]
+      },
+      "put": {
+        "description": "Auth: superadmin",
+        "operationId": "admin_instance_limits_set",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": {},
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {},
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "PUT /admin/instance-limits",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
     "/admin/instance-settings/custom-domain-verification": {
       "get": {
         "description": "Auth: superadmin",

@@ -27,7 +27,7 @@ recognised. Anything without a default is optional unless the description says o
 | `CILIUM_ENABLED` |  | Cilium-backed edge features: per-tenant CiliumNetworkPolicy, and enforcing basic auth with an Envoy filter bound to the Service instead of with the protection proxy. Leave unset and the server probes the cluster for the cilium.io group plus create permission on ciliumenvoyconfigs; 'true' or 'false' skips the probe. Basic auth works either way. |
 | `PROTECTION_ORCHARD_LOGIN` |  | Offer "sign in with Orchard" as an ingress protection mode. It sends visitors of a tenant host to this control plane's login and requires project membership, so it only suits instances whose visitors have Orchard accounts. Basic auth and shared-password protection are always available. Gates picking the mode, not enforcing it: existing walls stand regardless. |
 | `K8S_STORAGE_CLASS` |  |  |
-| `MAX_DATABASE_REPLICAS` |  | Most instances a single managed-database cluster may run (1 primary + standbys). Every instance is a pod with its own volume and bills against quota. Defaults to 5. |
+| `MAX_DATABASE_REPLICAS` |  | Most instances a single managed-database cluster may run (1 primary + standbys). Every instance is a pod with its own volume and bills against quota. Defaults to 5. Also under Admin -&gt; Limits; setting it here pins it there. |
 | `K8S_INGRESS_CLASS` |  |  |
 | `CERT_CLUSTER_ISSUER` |  |  |
 | `TAILSCALE_IMAGE` |  | Image of the Tailscale proxy pod. Defaults to ghcr.io/tailscale/tailscale:latest; pin a version or digest here. |
@@ -50,10 +50,10 @@ recognised. Anything without a default is optional unless the description says o
 | `PUBLIC_DB_TLS_LEGACY_HOSTNAMES` | `false` |  |
 | `PUBLIC_DEPLOYMENT_DOMAIN` |  | Parent for publicly exposed deployment ports. |
 | `PUBLIC_EXPOSURE_IP` |  | Fallback external IP that publicly exposed ports and databases are published on, for organizations that have not set one of their own. An organization with its own address still wins. Set here it also locks the matching field in the admin panel (Admin -&gt; Configuration -&gt; Public exposure). Unset means every organization must configure its own before it can expose anything. |
-| `TENANT_NODEPORT_EXPOSURE` |  | Set to false to refuse raw NodePort exposure (exposePublic). Public ports on the organization public IP still work. |
-| `MAX_PUBLIC_PORTS_PER_ORG` |  | Most public ports (node ports, app public ports, public databases) one organization may hold. Defaults to 20, 0 = unlimited. |
+| `TENANT_NODEPORT_EXPOSURE` |  | Set to false to refuse raw NodePort exposure (exposePublic). Public ports on the organization public IP still work. Also under Admin -&gt; Limits; setting it here pins it there. |
+| `MAX_PUBLIC_PORTS_PER_ORG` |  | Most public ports (node ports, app public ports, public databases) one organization may hold. Defaults to 20, 0 = unlimited. Also under Admin -&gt; Limits; setting it here pins it there. |
 | `TENANT_EGRESS_BANDWIDTH` |  | Caps each tenant pod's outbound bandwidth by setting the kubernetes.io/egress-bandwidth annotation on it, for example 50M. Empty (the default) sets nothing. Only enforced where the CNI runs a bandwidth manager (Cilium with bandwidthManager enabled); elsewhere the annotation is ignored. Pods pick it up on their next rollout. |
-| `MAX_VOLUME_SIZE` |  | Largest persistent volume a tenant may request. Defaults to 200Gi. |
+| `MAX_VOLUME_SIZE` |  | Largest persistent volume a tenant may request. Defaults to 200Gi. Also under Admin -&gt; Limits; setting it here pins it there. |
 | `PLATFORM_WILDCARD_DOMAINS` |  | Comma-separated domain=tlsSecretName pairs for wildcard certs you manage. Overrides the single entry otherwise derived from APP_DOMAIN. |
 | `WILDCARD_TLS_SOURCE_NAMESPACE` |  |  |
 | `AUTH_PROVIDER` |  | ── Auth: OAuth/OIDC login (optional; OTP/passkey work without it) ─────────── hackclub \| oidc \| none. Defaults to hackclub when HACKCLUB_CLIENT_ID is set, none otherwise. |
@@ -120,7 +120,7 @@ recognised. Anything without a default is optional unless the description says o
 | `TRIVY_IMAGE` | `ghcr.io/aquasecurity/trivy:0.76.1` | Image the scan jobs run. Must be an Alpine-based Trivy image (it uses sh and wget). |
 | `TRIVY_MAX_CONCURRENT_SCANS` | `3` | Scans allowed at once across the instance, and how long one may run. |
 | `TRIVY_SCAN_TIMEOUT_SECONDS` | `900` |  |
-| `TRIVY_MAX_SCANS_PER_ORG` |  | Of those, how many one organization may hold at once (default 1). |
+| `TRIVY_MAX_SCANS_PER_ORG` |  | Of those, how many one organization may hold at once (default 1). Also under Admin -&gt; Limits; setting it here pins it there. |
 | `ORCHARD_INTERNAL_URL` |  | How scan jobs reach this server from inside the cluster to hand back results, e.g. `http://server.orchard.svc.cluster.local:3001`. |
 | `REGISTRY_CREDENTIALS_ALLOW_INTERNAL` |  | Project registry credentials are verified against the registry before they are stored; registries on private or cluster-internal addresses are refused unless this is true. |
 | `EXEC_DETACH_GRACE_MS` |  | ── Pod shell sessions ────────────────────────────────────────────────────── How long a shell survives a dropped browser before it is reaped. |
@@ -129,7 +129,7 @@ recognised. Anything without a default is optional unless the description says o
 | `BUILDER_SOURCE_CPU_LIMIT` | `2` |  |
 | `BUILD_PLATFORM` |  | Architecture user images are built for: linux/amd64 (default) or linux/arm64. Build pods run on nodes of that architecture. When set, apps built by Orchard are also pinned to it, so a mixed-architecture cluster stays schedulable. |
 | `MAX_CONCURRENT_BUILDS` |  |  |
-| `MAX_CONCURRENT_BUILDS_PER_ORG` |  | Most builds one organization may run at once in a pool (default: half the pool, and no limit when the pool has 4 slots or fewer). 0 = no per-org limit. Queued builds are started fairest-first: the organization with the fewest running builds goes first. |
+| `MAX_CONCURRENT_BUILDS_PER_ORG` |  | Most builds one organization may run at once in a pool (default: half the pool, and no limit when the pool has 4 slots or fewer). 0 = no per-org limit. Queued builds are started fairest-first: the organization with the fewest running builds goes first. Also under Admin -&gt; Limits; setting it here pins it there. |
 | `DATABASE_DEFAULT_MEMORY_MB` |  | Memory request in MB for a database with no size of its own (default 1024, floor 512). The installer lowers it on a box with about 8G of RAM or less. |
 | `DEFAULT_APP_MEMORY_MB` |  | Memory limit in MB for an app with no size of its own and no organization default (default 128). The installer sets it by RAM on a fresh install. |
 | `BUILD_NO_PROXY_EXTRA` |  |  |
@@ -198,12 +198,12 @@ recognised. Anything without a default is optional unless the description says o
 | `TENANT_QUOTA_FLOOR_SERVICES` |  |  |
 | `TENANT_QUOTA_FLOOR_PVCS` |  |  |
 | `TENANT_QUOTA_FLOOR_STORAGE_BYTES` |  |  |
-| `TENANT_QUOTA_FLOOR_LOADBALANCERS` |  | Always applied, whatever the resource limits mode: the most LoadBalancer (default 20) and NodePort (default 10) Services a tenant namespace can hold, and the ephemeral-storage limit in GiB that every container gets by default (default 20, 0 turns the ephemeral-storage quota and default off). Public ports and public databases use these Service types, so 0 stops them. |
+| `TENANT_QUOTA_FLOOR_LOADBALANCERS` |  | Always applied, whatever the resource limits mode: the most LoadBalancer (default 20) and NodePort (default 10) Services a tenant namespace can hold, and the ephemeral-storage limit in GiB that every container gets by default (default 20, 0 turns the ephemeral-storage quota and default off). Public ports and public databases use these Service types, so 0 stops them. All three are also under Admin -&gt; Limits; setting one here pins it there. |
 | `TENANT_QUOTA_FLOOR_NODEPORTS` |  |  |
 | `TENANT_EPHEMERAL_STORAGE_LIMIT_GIB` |  |  |
 | `NEW_ORG_CPU` |  | Seed for the CPU and memory caps of NEW organizations. New organizations are uncapped unless this is set or a superadmin sets the instance default for new organizations in the admin panel (which wins over this seed). The value is written into the org's caps when it is created; existing organizations are untouched, and an administrator can change any organization's caps afterwards. 0 or "unlimited" means no cap. On an instance with open sign-up, set limits. |
 | `NEW_ORG_MEMORY` |  |  |
-| `MAX_PROJECTS_PER_ORG` |  | A hard ceiling on projects, extra environments (each is a namespace) and deployments for EVERY organization, whatever its own limit. Unset or 0 means no ceiling; per-organization limits are set in the admin panel. An organization already above a limit keeps everything it has and just cannot create more. |
+| `MAX_PROJECTS_PER_ORG` |  | A hard ceiling on projects, extra environments (each is a namespace) and deployments for EVERY organization, whatever its own limit. Unset or 0 means no ceiling; per-organization limits are set in the admin panel. An organization already above a limit keeps everything it has and just cannot create more. Also under Admin -&gt; Limits; setting one here pins it there. |
 | `MAX_ENVIRONMENTS_PER_ORG` |  |  |
 | `MAX_DEPLOYMENTS_PER_ORG` |  |  |
 | `TENANT_SECRETS_CLUSTER_ROLE` |  | Set by the chart: the ClusterRole the server binds into each tenant namespace for secrets and configmaps. Unset, the server mints a per-namespace Role. |
@@ -216,7 +216,7 @@ recognised. Anything without a default is optional unless the description says o
 | `SSO_ENFORCED` |  | Pins the "require single sign-on for everyone" switch in the admin panel. 'true' refuses email codes, passkeys and the superadmin password for every account that is not a superadmin; only the configured identity providers sign people in. Leave blank to let the switch decide. |
 | `IDP_AUTO_CREATE_ORGS` |  | Pins "identity providers may create organizations" in the admin SSO page. 'true' lets a login whose IdP groups match an auto-create rule on an instance provider create that organization once; 'false' keeps it off. Off unless an instance admin turns it on, and the group rules themselves are managed only by instance admins. Leave blank to let the switch decide. |
 | `CUSTOM_DOMAIN_VERIFICATION` |  | Pins the "require proof of domain ownership" switch in the admin panel. 'true' makes people add a TXT record before they can add a custom domain, 'false' turns it off. Leave blank to let the switch decide; with nothing stored the switch starts on when SIGNUP_MODE is open and off otherwise. Domains a project already serves are never asked for proof again. |
-| `MAX_CUSTOM_DOMAINS_PER_ORG` |  | Most distinct custom (non-generated) hostnames one organization may hold (default 250, 0 = unlimited) and most it may add per hour (default 30, 0 = unlimited). Repeated failed TXT proofs pause an organization's new domains for 1 minute after the fifth failure, doubling up to a day. |
+| `MAX_CUSTOM_DOMAINS_PER_ORG` |  | Most distinct custom (non-generated) hostnames one organization may hold (default 250, 0 = unlimited) and most it may add per hour (default 30, 0 = unlimited). Repeated failed TXT proofs pause an organization's new domains for 1 minute after the fifth failure, doubling up to a day. Both are also under Admin -&gt; Limits; setting one here pins it there. |
 | `MAX_CUSTOM_DOMAIN_CREATES_PER_HOUR` |  |  |
 | `MCP_SERVICE_TOKEN` |  | Shared with the MCP process. It authenticates to this API as a service and passes the consenting user's identity in headers, so a mismatch surfaces as every tool call failing rather than as anything failing to start. |
 | `SANDBOX_NAMESPACE` | `orchard-sandboxes` | Namespace the Kubernetes runner creates machines in. |

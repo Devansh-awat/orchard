@@ -10,7 +10,15 @@ import { InstanceSettingsService } from '../instance-settings/instance-settings.
 import { SecretCryptoService } from '../crypto/secret-crypto.service';
 import { setWildcardOverride } from '../projects/projects.utils';
 import { setObjectStorageOverride } from './object-storage';
-import { ConfigSection, NETWORK, SECTIONS, STORAGE, WILDCARD } from './instance-config.sections';
+import { setInstanceLimitOverrides } from '../quotas/instance-limits';
+import {
+  ConfigSection,
+  LIMITS,
+  NETWORK,
+  SECTIONS,
+  STORAGE,
+  WILDCARD
+} from './instance-config.sections';
 
 export type ConfigValues = Record<string, string | null>;
 
@@ -62,6 +70,8 @@ export class InstanceConfigService implements OnModuleInit, OnModuleDestroy {
 
   private wildcardHandlers: (() => Promise<unknown>)[] = [];
 
+  private limitsHandlers: (() => Promise<unknown>)[] = [];
+
   constructor(
     private readonly settings: InstanceSettingsService,
     private readonly crypto: SecretCryptoService
@@ -90,6 +100,10 @@ export class InstanceConfigService implements OnModuleInit, OnModuleDestroy {
     this.wildcardHandlers.push(handler);
   }
 
+  onLimitsChange(handler: () => Promise<unknown>): void {
+    this.limitsHandlers.push(handler);
+  }
+
   private async reconcileWildcards(): Promise<void> {
     for (const handler of this.wildcardHandlers) {
       try {
@@ -97,6 +111,14 @@ export class InstanceConfigService implements OnModuleInit, OnModuleDestroy {
       } catch (e: any) {
         this.logger.warn(`wildcard reconcile failed: ${e?.message}`);
       }
+    }
+  }
+
+  private reconcileLimits(): void {
+    for (const handler of this.limitsHandlers) {
+      void handler().catch((e: any) =>
+        this.logger.warn(`limits reconcile failed: ${e?.message ?? e}`)
+      );
     }
   }
 
@@ -126,6 +148,8 @@ export class InstanceConfigService implements OnModuleInit, OnModuleDestroy {
         next.set(section.id, values);
       } catch (e) {
         this.logger.error(`couldn't read stored config for ${section.id}: ${e}`);
+        const previous = this.stored.get(section.id);
+        if (previous) next.set(section.id, previous);
       }
     }
     const snapshot = JSON.stringify([...next.entries()]);
@@ -138,6 +162,7 @@ export class InstanceConfigService implements OnModuleInit, OnModuleDestroy {
     // import, so it is pushed the values instead.
     setWildcardOverride(next.get(WILDCARD.id)?.domains ?? null, this.settingsAppDomain(next));
     setObjectStorageOverride(next.get(STORAGE.id) ?? {});
+    setInstanceLimitOverrides(next.get(LIMITS.id) ?? {});
   }
 
   private settingsAppDomain(values: Map<string, ConfigValues>): string | null {
@@ -293,11 +318,13 @@ export class InstanceConfigService implements OnModuleInit, OnModuleDestroy {
     await this.settings.set(section.key, JSON.stringify(payload));
     await this.reload();
     if (section.id === WILDCARD.id) await this.reconcileWildcards();
+    if (section.id === LIMITS.id) this.reconcileLimits();
   }
 
   async clear(section: ConfigSection): Promise<void> {
     await this.settings.delete(section.key);
     await this.reload();
     if (section.id === WILDCARD.id) await this.reconcileWildcards();
+    if (section.id === LIMITS.id) this.reconcileLimits();
   }
 }

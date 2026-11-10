@@ -1,9 +1,11 @@
 import { ForbiddenException, HttpException, HttpStatus } from '@nestjs/common';
 import type { PrismaService } from '../prisma/prisma.service';
+import { countLimit, INSTANCE_LIMITS } from '../quotas/instance-limits';
 import { platformWildcardDomains } from './projects.utils';
 
-export const DEFAULT_MAX_CUSTOM_DOMAINS_PER_ORG = 250;
-export const DEFAULT_CUSTOM_DOMAIN_CREATES_PER_HOUR = 30;
+export const DEFAULT_MAX_CUSTOM_DOMAINS_PER_ORG = INSTANCE_LIMITS.customDomainsPerOrg.fallback;
+export const DEFAULT_CUSTOM_DOMAIN_CREATES_PER_HOUR =
+  INSTANCE_LIMITS.customDomainCreatesPerHour.fallback;
 export const FREE_PROOF_FAILURES = 5;
 export const PROOF_BACKOFF_BASE_MS = 60_000;
 export const PROOF_BACKOFF_MAX_MS = 24 * 60 * 60 * 1000;
@@ -19,18 +21,10 @@ export interface DomainBudgetLimits {
   createsPerHour: number;
 }
 
-function limit(raw: string | undefined, fallback: number): number {
-  const parsed = Number(raw?.trim());
-  return raw?.trim() && Number.isInteger(parsed) && parsed >= 0 ? parsed : fallback;
-}
-
 export function domainBudgetLimits(env: NodeJS.ProcessEnv = process.env): DomainBudgetLimits {
   return {
-    maxCustomDomains: limit(env.MAX_CUSTOM_DOMAINS_PER_ORG, DEFAULT_MAX_CUSTOM_DOMAINS_PER_ORG),
-    createsPerHour: limit(
-      env.MAX_CUSTOM_DOMAIN_CREATES_PER_HOUR,
-      DEFAULT_CUSTOM_DOMAIN_CREATES_PER_HOUR
-    )
+    maxCustomDomains: countLimit('customDomainsPerOrg', env),
+    createsPerHour: countLimit('customDomainCreatesPerHour', env)
   };
 }
 

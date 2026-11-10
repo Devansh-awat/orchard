@@ -1,6 +1,7 @@
 import { isCollapsedAddress, parseTrustProxy } from '../auth/client-ip';
 import { resolveBuildPosture } from '../docker/build-posture';
 import { registryPolicyMode } from '../kubernetes/registry-image-policy';
+import { nodePortExposureEnabled } from '../quotas/instance-limits';
 import { check, type DoctorCheck, type Fact } from './doctor.types';
 
 export interface DaemonSetFact {
@@ -612,14 +613,13 @@ export function registryPolicyCheck(inputs: DoctorInputs): DoctorCheck {
 export function nodePortCheck(inputs: DoctorInputs): DoctorCheck {
   const id = 'nodeport-exposure';
   const title = 'Tenant NodePort exposure';
-  const enabled = (inputs.env.TENANT_NODEPORT_EXPOSURE || '').trim().toLowerCase() !== 'false';
-  if (enabled) {
+  if (nodePortExposureEnabled(inputs.env)) {
     return check(
       id,
       title,
       'warn',
-      'Tenants can publish TCP ports on node addresses (TENANT_NODEPORT_EXPOSURE is not false). Nothing inside the cluster stops a published port from being reachable on every node.',
-      'Set tenant.nodePortExposure=false unless you need it, and firewall node ports (30000-32767 and 10250, 22, 6443, 50000) at the cloud or host.'
+      'Tenants can publish TCP ports on node addresses. Nothing inside the cluster stops a published port from being reachable on every node.',
+      'Turn off raw node ports under Admin -> Limits (or set tenant.nodePortExposure=false) unless you need them, and firewall node ports (30000-32767 and 10250, 22, 6443, 50000) at the cloud or host.'
     );
   }
   return check(id, title, 'pass', 'Tenant NodePort exposure is disabled.');

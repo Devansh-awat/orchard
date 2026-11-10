@@ -528,7 +528,7 @@ export class ProjectsService {
       throw new BadRequestException('Storage size must be a Kubernetes quantity like "10Gi"');
     }
     if (parseMemory(size) > maxVolumeBytes()) {
-      throw new BadRequestException(`Storage size can't exceed ${maxVolumeSize()}`);
+      throw new BadRequestException(`Storage size can't exceed ${maxVolumeSize() ?? size}`);
     }
 
     const { previousSize, archivingFailure, resizedVolumes, failedVolumes } =

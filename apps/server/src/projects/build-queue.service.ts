@@ -7,6 +7,7 @@ import { GitHubService } from '../github/github.service';
 import { canTrustDeploymentStatus } from './build-recovery';
 import { LeaseService } from '../coordination/lease.service';
 import { BuildBackendRouter, BuilderKind } from '../docker/fc/build-backend-router';
+import { storedLimit } from '../quotas/instance-limits';
 import { Prisma } from '@prisma/client';
 
 export interface QueueSnapshot {
@@ -34,6 +35,9 @@ export function orgBuildLimit(
   if (raw) {
     const parsed = Number(raw);
     if (Number.isInteger(parsed) && parsed >= 0) return parsed;
+  } else {
+    const stored = storedLimit('buildsPerOrg');
+    if (stored !== null) return stored === 'off' ? 0 : stored;
   }
   return poolLimit <= 4 ? 0 : Math.ceil(poolLimit / 2);
 }

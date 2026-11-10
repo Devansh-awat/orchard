@@ -1,3 +1,12 @@
+import {
+  INSTANCE_LIMIT_NAMES,
+  INSTANCE_LIMITS,
+  NODE_PORT_EXPOSURE_ENV,
+  NODE_PORT_EXPOSURE_FIELD,
+  isInstanceLimitName,
+  storedLimitError
+} from '../quotas/instance-limits';
+
 export interface ConfigField {
   name: string;
   env: string;
@@ -185,6 +194,29 @@ export const GIT_BITBUCKET = section(
   ['key', 'secret']
 );
 
+export const LIMITS = section(
+  'limits',
+  'instance_limits',
+  [
+    ...INSTANCE_LIMIT_NAMES.map((name) => ({ name, env: INSTANCE_LIMITS[name].env })),
+    { name: NODE_PORT_EXPOSURE_FIELD, env: NODE_PORT_EXPOSURE_ENV, bool: true, fallback: true }
+  ],
+  [],
+  (values) => {
+    for (const [name, value] of Object.entries(values)) {
+      if (name === NODE_PORT_EXPOSURE_FIELD) {
+        if (value && !['true', 'false'].includes(value.toLowerCase())) {
+          throw new Error(`${name} must be true or false`);
+        }
+        continue;
+      }
+      if (!isInstanceLimitName(name)) continue;
+      const error = storedLimitError(name, value);
+      if (error) throw new Error(error);
+    }
+  }
+);
+
 export const SECTIONS: ConfigSection[] = [
   STORAGE,
   EMAIL,
@@ -194,7 +226,8 @@ export const SECTIONS: ConfigSection[] = [
   TUNNEL,
   TURNSTILE,
   GIT_GITLAB,
-  GIT_BITBUCKET
+  GIT_BITBUCKET,
+  LIMITS
 ];
 
 export const sectionById = (id: string): ConfigSection | undefined =>
