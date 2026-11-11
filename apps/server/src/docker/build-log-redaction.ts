@@ -18,7 +18,7 @@ export function sanitizeBuildLogMessage(
   registryHosts: readonly string[] = []
 ): string {
   let sanitized = message.replace(
-    /(x-access-token:|ghs_|ghp_|github_pat_|dckr_pat_)[a-zA-Z0-9_-]+/gi,
+    /(x-access-token:|ghs_|ghp_|ghu_|gho_|ghr_|github_pat_|dckr_pat_)[a-zA-Z0-9_-]+/gi,
     '***REDACTED***'
   );
   sanitized = redactUrlUserinfo(sanitized);

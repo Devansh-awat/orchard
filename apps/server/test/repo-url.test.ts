@@ -70,9 +70,14 @@ test('the GitHub token is attached only when the host really is github.com', () 
   assert.equal(parseRepoUrl('https://evil.com/?x=https://github.com/o/r'), null);
 });
 
-test('a user OAuth token uses the bare-credential form', () => {
+test('every GitHub token kind gets a username and a password', () => {
   const url = parseRepoUrl('https://github.com/o/r')!;
-  assert.equal(withGitHubCredentials(url, 'gho_x'), 'https://gho_x@github.com/o/r');
+  for (const token of ['ghs_x', 'ghu_x', 'gho_x', 'ghp_x', 'github_pat_x']) {
+    assert.equal(
+      withGitHubCredentials(url, token),
+      `https://x-access-token:${token}@github.com/o/r`
+    );
+  }
 });
 
 test('no token means the URL is passed through untouched', () => {

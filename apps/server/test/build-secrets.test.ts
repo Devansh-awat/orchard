@@ -129,6 +129,13 @@ test('build log sanitizing hides tokens and registry hosts', () => {
   assert.ok(!out.includes('hunter2'));
 });
 
+test('GitHub user and OAuth tokens are redacted from build logs', () => {
+  for (const token of ['ghu_userToken123', 'gho_oauthToken123', 'ghr_refreshToken123']) {
+    const out = sanitizeBuildLogMessage(`remote: token ${token} rejected`);
+    assert.ok(!out.includes(token), out);
+  }
+});
+
 async function createJob(
   t: TestContext,
   build: Partial<Parameters<ImageBuilderService['createBuildJob']>[0]>

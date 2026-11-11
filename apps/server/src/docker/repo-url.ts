@@ -37,10 +37,7 @@ export function withCloneCredentials(repo: URL, accessToken?: string): string {
     return `https://${user}:${pass}@${repo.host}${repo.pathname}${repo.search}`;
   }
   if (repo.hostname !== 'github.com') return repo.href;
-  const credentials = accessToken.startsWith('ghs_')
-    ? `x-access-token:${accessToken}`
-    : accessToken;
-  return `https://${credentials}@github.com${repo.pathname}${repo.search}`;
+  return `https://x-access-token:${accessToken}@github.com${repo.pathname}${repo.search}`;
 }
 
 export const withGitHubCredentials = withCloneCredentials;

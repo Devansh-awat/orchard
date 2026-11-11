@@ -1722,7 +1722,7 @@ PLAIN_URL="$(printf '%s' "$CLONE_URL" | sed -E 's#://[^@/]+@#://#')"
 AUTH_BASE="$(printf '%s' "$CLONE_URL" | sed -E 's#^([a-z]+://[^/]+/).*#\\1#')"
 PLAIN_BASE="$(printf '%s' "$PLAIN_URL" | sed -E 's#^([a-z]+://[^/]+/).*#\\1#')"
 CLONE_OUTPUT=$(GIT_TERMINAL_PROMPT=0 GIT_LFS_SKIP_SMUDGE=1 git -c "url.$AUTH_BASE.insteadOf=$PLAIN_BASE" clone --depth 1 --recurse-submodules --shallow-submodules --branch "${branch}" "$PLAIN_URL" /workspace 2>&1) || {
-  SANITIZED_OUTPUT=$(echo "$CLONE_OUTPUT" | sed -E 's/(x-access-token:|ghs_|ghp_|github_pat_)[^ @]*/***REDACTED***/g')
+  SANITIZED_OUTPUT=$(echo "$CLONE_OUTPUT" | sed -E 's/(x-access-token:|ghs_|ghp_|ghu_|gho_|ghr_|github_pat_)[^ @]*/***REDACTED***/g')
   echo "$SANITIZED_OUTPUT"
   if echo "$CLONE_OUTPUT" | grep -q "terminal prompts disabled\\|could not read Username\\|Authentication failed\\|403"; then
     echo ""
@@ -1734,7 +1734,7 @@ CLONE_OUTPUT=$(GIT_TERMINAL_PROMPT=0 GIT_LFS_SKIP_SMUDGE=1 git -c "url.$AUTH_BAS
   fi
   exit 1
 }
-echo "$CLONE_OUTPUT" | sed -E 's/(x-access-token:|ghs_|ghp_|github_pat_)[^ @]*/***REDACTED***/g'
+echo "$CLONE_OUTPUT" | sed -E 's/(x-access-token:|ghs_|ghp_|ghu_|gho_|ghr_|github_pat_)[^ @]*/***REDACTED***/g'
 
 echo "=== Repository cloned successfully ==="
 
