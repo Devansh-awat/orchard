@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.87.0](https://github.com/hackclub/orchard/compare/frontend/v1.86.1...frontend/v1.87.0) (2026-11-10)
+
+
+### Features
+
+* **frontend:** admin limits page ([9418592](https://github.com/hackclub/orchard/commit/9418592f46de2e76abdc6f54af9e03220df94296))
+
 ## [1.86.1](https://github.com/hackclub/orchard/compare/frontend/v1.86.0...frontend/v1.86.1) (2026-11-10)
 
 

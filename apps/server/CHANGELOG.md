@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.95.3](https://github.com/hackclub/orchard/compare/server/v2.95.2...server/v2.95.3) (2026-11-10)
+
+
+### Bug Fixes
+
+* **server:** classify limits routes, type replica fallback ([326c642](https://github.com/hackclub/orchard/commit/326c642ec683dcfeb35eebf11631113555d8fdc3))
+
 ## [2.95.2](https://github.com/hackclub/orchard/compare/server/v2.95.1...server/v2.95.2) (2026-11-10)
 
 
