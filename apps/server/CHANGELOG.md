@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.95.4](https://github.com/hackclub/orchard/compare/server/v2.95.3...server/v2.95.4) (2026-11-11)
+
+
+### Bug Fixes
+
+* **server:** bring existing policies up to date after upgrades ([568cc2c](https://github.com/hackclub/orchard/commit/568cc2ce30118ac16ee2128af292690536a25cac))
+
 ## [2.95.3](https://github.com/hackclub/orchard/compare/server/v2.95.2...server/v2.95.3) (2026-11-10)
 
 
