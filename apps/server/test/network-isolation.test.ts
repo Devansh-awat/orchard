@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   CILIUM_DENY_POLICY,
+  DATABASE_PLATFORM_POLICY,
   TENANT_DENY_POLICY,
   ciliumDenyPolicy,
   egressPortsAvoiding,
@@ -237,33 +238,63 @@ const denyKey = (namespace: string): GuardKey => ({
   name: TENANT_DENY_POLICY
 });
 
-test('the periodic check recreates a missing default-deny and leaves present ones alone', async () => {
+const platformKey = (namespace: string): GuardKey => ({
+  kind: 'NetworkPolicy',
+  namespace,
+  name: DATABASE_PLATFORM_POLICY
+});
+
+test('the first check after boot verifies every guarded policy, present or not', async () => {
   const { consumer, enforced } = guardWith(async () => ['203.0.113.7/32'], new Set(['a']), [
     denyKey('a'),
+    platformKey('a'),
     denyKey('b')
   ]);
   await consumer.checkTenantPolicies();
   assert.deepEqual(
-    enforced.map((e) => e.key.namespace),
-    ['b']
+    enforced.map((e) => [e.key.namespace, e.key.name, e.rollForward]),
+    [
+      ['a', TENANT_DENY_POLICY, true],
+      ['a', DATABASE_PLATFORM_POLICY, true],
+      ['b', TENANT_DENY_POLICY, true]
+    ]
   );
 });
 
-test('a change in node addresses rolls every tenant policy forward without the restore backoff', async () => {
+test('later checks recreate a missing default-deny and leave present ones alone', async () => {
+  const { consumer, enforced } = guardWith(async () => ['203.0.113.7/32'], new Set(['a']), [
+    denyKey('a'),
+    platformKey('a'),
+    denyKey('b')
+  ]);
+  await consumer.checkTenantPolicies();
+  enforced.length = 0;
+  await consumer.checkTenantPolicies();
+  assert.deepEqual(
+    enforced.map((e) => [e.key.namespace, e.rollForward]),
+    [['b', false]]
+  );
+});
+
+test('a change in node addresses rolls every address-bound policy forward', async () => {
   let addresses = ['203.0.113.7/32'];
   const { consumer, enforced } = guardWith(async () => addresses, new Set(['a', 'b']), [
     denyKey('a'),
+    platformKey('a'),
     denyKey('b')
   ]);
+  await consumer.checkTenantPolicies();
+  enforced.length = 0;
   await consumer.checkTenantPolicies();
   assert.equal(enforced.length, 0);
   addresses = ['203.0.113.7/32', '203.0.113.8/32'];
   await consumer.checkTenantPolicies();
   assert.deepEqual(
-    enforced.map((e) => [e.key.namespace, e.rollForward]),
+    enforced.map((e) => [e.key.namespace, e.key.name, e.rollForward]),
     [
-      ['a', true],
-      ['b', true]
+      ['a', TENANT_DENY_POLICY, true],
+      ['a', DATABASE_PLATFORM_POLICY, true],
+      ['b', TENANT_DENY_POLICY, true]
     ]
   );
 });

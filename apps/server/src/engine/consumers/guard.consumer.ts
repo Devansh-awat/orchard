@@ -5,7 +5,7 @@ import { AuditService } from '../../audit/audit.service';
 import { EngineEventType, EngineObjectKey } from '../core/informer';
 import { GuardKind, GuardManifest, fingerprint, missingLabels, specDrift } from '../guard/compare';
 import { GuardCluster, GuardKey, K8sGuardCluster, statusOf } from '../guard/cluster';
-import { TENANT_DENY_POLICY } from '../../kubernetes/security-policies';
+import { DATABASE_PLATFORM_POLICY, TENANT_DENY_POLICY } from '../../kubernetes/security-policies';
 import { DesiredObject, GuardDesired, PrismaGuardDesired } from '../guard/desired';
 import { RestoreLimiter } from '../guard/restore-limiter';
 
@@ -16,6 +16,10 @@ const SETTLE_MS = 10_000;
 const CONFLICT_RETRY_MS = 5_000;
 
 type Outcome = 'ok' | 'pending';
+
+const ADDRESS_BOUND_POLICIES = new Set([TENANT_DENY_POLICY, DATABASE_PLATFORM_POLICY]);
+
+const VERIFIED_KINDS: GuardKind[] = ['NetworkPolicy', 'CiliumNetworkPolicy'];
 
 interface Verdict {
   ok: boolean;
@@ -111,20 +115,43 @@ export class GuardConsumer implements OnModuleDestroy {
 
   async checkTenantPolicies(): Promise<void> {
     const addresses = (await this.clusterAddresses()).join(',');
-    const changed = this.lastAddresses !== null && this.lastAddresses !== addresses;
+    const first = this.lastAddresses === null;
+    const changed = !first && this.lastAddresses !== addresses;
     this.lastAddresses = addresses;
-    const keys = (await this.desired.expected('NetworkPolicy')).filter(
-      (key) => key.name === TENANT_DENY_POLICY
-    );
+    if (first) {
+      await this.verifyEverything();
+      return;
+    }
+    const expected = await this.desired.expected('NetworkPolicy');
     if (changed) {
+      const keys = expected.filter((key) => ADDRESS_BOUND_POLICIES.has(key.name));
       this.logger.log(
-        `cluster addresses changed; rolling the tenant policy to ${keys.length} namespace(s)`
+        `cluster addresses changed; rolling ${keys.length} address-bound polic${keys.length === 1 ? 'y' : 'ies'} forward`
       );
+      await this.rollForward(keys);
+      return;
     }
     const live = await this.liveDenyPolicies();
+    for (const key of expected) {
+      if (key.name !== TENANT_DENY_POLICY || live?.has(key.namespace)) continue;
+      await this.enforce(key, null).catch((err) =>
+        this.logger.warn(`could not check ${idOf(key)}: ${(err as Error)?.message ?? err}`)
+      );
+    }
+  }
+
+  private async verifyEverything(): Promise<void> {
+    const keys: GuardKey[] = [];
+    for (const kind of VERIFIED_KINDS) {
+      keys.push(...(await this.desired.expected(kind)).filter((key) => key.kind === kind));
+    }
+    this.logger.log(`checking ${keys.length} guarded policies against what this server enforces`);
+    await this.rollForward(keys);
+  }
+
+  private async rollForward(keys: GuardKey[]): Promise<void> {
     for (const key of keys) {
-      if (!changed && live?.has(key.namespace)) continue;
-      await this.enforce(key, null, changed).catch((err) =>
+      await this.enforce(key, null, true).catch((err) =>
         this.logger.warn(`could not check ${idOf(key)}: ${(err as Error)?.message ?? err}`)
       );
     }
@@ -231,7 +258,7 @@ export class GuardConsumer implements OnModuleDestroy {
     this.firstDrift.delete(id);
     this.rememberNormalisation(key, want.manifest, written);
     if (rollForward && !missingDeny) {
-      this.logger.log(`rolled ${id} forward to the current cluster addresses`);
+      this.logger.log(`brought ${id} up to date with what this server enforces`);
       return 'ok';
     }
     const state = this.limiter.record(id);

@@ -11,7 +11,9 @@ import { PrismaGuardDesired } from '../src/engine/guard/desired';
 import { RestoreLimiter } from '../src/engine/guard/restore-limiter';
 import { buildEngineShards } from '../src/engine/shards';
 import {
+  DATABASE_PLATFORM_POLICY,
   basicAuthEnvoyConfig,
+  databasePlatformPolicy,
   publicDeploymentPolicy,
   tenantDenyPolicy
 } from '../src/kubernetes/security-policies';
@@ -233,6 +235,45 @@ test('the sweep restores an expected policy the watch never saw', async () => {
   await consumer.sweep('NetworkPolicy', [
     { namespace: 'acme', name: 'default-deny-all', refs: {} }
   ]);
+  assert.equal(cluster.writes.length, 1);
+  consumer.onModuleDestroy();
+});
+
+test('a policy left in the shape an older server wrote is updated on the first check', async () => {
+  const key: GuardKey = {
+    kind: 'NetworkPolicy',
+    namespace: 'acme',
+    name: DATABASE_PLATFORM_POLICY
+  };
+  const apiserver = { ips: ['10.43.0.1', '203.0.113.10'], ports: [443, 6443] };
+  const current = () =>
+    databasePlatformPolicy('acme', {
+      storage: null,
+      apiserver,
+      operatorNamespace: 'cnpg-system'
+    }) as GuardManifest;
+  const { consumer, cluster } = build(
+    (k) => (k.name === DATABASE_PLATFORM_POLICY ? current() : null),
+    [key]
+  );
+  (consumer as any).clusterAddresses = async () => ['203.0.113.10/32'];
+  const older = databasePlatformPolicy('acme', { storage: null }) as GuardManifest;
+  older.metadata!.resourceVersion = '7';
+  cluster.put(key, older);
+
+  await consumer.checkTenantPolicies();
+
+  assert.equal(cluster.writes.length, 1);
+  assert.equal(cluster.writes[0].op, 'replace');
+  const live = (await cluster.read(key)) as { state: 'present'; obj: GuardManifest };
+  assert.deepEqual(live.obj.spec.policyTypes, ['Ingress', 'Egress']);
+  const toApiserver = live.obj.spec.egress.find((rule: any) =>
+    rule.to?.some((peer: any) => peer.ipBlock?.cidr === '203.0.113.10/32')
+  );
+  assert.ok(toApiserver, 'the database pods can reach the API server again');
+  assert.ok(toApiserver.ports.some((p: any) => p.port === 6443));
+
+  await consumer.checkTenantPolicies();
   assert.equal(cluster.writes.length, 1);
   consumer.onModuleDestroy();
 });
