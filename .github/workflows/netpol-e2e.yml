@@ -1,0 +1,168 @@
+name: netpol-e2e
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - apps/server/src/kubernetes/security-policies.ts
+      - apps/server/src/kubernetes/cluster-addresses.ts
+      - apps/server/src/kubernetes/kubernetes.service.ts
+      - apps/server/src/kubernetes/k8s-cnpg.service.ts
+      - apps/server/src/engine/guard/**
+      - apps/server/scripts/netpol-e2e-policies.ts
+      - install/install.sh
+      - .github/workflows/netpol-e2e.yml
+  pull_request:
+    paths:
+      - apps/server/src/kubernetes/security-policies.ts
+      - apps/server/src/kubernetes/cluster-addresses.ts
+      - apps/server/src/kubernetes/kubernetes.service.ts
+      - apps/server/src/kubernetes/k8s-cnpg.service.ts
+      - apps/server/src/engine/guard/**
+      - apps/server/scripts/netpol-e2e-policies.ts
+      - install/install.sh
+      - .github/workflows/netpol-e2e.yml
+
+concurrency:
+  group: netpol-e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  cnpg-restart:
+    name: managed postgres restarts under tenant policies (k3s, ${{ matrix.node }} node ip)
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [private, public]
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      KUBECONFIG: /home/runner/.kube/config
+      CNPG_OPERATOR_NAMESPACE: cnpg-system
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --filter server...
+      - run: pnpm --filter server prisma:generate
+
+      - name: Start k3s the way the installer does
+        run: |
+          sudo systemctl stop docker.socket docker
+          sudo iptables -P FORWARD ACCEPT
+          extra=()
+          if [ "${{ matrix.node }}" = public ]; then
+            sudo ip link add orchard0 type dummy
+            sudo ip addr add 203.0.113.10/32 dev orchard0
+            sudo ip link set orchard0 up
+            extra=(--node-ip=203.0.113.10 --advertise-address=203.0.113.10)
+          fi
+          curl -sfL https://get.k3s.io | INSTALL_K3S_CHANNEL=stable sh -s - server \
+            --disable=traefik \
+            --write-kubeconfig-mode=644 "${extra[@]}"
+          mkdir -p "$(dirname "$KUBECONFIG")"
+          cp /etc/rancher/k3s/k3s.yaml "$KUBECONFIG"
+          for _ in $(seq 60); do kubectl get nodes >/dev/null 2>&1 && break; sleep 2; done
+          kubectl wait --for=condition=Ready node --all --timeout=3m
+          kubectl get nodes -o wide
+          kubectl get endpoints kubernetes -o wide
+
+      - name: Install CloudNativePG the way the installer does
+        run: |
+          helm repo add cnpg https://cloudnative-pg.github.io/charts >/dev/null
+          helm upgrade --install cnpg cnpg/cloudnative-pg \
+            --set-string config.data.ENABLE_INSTANCE_MANAGER_INPLACE_UPDATES=true \
+            --namespace cnpg-system --create-namespace \
+            --wait --timeout 10m
+          for _ in $(seq 90); do
+            [ -n "$(kubectl -n cnpg-system get endpoints cnpg-webhook-service -o jsonpath='{.subsets[*].addresses[*].ip}' 2>/dev/null)" ] && break
+            sleep 2
+          done
+
+      - name: Create a managed database in a tenant namespace and in a control namespace
+        run: |
+          for ns in tenant control; do
+            kubectl create namespace "$ns"
+            kubectl -n "$ns" apply -f - <<'YAML'
+          apiVersion: postgresql.cnpg.io/v1
+          kind: Cluster
+          metadata:
+            name: db
+          spec:
+            instances: 1
+            imageName: ghcr.io/cloudnative-pg/postgresql:17
+            storage:
+              size: 1Gi
+          YAML
+          done
+          for ns in tenant control; do
+            kubectl -n "$ns" wait cluster/db --for=condition=Ready --timeout=10m
+          done
+
+      - name: Apply Orchard's tenant policies
+        run: |
+          cd apps/server
+          pnpm exec tsx scripts/netpol-e2e-policies.ts tenant full > "$RUNNER_TEMP/tenant.json"
+          pnpm exec tsx scripts/netpol-e2e-policies.ts control deny-only > "$RUNNER_TEMP/control.json"
+          kubectl apply -f "$RUNNER_TEMP/tenant.json"
+          kubectl apply -f "$RUNNER_TEMP/control.json"
+          kubectl get networkpolicy -A
+          sleep 10
+
+      - name: A database pod can reach the API server
+        run: |
+          probe() {
+            kubectl -n "$1" run apiserver-probe --restart=Never --image=curlimages/curl:8.17.0 \
+              --labels=cnpg.io/cluster=probe --command -- \
+              sh -c 'sleep 20; curl -sk -m 10 -o /dev/null https://kubernetes.default.svc/version' >/dev/null
+            kubectl -n "$1" wait pod/apiserver-probe --for=jsonpath='{.status.phase}'=Succeeded --timeout=120s >/dev/null 2>&1 \
+              || kubectl -n "$1" wait pod/apiserver-probe --for=jsonpath='{.status.phase}'=Failed --timeout=10s >/dev/null 2>&1 || true
+            kubectl -n "$1" get pod apiserver-probe -o jsonpath='{.status.phase}'
+          }
+          control=$(probe control)
+          tenant=$(probe tenant)
+          echo "control (default-deny-all only): $control"
+          echo "tenant (Orchard's policies): $tenant"
+          test "$control" = Failed
+          test "$tenant" = Succeeded
+
+      - name: The database comes back after its pod restarts
+        run: |
+          kubectl -n control delete pod db-1 --wait=true
+          kubectl -n tenant delete pod db-1 --wait=true
+          kubectl -n tenant wait cluster/db --for=condition=Ready --timeout=5m
+          for _ in $(seq 60); do
+            kubectl -n tenant get pod db-1 >/dev/null 2>&1 && break
+            sleep 2
+          done
+          kubectl -n tenant wait pod/db-1 --for=condition=Ready --timeout=5m
+          test "$(kubectl -n tenant get pod db-1 -o jsonpath='{.status.containerStatuses[?(@.name=="postgres")].restartCount}')" = 0
+          if kubectl -n control wait pod/db-1 --for=condition=Ready --timeout=90s 2>/dev/null; then
+            echo "the control database restarted without an API server rule, so this job can no longer tell"
+            exit 1
+          fi
+          kubectl -n control logs db-1 -c postgres --tail=20 || true
+
+      - name: Diagnostics
+        if: failure()
+        run: |
+          kubectl get nodes -o wide || true
+          kubectl get endpoints kubernetes -o yaml || true
+          kubectl get pods -A -o wide || true
+          kubectl get networkpolicy -A -o yaml || true
+          for ns in tenant control; do
+            kubectl -n "$ns" logs apiserver-probe --tail=20 || true
+            kubectl -n "$ns" describe pod db-1 | tail -40 || true
+            kubectl -n "$ns" logs db-1 -c postgres --tail=60 || true
+          done
+          kubectl get events -A --sort-by=.lastTimestamp | tail -60 || true
