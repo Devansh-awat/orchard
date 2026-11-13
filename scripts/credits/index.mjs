@@ -620,9 +620,10 @@ function goModules(component) {
   });
 }
 
-function goStdlib() {
-  const goroot = run('go', ['env', 'GOROOT']).trim();
-  const version = run('go', ['env', 'GOVERSION']).trim().replace(/^go/, '');
+function goStdlib(cwd) {
+  const opts = { cwd, env: { ...process.env, GOTOOLCHAIN: 'auto' } };
+  const goroot = run('go', ['env', 'GOROOT'], opts).trim();
+  const version = run('go', ['env', 'GOVERSION'], opts).trim().replace(/^go/, '');
   const bundled = licenseTexts(goroot);
   const texts = bundled.length
     ? bundled
@@ -873,7 +874,7 @@ for (const component of COMPONENTS) {
   if (component.id === 'site') emit(people);
   let found = [];
   if (component.kind === 'go') {
-    found = [goStdlib(), ...goModules(component)];
+    found = [goStdlib(dir), ...goModules(component)];
   } else {
     const dirs =
       component.kind === 'sveltekit'
