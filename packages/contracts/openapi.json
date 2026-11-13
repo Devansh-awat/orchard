@@ -265,6 +265,154 @@
         ]
       }
     },
+    "/admin/build-cache": {
+      "get": {
+        "description": "Auth: superadmin",
+        "operationId": "admin_build_cache_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {},
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "GET /admin/build-cache",
+        "tags": [
+          "admin"
+        ]
+      },
+      "patch": {
+        "description": "Auth: superadmin",
+        "operationId": "admin_build_cache_update",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": {},
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {},
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "PATCH /admin/build-cache",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/build-cache/prune": {
+      "post": {
+        "description": "Auth: superadmin",
+        "operationId": "admin_build_cache_prune",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": {},
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {},
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "POST /admin/build-cache/prune",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/build-cache/usage": {
+      "get": {
+        "description": "Auth: superadmin",
+        "operationId": "admin_build_cache_usage_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {},
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "GET /admin/build-cache/usage",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
     "/admin/databases/plugin-migration": {
       "get": {
         "description": "Auth: superadmin",

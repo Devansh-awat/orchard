@@ -10,17 +10,21 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { LeaderElectionService } from '../events/leader-election.service';
 import { FirecrackerClient } from './fc/fc-client';
 import { BuildBackendRouter } from './fc/build-backend-router';
+import { BuildCacheService } from './build-cache.service';
+import { BuildCacheController } from './build-cache.controller';
+import { KubernetesModule } from '../kubernetes/kubernetes.module';
 
 @Module({
-  imports: [RegistryCredentialsModule, AuthModule, PrismaModule],
-  controllers: [DockerController],
+  imports: [RegistryCredentialsModule, AuthModule, PrismaModule, KubernetesModule],
+  controllers: [DockerController, BuildCacheController],
   providers: [
     DockerService,
     ImageBuilderService,
     BuildKitPoolService,
     BuildJobInformerService,
     FirecrackerClient,
-    BuildBackendRouter
+    BuildBackendRouter,
+    BuildCacheService
   ],
   exports: [
     DockerService,
@@ -28,7 +32,8 @@ import { BuildBackendRouter } from './fc/build-backend-router';
     BuildKitPoolService,
     BuildJobInformerService,
     FirecrackerClient,
-    BuildBackendRouter
+    BuildBackendRouter,
+    BuildCacheService
   ]
 })
 export class DockerModule implements OnModuleInit, OnModuleDestroy {

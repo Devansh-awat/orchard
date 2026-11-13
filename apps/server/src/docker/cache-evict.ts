@@ -26,6 +26,7 @@ export interface CacheEvictOptions {
   targetPct: number;
   /** Never evict a tenant touched this recently: assume a build is in flight. */
   idleMinutes: number;
+  maxGiB?: number | null;
   /** Hand the tenant directory to this uid, for a build that does not run as root. */
   chownUid?: number;
 }
@@ -44,10 +45,12 @@ CACHE_ROOT="/cache"
 SELF="${opts.cacheSubPath}"
 HIGH=${opts.highPct}
 TARGET=${opts.targetPct}
+MAX_KB=${opts.maxGiB ? Math.floor(opts.maxGiB) * 1024 * 1024 : 0}
 AGE_CUTOFF=$(( $(date +%s) - ${opts.maxAgeDays} * 86400 ))
 IDLE_CUTOFF=$(( $(date +%s) - ${opts.idleMinutes} * 60 ))
 
 usage() { df -P "$CACHE_ROOT" 2>/dev/null | awk 'NR==2 {sub(/%/,"",$5); print $5+0}'; }
+total_kb() { du -sk "$CACHE_ROOT" 2>/dev/null | awk '{print $1+0}'; }
 
 # BusyBox and GNU stat take -c, BSD takes -f. Probe once instead of assuming
 # the base image, because guessing wrong means every mtime reads as empty.
@@ -55,7 +58,10 @@ if stat -c%Y "$CACHE_ROOT" >/dev/null 2>&1; then STAT_FMT=-c%Y; else STAT_FMT=-f
 
 echo "=== Shared build cache at $(usage)% ==="
 
-: > /tmp/tenants
+WORK=$(mktemp -d)
+trap 'rm -rf "$WORK"' EXIT
+
+: > "$WORK/tenants"
 for dir in "$CACHE_ROOT"/*/; do
   [ -d "$dir" ] || continue
   name=\${dir#"$CACHE_ROOT"/}
@@ -70,15 +76,37 @@ for dir in "$CACHE_ROOT"/*/; do
     echo "Skipping $name: could not determine age"
     continue
   fi
-  echo "$newest $name" >> /tmp/tenants
+  echo "$newest $name" >> "$WORK/tenants"
 done
-sort -n /tmp/tenants > /tmp/tenants.lru
+sort -n "$WORK/tenants" > "$WORK/tenants.lru"
 
 while read -r ts name; do
   [ "$ts" -lt "$AGE_CUTOFF" ] || continue
   echo "Evicting stale tenant cache: $name (idle $(( ($(date +%s) - ts) / 86400 ))d)"
   rm -rf "\${CACHE_ROOT:?}/$name"
-done < /tmp/tenants.lru
+done < "$WORK/tenants.lru"
+
+if [ -d "$CACHE_ROOT/$SELF" ]; then
+  for dir in "$CACHE_ROOT/$SELF"/*/; do
+    [ -f "\${dir}index.json" ] || continue
+    newest=$(find "$dir" -maxdepth 1 -exec stat $STAT_FMT {} + 2>/dev/null | sort -rn | head -1)
+    [ -n "$newest" ] || continue
+    [ "$newest" -lt "$AGE_CUTOFF" ] || continue
+    echo "Evicting stale image cache: \${dir%/}"
+    rm -rf "\${dir:?}"
+  done
+fi
+
+if [ "$MAX_KB" -gt 0 ] && [ "$(total_kb)" -gt "$MAX_KB" ]; then
+  echo "=== Over the $((MAX_KB / 1048576))GiB budget, evicting least-recently-used tenants ==="
+  while read -r ts name; do
+    [ -d "$CACHE_ROOT/$name" ] || continue
+    [ "$ts" -gt "$IDLE_CUTOFF" ] && continue
+    [ "$(total_kb)" -le "$MAX_KB" ] && break
+    echo "Evicting tenant cache: $name"
+    rm -rf "\${CACHE_ROOT:?}/$name"
+  done < "$WORK/tenants.lru"
+fi
 
 if [ "$(usage)" -gt "$HIGH" ]; then
   echo "=== Above \${HIGH}%, evicting least-recently-used tenants ==="
@@ -89,7 +117,7 @@ if [ "$(usage)" -gt "$HIGH" ]; then
     [ "$U" -le "$TARGET" ] && break
     echo "Evicting tenant cache: $name (disk at \${U}%)"
     rm -rf "\${CACHE_ROOT:?}/$name"
-  done < /tmp/tenants.lru
+  done < "$WORK/tenants.lru"
 fi
 
 # Create our own subPath here rather than leaving it to kubelet, which hides

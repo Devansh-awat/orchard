@@ -22,6 +22,8 @@ import {
 } from './build-config';
 import { sandboxStartFailure } from './build-sandbox';
 import { cacheEvictInitContainer } from './cache-evict';
+import { NEXT_CACHE_SUFFIX, cacheSwapScript } from './build-cache-settings';
+import { BuildCacheService } from './build-cache.service';
 import { parseRepoUrl, withCloneCredentials } from './repo-url';
 import { gitCloneScript } from './clone-script';
 import { assertSafeBuildInputs, shellQuote } from './build-input';
@@ -441,7 +443,8 @@ export class ImageBuilderService {
     @Optional() private readonly buildKitPool?: BuildKitPoolService,
     @Optional() private readonly jobInformer?: BuildJobInformerService,
     @Optional() private readonly firecracker?: FirecrackerClient,
-    @Optional() private readonly registryCredentials?: RegistryCredentialsService
+    @Optional() private readonly registryCredentials?: RegistryCredentialsService,
+    @Optional() private readonly buildCache?: BuildCacheService
   ) {
     this.initKubeConfig();
     logBuildPosture(this.builderPosture, this.builderRuntimeClass);
@@ -1133,11 +1136,12 @@ ${registryConfigs}
 
   private buildCacheArgs(imageName?: string, s3Plan?: S3CachePlan): BuildctlArg[] {
     if (this.localCacheEnabled) {
+      if (this.buildCache && !this.buildCache.current().enabled) return [];
       const sub = imageName ? imageName.replace(/[^a-z0-9-]/gi, '-') : 'default';
       const cacheDir = `${this.localCachePath}/${sub}`;
       console.log(`[ImageBuilder] Local cache enabled - path: ${cacheDir}`);
       const importCache = `type=local,src=${cacheDir}`;
-      const exportCache = `type=local,dest=${cacheDir},mode=max,compression=zstd,ignore-error=true`;
+      const exportCache = `type=local,dest=${cacheDir}${NEXT_CACHE_SUFFIX},mode=max,compression=zstd,ignore-error=true`;
       return ['--import-cache', importCache, '--export-cache', exportCache];
     }
 
@@ -1485,10 +1489,10 @@ fi
       const found = buildctlArgs.find((_, i) => i > 0 && buildctlArgs[i - 1] === flag);
       return typeof found === 'string' ? found : '';
     };
-    const cacheDirMatch =
-      argAfter('--export-cache').match(/dest=([^,]+)/) ||
-      argAfter('--import-cache').match(/src=([^,]+)/);
-    const cacheDir = cacheDirMatch?.[1] ?? '';
+    const importDir = argAfter('--import-cache').match(/(?:^|,)src=([^,]+)/)?.[1] ?? '';
+    const exportDir = argAfter('--export-cache').match(/(?:^|,)dest=([^,]+)/)?.[1] ?? '';
+    const cacheDir = importDir || exportDir.replace(new RegExp(`${NEXT_CACHE_SUFFIX}$`), '');
+    const swapsCache = !!importDir && exportDir === `${importDir}${NEXT_CACHE_SUFFIX}`;
 
     // A broken cache is our problem, not the user's build's. Probe it up front
     // and drop the cache flags if it is unusable, so the build still produces
@@ -1506,7 +1510,7 @@ if ! mkdir -p "$CACHE_DIR" 2>/dev/null || ! touch "$CACHE_DIR/.orchard-probe" 2>
   CACHE_ARGS=""
 fi
 rm -f "$CACHE_DIR/.orchard-probe" 2>/dev/null || true
-`
+${swapsCache ? `rm -rf "$CACHE_DIR${NEXT_CACHE_SUFFIX}" 2>/dev/null || true\n` : ''}`
       : `
 CACHE_ARGS="${cacheOnlyArgs}"
 `;
@@ -1520,6 +1524,7 @@ echo "=== Building image ==="
 buildctl-daemonless.sh ${baseArgs} $CACHE_ARGS
 BUILD_EXIT_CODE=$?
 
+${swapsCache ? cacheSwapScript : ''}
 if [ "$BUILD_EXIT_CODE" -eq 0 ]; then
   echo "=== Build completed successfully ==="
   exit 0
@@ -1866,7 +1871,8 @@ ls -la /workspace
       initContainers.unshift(
         cacheEvictInitContainer({
           cacheSubPath,
-          maxAgeDays: this.cacheEvictMaxAgeDays,
+          maxAgeDays: this.buildCache?.current().maxAgeDays ?? this.cacheEvictMaxAgeDays,
+          maxGiB: this.buildCache?.current().maxGiB ?? null,
           highPct: this.cacheEvictHighPct,
           targetPct: this.cacheEvictTargetPct,
           idleMinutes: this.cacheEvictIdleMinutes,
