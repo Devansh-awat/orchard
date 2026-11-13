@@ -12,6 +12,8 @@ STATE_DIR=${ORCHARD_STATE_DIR:-/etc/orchard}
 VALUES_FILE="$STATE_DIR/values.yaml"
 SYSCTL_CONF=${ORCHARD_SYSCTL_CONF:-/etc/sysctl.d/90-orchard-builds.conf}
 REGISTRIES_FILE=${ORCHARD_REGISTRIES_FILE:-/etc/rancher/k3s/registries.yaml}
+APPARMOR_DIR=${ORCHARD_APPARMOR_DIR:-/etc/apparmor.d}
+APPARMOR_STACKING_PROC=${ORCHARD_APPARMOR_STACKING_PROC:-/proc/sys/kernel/apparmor_restrict_unprivileged_unconfined}
 IMAGE_GC_FILE=${ORCHARD_IMAGE_GC_FILE:-/var/lib/rancher/k3s/agent/etc/kubelet.conf.d/05-orchard-image-gc.conf}
 
 K3S_VERSION=${K3S_VERSION:-}
@@ -2955,6 +2957,61 @@ allow_rootless_builds() {
   fi
 }
 
+containerd_apparmor_profile() {
+  cat <<'PROFILE'
+abi <abi/3.0>,
+#include <tunables/global>
+
+profile cri-containerd.apparmor.d flags=(attach_disconnected,mediate_deleted) {
+  #include <abstractions/base>
+
+  network,
+  capability,
+  file,
+  umount,
+  signal (receive) peer=unconfined,
+  signal (receive) peer=runc,
+  signal (receive) peer=crun,
+  signal (send,receive) peer=cri-containerd.apparmor.d,
+  signal (send,receive) peer=cri-containerd.apparmor.d//&unconfined,
+
+  deny @{PROC}/* w,
+  deny @{PROC}/{[^1-9/],[^1-9/][^0-9/],[^1-9s/][^0-9y/][^0-9s/],[^1-9/][^0-9/][^0-9/][^0-9/]*}/** w,
+  deny @{PROC}/sys/[^k]** w,
+  deny @{PROC}/sys/kernel/{?,??,[^s][^h][^m]**} w,
+  deny @{PROC}/sysrq-trigger rwklx,
+  deny @{PROC}/kcore rwklx,
+
+  deny mount,
+
+  deny /sys/[^f]*/** wklx,
+  deny /sys/f[^s]*/** wklx,
+  deny /sys/fs/[^c]*/** wklx,
+  deny /sys/fs/c[^g]*/** wklx,
+  deny /sys/fs/cg[^r]*/** wklx,
+  deny /sys/firmware/** rwklx,
+  deny /sys/devices/virtual/powercap/** rwklx,
+  deny /sys/kernel/security/** rwklx,
+
+  ptrace (trace,tracedby,read,readby) peer=cri-containerd.apparmor.d,
+  ptrace (trace,tracedby,read,readby) peer=cri-containerd.apparmor.d//&unconfined,
+}
+PROFILE
+}
+
+allow_container_signals() {
+  [ "$(cat "$APPARMOR_STACKING_PROC" 2>/dev/null)" = 1 ] || return 0
+  command -v apparmor_parser >/dev/null 2>&1 || return 0
+  [ -d "$APPARMOR_DIR/abi" ] && [ -d "$APPARMOR_DIR/abstractions" ] || return 0
+  local file="$APPARMOR_DIR/cri-containerd.apparmor.d"
+  containerd_apparmor_profile > "$file"
+  if apparmor_parser -r -W "$file" >/dev/null 2>&1; then
+    info "let processes in a container signal each other under this kernel's AppArmor stacking"
+  else
+    warn "couldn't load $file; databases can't checkpoint until it loads"
+  fi
+}
+
 image_gc_conf() {
   cat <<'YAML'
 apiVersion: kubelet.config.k8s.io/v1beta1
@@ -2977,6 +3034,7 @@ install_k3s() {
   step
   configure_firewall
   allow_rootless_builds
+  allow_container_signals
 
   local gc_pending=false
   if [ ! -e "$IMAGE_GC_FILE" ]; then

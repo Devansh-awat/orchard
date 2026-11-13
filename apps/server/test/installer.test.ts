@@ -4,6 +4,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import {
   chmodSync,
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   readdirSync,
@@ -182,6 +183,7 @@ test('image garbage collection is set before k3s starts and never overwritten', 
     const install = `IMAGE_GC_FILE=${gc}
 configure_firewall() { :; }
 allow_rootless_builds() { :; }
+allow_container_signals() { :; }
 wait_for_node() { :; }
 harden_coredns() { :; }
 k3s_download() { if [ -f "$IMAGE_GC_FILE" ]; then echo gc-first >> ${order}; fi; }
@@ -2369,6 +2371,48 @@ test('rootless builds are allowed only where the host blocks them', () => {
     box.run(`SYSCTL_CONF=${conf}; allow_rootless_builds`);
     assert.match(readFileSync(conf, 'utf8'), /apparmor_restrict_unprivileged_userns = 0/);
     assert.match(readFileSync(calls, 'utf8'), /apparmor_restrict_unprivileged_userns=0/);
+  } finally {
+    box.cleanup();
+  }
+});
+
+test('containers may signal themselves only where AppArmor stacks their profile', () => {
+  const box = sandbox();
+  try {
+    const dir = join(box.dir, 'apparmor.d');
+    mkdirSync(join(dir, 'abi'), { recursive: true });
+    mkdirSync(join(dir, 'abstractions'), { recursive: true });
+    const stacking = join(box.dir, 'stacking');
+    const calls = join(box.dir, 'parser-calls');
+    writeFileSync(join(box.dir, 'apparmor_parser'), `#!/bin/sh\necho "$*" >> "${calls}"\n`);
+    chmodSync(join(box.dir, 'apparmor_parser'), 0o755);
+    const profile = join(dir, 'cri-containerd.apparmor.d');
+    const run = () =>
+      box.run(`APPARMOR_DIR=${dir}; APPARMOR_STACKING_PROC=${stacking}; allow_container_signals`);
+
+    writeFileSync(stacking, '0\n');
+    run();
+    assert.equal(
+      existsSync(profile),
+      false,
+      "a kernel that does not stack keeps containerd's profile"
+    );
+
+    writeFileSync(stacking, '1\n');
+    run();
+    const text = readFileSync(profile, 'utf8');
+    assert.match(
+      text,
+      /^profile cri-containerd\.apparmor\.d flags=\(attach_disconnected,mediate_deleted\) \{$/m
+    );
+    assert.match(text, /signal \(send,receive\) peer=cri-containerd\.apparmor\.d,/);
+    assert.match(text, /signal \(send,receive\) peer=cri-containerd\.apparmor\.d\/\/&unconfined,/);
+    assert.match(
+      text,
+      /ptrace \(trace,tracedby,read,readby\) peer=cri-containerd\.apparmor\.d\/\/&unconfined,/
+    );
+    assert.doesNotMatch(text, /\/\/&\*/);
+    assert.match(readFileSync(calls, 'utf8'), new RegExp(`-r -W ${profile}`));
   } finally {
     box.cleanup();
   }
