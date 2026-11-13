@@ -1,6 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { isPublicAddress } from '../src/notifications/webhook-guard';
+import {
+  assertPublicUrl,
+  isPublicAddress,
+  refreshClusterDeny,
+  setClusterDenyCidrs,
+  setClusterDenySource
+} from '../src/notifications/webhook-guard';
 
 const PUBLIC = [
   '8.8.8.8',
@@ -24,6 +30,7 @@ const BLOCKED = [
   '100.127.255.255',
   '127.0.0.1',
   '169.254.169.254',
+  '168.63.129.16',
   '172.16.0.1',
   '172.31.255.255',
   '192.0.0.1',
@@ -64,5 +71,58 @@ test('public addresses pass', () => {
 test('private, reserved, and malformed addresses are blocked', () => {
   for (const ip of BLOCKED) {
     assert.equal(isPublicAddress(ip), false, `${ip} should be blocked`);
+  }
+});
+
+test('the cluster fence and PLATFORM_EXTRA_DENY_CIDRS are refused like private ranges', () => {
+  const previous = process.env.PLATFORM_EXTRA_DENY_CIDRS;
+  process.env.PLATFORM_EXTRA_DENY_CIDRS = '203.1.0.0/24, 0.0.0.0/0, junk';
+  setClusterDenyCidrs(['34.120.5.6/32', '35.1.2.0/24']);
+  try {
+    for (const ip of ['34.120.5.6', '35.1.2.200', '203.1.0.9', '::ffff:34.120.5.6']) {
+      assert.equal(isPublicAddress(ip), false, `${ip} should be blocked`);
+    }
+    for (const ip of ['34.120.5.7', '35.1.3.1', '203.1.1.1', '8.8.8.8']) {
+      assert.equal(isPublicAddress(ip), true, `${ip} should stay public`);
+    }
+  } finally {
+    setClusterDenyCidrs([]);
+    if (previous === undefined) delete process.env.PLATFORM_EXTRA_DENY_CIDRS;
+    else process.env.PLATFORM_EXTRA_DENY_CIDRS = previous;
+  }
+});
+
+test('url checks pull the cluster fence from its source before deciding', async () => {
+  let calls = 0;
+  setClusterDenySource(async () => {
+    calls++;
+    return ['34.120.5.6'];
+  });
+  try {
+    await assert.rejects(assertPublicUrl('https://34.120.5.6/'), /public/);
+    assert.equal(calls, 1);
+    await assertPublicUrl('https://34.120.5.7/');
+  } finally {
+    setClusterDenySource(null);
+    setClusterDenyCidrs([]);
+  }
+});
+
+test('a hung or failing fence source keeps the last known set instead of stalling', async () => {
+  setClusterDenyCidrs(['34.120.5.6']);
+  setClusterDenySource(() => new Promise<string[]>(() => undefined));
+  try {
+    const started = Date.now();
+    await refreshClusterDeny(20);
+    assert.ok(Date.now() - started < 1000);
+    assert.equal(isPublicAddress('34.120.5.6'), false);
+    setClusterDenySource(async () => {
+      throw new Error('apiserver down');
+    });
+    await refreshClusterDeny(20);
+    assert.equal(isPublicAddress('34.120.5.6'), false);
+  } finally {
+    setClusterDenySource(null);
+    setClusterDenyCidrs([]);
   }
 });

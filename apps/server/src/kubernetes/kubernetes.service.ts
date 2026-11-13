@@ -12,6 +12,7 @@ import {
 } from './cluster-addresses';
 import type { PodSizing } from './resource-spec';
 import { assertValidClaimName, assertValidVolumeSize, isPlatformOwnedClaim } from './pvc-limits';
+import { setClusterDenySource } from '../notifications/webhook-guard';
 
 export const ALLOWED_INGRESS_ANNOTATION_KEYS = new Set<string>([
   'cert-manager.io/cluster-issuer',
@@ -350,6 +351,10 @@ export class KubernetesService {
       );
       this.kc = null;
     }
+  }
+
+  onModuleInit() {
+    setClusterDenySource(() => this.clusterExceptCidrs());
   }
 
   ensureKubeConfig() {

@@ -1,4 +1,6 @@
-import { test } from 'node:test';
+import { test, mock } from 'node:test';
+import dns from 'node:dns';
+import dnsPromises from 'node:dns/promises';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { once } from 'node:events';
@@ -6,7 +8,8 @@ import { Agent, fetch as undiciFetch } from 'undici';
 import {
   guardedFetch,
   guardedLookup,
-  ResponseTooLargeError
+  ResponseTooLargeError,
+  setGuardedFetchTransport
 } from '../src/notifications/webhook-guard';
 import { IDP_MAX_BODY_BYTES, SsoService } from '../src/sso/sso.service';
 
@@ -138,5 +141,52 @@ test('every identity provider fetch is capped at IDP_MAX_BODY_BYTES', async () =
   } finally {
     if (previous === undefined) delete process.env.SSO_ALLOW_INTERNAL_IDP;
     else process.env.SSO_ALLOW_INTERNAL_IDP = previous;
+  }
+});
+
+test('a rebound name is refused at connect time even when global fetch has been wrapped', async () => {
+  const server = createServer((_req, res) => res.end('leak'));
+  server.listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  const { port } = server.address() as { port: number };
+  const original = globalThis.fetch;
+  let wrappedCalls = 0;
+  globalThis.fetch = ((input: any, init: any) => {
+    wrappedCalls++;
+    return original(input, init);
+  }) as typeof fetch;
+  const saveTime = mock.method(dnsPromises, 'lookup', async () => [
+    { address: '93.184.216.34', family: 4 }
+  ]);
+  const connectTime = mock.method(dns, 'lookup', (_host: string, _opts: any, cb: any) =>
+    cb(null, [{ address: '127.0.0.1', family: 4 }])
+  );
+  try {
+    await assert.rejects(guardedFetch(`http://rebind.example.com:${port}/`), (e: any) =>
+      /EBLOCKED|non-public/.test(String(e?.cause?.code ?? e?.cause?.message ?? e))
+    );
+    assert.equal(wrappedCalls, 0);
+  } finally {
+    globalThis.fetch = original;
+    saveTime.mock.restore();
+    connectTime.mock.restore();
+    server.close();
+  }
+});
+
+test('the transport seam replaces the network for tests without touching the url checks', async () => {
+  const seen: string[] = [];
+  setGuardedFetchTransport(async (url) => {
+    seen.push(url.href);
+    return new Response('stubbed');
+  });
+  try {
+    const res = await guardedFetch('https://93.184.216.34/x');
+    assert.equal(await res.text(), 'stubbed');
+    assert.deepEqual(seen, ['https://93.184.216.34/x']);
+    await assert.rejects(guardedFetch('http://127.0.0.1:8080/'), /public/);
+    assert.equal(seen.length, 1);
+  } finally {
+    setGuardedFetchTransport(null);
   }
 });

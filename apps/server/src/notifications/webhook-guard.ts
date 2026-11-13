@@ -43,6 +43,7 @@ export function parseHttpUrl(raw: string | URL, label = 'URL'): URL {
 
 export async function assertPublicUrl(raw: string | URL, label = 'URL'): Promise<URL> {
   const url = parseHttpUrl(raw, label);
+  await refreshClusterDeny();
   const host = url.hostname
     .toLowerCase()
     .replace(/\.$/, '')
@@ -80,6 +81,7 @@ export async function resolvePublicHost(raw: string, label = 'Host'): Promise<Re
     .toLowerCase()
     .replace(/\.$/, '')
     .replace(/^\[|\]$/g, '');
+  await refreshClusterDeny();
   const literal = isIP(hostname);
   if (literal) {
     if (!isPublicAddress(hostname)) {
@@ -181,12 +183,28 @@ function isRedirect(status: number): boolean {
   return status === 301 || status === 302 || status === 303 || status === 307 || status === 308;
 }
 
-const nativeFetch = globalThis.fetch;
 let pinnedAgent: Agent | null = null;
 
 function pinned(): Agent {
   pinnedAgent ??= new Agent({ connect: { lookup: guardedLookup } });
   return pinnedAgent;
+}
+
+export type GuardedFetchTransport = (url: URL, init: RequestInit) => Promise<Response>;
+
+let transportOverride: GuardedFetchTransport | null = null;
+
+export function setGuardedFetchTransport(transport: GuardedFetchTransport | null): void {
+  transportOverride = transport;
+}
+
+function send(url: URL, init: RequestInit, allowPrivate: boolean): Promise<Response> {
+  if (transportOverride) return transportOverride(url, init);
+  if (allowPrivate) return fetch(url, init);
+  return pinnedFetch(url, {
+    ...(init as any),
+    dispatcher: pinned()
+  }) as unknown as Promise<Response>;
 }
 
 export async function guardedFetch(
@@ -210,18 +228,11 @@ export async function guardedFetch(
   const headers = new Headers(rest.headers);
   const timeout = signal ?? AbortSignal.timeout(DEFAULT_FETCH_TIMEOUT_MS);
   for (let hop = 0; ; hop++) {
-    const res =
-      allowPrivate || globalThis.fetch !== nativeFetch
-        ? await fetch(url, { ...rest, method, body, headers, redirect: 'manual', signal: timeout })
-        : ((await pinnedFetch(url, {
-            ...(rest as any),
-            method,
-            body: body as any,
-            headers,
-            redirect: 'manual',
-            signal: timeout,
-            dispatcher: pinned()
-          })) as unknown as Response);
+    const res = await send(
+      url,
+      { ...rest, method, body, headers, redirect: 'manual', signal: timeout },
+      allowPrivate
+    );
     if (redirect === 'manual' || !isRedirect(res.status)) {
       return maxBodyBytes ? capResponseBody(res, maxBodyBytes, label) : res;
     }
@@ -278,6 +289,82 @@ export function guardedLookup(
   });
 }
 
+const AZURE_WIRESERVER = '168.63.129.16';
+const MIN_DENY_PREFIX = 8;
+const CLUSTER_DENY_WAIT_MS = 3_000;
+
+interface DenyRange {
+  start: number;
+  end: number;
+}
+
+function ipv4ToInt(ip: string): number {
+  return ip.split('.').reduce((acc, part) => acc * 256 + Number(part), 0);
+}
+
+function denyRanges(cidrs: Iterable<string>): DenyRange[] {
+  const out: DenyRange[] = [];
+  for (const raw of cidrs) {
+    const [address, prefixRaw, extra] = raw.trim().split('/');
+    if (extra !== undefined || !address || isIP(address) !== 4) continue;
+    const prefix = prefixRaw === undefined ? 32 : Number(prefixRaw);
+    if (!Number.isInteger(prefix) || prefix < MIN_DENY_PREFIX || prefix > 32) continue;
+    const size = 2 ** (32 - prefix);
+    const start = Math.floor(ipv4ToInt(address) / size) * size;
+    out.push({ start, end: start + size - 1 });
+  }
+  return out;
+}
+
+let clusterDeny: DenyRange[] = [];
+let clusterDenySource: (() => Promise<string[]>) | null = null;
+let clusterDenyLoad: Promise<void> | null = null;
+let envDeny: { raw: string; ranges: DenyRange[] } = { raw: '', ranges: [] };
+
+export function setClusterDenyCidrs(cidrs: string[]): void {
+  clusterDeny = denyRanges(cidrs);
+}
+
+export function setClusterDenySource(source: (() => Promise<string[]>) | null): void {
+  clusterDenySource = source;
+  clusterDenyLoad = null;
+}
+
+export async function refreshClusterDeny(waitMs = CLUSTER_DENY_WAIT_MS): Promise<void> {
+  const source = clusterDenySource;
+  if (!source) return;
+  const load = (clusterDenyLoad ??= source()
+    .then(
+      (cidrs) => {
+        if (clusterDenySource === source) setClusterDenyCidrs(cidrs);
+      },
+      () => undefined
+    )
+    .finally(() => {
+      if (clusterDenyLoad === load) clusterDenyLoad = null;
+    }));
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  await Promise.race([
+    load,
+    new Promise<void>((resolve) => {
+      timer = setTimeout(resolve, waitMs);
+    })
+  ]);
+  clearTimeout(timer);
+}
+
+function envDenyRanges(): DenyRange[] {
+  const raw = process.env.PLATFORM_EXTRA_DENY_CIDRS || '';
+  if (raw !== envDeny.raw) envDeny = { raw, ranges: denyRanges(raw.split(',')) };
+  return envDeny.ranges;
+}
+
+function isClusterDenied(ip: string): boolean {
+  const value = ipv4ToInt(ip);
+  const hit = (r: DenyRange) => r.start <= value && value <= r.end;
+  return clusterDeny.some(hit) || envDenyRanges().some(hit);
+}
+
 export function isPublicAddress(ip: string): boolean {
   const version = isIP(ip);
   if (version === 4) return isPublicIpv4(ip);
@@ -300,6 +387,8 @@ function isPublicIpv4(ip: string): boolean {
   if (a === 198 && b === 51 && c === 100) return false;
   if (a === 203 && b === 0 && c === 113) return false;
   if (a >= 224) return false;
+  if (ip === AZURE_WIRESERVER) return false;
+  if (isClusterDenied(ip)) return false;
   return true;
 }
 

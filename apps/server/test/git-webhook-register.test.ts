@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { providerFor } from '../src/git/providers';
 import type { ConnectionConfig } from '../src/git/git-provider';
+import { setGuardedFetchTransport } from '../src/notifications/webhook-guard';
 
 const HOOK = 'https://orchard.example.com/apiv1/git/webhooks/conn-1';
 
@@ -9,8 +10,7 @@ function stubFetch(
   routes: Record<string, (init?: RequestInit) => { status: number; body: unknown }>
 ) {
   const calls: { url: string; method: string; body: unknown }[] = [];
-  const original = globalThis.fetch;
-  globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+  const stub = (async (input: string | URL | Request, init?: RequestInit) => {
     const url = String(input);
     const key = `${(init?.method ?? 'GET').toUpperCase()} ${new URL(url).pathname}`;
     calls.push({
@@ -26,10 +26,11 @@ function stubFetch(
       headers: { 'Content-Type': 'application/json' }
     });
   }) as typeof fetch;
+  setGuardedFetchTransport(stub);
   return {
     calls,
     restore: () => {
-      globalThis.fetch = original;
+      setGuardedFetchTransport(null);
     }
   };
 }
