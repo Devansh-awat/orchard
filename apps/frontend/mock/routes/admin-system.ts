@@ -565,6 +565,59 @@ export function adminSystemRoutes(r: Router, { store }: MockContext) {
 		return ipSharingView();
 	});
 
+	const buildCache = {
+		settings: { enabled: true, maxGiB: 20 as number | null, maxAgeDays: 14 },
+		tenants: [
+			{ name: 'acme-web-production', bytes: 6.2 * 1024 ** 3, ageMinutes: 12 },
+			{ name: 'acme-api-production', bytes: 3.9 * 1024 ** 3, ageMinutes: 300 },
+			{ name: 'acme-web-preview-42', bytes: 1.4 * 1024 ** 3, ageMinutes: 60 * 24 * 3 },
+			{ name: 'blog-production', bytes: 640 * 1024 ** 2, ageMinutes: 60 * 24 * 9 }
+		]
+	};
+	const buildCacheView = () => ({
+		available: true,
+		pvcName: 'buildkit-cache',
+		pvcSize: '20Gi',
+		settings: buildCache.settings,
+		defaults: { enabled: true, maxGiB: 20, maxAgeDays: 14 },
+		idleMinutes: 60
+	});
+	const buildCacheUsage = () => {
+		const totalBytes = buildCache.tenants.reduce((sum, t) => sum + t.bytes, 0);
+		return {
+			totalBytes,
+			diskBytes: 47 * 1024 ** 3,
+			diskUsedBytes: 21 * 1024 ** 3 + totalBytes,
+			tenants: buildCache.tenants.map((t) => ({
+				name: t.name,
+				bytes: t.bytes,
+				lastUsedAt: new Date(Date.now() - t.ageMinutes * 60_000).toISOString()
+			}))
+		};
+	};
+	r.get('/admin/build-cache', () => buildCacheView());
+	r.patch('/admin/build-cache', ({ body }) => {
+		const next = { ...buildCache.settings };
+		if (typeof body?.enabled === 'boolean') next.enabled = body.enabled;
+		if (body && 'maxGiB' in body) next.maxGiB = body.maxGiB === null ? null : Number(body.maxGiB);
+		if (body && 'maxAgeDays' in body) next.maxAgeDays = Number(body.maxAgeDays);
+		buildCache.settings = next;
+		return buildCacheView();
+	});
+	r.get('/admin/build-cache/usage', () => buildCacheUsage());
+	r.post('/admin/build-cache/prune', ({ body }) => {
+		const all = body?.mode === 'all';
+		const keep = buildCache.tenants.filter((t) => t.ageMinutes < (all ? 15 : 60));
+		const removed = buildCache.tenants.filter((t) => !keep.includes(t));
+		buildCache.tenants = keep;
+		return {
+			freedBytes: removed.reduce((sum, t) => sum + t.bytes, 0),
+			totalBytes: keep.reduce((sum, t) => sum + t.bytes, 0),
+			removed: removed.map((t) => t.name),
+			skipped: keep.map((t) => ({ name: t.name, reason: t.ageMinutes < 15 ? 'in-use' : 'recent' }))
+		};
+	});
+
 	r.get('/admin/telemetry/preview', () => ({
 		event: 'instance_report',
 		distinctId: 'a3f0c1d2-7b1e-4b6a-9f55-2c8d90e4b7aa',

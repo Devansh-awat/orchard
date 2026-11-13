@@ -55,7 +55,11 @@
 		},
 		{
 			label: 'Maintenance',
-			items: [railItem('/admin/audit-logs', 'Audit log'), railItem('/admin/backfill', 'Backfill')]
+			items: [
+				railItem('/admin/audit-logs', 'Audit log'),
+				railItem('/admin/build-cache', 'Build cache'),
+				railItem('/admin/backfill', 'Backfill')
+			]
 		},
 		...(graftItems.length ? [{ label: 'Extensions', items: graftItems }] : [])
 	]);
