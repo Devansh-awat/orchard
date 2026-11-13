@@ -12,6 +12,7 @@ STATE_DIR=${ORCHARD_STATE_DIR:-/etc/orchard}
 VALUES_FILE="$STATE_DIR/values.yaml"
 SYSCTL_CONF=${ORCHARD_SYSCTL_CONF:-/etc/sysctl.d/90-orchard-builds.conf}
 REGISTRIES_FILE=${ORCHARD_REGISTRIES_FILE:-/etc/rancher/k3s/registries.yaml}
+IMAGE_GC_FILE=${ORCHARD_IMAGE_GC_FILE:-/var/lib/rancher/k3s/agent/etc/kubelet.conf.d/05-orchard-image-gc.conf}
 
 K3S_VERSION=${K3S_VERSION:-}
 K3S_CHANNEL=${K3S_CHANNEL:-v1.36}
@@ -2954,20 +2955,48 @@ allow_rootless_builds() {
   fi
 }
 
+image_gc_conf() {
+  cat <<'YAML'
+apiVersion: kubelet.config.k8s.io/v1beta1
+kind: KubeletConfiguration
+imageGCHighThresholdPercent: 70
+imageGCLowThresholdPercent: 50
+imageMaximumGCAge: 72h
+YAML
+}
+
+write_image_gc_defaults() {
+  local dir
+  dir=$(dirname "$IMAGE_GC_FILE")
+  mkdir -p "$(dirname "$dir")"
+  [ -d "$dir" ] || mkdir -m 700 "$dir"
+  (umask 077 && image_gc_conf > "$IMAGE_GC_FILE")
+}
+
 install_k3s() {
   step
   configure_firewall
   allow_rootless_builds
 
+  local gc_pending=false
+  if [ ! -e "$IMAGE_GC_FILE" ]; then
+    write_image_gc_defaults
+    gc_pending=true
+  fi
+
   if command -v k3s >/dev/null 2>&1; then
     info "k3s already installed, leaving it alone"
   else
+    gc_pending=false
     run_step "downloading and starting k3s" 1m k3s_download
   fi
 
   mkdir -p "$STATE_DIR"
   chmod 700 "$STATE_DIR"
   export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+  if [ "$gc_pending" = true ]; then
+    run_step "restarting k3s to remove unused images sooner" 45s restart_k3s
+  fi
   run_step "waiting for the node to be ready" 30s wait_for_node
   run_step "blocking reverse DNS lookups from pods" 15s harden_coredns
 }

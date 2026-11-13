@@ -167,6 +167,64 @@ test('a restart that never finished is retried on the next run', () => {
   }
 });
 
+test('image garbage collection is set before k3s starts and never overwritten', () => {
+  const box = sandbox();
+  try {
+    const gc = join(
+      box.dir,
+      'k3s-data',
+      'agent',
+      'etc',
+      'kubelet.conf.d',
+      '05-orchard-image-gc.conf'
+    );
+    const order = join(box.dir, 'order');
+    const install = `IMAGE_GC_FILE=${gc}
+configure_firewall() { :; }
+allow_rootless_builds() { :; }
+wait_for_node() { :; }
+harden_coredns() { :; }
+k3s_download() { if [ -f "$IMAGE_GC_FILE" ]; then echo gc-first >> ${order}; fi; }
+install_k3s`;
+    const expected = [
+      'apiVersion: kubelet.config.k8s.io/v1beta1',
+      'kind: KubeletConfiguration',
+      'imageGCHighThresholdPercent: 70',
+      'imageGCLowThresholdPercent: 50',
+      'imageMaximumGCAge: 72h',
+      ''
+    ].join('\n');
+
+    const k3sOnPath = spawnSync('bash', ['-c', 'command -v k3s']).status === 0;
+    if (!k3sOnPath) {
+      box.run(install);
+      assert.equal(readFileSync(gc, 'utf8'), expected);
+      assert.equal(statSync(gc).mode & 0o777, 0o600);
+      assert.equal(
+        readFileSync(order, 'utf8'),
+        'gc-first\n',
+        'the kubelet reads it on first start'
+      );
+      assert.equal(box.k3sRestarts(), 0, 'a fresh install needs no restart');
+    }
+
+    writeFileSync(join(box.dir, 'k3s'), '#!/bin/sh\nexit 0\n');
+    chmodSync(join(box.dir, 'k3s'), 0o755);
+    rmSync(gc, { force: true });
+    box.run(install);
+    assert.equal(readFileSync(gc, 'utf8'), expected, 'an older install gets it on a re-run');
+    assert.equal(box.k3sRestarts(), 1, 'k3s restarts once to load it');
+
+    const tuned = expected.replace('70', '90').replace('50', '80');
+    writeFileSync(gc, tuned);
+    box.run(install);
+    assert.equal(readFileSync(gc, 'utf8'), tuned, 'a tuned file is left alone');
+    assert.equal(box.k3sRestarts(), 1, 'and k3s keeps running');
+  } finally {
+    box.cleanup();
+  }
+});
+
 test(
   're-running keeps env the installer does not manage',
   { skip: !has('yq', '--version') },
