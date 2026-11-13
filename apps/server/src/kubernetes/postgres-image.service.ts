@@ -11,6 +11,7 @@ import {
   hourInWindow,
   ImageRolloutCandidate,
   isOutdated,
+  osBaseChanges,
   parseHourWindow,
   parsePostgresImageCatalog,
   pickImageRolloutBatch,
@@ -93,6 +94,40 @@ export class PostgresImageService implements OnApplicationBootstrap, OnModuleDes
     return this.channel;
   }
 
+  async collationOf(
+    namespace: string,
+    cluster: any,
+    remember = true
+  ): Promise<'c' | 'other' | null> {
+    const known = cluster?.metadata?.annotations?.[PG_COLLATION_ANNOTATION];
+    if (known === 'c' || known === 'other') return known;
+    const probed = await this.k8sCnpg.probeClusterCollation(namespace, cluster);
+    if (probed && remember && cluster?.metadata?.name) {
+      await this.k8sCnpg.annotateCnpgCluster(namespace, cluster.metadata.name, {
+        [PG_COLLATION_ANNOTATION]: probed
+      });
+    }
+    return probed;
+  }
+
+  async autoUpdateFor(organizationId: string | null | undefined): Promise<{
+    enabled: boolean;
+    organization: boolean;
+    instance: boolean;
+  }> {
+    const [instance, org] = await Promise.all([
+      this.settings.isPostgresAutoUpdateEnabled(),
+      organizationId
+        ? this.prisma.organization.findUnique({
+            where: { id: organizationId },
+            select: { postgresAutoUpdate: true }
+          })
+        : null
+    ]);
+    const organization = !!org?.postgresAutoUpdate;
+    return { enabled: instance && organization, organization, instance };
+  }
+
   private catalogUrl(): string {
     return process.env.POSTGRES_IMAGE_CATALOG_URL?.trim() || DEFAULT_POSTGRES_IMAGE_CATALOG_URL;
   }
@@ -173,7 +208,8 @@ export class PostgresImageService implements OnApplicationBootstrap, OnModuleDes
           mode: 'cnpg',
           namespace: { not: null },
           clusterName: { not: null },
-          status: { notIn: ['deleting', 'restoring', 'error'] }
+          status: { notIn: ['deleting', 'restoring', 'error'] },
+          project: { organization: { postgresAutoUpdate: true } }
         },
         select: { namespace: true, clusterName: true, pgMajor: true }
       }),
@@ -244,22 +280,19 @@ export class PostgresImageService implements OnApplicationBootstrap, OnModuleDes
       if (result.patched.length >= limit || probes >= limit * 3) break;
       const key = `${c.namespace}/${c.clusterName}`;
       try {
-        let collation = c.collation;
-        if (!collation) {
-          probes += 1;
-          collation = await this.k8sCnpg.probeClusterCollation(c.namespace, byName.get(key));
-          if (collation) {
-            await this.k8sCnpg.annotateCnpgCluster(c.namespace, c.clusterName, {
-              [PG_COLLATION_ANNOTATION]: collation
-            });
+        if (osBaseChanges(c.current, c.target)) {
+          let collation = c.collation;
+          if (!collation) {
+            probes += 1;
+            collation = await this.collationOf(c.namespace, byName.get(key));
           }
-        }
-        if (collation !== 'c') {
-          result.held.push(key);
-          this.logger.warn(
-            `postgres image update held for ${key}: ${collation === 'other' ? 'a database uses a non-C collation, which a new OS image can reorder' : "collation couldn't be checked"}`
-          );
-          continue;
+          if (collation !== 'c') {
+            result.held.push(key);
+            this.logger.warn(
+              `postgres image update held for ${key}: ${collation === 'other' ? 'a database uses a non-C collation, which a new OS image can reorder' : "collation couldn't be checked"}`
+            );
+            continue;
+          }
         }
         await this.k8sCnpg.patchClusterImage(c.namespace, c.clusterName, c.target);
         this.lastBatch.push({

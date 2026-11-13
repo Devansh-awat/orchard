@@ -1,8 +1,10 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
-  NotFoundException
+  NotFoundException,
+  Optional
 } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
 import type { Prisma } from '@prisma/client';
@@ -15,6 +17,12 @@ import { DatabaseCheckpointsService } from './database-checkpoints.service';
 import { DatabaseDrillsService } from './database-drills.service';
 import { DatabaseTrashService } from './database-trash.service';
 import { PostgresSecurityService } from './postgres-security.service';
+import {
+  PG_COLLATION_ANNOTATION,
+  PostgresImageService
+} from '../kubernetes/postgres-image.service';
+import { isOutdated, osBaseChanges, imageOsBase } from '../kubernetes/postgres-images';
+import { majorFromImage } from '../kubernetes/cnpg-spec-sync';
 import {
   securityReport,
   versionFromImage,
@@ -205,7 +213,8 @@ export class DatabaseRecoveryService {
     private readonly drills: DatabaseDrillsService,
     private readonly trash: DatabaseTrashService,
     private readonly security: PostgresSecurityService,
-    private readonly moduleRef: ModuleRef
+    private readonly moduleRef: ModuleRef,
+    @Optional() private readonly images?: PostgresImageService
   ) {}
 
   private async databases(): Promise<DatabasesService> {
@@ -710,8 +719,158 @@ export class DatabaseRecoveryService {
     const db = await this.prisma.database.findUnique({ where: { id: database.id } });
     if (!db?.namespace || !db.clusterName) throw new NotFoundException('Database not found');
     const cluster = await this.k8sCnpg.readCluster(db.namespace, db.clusterName);
-    let version = versionFromImage(cluster?.status?.image ?? cluster?.spec?.imageName);
-    if (!version || version.minor === null) {
+    const autoUpdate = await this.autoUpdateFor(database.project.organizationId);
+    return this.securityFor(db, cluster, autoUpdate, { probe: true });
+  }
+
+  async projectSecurity(projectId: string, clerkId: string, userData?: UserData) {
+    await this.access.assertProjectView(projectId, clerkId, userData);
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+      select: { organizationId: true }
+    });
+    if (!project) throw new NotFoundException('Project not found');
+    const rows = await this.prisma.database.findMany({
+      where: { projectId, mode: 'cnpg', status: { notIn: ['deleting'] } },
+      select: {
+        id: true,
+        name: true,
+        status: true,
+        environmentId: true,
+        namespace: true,
+        clusterName: true,
+        pgMajor: true
+      },
+      orderBy: { name: 'asc' }
+    });
+    const autoUpdate = await this.autoUpdateFor(project.organizationId);
+    const databases = await Promise.all(
+      rows.map(async (row) => {
+        const cluster =
+          row.namespace && row.clusterName
+            ? await this.k8sCnpg.readCluster(row.namespace, row.clusterName).catch(() => null)
+            : null;
+        const report = await this.securityFor(row, cluster, autoUpdate, { probe: false });
+        return {
+          id: row.id,
+          name: row.name,
+          status: row.status,
+          environmentId: row.environmentId,
+          running: report.running,
+          major: report.major ?? row.pgMajor,
+          action: report.action,
+          vulnerabilities: report.vulnerabilities.length,
+          highestScore: report.highestScore ?? null,
+          supported: report.supported ?? null,
+          eolDate: report.eolDate ?? null,
+          endOfLifeSoon: report.endOfLifeSoon ?? false,
+          minorUpdate: report.minorUpdate,
+          upgrades: report.upgrades
+        };
+      })
+    );
+    const cache = await this.security.load();
+    return { autoUpdate, advisoriesFetchedAt: cache?.fetchedAt ?? null, databases };
+  }
+
+  async minorUpdate(databaseId: string, clerkId: string, userData?: UserData) {
+    const { user, database } = await this.access.assertDatabaseEditor(
+      databaseId,
+      clerkId,
+      userData
+    );
+    if (database.mode !== 'cnpg' || !database.namespace || !database.clusterName) {
+      throw new BadRequestException('Updates need a dedicated database');
+    }
+    if ((database.replicas ?? 1) < 1 || database.status !== 'ready') {
+      throw new BadRequestException('The database has to be running and healthy to update');
+    }
+    const busy = await this.prisma.databaseOperation.findFirst({
+      where: {
+        databaseId: database.id,
+        status: { in: ['pending', 'running'] },
+        kind: { in: ['restore', 'upgrade', 'undelete'] }
+      },
+      select: { id: true }
+    });
+    if (busy)
+      throw new BadRequestException('Another restore or upgrade is running for this database');
+    const cluster = await this.k8sCnpg.readCluster(database.namespace, database.clusterName);
+    const current = typeof cluster?.spec?.imageName === 'string' ? cluster.spec.imageName : null;
+    if (!cluster || !current) throw new NotFoundException('Database cluster not found');
+    if (cluster.metadata?.annotations?.['cnpg.io/hibernation'] === 'on') {
+      throw new BadRequestException('Start the database before updating it');
+    }
+    const plan = await this.minorPlan(current, database.pgMajor, cluster, database.namespace, {
+      probe: true,
+      remember: true
+    });
+    if (!plan) {
+      throw new BadRequestException(
+        `The database already runs the newest Postgres ${majorFromImage(current) ?? database.pgMajor} image Orchard offers`
+      );
+    }
+    if (plan.blocked) throw new ConflictException(plan.blocked);
+    await this.k8sCnpg.patchClusterImage(database.namespace, database.clusterName, plan.image);
+    const from = versionFromImage(current);
+    this.auditOp('database.minor_update.started', user, database, {
+      from: from ? `${from.major}.${from.minor ?? ''}` : current,
+      to: plan.to
+    });
+    return { from: from?.minor != null ? `${from.major}.${from.minor}` : null, to: plan.to };
+  }
+
+  private async autoUpdateFor(organizationId: string | null | undefined) {
+    return this.images
+      ? this.images.autoUpdateFor(organizationId)
+      : { enabled: false, organization: false, instance: false };
+  }
+
+  private targetImage(major: number): string | null {
+    if (this.images) return this.images.imageFor(major);
+    return this.security.catalogImages()[major] ?? null;
+  }
+
+  private async minorPlan(
+    current: string,
+    pgMajor: number | null,
+    cluster: any,
+    namespace: string | null,
+    opts: { probe: boolean; remember?: boolean }
+  ): Promise<{ to: string; image: string; blocked: string | null } | null> {
+    const major = majorFromImage(current) ?? pgMajor ?? 17;
+    const image = this.targetImage(major);
+    if (!image || !isOutdated({ current, target: image })) return null;
+    const from = versionFromImage(current);
+    const to = versionFromImage(image);
+    if (!to || to.minor === null || (from?.minor != null && to.minor <= from.minor)) return null;
+    let blocked: string | null = null;
+    if (osBaseChanges(current, image)) {
+      const known = cluster?.metadata?.annotations?.[PG_COLLATION_ANNOTATION];
+      const collation =
+        known === 'c' || known === 'other'
+          ? known
+          : opts.probe && namespace && this.images
+            ? await this.images.collationOf(namespace, cluster, opts.remember).catch(() => null)
+            : null;
+      if (collation === 'other') {
+        blocked = `Postgres ${major}.${to.minor} also moves the operating system image${imageOsBase(current) ? ` from ${imageOsBase(current)}` : ''} to ${imageOsBase(image) ?? 'a newer one'}, and a database here uses a non-C collation. The new OS can sort text differently and leave text indexes out of order, so Orchard won't swap the image in place. Dump it into a new database on Postgres ${major}.${to.minor} instead.`;
+      } else if (collation === null && opts.probe) {
+        blocked = `Orchard couldn't check this database's collation, which it needs before moving it to a new operating system image. Make sure it's running and try again.`;
+      }
+    }
+    return { to: `${major}.${to.minor}`, image, blocked };
+  }
+
+  private async securityFor(
+    db: { namespace: string | null; clusterName: string | null; pgMajor: number | null },
+    cluster: any,
+    autoUpdate: { enabled: boolean; organization: boolean; instance: boolean },
+    opts: { probe: boolean }
+  ) {
+    const imageRef: string | null = cluster?.status?.image ?? cluster?.spec?.imageName ?? null;
+    let version = versionFromImage(imageRef);
+    if (opts.probe && db.namespace && db.clusterName && (!version || version.minor === null)) {
       const out = await this.k8sCnpg
         .runPsqlInCnpg(db.namespace, db.clusterName, 'postgres', 'SHOW server_version_num;', {
           tuplesOnly: true
@@ -724,17 +883,28 @@ export class DatabaseRecoveryService {
     const report = version
       ? securityReport(version, cache?.advisories ?? [], cache?.releases ?? [])
       : null;
-    const sameMajor = offered.versions.find((v) => v.major === version?.major) ?? null;
+    const specImage = typeof cluster?.spec?.imageName === 'string' ? cluster.spec.imageName : null;
+    const plan = specImage
+      ? await this.minorPlan(specImage, db.pgMajor, cluster, db.namespace, opts)
+      : null;
     return {
-      ...(report ?? { running: null, vulnerabilities: [], action: 'unknown' }),
-      image: cluster?.status?.image ?? cluster?.spec?.imageName ?? null,
-      minorUpdate:
-        sameMajor &&
-        sameMajor.minor !== null &&
-        version?.minor !== null &&
-        sameMajor.minor > (version?.minor ?? 0)
-          ? { to: `${sameMajor.major}.${sameMajor.minor}`, automatic: true }
-          : null,
+      ...(report ?? {
+        running: null,
+        major: version?.major ?? db.pgMajor ?? null,
+        minor: null,
+        latestMinor: null,
+        supported: null,
+        eolDate: null,
+        endOfLifeSoon: false,
+        vulnerabilities: [],
+        highestScore: null,
+        action: 'unknown' as const
+      }),
+      image: imageRef,
+      minorUpdate: plan
+        ? { to: plan.to, automatic: autoUpdate.enabled && !plan.blocked, blocked: plan.blocked }
+        : null,
+      autoUpdate,
       upgrades: offered.versions.filter((v) => version && v.major > version.major),
       advisoriesFetchedAt: cache?.fetchedAt ?? null
     };

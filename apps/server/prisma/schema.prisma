@@ -299,6 +299,8 @@ model Organization {
 
   databasePublicIp String? @map("database_public_ip") @db.VarChar(45)
 
+  postgresAutoUpdate Boolean @default(false) @map("postgres_auto_update")
+
   // Org-wide resource caps (null = unlimited). CPU in millicores, memory in bytes.
   cpuLimitMilli    Int?    @map("cpu_limit_milli")
   memoryLimitBytes BigInt? @map("memory_limit_bytes")

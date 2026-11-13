@@ -145,6 +145,7 @@ export class OrganizationsController {
       backupR2AccessKey?: string | null;
       backupR2SecretKey?: string | null;
       databasePublicIp?: string | null;
+      postgresAutoUpdate?: boolean;
     },
     @Request() req
   ) {

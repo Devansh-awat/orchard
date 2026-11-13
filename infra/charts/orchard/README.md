@@ -923,6 +923,15 @@ helm upgrade orchard oci://ghcr.io/hackclub/orchard/charts/orchard \
 CNPG handles rolling Postgres upgrades on its own. Bumping `postgres.instances`
 adds replicas. Set `postgres.backup.enabled` to render a CNPG `ScheduledBackup`.
 
+Upgrading to the release with opt-in Postgres updates:
+
+- Orchard no longer moves tenant databases to new Postgres minor releases on
+  its own. Each organization's admins turn it on under Settings → Databases
+  (or `orchard org update <org> --postgres-auto-update`). Until then, members
+  apply a minor update from the database's Security tab or with
+  `orchard db update <id>`. `POSTGRES_AUTO_UPDATE=false` still switches it off
+  for the whole instance.
+
 Upgrading across the 2026-09 security release:
 
 - the server's ClusterRole loses `escalate`; a new `<release>-tenant-secrets`

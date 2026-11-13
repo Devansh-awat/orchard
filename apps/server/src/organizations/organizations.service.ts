@@ -4,7 +4,8 @@ import {
   BadRequestException,
   ForbiddenException,
   ConflictException,
-  Logger
+  Logger,
+  Optional
 } from '@nestjs/common';
 import { OrganizationRole } from '@prisma/client';
 import { S3Client, ListObjectsV2Command } from '@aws-sdk/client-s3';
@@ -18,6 +19,7 @@ import { AuthorizationService } from '../auth/authorization.service';
 import { MembershipCacheService } from '../auth/membership-cache.service';
 import { requestAuthStorage } from '../auth/request-context';
 import { TailscaleService } from '../tailscale/tailscale.service';
+import { InstanceSettingsService } from '../instance-settings/instance-settings.service';
 import { InstanceConfigService } from '../instance-config/instance-config.service';
 import { RateLimitService } from '../auth/rate-limit.service';
 import { signupMode, signupDeniedError } from '../auth/signup-mode';
@@ -67,7 +69,8 @@ export class OrganizationsService {
     private readonly tailscale: TailscaleService,
     private readonly instanceConfig: InstanceConfigService,
     private readonly crypto: SecretCryptoService,
-    private readonly rateLimit: RateLimitService
+    private readonly rateLimit: RateLimitService,
+    @Optional() private readonly instanceSettings?: InstanceSettingsService
   ) {}
 
   // M-3: SHA-256 of the plaintext invitation token. Stored alongside the
@@ -238,7 +241,8 @@ export class OrganizationsService {
         backupR2Region: true,
         backupR2AccessKey: true,
         backupR2SecretKey: true,
-        databasePublicIp: true
+        databasePublicIp: true,
+        postgresAutoUpdate: true
       }
     });
     if (!org) throw new NotFoundException('Organization not found');
@@ -254,7 +258,11 @@ export class OrganizationsService {
       databasePublicIp: org.databasePublicIp,
       // What this organization falls back to when it sets nothing, so the
       // field can say what leaving it empty actually means.
-      instanceDefaultPublicIp: this.instanceConfig.defaultPublicIp() || null
+      instanceDefaultPublicIp: this.instanceConfig.defaultPublicIp() || null,
+      postgresAutoUpdate: org.postgresAutoUpdate,
+      postgresAutoUpdateAllowed: this.instanceSettings
+        ? await this.instanceSettings.isPostgresAutoUpdateEnabled()
+        : true
     };
   }
 
@@ -541,6 +549,7 @@ export class OrganizationsService {
       backupR2AccessKey?: string | null;
       backupR2SecretKey?: string | null;
       databasePublicIp?: string | null;
+      postgresAutoUpdate?: boolean;
     },
     userData?: any
   ) {
@@ -562,7 +571,8 @@ export class OrganizationsService {
         backupR2Region: true,
         backupR2AccessKey: true,
         backupR2SecretKey: true,
-        databasePublicIp: true
+        databasePublicIp: true,
+        postgresAutoUpdate: true
       }
     });
 
@@ -593,6 +603,12 @@ export class OrganizationsService {
         throw new BadRequestException('databasePublicIp must be a valid IPv4 or IPv6 address');
       }
       updateData.databasePublicIp = ip;
+    }
+    if (data.postgresAutoUpdate !== undefined) {
+      if (typeof data.postgresAutoUpdate !== 'boolean') {
+        throw new BadRequestException('postgresAutoUpdate must be true or false');
+      }
+      updateData.postgresAutoUpdate = data.postgresAutoUpdate;
     }
 
     const backupFields = [

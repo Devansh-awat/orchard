@@ -42,6 +42,17 @@ export class DatabaseRecoveryController {
     return this.recovery.securityReport(id, req.user.sub, who(req));
   }
 
+  @Get('projects/:id/database-security')
+  projectSecurity(@Param('id') id: string, @Request() req) {
+    return this.recovery.projectSecurity(id, req.user.sub, who(req));
+  }
+
+  @Post('databases/:id/minor-update')
+  @Idempotent()
+  minorUpdate(@Param('id') id: string, @Request() req) {
+    return this.recovery.minorUpdate(id, req.user.sub, who(req));
+  }
+
   @Post('databases/:id/upgrade')
   @Idempotent()
   upgrade(

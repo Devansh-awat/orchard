@@ -4,8 +4,10 @@ import {
   clusterSettled,
   FALLBACK_POSTGRES_IMAGES,
   hourInWindow,
+  imageOsBase,
   imageRepository,
   isOutdated,
+  osBaseChanges,
   parseHourWindow,
   parsePostgresImageCatalog,
   pickImageRolloutBatch,
@@ -169,7 +171,7 @@ function liveCluster(
 
 function rolloutHarness(
   clusters: any[],
-  opts: { collation?: 'c' | 'other' | null; enabled?: boolean } = {}
+  opts: { collation?: 'c' | 'other' | null; enabled?: boolean; optedOut?: string[] } = {}
 ) {
   const settings = new Map<string, string>();
   const patched: string[] = [];
@@ -183,8 +185,14 @@ function rolloutHarness(
     rolling: false,
     prisma: {
       database: {
-        findMany: async () =>
-          clusters.map((c) => ({ namespace: 'ns', clusterName: c.metadata.name, pgMajor: 17 }))
+        findMany: async ({ where }: any) =>
+          clusters
+            .filter(
+              (c) =>
+                where?.project?.organization?.postgresAutoUpdate !== true ||
+                !(opts.optedOut ?? []).includes(c.metadata.name)
+            )
+            .map((c) => ({ namespace: 'ns', clusterName: c.metadata.name, pgMajor: 17 }))
       }
     },
     settings: {
@@ -267,4 +275,40 @@ test('turning auto-update off stops the rollout entirely', async () => {
   const { s, patched } = rolloutHarness([liveCluster('a')], { enabled: false });
   assert.equal(await s.rolloutTick(inWindow), null);
   assert.deepEqual(patched, []);
+});
+
+test('the OS base comes from the last segment of the tag', () => {
+  assert.equal(imageOsBase(img('17.11-202610190957-system-trixie')), 'trixie');
+  assert.equal(imageOsBase('ghcr.io/cloudnative-pg/postgresql:17.5-bookworm'), 'bookworm');
+  assert.equal(imageOsBase('ghcr.io/cloudnative-pg/postgresql:17'), null);
+  assert.equal(imageOsBase('localhost:5000/postgresql'), null);
+  assert.ok(!osBaseChanges(img('17.10-202609010000-system-trixie'), img('17.11-system-trixie')));
+  assert.ok(osBaseChanges(img('17.10-system-bookworm'), img('17.11-system-trixie')));
+  assert.ok(osBaseChanges('ghcr.io/cloudnative-pg/postgresql:17', img('17.11-system-trixie')));
+});
+
+test('a non-C collation only holds the update when the OS image changes', async () => {
+  const sameOs = img('17.10-202609010000-system-trixie', 'b');
+  const batch = pickImageRolloutBatch(
+    [cand('a', { current: sameOs, collation: 'other' }), cand('b', { collation: 'other' })],
+    5
+  );
+  assert.deepEqual(
+    batch.map((c) => c.clusterName),
+    ['a']
+  );
+  const { s, patched } = rolloutHarness([liveCluster('c', { image: sameOs })], {
+    collation: 'other'
+  });
+  const r = await s.rolloutTick(inWindow);
+  assert.deepEqual(r.held, []);
+  assert.deepEqual(patched, ['c']);
+});
+
+test('only databases in organizations that opted in are updated', async () => {
+  const clusters = ['a', 'b'].map((n) => liveCluster(n));
+  const { s, patched } = rolloutHarness(clusters, { optedOut: ['a'] });
+  const r = await s.rolloutTick(inWindow);
+  assert.equal(r.outdated, 1);
+  assert.deepEqual(patched, ['b']);
 });

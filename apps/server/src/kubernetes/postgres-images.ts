@@ -110,13 +110,32 @@ export function isOutdated(c: Pick<ImageRolloutCandidate, 'current' | 'target'>)
   return repo === imageRepository(c.target) || repo === POSTGRES_IMAGE_REPOSITORY;
 }
 
+export function imageOsBase(image: string | null | undefined): string | null {
+  if (!image) return null;
+  const ref = image.split('@')[0];
+  const slash = ref.lastIndexOf('/');
+  const colon = ref.lastIndexOf(':');
+  if (colon <= slash) return null;
+  const last =
+    ref
+      .slice(colon + 1)
+      .split('-')
+      .at(-1) ?? '';
+  return /^[a-z]{3,}$/.test(last) ? last : null;
+}
+
+export function osBaseChanges(current: string | null, target: string): boolean {
+  const from = imageOsBase(current);
+  return !from || from !== imageOsBase(target);
+}
+
 export function pickImageRolloutBatch(
   candidates: ImageRolloutCandidate[],
   limit: number
 ): ImageRolloutCandidate[] {
   return candidates
     .filter((c) => isOutdated(c) && c.healthy && !c.hibernated && !c.backupRunning)
-    .filter((c) => c.collation !== 'other')
+    .filter((c) => c.collation !== 'other' || !osBaseChanges(c.current, c.target))
     .sort((a, b) =>
       `${a.namespace}/${a.clusterName}`.localeCompare(`${b.namespace}/${b.clusterName}`)
     )
