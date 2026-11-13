@@ -400,7 +400,11 @@ export class NotificationFanoutService implements OnModuleInit, OnModuleDestroy 
         select: { ownerId: true, createdBy: true }
       }),
       this.prisma.organizationMember.findMany({
-        where: { organizationId: chain.organizationId, role: { in: ['owner', 'admin'] } },
+        where: {
+          organizationId: chain.organizationId,
+          role: { in: ['owner', 'admin'] },
+          status: 'active'
+        },
         select: { userId: true }
       })
     ]);

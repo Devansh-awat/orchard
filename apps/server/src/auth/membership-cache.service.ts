@@ -76,7 +76,7 @@ export class MembershipCacheService {
           return [];
         }
         const memberships = await this.prisma.organizationMember.findMany({
-          where: { userId: internalId },
+          where: { userId: internalId, status: 'active' },
           select: { organizationId: true, role: true }
         });
         // Only cache non-empty results. Caching empty poisoned every membership

@@ -509,7 +509,11 @@ export class NotificationDeliveryService implements OnModuleInit, OnModuleDestro
     lastErrorAt: Date | null;
   }) {
     const admins = await this.prisma.organizationMember.findMany({
-      where: { organizationId: channel.organizationId, role: { in: ['owner', 'admin'] } },
+      where: {
+        organizationId: channel.organizationId,
+        role: { in: ['owner', 'admin'] },
+        status: 'active'
+      },
       select: { user: { select: { email: true } } }
     });
     const recipients = admins.map((a) => a.user.email).filter(Boolean);

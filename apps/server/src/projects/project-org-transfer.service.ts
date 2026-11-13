@@ -125,7 +125,7 @@ export class ProjectOrgTransferService {
     const memberUserIds = project.members.map((m) => m.userId);
     const destMembers = memberUserIds.length
       ? await this.prisma.organizationMember.findMany({
-          where: { organizationId: destOrg.id, userId: { in: memberUserIds } },
+          where: { organizationId: destOrg.id, userId: { in: memberUserIds }, status: 'active' },
           select: { userId: true }
         })
       : [];

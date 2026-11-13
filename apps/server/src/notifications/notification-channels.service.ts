@@ -499,7 +499,7 @@ export class NotificationChannelsService {
   ): Promise<Set<string>> {
     if (scope.scopeType === 'org' || !scope.projectId) {
       const members = await this.prisma.organizationMember.findMany({
-        where: { organizationId },
+        where: { organizationId, status: 'active' },
         select: { user: { select: { email: true } } }
       });
       return new Set(members.map((m) => m.user.email?.toLowerCase()).filter(Boolean) as string[]);

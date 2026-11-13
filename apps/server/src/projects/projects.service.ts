@@ -2215,7 +2215,7 @@ export class ProjectsService {
     // project would be 2 DB queries each (org membership + project membership),
     // so 2N round-trips for N projects. Superadmin still short-circuits to
     // canEdit=true.
-    const isSuperAdmin = await this.authz.isSuperAdmin(userId);
+    const isSuperAdmin = await this.authz.isUnrestrictedSuperAdmin(userId);
     const orgRoleByOrgId = new Map<string, string>();
     if (!isSuperAdmin) {
       const memberships = await this.membershipCache.getMemberships(userId);
@@ -2321,6 +2321,7 @@ export class ProjectsService {
     const memberships = await this.prisma.organizationMember.findMany({
       where: {
         userId,
+        status: 'active',
         ...(sessionOrgId ? { organizationId: sessionOrgId } : {}),
         ...(blocked.length ? { organizationId: { notIn: blocked } } : {})
       },
@@ -2347,7 +2348,7 @@ export class ProjectsService {
     await this.assertOrgOverviewAccess(org.id, userId);
 
     const [isSuper, memberships] = await Promise.all([
-      this.authz.isSuperAdmin(userId),
+      this.authz.isUnrestrictedSuperAdmin(userId),
       this.membershipCache.getMembershipsForOrg(userId, org.id)
     ]);
     if (!isSuper && memberships.length === 0) {
@@ -2472,7 +2473,7 @@ export class ProjectsService {
     await this.assertOrgOverviewAccess(org.id, userId);
 
     const [isSuper, memberships] = await Promise.all([
-      this.authz.isSuperAdmin(userId),
+      this.authz.isUnrestrictedSuperAdmin(userId),
       this.membershipCache.getMembershipsForOrg(userId, org.id)
     ]);
     if (!isSuper && memberships.length === 0) {
