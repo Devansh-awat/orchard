@@ -69,7 +69,12 @@ test('the refresh grant rotates the generation and issues the next one', async (
       calls.push('extend');
     }
   };
-  const prisma = { mcpOauthClient: { findUnique: async () => null } };
+  const prisma = {
+    mcpOauthClient: {
+      findUnique: async () => ({ id: 'client-1', clientSecret: null, redirectUris: [], name: 'c' }),
+      updateMany: async () => ({ count: 1 })
+    }
+  };
   const svc = new McpOAuthService(sessions as any, prisma as any);
   const refreshToken = await (svc as any).mintRefreshToken(
     { sub: 'user-1', sessionId: 'session-1', authMethod: 'otp' },
@@ -91,6 +96,34 @@ test('the refresh grant rotates the generation and issues the next one', async (
   });
   assert.equal(replay.error, 'invalid_grant');
   assert.ok(calls.includes('revoke'), 'reusing a rotated refresh token revokes the session');
+});
+
+test('a refresh for a purged client is refused and its session revoked', async () => {
+  const revoked: string[] = [];
+  const sessions = {
+    refreshGeneration: async () => 0,
+    rotateRefreshGeneration: async () => 1,
+    revokeSession: async (userId: string, sessionId: string) => {
+      revoked.push(`${userId}:${sessionId}`);
+      return true;
+    },
+    extendSession: async () => {}
+  };
+  const prisma = { mcpOauthClient: { findUnique: async () => null } };
+  const svc = new McpOAuthService(sessions as any, prisma as any);
+  const refreshToken = await (svc as any).mintRefreshToken(
+    { sub: 'user-1', sessionId: 'session-1', authMethod: 'otp' },
+    'gone-client',
+    0
+  );
+
+  const result = await (svc as any).refreshAccessToken({
+    refresh_token: refreshToken,
+    client_id: 'gone-client'
+  });
+  assert.equal(result.error, 'invalid_client');
+  assert.equal(result.token_response, undefined);
+  assert.deepEqual(revoked, ['user-1:session-1']);
 });
 
 test('auth code rows are keyed by the sha256 of the code', () => {

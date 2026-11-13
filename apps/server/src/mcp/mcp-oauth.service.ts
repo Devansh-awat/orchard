@@ -583,12 +583,6 @@ export class McpOAuthService {
     };
   }
 
-  private async clientSecretAccepted(clientId: string, secret?: string): Promise<boolean> {
-    const client = await this.getClient(clientId);
-    if (!client) return true;
-    return (await this.authenticateClient(clientId, secret)) !== null;
-  }
-
   private async authenticateClient(
     clientId: string,
     presentedSecret: string | undefined
@@ -628,18 +622,21 @@ export class McpOAuthService {
       console.error('[MCP OAuth] Refresh failed: wrong token type');
       return { error: 'invalid_grant', error_description: 'not a refresh token' };
     }
-    // Bind to the issuing client via the embedded claim, not the in-memory
-    // registry: registrations are lost on restart but refresh must survive.
     if (!body.client_id || payload.clientId !== body.client_id) {
       console.error('[MCP OAuth] Refresh failed: client_id mismatch');
       return { error: 'invalid_client' };
     }
-    if (!(await this.clientSecretAccepted(body.client_id, body.client_secret))) {
-      console.error('[MCP OAuth] Refresh failed: client authentication failed');
-      return { error: 'invalid_client', error_description: 'client authentication failed' };
-    }
     if (!payload.sessionId || !payload.sub) {
       return { error: 'invalid_grant', error_description: 'malformed refresh token' };
+    }
+    if (!(await this.getClient(body.client_id))) {
+      console.error('[MCP OAuth] Refresh failed: client no longer registered, revoking session');
+      await this.sessions.revokeSession(payload.sub, payload.sessionId);
+      return { error: 'invalid_client', error_description: 'client is no longer registered' };
+    }
+    if (!(await this.authenticateClient(body.client_id, body.client_secret))) {
+      console.error('[MCP OAuth] Refresh failed: client authentication failed');
+      return { error: 'invalid_client', error_description: 'client authentication failed' };
     }
 
     const currentGen = await this.sessions.refreshGeneration(payload.sessionId);
