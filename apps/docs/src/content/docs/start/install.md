@@ -740,7 +740,7 @@ To create a local trial cluster, run the following script from a clone of the Or
 
 The script creates a k3d cluster, installs the prerequisites, and deploys the chart at `http://orchard.127.0.0.1.nip.io:8080`. It prints the steps to claim the instance.
 
-The quickstart turns off image builds, so deploy from a container image. Its secrets are public, so do not expose this cluster.
+The quickstart turns off image builds, so deploy from a container image. It generates its own secrets and listens only on `127.0.0.1`. It runs with open sign-up and no TLS, so do not expose it beyond your machine.
 
 ## Verify what you install
 

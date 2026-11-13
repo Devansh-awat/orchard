@@ -22,8 +22,8 @@ fi
 
 step "Creating k3d cluster $CLUSTER"
 k3d cluster create "$CLUSTER" \
-  -p "$HTTP_PORT:80@loadbalancer" \
-  -p "$HTTPS_PORT:443@loadbalancer" \
+  -p "127.0.0.1:$HTTP_PORT:80@loadbalancer" \
+  -p "127.0.0.1:$HTTPS_PORT:443@loadbalancer" \
   --k3s-arg "--disable=traefik@server:0" \
   --wait
 
@@ -72,8 +72,23 @@ until [ -n "$(kubectl -n cnpg-system get endpoints/cnpg-webhook-service -o jsonp
   sleep 2
 done
 
-step "Installing Orchard"
+step "Generating Orchard secrets"
 kubectl create namespace network >/dev/null 2>&1 || true
+kubectl create namespace orchard >/dev/null 2>&1 || true
+random_secret() { head -c "$1" /dev/urandom | base64 | tr -d '\n=+/'; }
+kubectl apply -f - >/dev/null <<EOF
+apiVersion: v1
+kind: Secret
+metadata:
+  name: orchard-quickstart-secrets
+  namespace: orchard
+type: Opaque
+stringData:
+  jwt: $(random_secret 48)
+  enc: $(random_secret 48)
+EOF
+
+step "Installing Orchard"
 helm upgrade --install orchard "$REPO_ROOT/infra/charts/orchard" \
   --namespace orchard --create-namespace \
   -f "$REPO_ROOT/scripts/quickstart-values.yaml" \
