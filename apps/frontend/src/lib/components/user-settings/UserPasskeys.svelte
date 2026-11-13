@@ -10,6 +10,7 @@
 		ListRow,
 		Modal,
 		ModalIntro,
+		SecretInput,
 		SectionCard,
 		Skeleton,
 		ToneTile
@@ -35,6 +36,10 @@
 		registerLoading,
 		showAddPasskey = $bindable(false),
 		newPasskeyName = $bindable(''),
+		currentPassword = $bindable(''),
+		needsCurrent = false,
+		stale = false,
+		onSignInAgain,
 		editingPasskeyId = $bindable<string | null>(null),
 		renameValue = $bindable(''),
 		renaming,
@@ -52,6 +57,10 @@
 		registerLoading: boolean;
 		showAddPasskey: boolean;
 		newPasskeyName: string;
+		currentPassword?: string;
+		needsCurrent?: boolean;
+		stale?: boolean;
+		onSignInAgain?: () => void;
 		editingPasskeyId: string | null;
 		renameValue: string;
 		renaming: boolean;
@@ -76,6 +85,7 @@
 	function cancelAdd() {
 		showAddPasskey = false;
 		newPasskeyName = '';
+		currentPassword = '';
 	}
 </script>
 
@@ -166,14 +176,27 @@
 				{@attach focusOnOpen}
 			/>
 		</Field>
+		{#if needsCurrent}
+			<Field label="Current password" for="{uid}-current">
+				<SecretInput
+					id="{uid}-current"
+					bind:value={currentPassword}
+					autocomplete="current-password"
+				/>
+			</Field>
+		{/if}
 	</form>
 	{#snippet footer()}
 		<Button variant="ghost" shape="capsule" disabled={registerLoading} onclick={cancelAdd}
 			>Cancel</Button
 		>
-		<Button variant="primary" shape="capsule" loading={registerLoading} onclick={onRegister}
-			>Continue</Button
-		>
+		{#if stale && onSignInAgain}
+			<Button variant="primary" shape="capsule" onclick={onSignInAgain}>Sign in again</Button>
+		{:else}
+			<Button variant="primary" shape="capsule" loading={registerLoading} onclick={onRegister}
+				>Continue</Button
+			>
+		{/if}
 	{/snippet}
 </Modal>
 

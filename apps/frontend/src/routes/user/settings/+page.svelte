@@ -24,6 +24,8 @@
 	} from '$lib/posthog';
 	import { page } from '$app/stores';
 	import { registerPasskey as createPasskey, passkeyErrorMessage } from '$lib/utils/passkey';
+	import { StepUpError } from '$lib/utils/step-up';
+	import { rememberReturnTo } from '$lib/utils/url-secrets';
 	import {
 		UserIdentityHero,
 		UserInvitations,
@@ -82,6 +84,9 @@
 	let passkeyListError = $state<string | null>(null);
 	let registerLoading = $state(false);
 	let newPasskeyName = $state('');
+	let passkeyCurrentPassword = $state('');
+	let passkeyNeedsCurrent = $state(false);
+	let passkeyStale = $state(false);
 	let editingPasskeyId = $state<string | null>(null);
 	let renameValue = $state('');
 	let renaming = $state(false);
@@ -604,7 +609,8 @@
 		}
 		registerLoading = true;
 		try {
-			await createPasskey(newPasskeyName);
+			await createPasskey(newPasskeyName, passkeyNeedsCurrent ? passkeyCurrentPassword : undefined);
+			passkeyCurrentPassword = '';
 			toasts.add({
 				title: 'Passkey added',
 				description: 'You can now sign in with this device.',
@@ -614,6 +620,8 @@
 			showAddPasskey = false;
 			await fetchPasskeys();
 		} catch (err) {
+			if (err instanceof StepUpError && err.needsCurrentPassword) passkeyNeedsCurrent = true;
+			passkeyStale = err instanceof StepUpError && err.needsSignIn;
 			toasts.add({
 				title: "Couldn't register passkey",
 				description: passkeyErrorMessage(err),
@@ -622,6 +630,10 @@
 		} finally {
 			registerLoading = false;
 		}
+	}
+	function signInAgain() {
+		rememberReturnTo(window.location.pathname + window.location.search);
+		user.signOut();
 	}
 	function startRenaming(passkey: PasskeyRecord) {
 		editingPasskeyId = passkey.id;
@@ -867,6 +879,10 @@
 			{registerLoading}
 			bind:showAddPasskey
 			bind:newPasskeyName
+			bind:currentPassword={passkeyCurrentPassword}
+			needsCurrent={passkeyNeedsCurrent}
+			stale={passkeyStale}
+			onSignInAgain={signInAgain}
 			bind:editingPasskeyId
 			bind:renameValue
 			{renaming}

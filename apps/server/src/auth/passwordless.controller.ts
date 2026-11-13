@@ -23,6 +23,7 @@ import {
   verifySuperadminPassword
 } from './superadmin-password';
 import { PasskeyService } from './passkey.service';
+import { stepUp } from './step-up';
 import { OAuthService } from './oauth.service';
 import { SessionsService } from './sessions.service';
 import { UsersService, sanitizeUsername } from '../users/users.service';
@@ -55,6 +56,7 @@ interface PasswordDto {
 interface RegisterPasskeyDto {
   response: any; // RegistrationResponseJSON
   friendlyName?: string;
+  currentPassword?: string;
 }
 
 interface AuthenticatePasskeyDto {
@@ -121,6 +123,24 @@ export class PasswordlessController {
   /**
    * Resolve the internal UUID user from the request subject (which may be a Hack Club ID).
    */
+  private async requireStepUp(
+    user: { id: string; email: string; passwordHash: string | null },
+    currentPassword: unknown,
+    req: any,
+    action: string
+  ): Promise<void> {
+    if (user.passwordHash) {
+      await this.rateLimit.checkRateLimit(user.email, 'email', 'password_signin');
+    }
+    const refusal = await stepUp(this.prisma, {
+      action,
+      user,
+      currentPassword,
+      auth: req['auth']
+    });
+    if (refusal) throw new HttpException(refusal, HttpStatus.FORBIDDEN);
+  }
+
   private async resolveInternalUser(userId: string) {
     const where: Prisma.UserWhereInput = { OR: [] };
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -362,7 +382,7 @@ export class PasswordlessController {
   @Auth()
   @Post('password/set')
   async setOwnPassword(
-    @Body() body: { password: string },
+    @Body() body: { password: string; currentPassword?: string },
     @Req() req: any
   ): Promise<{ success: true }> {
     const user = await this.resolveInternalUser(req.user.sub);
@@ -372,6 +392,8 @@ export class PasswordlessController {
         HttpStatus.FORBIDDEN
       );
     }
+
+    await this.requireStepUp(user, body?.currentPassword, req, 'set a password');
 
     try {
       if (user.isSuperAdmin) {
@@ -416,9 +438,10 @@ export class PasswordlessController {
    */
   @Auth()
   @Post('passkey/register/options')
-  async getRegistrationOptions(@Req() req: any) {
+  async getRegistrationOptions(@Body() body: { currentPassword?: string }, @Req() req: any) {
     const email = req.user.email;
     const user = await this.resolveInternalUser(req.user.sub);
+    await this.requireStepUp(user, body?.currentPassword, req, 'add a passkey');
 
     const options = await this.passkeyService.generateRegistrationOptions(user.id, email);
 
@@ -430,6 +453,7 @@ export class PasswordlessController {
   async verifyRegistration(@Body() body: RegisterPasskeyDto, @Req() req: any) {
     const email = req.user.email;
     const user = await this.resolveInternalUser(req.user.sub);
+    await this.requireStepUp(user, body?.currentPassword, req, 'add a passkey');
 
     const result = await this.passkeyService.verifyRegistration(
       user.id,

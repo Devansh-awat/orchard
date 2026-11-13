@@ -16,6 +16,7 @@
 	import { Alert, Badge, Button, Field, Input } from '$lib/components/ui';
 	import { rememberReturnTo } from '$lib/utils/url-secrets';
 	import { passkeyErrorMessage, passkeysSupported, registerPasskey } from '$lib/utils/passkey';
+	import { setOwnPassword } from '$lib/utils/set-password';
 
 	const MIN_PASSWORD_LENGTH = 12;
 	let signedUp = $state<User | null>(null);
@@ -208,15 +209,7 @@
 		signingUp = 'password';
 		try {
 			if (needsPassword) {
-				const response = await apiFetch('/apiv1/auth/password/set', {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({ password })
-				});
-				if (!response.ok) {
-					const data = await response.json().catch(() => ({}));
-					throw new Error(data?.message || "Couldn't set the password.");
-				}
+				await setOwnPassword(password);
 				await enterAfterSignUp(signedUp as User);
 				return;
 			}

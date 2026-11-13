@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { Button, Field, SecretInput } from '$lib/components/ui';
-	import { apiFetch, toasts } from '$lib/stores';
+	import { toasts, user } from '$lib/stores';
+	import { setOwnPassword } from '$lib/utils/set-password';
+	import { StepUpError } from '$lib/utils/step-up';
 	import {
 		registerPasskey,
 		passkeysSupported,
@@ -17,6 +19,9 @@
 	let error = $state<string | null>(null);
 	let password = $state('');
 	let confirm = $state('');
+	let current = $state('');
+	let needsCurrent = $state(false);
+	let stale = $state(false);
 	let choice = $state<'passkey' | 'password' | null>(null);
 
 	const warning = $derived(secureContextWarning());
@@ -24,15 +29,22 @@
 	const passkeyAvailable = $derived(supported && !warning);
 	const mode = $derived(choice ?? (passkeyAvailable ? 'passkey' : 'password'));
 
+	function noteStepUp(err: unknown) {
+		if (err instanceof StepUpError && err.needsCurrentPassword) needsCurrent = true;
+		stale = err instanceof StepUpError && err.needsSignIn;
+	}
+
 	async function add() {
 		if (working) return;
 		working = true;
 		error = null;
 		try {
-			await registerPasskey('This device');
+			await registerPasskey('This device', needsCurrent ? current : undefined);
+			current = '';
 			toasts.add({ title: 'Passkey added', color: 'success' });
 			await onDone();
 		} catch (err) {
+			noteStepUp(err);
 			error = passkeyErrorMessage(err);
 		} finally {
 			working = false;
@@ -53,26 +65,37 @@
 		working = true;
 		error = null;
 		try {
-			const response = await apiFetch('/apiv1/auth/password/set', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ password })
-			});
-			if (!response.ok) {
-				const data = await response.json().catch(() => ({}));
-				throw new Error(data?.message || "Couldn't set the password.");
-			}
+			await setOwnPassword(password, needsCurrent ? current : undefined);
 			password = '';
 			confirm = '';
+			current = '';
 			toasts.add({ title: 'Password set', color: 'success' });
 			await onDone();
 		} catch (err) {
+			noteStepUp(err);
 			error = err instanceof Error ? err.message : "Couldn't set the password.";
 		} finally {
 			working = false;
 		}
 	}
 </script>
+
+{#snippet currentField()}
+	<Field label="Current password" for="{uid}-current">
+		<SecretInput
+			id="{uid}-current"
+			size="lg"
+			bind:value={current}
+			autocomplete="current-password"
+		/>
+	</Field>
+{/snippet}
+
+{#snippet signInAgain()}
+	<Button variant="primary" size="lg" shape="capsule" onclick={() => user.signOut()}>
+		Sign in again
+	</Button>
+{/snippet}
 
 <section class="setup-step">
 	{#if mode === 'passkey'}
@@ -83,10 +106,20 @@
 			<p>It stays on this device, and you have no password to remember.</p>
 		{/if}
 
+		{#if needsCurrent}
+			<div class="setup-body setup-fields">
+				{@render currentField()}
+			</div>
+		{/if}
+
 		<div class="setup-acts">
-			<Button variant="primary" size="lg" shape="capsule" loading={working} onclick={add}>
-				{working ? 'Waiting for your device' : 'Create passkey'}
-			</Button>
+			{#if stale}
+				{@render signInAgain()}
+			{:else}
+				<Button variant="primary" size="lg" shape="capsule" loading={working} onclick={add}>
+					{working ? 'Waiting for your device' : 'Create passkey'}
+				</Button>
+			{/if}
 			<Button
 				variant="ghost"
 				size="lg"
@@ -111,6 +144,9 @@
 		{/if}
 
 		<div class="setup-body setup-fields">
+			{#if needsCurrent}
+				{@render currentField()}
+			{/if}
 			<Field label="New password" for="{uid}-password">
 				<SecretInput
 					id="{uid}-password"
@@ -130,9 +166,19 @@
 		</div>
 
 		<div class="setup-acts">
-			<Button variant="primary" size="lg" shape="capsule" loading={working} onclick={savePassword}>
-				Set password
-			</Button>
+			{#if stale}
+				{@render signInAgain()}
+			{:else}
+				<Button
+					variant="primary"
+					size="lg"
+					shape="capsule"
+					loading={working}
+					onclick={savePassword}
+				>
+					Set password
+				</Button>
+			{/if}
 			{#if passkeyAvailable}
 				<Button
 					variant="ghost"
