@@ -260,6 +260,9 @@ true
             {{- with .idleMinutes }}
             - { name: BUILDKIT_CACHE_IDLE_MINUTES, value: {{ . | quote }} }
             {{- end }}
+            {{- with .maxGiB }}
+            - { name: BUILDKIT_CACHE_MAX_GIB, value: {{ . | quote }} }
+            {{- end }}
             {{- end }}
             {{- end }}
             {{- if .Values.tenant.ingressNamespaces }}

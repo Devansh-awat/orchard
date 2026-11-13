@@ -532,6 +532,11 @@ builders:
       # Never evict a tenant whose cache moved this recently — assume a build
       # is in flight.
       idleMinutes: 60
+      # Total GiB the cache may hold before the least-recently-used tenants are
+      # evicted. Empty means no byte budget, only highPct. Volumes that do not
+      # enforce their size, such as local-path, need this. Admins can change it
+      # under Admin -> Builds.
+      maxGiB: ""
   quota:
     requestsCpu: "16"
     requestsMemory: "32Gi"

@@ -462,6 +462,7 @@ is the single place the MCP's address is configured.
 | `builders.localCache.evict.maxAgeDays` | `14` | Evict any tenant untouched for this long. |
 | `builders.localCache.evict.highPct` / `targetPct` | `80` / `60` | Above `highPct` used, evict least-recently-used tenants until under `targetPct`. |
 | `builders.localCache.evict.idleMinutes` | `60` | Never evict a tenant whose cache moved this recently. |
+| `builders.localCache.evict.maxGiB` | `""` | Total GiB the cache may hold before least-recently-used tenants are evicted. Empty means no byte budget. Set it on storage that does not enforce `size`, such as `local-path`. **Instance admin** > **Build cache** overrides it and `maxAgeDays`. |
 
 The chart grants the orchard-server ServiceAccount in `.namespace` permission to manage Jobs/Pods/Secrets in `builders.namespace`.
 

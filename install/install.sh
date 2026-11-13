@@ -3815,6 +3815,8 @@ builders:
     enabled: true
     size: ${BUILD_CACHE_GB}Gi
     storageClass: local-path
+    evict:
+      maxGiB: $BUILD_CACHE_GB
 
 $(observability_values)
 
