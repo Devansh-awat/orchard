@@ -71,6 +71,7 @@ BEHIND_NAT=true
 CLOUD=''
 DMI_DIR=${ORCHARD_DMI_DIR:-/sys/class/dmi/id}
 MEMINFO_FILE=${ORCHARD_MEMINFO_FILE:-/proc/meminfo}
+TINY_BOX_MB=3500
 ORCHARD_PUBLIC_IP=${ORCHARD_PUBLIC_IP:-}
 ORCHARD_INGRESS_CNAME=${ORCHARD_INGRESS_CNAME:-}
 INGRESS_MODE=''
@@ -555,10 +556,21 @@ detect_arch() {
 
 check_memory() {
   MEM_MB=$(awk '/MemTotal/ {print int($2/1024)}' "$MEMINFO_FILE")
-  if [ "$MEM_MB" -lt 7500 ]; then
-    warn "${MEM_MB}Mi of memory is below the recommended 8Gi, so Orchard may behave unexpectedly. At 4Gi, image builds may not schedule."
+  if [ "$MEM_MB" -lt 1800 ]; then
+    warn "${MEM_MB}Mi of memory is below 2Gi, so Orchard will leave little or no room for apps."
+  elif [ "$MEM_MB" -lt "$TINY_BOX_MB" ]; then
+    warn "${MEM_MB}Mi of memory: Orchard runs its smallest profile. MCP and image scanning start off, and big builds may run out of memory."
   fi
   info "memory: ${MEM_MB}Mi"
+}
+
+tiny_box_defaults() {
+  [ "$MEM_MB" -lt "$TINY_BOX_MB" ] || return 0
+  [ "$PREVIOUS_INSTALL" = true ] && return 0
+  if ! answer_given --mcp ORCHARD_MCP && ! answer_given --mcp-domain ORCHARD_MCP_DOMAIN; then
+    ORCHARD_MCP=false
+  fi
+  answer_given --image-scanning ORCHARD_IMAGE_SCANNING || ORCHARD_IMAGE_SCANNING=false
 }
 
 check_image_tag() {
@@ -687,6 +699,7 @@ preflight() {
   fi
 
   check_memory
+  tiny_box_defaults
 
   DISK_GB=$(df -BG --output=avail /var/lib 2>/dev/null | tail -1 | tr -dc '0-9')
   DISK_GB=${DISK_GB:-0}
@@ -3049,10 +3062,14 @@ install_operators() {
     --set accessLog.enabled=true \
     --set accessLog.format=json \
     --set accessLog.fields.headers.names.User-Agent=keep \
+    --set resources.requests.cpu=20m \
+    --set resources.requests.memory=48Mi \
     --wait --timeout 10m
 
   run_step "CloudNativePG" 1m helm upgrade --install cnpg cnpg/cloudnative-pg \
     --set-string config.data.ENABLE_INSTANCE_MANAGER_INPLACE_UPDATES=true \
+    --set resources.requests.cpu=20m \
+    --set resources.requests.memory=48Mi \
     --namespace cnpg-system --create-namespace \
     --wait --timeout 10m
 
@@ -3060,6 +3077,9 @@ install_operators() {
     run_step "cert-manager" 1m30s helm upgrade --install cert-manager jetstack/cert-manager \
       --namespace cert-manager --create-namespace \
       --set crds.enabled=true \
+      --set resources.requests.memory=32Mi \
+      --set webhook.resources.requests.memory=16Mi \
+      --set cainjector.resources.requests.memory=32Mi \
       --wait --timeout 10m
     install_cluster_issuer
   else
@@ -3385,6 +3405,8 @@ size_workloads() {
 
   SMALL_BOX=false
   if [ "$MEM_MB" -lt 7500 ]; then SMALL_BOX=true; fi
+  TINY_BOX=false
+  if [ "$MEM_MB" -lt "$TINY_BOX_MB" ]; then TINY_BOX=true; fi
 
   DB_DEFAULT_MEMORY_MB=1024
   if [ "$MEM_MB" -lt 9000 ]; then DB_DEFAULT_MEMORY_MB=512; fi
@@ -3394,7 +3416,9 @@ size_workloads() {
   elif [ "$MEM_MB" -lt 17000 ]; then APP_DEFAULT_MEMORY_MB=512; fi
 
   info "concurrent builds: $MAX_BUILDS, build cache: ${BUILD_CACHE_GB}G, registry: ${REGISTRY_SIZE_GB}G, backups: ${OBJECT_STORAGE_GB}G, logs: ${LOGS_SIZE_GB}G"
-  if [ "$SMALL_BOX" = true ]; then
+  if [ "$TINY_BOX" = true ]; then
+    info "under 3.5G of RAM: Orchard itself runs on its smallest footprint to leave room for apps"
+  elif [ "$SMALL_BOX" = true ]; then
     info "under 8G of RAM: metrics, logs and scanning run trimmed, with a week of logs"
   fi
 }
@@ -3599,6 +3623,31 @@ clientIp:
   headerFrom: \"$(cluster_pod_cidrs)\""
   fi
 
+  local server_res='' server_tiny_env='' frontend_res='' frontend_tiny_env='' postgres_res='' redis_res=''
+  if [ "${TINY_BOX:-false}" = true ]; then
+    server_res='
+  resources:
+    requests: { cpu: 50m, memory: 192Mi }
+    limits: { cpu: "2", memory: 1Gi }'
+    server_tiny_env='
+    - { name: NODE_OPTIONS, value: "--max-old-space-size=512" }
+    - { name: BUILDER_MEMORY_REQUEST, value: 512Mi }'
+    frontend_res='
+  resources:
+    requests: { cpu: 20m, memory: 64Mi }
+    limits: { cpu: "1", memory: 512Mi }'
+    frontend_tiny_env='
+    - { name: NODE_OPTIONS, value: "--max-old-space-size=192" }'
+    postgres_res='
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { cpu: "2", memory: 1Gi }'
+    redis_res='
+  resources:
+    requests: { cpu: 20m, memory: 32Mi }
+    limits: { cpu: 500m, memory: 256Mi }'
+  fi
+
   local db_memory_env=
   if [ ! -f "$VALUES_FILE" ]; then
     db_memory_env="
@@ -3637,16 +3686,16 @@ datadog:
   enabled: false
 
 frontend:
-  replicas: 1
+  replicas: 1$frontend_res
 $image_block
   env:
     - { name: PUBLIC_HTTP_PORT, value: "$HTTP_PORT" }
     - { name: PUBLIC_HTTPS_PORT, value: "$HTTPS_PORT" }
-    - { name: PUBLIC_OAUTH_PROVIDER, value: none }
+    - { name: PUBLIC_OAUTH_PROVIDER, value: none }$frontend_tiny_env
 $client_ip_block
 
 server:
-  replicas: 1
+  replicas: 1$server_res
 $image_block
   env:
     - { name: JWT_SECRET, value: "$JWT_SECRET" }
@@ -3668,7 +3717,7 @@ $image_block
     - { name: REGISTRY_IMAGE_POLICY, value: enforce }
     - { name: HARBOR_USERNAME, value: $REGISTRY_USER }
     - { name: HARBOR_PASSWORD, value: "$REGISTRY_PASSWORD" }
-    - { name: BUILDER_SCRATCH_STORAGE_CLASS, value: local-path }
+    - { name: BUILDER_SCRATCH_STORAGE_CLASS, value: local-path }$server_tiny_env
 
 protection:
   orchardLogin: true
@@ -3704,7 +3753,7 @@ gateway:
 
 postgres:
   enabled: true
-  instances: 1
+  instances: 1$postgres_res
   storage:
     size: 10Gi
     storageClass: local-path
@@ -3712,7 +3761,7 @@ postgres:
 redis:
   enabled: true
   storage: 1Gi
-  storageClass: local-path
+  storageClass: local-path$redis_res
 
 builders:
   enabled: true

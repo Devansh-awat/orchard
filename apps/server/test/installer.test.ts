@@ -2362,12 +2362,48 @@ test('low memory warns and never stops the install', () => {
       assert.equal(result.status, 0, result.stderr);
       return result.stdout + result.stderr;
     };
-    for (const kb of [1048576, 2969684, 4082884]) {
-      const out = check(kb);
-      assert.match(out, /below the recommended 8Gi/);
-      assert.match(out, /image builds may not schedule/);
+    assert.match(check(1048576), /below 2Gi/);
+    for (const kb of [2007040, 2969684]) {
+      assert.match(check(kb), /smallest profile/);
     }
-    assert.doesNotMatch(check(8126464), /below the recommended/);
+    for (const kb of [4082884, 8126464]) {
+      assert.doesNotMatch(check(kb), /below 2Gi|smallest profile/);
+    }
+  } finally {
+    box.cleanup();
+  }
+});
+
+test('a tiny box starts lean and keeps what was asked for', () => {
+  const box = sandbox();
+  try {
+    const meminfo = join(box.dir, 'meminfo');
+    writeFileSync(meminfo, 'MemTotal: 2007040 kB\n');
+    const defaults = (setup: string) =>
+      box
+        .run(
+          `MEMINFO_FILE=${meminfo}; ${setup}; check_memory >/dev/null 2>&1; tiny_box_defaults; echo "mcp=$ORCHARD_MCP scan=$ORCHARD_IMAGE_SCANNING"`
+        )
+        .trim()
+        .split('\n')
+        .pop();
+    assert.equal(defaults('FLAGS_GIVEN=" "'), 'mcp=false scan=false');
+    assert.equal(defaults('FLAGS_GIVEN=" --mcp --image-scanning "'), 'mcp=true scan=true');
+    assert.equal(defaults('FLAGS_GIVEN=" --mcp-domain "'), 'mcp=true scan=false');
+    assert.equal(defaults('FLAGS_GIVEN=" "; PREVIOUS_INSTALL=true'), 'mcp=true scan=true');
+
+    box.run(`mkdir -p "${box.state}"; TINY_BOX=true; write_values`);
+    const values = readFileSync(join(box.state, 'values.yaml'), 'utf8');
+    assert.match(
+      values,
+      /^server:\n  replicas: 1\n  resources:\n    requests: \{ cpu: 50m, memory: 192Mi \}/m
+    );
+    assert.match(
+      values,
+      /^frontend:\n  replicas: 1\n  resources:\n    requests: \{ cpu: 20m, memory: 64Mi \}/m
+    );
+    assert.match(values, /name: BUILDER_MEMORY_REQUEST, value: 512Mi/);
+    assert.match(values, /name: NODE_OPTIONS, value: "--max-old-space-size=512"/);
   } finally {
     box.cleanup();
   }
