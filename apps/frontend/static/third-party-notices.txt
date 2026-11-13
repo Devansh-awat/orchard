@@ -41,9 +41,9 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ================================================================================
-@floating-ui/core 1.7.3
+@floating-ui/core 1.8.0
 Project: https://github.com/floating-ui/floating-ui
-Source for this version: https://registry.npmjs.org/@floating-ui/core/-/core-1.7.3.tgz
+Source for this version: https://registry.npmjs.org/@floating-ui/core/-/core-1.8.0.tgz
 License: MIT
 
 MIT License
@@ -74,16 +74,16 @@ Source for this version: https://registry.npmjs.org/@floating-ui/dom/-/dom-1.7.4
 License: MIT
 
 Copyright (c) 2021-present Floating UI contributors
-The rest of LICENSE is word for word the text printed under @floating-ui/core 1.7.3.
+The rest of LICENSE is word for word the text printed under @floating-ui/core 1.8.0.
 
 ================================================================================
-@floating-ui/utils 0.2.10
+@floating-ui/utils 0.2.12
 Project: https://github.com/floating-ui/floating-ui
-Source for this version: https://registry.npmjs.org/@floating-ui/utils/-/utils-0.2.10.tgz
+Source for this version: https://registry.npmjs.org/@floating-ui/utils/-/utils-0.2.12.tgz
 License: MIT
 
 Copyright (c) 2021-present Floating UI contributors
-The rest of LICENSE is word for word the text printed under @floating-ui/core 1.7.3.
+The rest of LICENSE is word for word the text printed under @floating-ui/core 1.8.0.
 
 ================================================================================
 @jis3r/icons 2.7.0
@@ -92,7 +92,7 @@ Source for this version: https://registry.npmjs.org/@jis3r/icons/-/icons-2.7.0.t
 License: MIT
 
 Copyright (c) 2024 jis3r
-The rest of LICENSE is word for word the text printed under @floating-ui/core 1.7.3.
+The rest of LICENSE is word for word the text printed under @floating-ui/core 1.8.0.
 
 ================================================================================
 @number-flow/svelte 0.3.9
@@ -101,7 +101,7 @@ Source for this version: https://registry.npmjs.org/@number-flow/svelte/-/svelte
 License: MIT
 
 Copyright (c) 2024 Maxwell Barvian
-The rest of LICENSE.md is word for word the text printed under @floating-ui/core 1.7.3.
+The rest of LICENSE.md is word for word the text printed under @floating-ui/core 1.8.0.
 
 ================================================================================
 @simplewebauthn/browser 13.2.2
@@ -110,7 +110,7 @@ Source for this version: https://registry.npmjs.org/@simplewebauthn/browser/-/br
 License: MIT
 
 Copyright (c) 2020 Matthew Miller
-The rest of LICENSE.md is word for word the text printed under @floating-ui/core 1.7.3.
+The rest of LICENSE.md is word for word the text printed under @floating-ui/core 1.8.0.
 
 ================================================================================
 @sveltejs/kit 2.70.3
@@ -133,7 +133,7 @@ Source for this version: https://registry.npmjs.org/@tanstack/query-core/-/query
 License: MIT
 
 Copyright (c) 2021-present Tanner Linsley
-The rest of LICENSE is word for word the text printed under @floating-ui/core 1.7.3.
+The rest of LICENSE is word for word the text printed under @floating-ui/core 1.8.0.
 
 ================================================================================
 @tanstack/svelte-query 6.1.28
@@ -142,7 +142,7 @@ Source for this version: https://registry.npmjs.org/@tanstack/svelte-query/-/sve
 License: MIT
 
 Copyright (c) 2021-present Tanner Linsley
-The rest of LICENSE is word for word the text printed under @floating-ui/core 1.7.3.
+The rest of LICENSE is word for word the text printed under @floating-ui/core 1.8.0.
 
 ================================================================================
 @wterm/core 0.5.4
@@ -502,7 +502,7 @@ Source for this version: https://registry.npmjs.org/clsx/-/clsx-2.1.1.tgz
 License: MIT
 
 Copyright (c) Luke Edwards <luke.edwards05@gmail.com> (lukeed.com)
-The rest of license is word for word the text printed under @floating-ui/core 1.7.3.
+The rest of license is word for word the text printed under @floating-ui/core 1.8.0.
 
 ================================================================================
 cookie 0.7.2
@@ -521,7 +521,7 @@ Source for this version: https://registry.npmjs.org/cuelume/-/cuelume-0.2.2.tgz
 License: MIT
 
 Copyright (c) 2026 Daniel Belyi
-The rest of LICENSE is word for word the text printed under @floating-ui/core 1.7.3.
+The rest of LICENSE is word for word the text printed under @floating-ui/core 1.8.0.
 
 ================================================================================
 dequal 2.0.3
@@ -765,7 +765,7 @@ Source for this version: https://registry.npmjs.org/melt/-/melt-0.42.0.tgz
 License: MIT
 
 Copyright (c) 2023 Thomas G. Lopes
-The rest of LICENSE is word for word the text printed under @floating-ui/core 1.7.3.
+The rest of LICENSE is word for word the text printed under @floating-ui/core 1.8.0.
 
 ================================================================================
 motion 12.38.0
@@ -801,7 +801,7 @@ Source for this version: https://registry.npmjs.org/number-flow/-/number-flow-0.
 License: MIT
 
 Copyright (c) 2024 Maxwell Barvian
-The rest of LICENSE.md is word for word the text printed under @floating-ui/core 1.7.3.
+The rest of LICENSE.md is word for word the text printed under @floating-ui/core 1.8.0.
 
 ================================================================================
 OpenDyslexic
@@ -1277,7 +1277,7 @@ License: MIT
 
 Copyright (c) 2024 Hunter Johnston <https://github.com/huntabyte>
 Copyright (c) 2024 Thomas G. Lopes <https://github.com/tglide>
-The rest of LICENSE is word for word the text printed under @floating-ui/core 1.7.3.
+The rest of LICENSE is word for word the text printed under @floating-ui/core 1.8.0.
 
 ================================================================================
 set-cookie-parser 3.1.2
@@ -1295,7 +1295,7 @@ Source for this version: https://registry.npmjs.org/skullet/-/skullet-0.0.3.tgz
 License: MIT
 
 Copyright (c) 2025 Lochie Axon
-The rest of LICENSE is word for word the text printed under @floating-ui/core 1.7.3.
+The rest of LICENSE is word for word the text printed under @floating-ui/core 1.8.0.
 
 ================================================================================
 Source Serif 4
@@ -1338,4 +1338,4 @@ Source for this version: https://registry.npmjs.org/tailwindcss/-/tailwindcss-4.
 License: MIT
 
 Copyright (c) Tailwind Labs, Inc.
-The rest of LICENSE is word for word the text printed under @floating-ui/core 1.7.3.
+The rest of LICENSE is word for word the text printed under @floating-ui/core 1.8.0.

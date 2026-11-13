@@ -7436,10 +7436,10 @@ License: BlueOak-1.0.0
 The rest of LICENSE.md is word for word the text printed under chownr 3.0.0.
 
 ================================================================================
-Go standard library 1.26.8
+Go standard library 1.26.11
 Ships in: orchardctl
 Project: https://go.dev
-Source for this version: https://go.dev/dl/go1.26.8.src.tar.gz
+Source for this version: https://go.dev/dl/go1.26.11.src.tar.gz
 License: BSD-3-Clause
 
 Copyright 2009 The Go Authors.
@@ -7604,10 +7604,10 @@ Copyright (c) Jordan Harband and contributors
 The rest of LICENSE is word for word the text printed under @babel/code-frame 7.29.7.
 
 ================================================================================
-hono 4.13.13
+hono 4.13.16
 Ships in: API server
 Project: https://github.com/honojs/hono
-Source for this version: https://registry.npmjs.org/hono/-/hono-4.13.13.tgz
+Source for this version: https://registry.npmjs.org/hono/-/hono-4.13.16.tgz
 License: MIT
 
 Copyright (c) 2021 - present, Yusuke Wada and Hono contributors

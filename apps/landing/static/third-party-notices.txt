@@ -1176,10 +1176,10 @@ Copyright 2018 Datadog, Inc.
 The rest of LICENSE is word for word the text printed under @aws-sdk/checksums 3.1000.29.
 
 ================================================================================
-@floating-ui/core 1.7.3
+@floating-ui/core 1.8.0
 Ships in: Web app
 Project: https://github.com/floating-ui/floating-ui
-Source for this version: https://registry.npmjs.org/@floating-ui/core/-/core-1.7.3.tgz
+Source for this version: https://registry.npmjs.org/@floating-ui/core/-/core-1.8.0.tgz
 License: MIT
 
 Copyright (c) 2021-present Floating UI contributors
@@ -1196,10 +1196,10 @@ Copyright (c) 2021-present Floating UI contributors
 The rest of LICENSE is word for word the text printed under @astrojs/starlight 0.41.9.
 
 ================================================================================
-@floating-ui/utils 0.2.10
+@floating-ui/utils 0.2.12
 Ships in: Web app
 Project: https://github.com/floating-ui/floating-ui
-Source for this version: https://registry.npmjs.org/@floating-ui/utils/-/utils-0.2.10.tgz
+Source for this version: https://registry.npmjs.org/@floating-ui/utils/-/utils-0.2.12.tgz
 License: MIT
 
 Copyright (c) 2021-present Floating UI contributors
@@ -10501,10 +10501,10 @@ License: BlueOak-1.0.0
 The rest of LICENSE.md is word for word the text printed under chownr 3.0.0.
 
 ================================================================================
-Go standard library 1.26.8
+Go standard library 1.26.11
 Ships in: CLI, Terraform provider, orchardctl, Gateway, R2 proxy, Fast builder, Template registry
 Project: https://go.dev
-Source for this version: https://go.dev/dl/go1.26.8.src.tar.gz
+Source for this version: https://go.dev/dl/go1.26.11.src.tar.gz
 License: BSD-3-Clause
 
 Copyright 2009 The Go Authors.
@@ -10543,7 +10543,7 @@ Source for this version: https://proxy.golang.org/golang.org/x/net/@v/v0.62.0.zi
 License: BSD-3-Clause
 
 Copyright 2009 The Go Authors.
-The rest of LICENSE is word for word the text printed under Go standard library 1.26.8.
+The rest of LICENSE is word for word the text printed under Go standard library 1.26.11.
 
 ================================================================================
 golang.org/x/sync v0.24.0
@@ -10553,7 +10553,7 @@ Source for this version: https://proxy.golang.org/golang.org/x/sync/@v/v0.24.0.z
 License: BSD-3-Clause
 
 Copyright 2009 The Go Authors.
-The rest of LICENSE is word for word the text printed under Go standard library 1.26.8.
+The rest of LICENSE is word for word the text printed under Go standard library 1.26.11.
 
 ================================================================================
 golang.org/x/sys v0.49.0
@@ -10563,7 +10563,7 @@ Source for this version: https://proxy.golang.org/golang.org/x/sys/@v/v0.49.0.zi
 License: BSD-3-Clause
 
 Copyright 2009 The Go Authors.
-The rest of LICENSE is word for word the text printed under Go standard library 1.26.8.
+The rest of LICENSE is word for word the text printed under Go standard library 1.26.11.
 
 ================================================================================
 golang.org/x/term v0.47.0
@@ -10573,7 +10573,7 @@ Source for this version: https://proxy.golang.org/golang.org/x/term/@v/v0.47.0.z
 License: BSD-3-Clause
 
 Copyright 2009 The Go Authors.
-The rest of LICENSE is word for word the text printed under Go standard library 1.26.8.
+The rest of LICENSE is word for word the text printed under Go standard library 1.26.11.
 
 ================================================================================
 golang.org/x/text v0.43.0
@@ -10583,7 +10583,7 @@ Source for this version: https://proxy.golang.org/golang.org/x/text/@v/v0.43.0.z
 License: BSD-3-Clause
 
 Copyright 2009 The Go Authors.
-The rest of LICENSE is word for word the text printed under Go standard library 1.26.8.
+The rest of LICENSE is word for word the text printed under Go standard library 1.26.11.
 
 ================================================================================
 google.golang.org/genproto/googleapis/rpc v0.0.0-20260526163538-3dc84a4a5aaa
@@ -10750,10 +10750,10 @@ Copyright (c) Jordan Harband and contributors
 The rest of LICENSE is word for word the text printed under @astrojs/starlight 0.41.9.
 
 ================================================================================
-hono 4.13.13
+hono 4.13.16
 Ships in: API server
 Project: https://github.com/honojs/hono
-Source for this version: https://registry.npmjs.org/hono/-/hono-4.13.13.tgz
+Source for this version: https://registry.npmjs.org/hono/-/hono-4.13.16.tgz
 License: MIT
 
 Copyright (c) 2021 - present, Yusuke Wada and Hono contributors
