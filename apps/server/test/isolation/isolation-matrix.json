@@ -3217,6 +3217,15 @@
     "bodyIds": [],
     "unseeded": []
   },
+  "GET /projects/:id/database-security": {
+    "class": "resource-scoped",
+    "auth": "authenticated",
+    "handler": "DatabaseRecoveryController.projectSecurity",
+    "params": ["id:project"],
+    "queryIds": [],
+    "bodyIds": [],
+    "unseeded": []
+  },
   "GET /projects/:id/databases": {
     "class": "resource-scoped",
     "auth": "authenticated",
@@ -4828,6 +4837,15 @@
     "params": ["id:database"],
     "queryIds": [],
     "bodyIds": ["backupId", "checkpointId", "environmentId", "projectId"],
+    "unseeded": []
+  },
+  "POST /databases/:id/minor-update": {
+    "class": "resource-scoped",
+    "auth": "authenticated",
+    "handler": "DatabaseRecoveryController.minorUpdate",
+    "params": ["id:database"],
+    "queryIds": [],
+    "bodyIds": [],
     "unseeded": []
   },
   "POST /databases/:id/public": {

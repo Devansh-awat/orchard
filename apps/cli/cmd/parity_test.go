@@ -236,6 +236,7 @@ var routeCoverage = map[string]string{
 	"GET /database-versions":                    "db versions",
 	"GET /databases/:id/security":               "db security",
 	"POST /databases/:id/upgrade":               "db upgrade",
+	"POST /databases/:id/minor-update":          "db update",
 
 	// pods
 	"GET /pods":                "pod list",
@@ -457,6 +458,7 @@ var routeExclusions = map[string]string{
 	"GET /deployments/:id/next-steps":                  "UI-only checklist card",
 	"GET /deployments/:id/security":                    "web security tab first; CLI command to follow",
 	"POST /deployments/:id/security/scan":              "web security tab first; CLI command to follow",
+	"GET /projects/:id/database-security":              "project security tab summary; db security covers each database, agents use MCP",
 	"GET /observe/deployments/:id/pod-health":          "dashboard series; CLI command to follow",
 	"GET /observe/deployments/:id/volumes":             "dashboard series; CLI command to follow",
 	"GET /observe/deployments/:id/builds":              "dashboard series; CLI command to follow",
