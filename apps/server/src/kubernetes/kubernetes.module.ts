@@ -9,6 +9,7 @@ import { RegistryImagePolicyService } from './registry-image-policy.service';
 import { R2ProxyService } from './r2-proxy.service';
 import { BackupUpstreamSyncService } from './backup-upstream-sync.service';
 import { PostgresImageService } from './postgres-image.service';
+import { PublicIpPolicyService } from './public-ip-policy.service';
 import { AuthModule } from '../auth/auth.module';
 import { PrismaModule } from '../prisma/prisma.module';
 
@@ -24,7 +25,8 @@ import { PrismaModule } from '../prisma/prisma.module';
     K8sNamespaceService,
     R2ProxyService,
     BackupUpstreamSyncService,
-    PostgresImageService
+    PostgresImageService,
+    PublicIpPolicyService
   ],
   exports: [
     KubernetesService,
@@ -33,7 +35,8 @@ import { PrismaModule } from '../prisma/prisma.module';
     K8sNetworkService,
     K8sNamespaceService,
     R2ProxyService,
-    PostgresImageService
+    PostgresImageService,
+    PublicIpPolicyService
   ]
 })
 export class KubernetesModule {}

@@ -919,6 +919,15 @@
     "bodyIds": [],
     "unseeded": []
   },
+  "GET /admin/instance-settings/public-ip-sharing": {
+    "class": "superadmin",
+    "auth": "superadmin",
+    "handler": "InstanceSettingsController.getPublicIpSharing",
+    "params": [],
+    "queryIds": [],
+    "bodyIds": [],
+    "unseeded": []
+  },
   "GET /admin/instance-settings/resource-limits": {
     "class": "superadmin",
     "auth": "superadmin",
@@ -3806,6 +3815,15 @@
     "class": "superadmin",
     "auth": "superadmin",
     "handler": "AdminNewOrgDefaultsController.set",
+    "params": [],
+    "queryIds": [],
+    "bodyIds": [],
+    "unseeded": []
+  },
+  "PATCH /admin/instance-settings/public-ip-sharing": {
+    "class": "superadmin",
+    "auth": "superadmin",
+    "handler": "InstanceSettingsController.setPublicIpSharing",
     "params": [],
     "queryIds": [],
     "bodyIds": [],

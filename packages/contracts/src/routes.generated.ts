@@ -33,6 +33,8 @@ export const routes: GeneratedRoute[] = [
   { method: 'PATCH', path: '/admin/instance-settings/mcp', auth: 'superadmin' },
   { method: 'GET', path: '/admin/instance-settings/new-org-defaults', auth: 'superadmin' },
   { method: 'PATCH', path: '/admin/instance-settings/new-org-defaults', auth: 'superadmin' },
+  { method: 'GET', path: '/admin/instance-settings/public-ip-sharing', auth: 'superadmin' },
+  { method: 'PATCH', path: '/admin/instance-settings/public-ip-sharing', auth: 'superadmin' },
   { method: 'GET', path: '/admin/instance-settings/resource-limits', auth: 'superadmin' },
   { method: 'PATCH', path: '/admin/instance-settings/resource-limits', auth: 'superadmin' },
   { method: 'GET', path: '/admin/instance-settings/userspace-scheduling', auth: 'superadmin' },

@@ -44,6 +44,17 @@ export class InstanceSettingsController {
     return this.settings.getCustomDomainVerificationState();
   }
 
+  @Get('public-ip-sharing')
+  async getPublicIpSharing() {
+    return this.settings.getPublicIpSharingState();
+  }
+
+  @Patch('public-ip-sharing')
+  async setPublicIpSharing(@Body() body: { enabled?: boolean }) {
+    await this.settings.setPublicIpSharing(Boolean(body?.enabled));
+    return this.settings.getPublicIpSharingState();
+  }
+
   @Get('databases')
   async getDatabaseToggles() {
     return this.settings.databaseTogglesView();

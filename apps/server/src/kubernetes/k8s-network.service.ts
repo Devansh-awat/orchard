@@ -3,9 +3,12 @@ import {
   Logger,
   BadRequestException,
   NotFoundException,
-  OnModuleInit
+  OnModuleInit,
+  Optional
 } from '@nestjs/common';
 import * as k8s from '@kubernetes/client-node';
+import { PublicIpPolicyService } from './public-ip-policy.service';
+import { sharedIpAnnotations, servicesToAlign, type ShareWith } from './public-ip-policy';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   KubernetesService,
@@ -101,7 +104,8 @@ export class K8sNetworkService implements OnModuleInit {
   constructor(
     private readonly prisma: PrismaService,
     private readonly kubernetes: KubernetesService,
-    private readonly leaderElection: LeaderElectionService
+    private readonly leaderElection: LeaderElectionService,
+    @Optional() private readonly ipPolicy?: PublicIpPolicyService
   ) {}
 
   onModuleInit() {
@@ -2250,11 +2254,49 @@ export class K8sNetworkService implements OnModuleInit {
     return truncateK8sName(`${clusterName}-public`, 63);
   }
 
-  private sharedIpAnnotations(ip: string): Record<string, string> {
-    return {
-      'lbipam.cilium.io/sharing-key': `shared-${ip.replace(/[^0-9a-zA-Z]/g, '-')}`,
-      'lbipam.cilium.io/sharing-cross-namespace': '*'
-    };
+  private async shareWith(namespace: string, ip: string): Promise<ShareWith> {
+    return this.ipPolicy ? this.ipPolicy.shareWith(namespace, ip) : '*';
+  }
+
+  private async alignSharedIp(
+    coreApi: k8s.CoreV1Api,
+    ip: string,
+    shareWith: ShareWith
+  ): Promise<void> {
+    let services: k8s.V1Service[];
+    try {
+      const { body } = await coreApi.listServiceForAllNamespaces(
+        undefined,
+        undefined,
+        undefined,
+        'app.kubernetes.io/managed-by=orchard'
+      );
+      services = body.items;
+    } catch (e: any) {
+      this.logger.warn(`Couldn't list services sharing ${ip}: ${e?.message ?? e}`);
+      return;
+    }
+    const annotations = sharedIpAnnotations(ip, shareWith);
+    for (const svc of servicesToAlign(services, ip, shareWith)) {
+      const name = svc.metadata?.name;
+      const namespace = svc.metadata?.namespace;
+      if (!name || !namespace) continue;
+      try {
+        await coreApi.patchNamespacedService(
+          name,
+          namespace,
+          { metadata: { annotations } },
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          { headers: { 'Content-Type': 'application/strategic-merge-patch+json' } }
+        );
+      } catch (e: any) {
+        this.logger.warn(`Couldn't align IP sharing on ${namespace}/${name}: ${e?.message ?? e}`);
+      }
+    }
   }
 
   async listInUsePortsOnIp(loadBalancerIp: string): Promise<number[]> {
@@ -2282,6 +2324,7 @@ export class K8sNetworkService implements OnModuleInit {
     this.ensureKubeConfig();
     const coreApi = this.kc.makeApiClient(k8s.CoreV1Api);
     const svcName = this.publicServiceName(options.clusterName);
+    const shareWith = await this.shareWith(options.namespace, options.loadBalancerIp);
 
     const body: k8s.V1Service = {
       metadata: {
@@ -2291,7 +2334,7 @@ export class K8sNetworkService implements OnModuleInit {
           'app.kubernetes.io/managed-by': 'orchard',
           'cnpg.io/cluster': options.clusterName
         },
-        annotations: this.sharedIpAnnotations(options.loadBalancerIp)
+        annotations: sharedIpAnnotations(options.loadBalancerIp, shareWith)
       },
       spec: {
         type: 'LoadBalancer',
@@ -2304,6 +2347,8 @@ export class K8sNetworkService implements OnModuleInit {
         ports: [{ name: 'postgres', port: options.port, targetPort: 5432, protocol: 'TCP' }]
       }
     };
+
+    await this.alignSharedIp(coreApi, options.loadBalancerIp, shareWith);
 
     try {
       await coreApi.readNamespacedService(svcName, options.namespace);
@@ -2395,6 +2440,7 @@ export class K8sNetworkService implements OnModuleInit {
       options.publicPort,
       protocol
     );
+    const shareWith = await this.shareWith(options.namespace, options.loadBalancerIp);
 
     const body: k8s.V1Service = {
       metadata: {
@@ -2405,7 +2451,7 @@ export class K8sNetworkService implements OnModuleInit {
           'app.kubernetes.io/name': options.deploymentName,
           'orchard.my/public-deployment': options.deploymentName
         },
-        annotations: this.sharedIpAnnotations(options.loadBalancerIp)
+        annotations: sharedIpAnnotations(options.loadBalancerIp, shareWith)
       },
       spec: {
         type: 'LoadBalancer',
@@ -2424,6 +2470,8 @@ export class K8sNetworkService implements OnModuleInit {
         ]
       }
     };
+
+    await this.alignSharedIp(coreApi, options.loadBalancerIp, shareWith);
 
     try {
       await coreApi.readNamespacedService(svcName, options.namespace);

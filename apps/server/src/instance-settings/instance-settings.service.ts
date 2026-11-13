@@ -21,6 +21,9 @@ export const CUSTOM_DOMAIN_VERIFICATION_ENV = 'CUSTOM_DOMAIN_VERIFICATION';
 export const SSO_ENFORCED_KEY = 'sso_enforced';
 export const SSO_ENFORCED_ENV = 'SSO_ENFORCED';
 
+export const PUBLIC_IP_SHARING_KEY = 'public_ip_sharing';
+export const PUBLIC_IP_SHARING_ENV = 'PUBLIC_IP_SHARING';
+
 export const IDP_AUTO_CREATE_ORGS_KEY = 'idp_auto_create_orgs';
 export const IDP_AUTO_CREATE_ORGS_ENV = 'IDP_AUTO_CREATE_ORGS';
 export const IDP_SUPERADMIN_PROVIDER_KEY = 'idp_superadmin_provider_id';
@@ -252,6 +255,19 @@ export class InstanceSettingsService implements OnModuleInit {
   async setCustomDomainVerification(value: boolean): Promise<void> {
     this.assertUnlocked(CUSTOM_DOMAIN_VERIFICATION_ENV);
     await this.setBool(CUSTOM_DOMAIN_VERIFICATION_KEY, value);
+  }
+
+  isPublicIpSharingAllowed(): Promise<boolean> {
+    return this.resolveBool(PUBLIC_IP_SHARING_KEY, PUBLIC_IP_SHARING_ENV);
+  }
+
+  getPublicIpSharingState(): Promise<ToggleState> {
+    return this.toggleState(PUBLIC_IP_SHARING_KEY, PUBLIC_IP_SHARING_ENV);
+  }
+
+  async setPublicIpSharing(value: boolean): Promise<void> {
+    this.assertUnlocked(PUBLIC_IP_SHARING_ENV);
+    await this.setBool(PUBLIC_IP_SHARING_KEY, value);
   }
 
   isSsoEnforced(): Promise<boolean> {

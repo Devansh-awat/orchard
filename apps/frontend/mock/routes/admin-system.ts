@@ -557,6 +557,14 @@ export function adminSystemRoutes(r: Router, { store }: MockContext) {
 		return domainProofView();
 	});
 
+	let ipSharing = false;
+	const ipSharingView = () => ({ enabled: ipSharing, dbValue: ipSharing, envOverride: null });
+	r.get('/admin/instance-settings/public-ip-sharing', () => ipSharingView());
+	r.patch('/admin/instance-settings/public-ip-sharing', ({ body }) => {
+		ipSharing = Boolean(body?.enabled);
+		return ipSharingView();
+	});
+
 	r.get('/admin/telemetry/preview', () => ({
 		event: 'instance_report',
 		distinctId: 'a3f0c1d2-7b1e-4b6a-9f55-2c8d90e4b7aa',

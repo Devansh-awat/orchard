@@ -5,7 +5,8 @@ import {
   ForbiddenException,
   ConflictException,
   Logger,
-  Optional
+  Optional,
+  ServiceUnavailableException
 } from '@nestjs/common';
 import { OrganizationRole } from '@prisma/client';
 import { S3Client, ListObjectsV2Command } from '@aws-sdk/client-s3';
@@ -21,6 +22,8 @@ import { requestAuthStorage } from '../auth/request-context';
 import { TailscaleService } from '../tailscale/tailscale.service';
 import { InstanceSettingsService } from '../instance-settings/instance-settings.service';
 import { InstanceConfigService } from '../instance-config/instance-config.service';
+import { PublicIpPolicyService } from '../kubernetes/public-ip-policy.service';
+import { canonicalIp } from '../kubernetes/public-ip-policy';
 import { RateLimitService } from '../auth/rate-limit.service';
 import { signupMode, signupDeniedError } from '../auth/signup-mode';
 import { PasswordRefused, hashAccountPassword } from '../auth/superadmin-password';
@@ -70,7 +73,8 @@ export class OrganizationsService {
     private readonly instanceConfig: InstanceConfigService,
     private readonly crypto: SecretCryptoService,
     private readonly rateLimit: RateLimitService,
-    @Optional() private readonly instanceSettings?: InstanceSettingsService
+    @Optional() private readonly instanceSettings?: InstanceSettingsService,
+    @Optional() private readonly publicIpPolicy?: PublicIpPolicyService
   ) {}
 
   // M-3: SHA-256 of the plaintext invitation token. Stored alongside the
@@ -113,7 +117,7 @@ export class OrganizationsService {
       return [];
     }
 
-    const isSuperAdmin = await this.authz.isSuperAdmin(user.id);
+    const isSuperAdmin = await this.authz.isUnrestrictedSuperAdmin(user.id);
 
     // This listing reads memberships directly rather than going through
     // AuthorizationService, so tenant confinement has to be repeated here,
@@ -597,10 +601,17 @@ export class OrganizationsService {
     if (data.backupR2SecretKey !== undefined)
       updateData.backupR2SecretKey = this.crypto.seal(data.backupR2SecretKey || null);
     if (data.databasePublicIp !== undefined) {
-      const ip =
+      const raw =
         data.databasePublicIp === null ? null : String(data.databasePublicIp).trim() || null;
-      if (ip && !/^(\d{1,3}\.){3}\d{1,3}$/.test(ip) && !/^[0-9a-fA-F:]+$/.test(ip)) {
+      const ip = raw === null ? null : canonicalIp(raw);
+      if (raw !== null && ip === null) {
         throw new BadRequestException('databasePublicIp must be a valid IPv4 or IPv6 address');
+      }
+      if (ip && ip !== canonicalIp(before?.databasePublicIp)) {
+        if (!this.publicIpPolicy) {
+          throw new ServiceUnavailableException("Couldn't check who else uses this IP");
+        }
+        await this.publicIpPolicy.assertOrgMayUse(organizationId, ip);
       }
       updateData.databasePublicIp = ip;
     }
@@ -850,7 +861,7 @@ export class OrganizationsService {
     const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
     if (!user) throw new NotFoundException('User not found');
 
-    if (!(await this.authz.isSuperAdmin(user.id))) {
+    if (!(await this.authz.isUnrestrictedSuperAdmin(user.id))) {
       throw new ForbiddenException('Only superadmins can join organizations directly');
     }
 

@@ -4,6 +4,7 @@
 	import DnsStatusCard from '$lib/components/admin/DnsStatusCard.svelte';
 	import TunnelCard from '$lib/components/admin/TunnelCard.svelte';
 	import DomainVerificationToggle from '$lib/components/admin/DomainVerificationToggle.svelte';
+	import PublicIpSharingToggle from '$lib/components/admin/PublicIpSharingToggle.svelte';
 	import AddressesCard from '$lib/components/admin/AddressesCard.svelte';
 	import type { SetupOverview } from '$lib/components/setup/setup-overview';
 	import type { DnsReport } from '$lib/components/admin/DnsStatusCard.svelte';
@@ -125,6 +126,8 @@
 <DnsStatusCard {report} error={dnsError} {loading} {refreshing} onRefresh={refresh} />
 
 <AddressesCard {overview} />
+
+<PublicIpSharingToggle />
 
 <DomainVerificationToggle />
 
