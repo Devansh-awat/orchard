@@ -308,7 +308,7 @@ func localDeploysHint(err error) error {
 	if !strings.Contains(apiErr.Message, "Local deploys are disabled") {
 		return err
 	}
-	return fmt.Errorf("%w\norchard up is off on this server. An instance admin can turn it on: https://docs.orchard.my/deploy/deploy-from-terminal/#turn-on-local-deploys\nOr deploy from a repository: orchard import owner/repo", err)
+	return fmt.Errorf("%w\norchard up is off on this server. An instance admin can turn it on: https://docs.orchard.hackclub.com/deploy/deploy-from-terminal/#turn-on-local-deploys\nOr deploy from a repository: orchard import owner/repo", err)
 }
 
 func slugify(v string) string {

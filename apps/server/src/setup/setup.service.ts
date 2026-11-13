@@ -682,7 +682,7 @@ export class SetupService implements OnModuleInit {
           : "AI agents can't connect to this instance. Set mcp.enabled and mcp.ingress.host in your Helm values.",
         done: false,
         severity: 'normal',
-        href: 'https://docs.orchard.my/operate/finishing-setup/#turn-the-mcp-endpoint-on-or-off'
+        href: 'https://docs.orchard.hackclub.com/operate/finishing-setup/#turn-the-mcp-endpoint-on-or-off'
       });
     }
 
@@ -709,7 +709,7 @@ export class SetupService implements OnModuleInit {
           "More than one person uses this instance, and a container escape reaches every app on it. Install gVisor or Kata before you run code you don't trust.",
         done: false,
         severity: 'warning',
-        href: 'https://docs.orchard.my/operate/security/'
+        href: 'https://docs.orchard.hackclub.com/operate/security/'
       });
     }
 

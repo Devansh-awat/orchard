@@ -87,7 +87,7 @@
 	{#snippet footer()}
 		<Button
 			variant="secondary"
-			href="https://docs.orchard.my/reference/cli/"
+			href="https://docs.orchard.hackclub.com/reference/cli/"
 			target="_blank"
 			rel="noopener"
 		>

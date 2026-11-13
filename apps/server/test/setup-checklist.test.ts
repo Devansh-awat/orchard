@@ -118,7 +118,7 @@ test('the kernel warning appears once a second person joins, until a sandbox is 
   const item = items.find((i) => i.id === 'tenant-isolation');
   assert.equal(item?.title, "Apps share this server's kernel");
   assert.equal(item?.severity, 'warning');
-  assert.equal(item?.href, 'https://docs.orchard.my/operate/security/');
+  assert.equal(item?.href, 'https://docs.orchard.hackclub.com/operate/security/');
   process.env.TENANT_RUNTIME_CLASS = 'gvisor';
   assert.ok(!ids(await checklist({ ...quiet, users: 2 })).includes('tenant-isolation'));
 });

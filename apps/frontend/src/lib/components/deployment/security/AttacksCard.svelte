@@ -22,7 +22,7 @@
 		active
 	}: { deploymentId: string; hasDomains?: boolean; active: boolean } = $props();
 
-	const ACCESS_LOGS_DOCS = 'https://docs.orchard.my/operate/logs/';
+	const ACCESS_LOGS_DOCS = 'https://docs.orchard.hackclub.com/operate/logs/';
 
 	const DAY = 24 * 60 * 60_000;
 	const KINDS: { id: Kind; label: string; color: string }[] = [

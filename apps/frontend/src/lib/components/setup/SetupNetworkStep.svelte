@@ -81,7 +81,7 @@
 			{#snippet hint()}
 				Needs a wildcard DNS record, *.{appDomain || 'apps.example.com'}. If blank, apps get no URL.
 				<a
-					href="https://docs.orchard.my/operate/wildcard-certificates/"
+					href="https://docs.orchard.hackclub.com/operate/wildcard-certificates/"
 					target="_blank"
 					rel="noreferrer">Set up wildcard certificates</a
 				>

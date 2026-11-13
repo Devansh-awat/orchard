@@ -32,7 +32,7 @@
 
 	let { open = $bindable(false) }: { open?: boolean } = $props();
 
-	const DOCS = 'https://docs.orchard.my/greenhouse/';
+	const DOCS = 'https://docs.orchard.hackclub.com/greenhouse/';
 	const ACCOUNT = '/user/settings?tab=profile';
 
 	const app = getGreenhouseApp();

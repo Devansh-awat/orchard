@@ -121,7 +121,7 @@ async function bootstrap() {
   const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
   // Hosts that are part of the platform itself (login, status page, docs,
   // etc.) and may issue credentialed requests to the API. Comma-separated
-  // origins, e.g. `https://app.orchard.my,https://docs.orchard.my`.
+  // origins, e.g. `https://app.orchard.my,https://docs.orchard.hackclub.com`.
   const platformOrigins = new Set<string>([
     frontendUrl,
     ...(process.env.PLATFORM_ORIGINS || '')

@@ -741,7 +741,7 @@ export class K8sNetworkService implements OnModuleInit {
    * Basic auth is enforced by an Envoy filter that only Cilium can install, so
    * on a cluster without it the request has to fail rather than fall through:
    * a caller that asked for a password-protected host must never end up with a
-   * public one. See https://docs.orchard.my/deploy/protection/.
+   * public one. See https://docs.orchard.hackclub.com/deploy/protection/.
    */
   private async applyBasicAuth(
     namespace: string,

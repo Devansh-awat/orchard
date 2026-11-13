@@ -208,7 +208,7 @@ tenant:
   #
   # Per host costs one issuance each, against Let's Encrypt's 50 per registered
   # domain per week (eTLD+1, so every subdomain shares one budget). Past roughly
-  # 50 URLs a week, set up a wildcard instead — see https://docs.orchard.my/operate/wildcard-certificates/.
+  # 50 URLs a week, set up a wildcard instead — see https://docs.orchard.hackclub.com/operate/wildcard-certificates/.
   wildcardDomains: ""
 
 # Cilium-specific features: per-tenant CiliumNetworkPolicy and the
@@ -220,7 +220,7 @@ tenant:
 # the server probes the cluster instead of assuming, and picks the enforcement
 # point for basic auth from the answer: the Envoy filter where Cilium is
 # available, Orchard's own protection proxy where it isn't. Basic auth works
-# either way. See https://docs.orchard.my/deploy/protection/.
+# either way. See https://docs.orchard.hackclub.com/deploy/protection/.
 cilium:
   enabled: false
 
@@ -672,7 +672,7 @@ gateway:
 
 # cert-manager Certificates for cluster wildcards.
 # Requires cert-manager + a working DNS-01 ClusterIssuer. Guide:
-# https://docs.orchard.my/operate/wildcard-certificates/
+# https://docs.orchard.hackclub.com/operate/wildcard-certificates/
 # Set enabled=false if you provision Secrets out-of-band.
 certificates:
   enabled: true

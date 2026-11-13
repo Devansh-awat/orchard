@@ -155,7 +155,7 @@ without S3.
 
 Add or change it later with `sudo orchardctl backups s3 set`, or under Instance
 admin. Provider settings are at
-[docs.orchard.my/operate/storage](https://docs.orchard.my/operate/storage/).
+[docs.orchard.hackclub.com/operate/storage](https://docs.orchard.hackclub.com/operate/storage/).
 
 ## Claiming the instance
 
@@ -279,7 +279,7 @@ the `url` the API returns for every ingress carries them and the dashboard, CLI
 and TUI all link correctly.
 
 **Wildcard certificates.** Apps get per-hostname certificates. Wildcards need a
-DNS-01 issuer; see [Wildcard certificates](https://docs.orchard.my/operate/wildcard-certificates/).
+DNS-01 issuer; see [Wildcard certificates](https://docs.orchard.hackclub.com/operate/wildcard-certificates/).
 
 **Public TCP/UDP in tunnel mode.** Cloudflare Tunnels carry HTTP only, so
 publicly exposed databases and raw ports are unavailable there.

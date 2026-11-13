@@ -148,7 +148,7 @@
 
 		<footer class="sp-foot">
 			<span>30 day history</span>
-			<a href="https://orchard.my" rel="noopener">Powered by Orchard</a>
+			<a href="https://orchard.hackclub.com" rel="noopener">Powered by Orchard</a>
 		</footer>
 	{/if}
 </div>

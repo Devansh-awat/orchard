@@ -12,7 +12,7 @@ export const TELEMETRY_SENT: string[] = [
 
 export const TELEMETRY_NEVER = 'Orchard collects nothing from users unless statistics are enabled.';
 
-export const TELEMETRY_DOCS_URL = 'https://docs.orchard.my/operate/telemetry/';
+export const TELEMETRY_DOCS_URL = 'https://docs.orchard.hackclub.com/operate/telemetry/';
 
 export const TELEMETRY_ENV_NOTE =
 	'Set ORCHARD_TELEMETRY=false to turn this off and lock the setting.';

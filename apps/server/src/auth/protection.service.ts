@@ -335,7 +335,7 @@ export class ProtectionService {
     // Basic auth terminates here. There is no login page, no cookie and no
     // redirect to the control plane: the point of this mode is that it works
     // for clients that only speak `Authorization: Basic`, on clusters with no
-    // Cilium to run the Envoy filter. See https://docs.orchard.my/deploy/protection/.
+    // Cilium to run the Envoy filter. See https://docs.orchard.hackclub.com/deploy/protection/.
     if (ingress.protectionMode === 'basic') {
       const challenge: ProtectionDecision = {
         allow: false,

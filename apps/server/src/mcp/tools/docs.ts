@@ -1,10 +1,9 @@
 import { McpServer } from '@modelcontextprotocol/server';
 import { YAML_FORMAT_GUIDE } from './query';
 
-export const DOCS_URL = (process.env.ORCHARD_DOCS_URL || 'https://docs.orchard.my').replace(
-  /\/$/,
-  ''
-);
+export const DOCS_URL = (
+  process.env.ORCHARD_DOCS_URL || 'https://docs.orchard.hackclub.com'
+).replace(/\/$/, '');
 
 export const TEMPLATE_GUIDE_URI = 'orchard://docs/template-yaml-guide';
 export const LLMS_TXT_URI = 'orchard://docs/llms.txt';

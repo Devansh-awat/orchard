@@ -728,7 +728,7 @@ preflight() {
   if [ ! -d "$STATE_DIR" ] && command -v kubectl >/dev/null 2>&1 && kubectl cluster-info >/dev/null 2>&1; then
     warn "an existing Kubernetes cluster is reachable from this shell."
     warn "This installer creates its own k3s cluster and won't touch it."
-    warn "To install into that cluster instead, use the Helm chart: https://docs.orchard.my/start/install/#install-on-an-existing-cluster"
+    warn "To install into that cluster instead, use the Helm chart: https://docs.orchard.hackclub.com/start/install/#install-on-an-existing-cluster"
     if [ "$(ask 'Continue and create a new k3s cluster? (yes/no)' no)" != yes ]; then
       die "stopped so the existing cluster is left alone"
     fi
@@ -4252,7 +4252,7 @@ EOF
   printf '\n  %sNext, in the dashboard%s\n' "$C_BOLD" "$C_RESET"
   note "Setup walks you through what is left: your organization, the GitHub App,"
   note "storage, resource limits and email. Then deploy an app:"
-  note "https://docs.orchard.my/start/first-deploy/"
+  note "https://docs.orchard.hackclub.com/start/first-deploy/"
 
   printf '\n  %sChange these later%s\n' "$C_BOLD" "$C_RESET"
   note "Public IP, custom domains target, SMTP, storage: Instance admin > Configuration"

@@ -54,7 +54,7 @@ backing up to where they are now, and their existing backups stay restorable
 from there. clear goes back to the store on this server, if it has one.
 
 Settings from R2_* environment variables win over these, and can't be changed
-here. Refer to https://docs.orchard.my/operate/storage/
+here. Refer to https://docs.orchard.hackclub.com/operate/storage/
 `,
 		Run: func(c *cli.Context, args []string) error {
 			if len(args) < 2 || args[0] != "s3" {

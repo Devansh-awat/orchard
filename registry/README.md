@@ -1,7 +1,7 @@
 # The Orchard registry
 
 Everything in this directory is published to `https://assets.orchard.my/registry`
-and shown in the gallery at `https://orchard.my/templates`. Every Orchard instance
+and shown in the gallery at `https://orchard.hackclub.com/templates`. Every Orchard instance
 pulls the catalogue from there unless `TEMPLATE_REGISTRY_URL` says otherwise, so a
 merged template shows up in the hosted instance and in self-hosted ones alike.
 

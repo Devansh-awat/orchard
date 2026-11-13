@@ -47,7 +47,7 @@ These were not tested on this path: backups with the `objectStorage` values, MCP
 public database exposure, more than one node, and other ingress controllers.
 
 To install the prerequisites, including the commands and a ClusterIssuer example,
-refer to [Install the prerequisites](https://docs.orchard.my/start/install/#install-the-prerequisites).
+refer to [Install the prerequisites](https://docs.orchard.hackclub.com/start/install/#install-the-prerequisites).
 
 **1. Create the namespaces and the Secret.** The Secret holds two values the
 server needs at boot. `jwt` signs sessions and must be at least 32 characters.
@@ -163,7 +163,7 @@ inside the cluster, or configure external storage. Refer to
 This was not tested on this path.
 
 For the steps in full, refer to
-[Turn on image builds](https://docs.orchard.my/start/install/#turn-on-image-builds).
+[Turn on image builds](https://docs.orchard.hackclub.com/start/install/#turn-on-image-builds).
 
 Inspect what will be applied first:
 
@@ -171,7 +171,7 @@ Inspect what will be applied first:
 helm template orchard oci://ghcr.io/hackclub/orchard/charts/orchard -f my-values.yaml | less
 ```
 
-[Install on an existing cluster](https://docs.orchard.my/start/install/#install-on-an-existing-cluster) walks through the rest.
+[Install on an existing cluster](https://docs.orchard.hackclub.com/start/install/#install-on-an-existing-cluster) walks through the rest.
 
 ---
 
@@ -571,7 +571,7 @@ Empty turns uploads off until S3 storage is added.
 
 Use the setup flow, **Instance admin**, or `sudo orchardctl backups s3 set`. No
 chart value changes. See
-[Add S3 storage](https://docs.orchard.my/operate/storage/) for provider settings.
+[Add S3 storage](https://docs.orchard.hackclub.com/operate/storage/) for provider settings.
 
 New databases back up to the new bucket. Databases that already exist keep their
 bucket, so they keep archiving to the local store and restoring from it. To let
@@ -794,7 +794,7 @@ Renders `cert-manager.io/v1 Certificate` resources for the configured wildcards.
 |---|---|---|
 | `certificates.enabled` | `true` | Render `Certificate` resources. Set `false` if you pre-provision the TLS Secrets out-of-band. |
 | `certificates.namespace` | `network` | Where Certificates + their Secrets live. Same as `gateway.namespace` in the default layout. |
-| `certificates.issuer.name` | `letsencrypt-dns01-wildcard` | Name of the `ClusterIssuer` (or `Issuer`). **Must support DNS-01.** See [Wildcard certificates](https://docs.orchard.my/operate/wildcard-certificates/). |
+| `certificates.issuer.name` | `letsencrypt-dns01-wildcard` | Name of the `ClusterIssuer` (or `Issuer`). **Must support DNS-01.** See [Wildcard certificates](https://docs.orchard.hackclub.com/operate/wildcard-certificates/). |
 | `certificates.issuer.kind` | `ClusterIssuer` | `ClusterIssuer` or `Issuer`. |
 | `certificates.duration` | `2160h` | Cert lifetime. |
 | `certificates.renewBefore` | `360h` | Renewal lead time. |
@@ -944,7 +944,7 @@ Upgrading across the 2026-09 security release:
   BuildKit config. If you pushed to a plaintext registry other than the
   internal Harbor, list it.
 - identity-provider-initiated SAML sign-in stops working, and org owners only
-  sign in through providers they created; see https://docs.orchard.my/teams/sso/.
+  sign in through providers they created; see https://docs.orchard.hackclub.com/teams/sso/.
 
 Upgrading to the release with cluster-neutral storage defaults:
 

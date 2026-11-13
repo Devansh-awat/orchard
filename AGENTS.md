@@ -27,9 +27,9 @@ Deployed (`apps/`):
 - `apps/gateway`: Go dev/edge reverse proxy (`:4000` to API `:3001` and Vite `:3000`). Always open
   `:4000` in dev.
 - `apps/cli`: Go CLI (`orchard`), Cobra + Bubbletea, plus the OpenTofu provider in `tofu-provider`.
-- `apps/landing`: the marketing site (orchard.my) on `:5173`. Tailwind only, no shared UI with
+- `apps/landing`: the marketing site (orchard.hackclub.com) on `:5173`. Tailwind only, no shared UI with
   `apps/frontend`.
-- `apps/docs`: docs.orchard.my, Astro Starlight on `:5174`. `src/content/docs/reference` is generated. Styles use the design tokens from `apps/frontend/src/lib/design`, with its own palette from `pnpm --filter docs gen:palette`.
+- `apps/docs`: docs.orchard.hackclub.com, Astro Starlight on `:5174`. `src/content/docs/reference` is generated. Styles use the design tokens from `apps/frontend/src/lib/design`, with its own palette from `pnpm --filter docs gen:palette`.
 - `apps/r2-proxy`: Go proxy that issues per-cluster scoped credentials for database backups to R2.
 - `apps/registry`: Go service that serves and publishes templates and grafts.
 - `apps/fc-builder`: Firecracker microVM image builder.

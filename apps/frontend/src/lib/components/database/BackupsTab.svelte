@@ -604,8 +604,10 @@
 		<p class="on-this-server">
 			This database still backs up to this server, because it was created before S3 storage was
 			added. To move its backups to S3,
-			<a href="https://docs.orchard.my/operate/storage/" target="_blank" rel="noopener noreferrer"
-				>create a copy of it</a
+			<a
+				href="https://docs.orchard.hackclub.com/operate/storage/"
+				target="_blank"
+				rel="noopener noreferrer">create a copy of it</a
 			>.
 		</p>
 	{/if}

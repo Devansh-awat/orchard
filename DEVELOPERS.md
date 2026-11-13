@@ -5,7 +5,7 @@ This file explains how Orchard works, for people changing it. Every name here is
 - Setup, commits and pull requests are in [CONTRIBUTING.md](CONTRIBUTING.md).
 - The repo map, generated files and project rules are in [AGENTS.md](AGENTS.md).
 - How the server could split into services is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
-- Running an instance is covered at <https://docs.orchard.my>.
+- Running an instance is covered at <https://docs.orchard.hackclub.com>.
 
 ## Kubernetes is the source of truth
 

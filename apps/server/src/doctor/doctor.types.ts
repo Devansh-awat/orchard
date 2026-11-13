@@ -22,10 +22,9 @@ export interface Fact<T> {
   error?: string;
 }
 
-export const DOCTOR_DOCS_BASE = (process.env.ORCHARD_DOCS_URL || 'https://docs.orchard.my').replace(
-  /\/$/,
-  ''
-);
+export const DOCTOR_DOCS_BASE = (
+  process.env.ORCHARD_DOCS_URL || 'https://docs.orchard.hackclub.com'
+).replace(/\/$/, '');
 
 export function docsLink(id: string): string {
   return `${DOCTOR_DOCS_BASE}/operate/doctor/#${id}`;

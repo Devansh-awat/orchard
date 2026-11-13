@@ -702,7 +702,7 @@ export class K8sNamespaceService implements OnModuleInit {
 
       // Without Cilium the plain NetworkPolicy above is the whole story, and
       // these two CRs would 404 (no CRD) or 403 (no cilium.io rbac) on every
-      // project creation. See https://docs.orchard.my/deploy/protection/.
+      // project creation. See https://docs.orchard.hackclub.com/deploy/protection/.
       if (!(await this.kubernetes.isCiliumAvailable())) {
         return {
           success: true,
