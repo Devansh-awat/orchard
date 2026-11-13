@@ -111,6 +111,7 @@ func orgGetCmd() *cobra.Command {
 
 func orgUpdateCmd() *cobra.Command {
 	var name, publicIP, subdomain string
+	var pgAutoUpdate bool
 	c := &cobra.Command{
 		Use:   "update <slug-or-id>",
 		Short: "Update an organization",
@@ -120,8 +121,8 @@ func orgUpdateCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if !cmd.Flags().Changed("name") && !cmd.Flags().Changed("public-ip") && !cmd.Flags().Changed("subdomain") {
-				return errors.New("nothing to update: pass --name, --public-ip, or --subdomain")
+			if !cmd.Flags().Changed("name") && !cmd.Flags().Changed("public-ip") && !cmd.Flags().Changed("subdomain") && !cmd.Flags().Changed("postgres-auto-update") {
+				return errors.New("nothing to update: pass --name, --public-ip, --subdomain, or --postgres-auto-update")
 			}
 			m, err := resolveOrg(cmd.Context(), cl, args[0])
 			if err != nil {
@@ -138,6 +139,9 @@ func orgUpdateCmd() *cobra.Command {
 				} else {
 					body["databasePublicIp"] = publicIP
 				}
+			}
+			if cmd.Flags().Changed("postgres-auto-update") {
+				body["postgresAutoUpdate"] = pgAutoUpdate
 			}
 			if len(body) > 0 {
 				if err := cl.Send(cmd.Context(), http.MethodPatch, "/organizations/"+url.PathEscape(id), body, nil); err != nil {
@@ -161,6 +165,7 @@ func orgUpdateCmd() *cobra.Command {
 	c.Flags().StringVar(&name, "name", "", "new display name")
 	c.Flags().StringVar(&publicIP, "public-ip", "", "public IP advertised for exposed databases (empty to clear)")
 	c.Flags().StringVar(&subdomain, "subdomain", "", "custom subdomain (empty to clear)")
+	c.Flags().BoolVar(&pgAutoUpdate, "postgres-auto-update", false, "let Orchard roll Postgres minor updates on this organization's databases (admins only)")
 	return c
 }
 

@@ -53,6 +53,7 @@ func dbCmd() *cobra.Command {
 		dbVersionsCmd(),
 		dbSecurityCmd(),
 		dbUpgradeCmd(),
+		dbMinorUpdateCmd(),
 		dbExtensionCmd(),
 		dbSettingsCmd(),
 		dbPublicCmd(),

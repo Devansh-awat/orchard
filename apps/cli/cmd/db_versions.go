@@ -207,10 +207,12 @@ func dbRenderSecurity(raw map[string]any) {
 	}
 	output.Println()
 	if to := pick(auto, "to"); to != "" {
-		if b, _ := auto["automatic"].(bool); b {
+		if blocked := pick(auto, "blocked"); blocked != "" {
+			output.Printf("minor update to %s can't be applied in place: %s\n", to, blocked)
+		} else if b, _ := auto["automatic"].(bool); b {
 			output.Printf("minor update to %s happens automatically\n", to)
 		} else {
-			output.Printf("minor update to %s is available\n", to)
+			output.Printf("minor update to %s is available (`orchard db update <id>`)\n", to)
 		}
 	}
 	ups := []string{}
@@ -223,6 +225,40 @@ func dbRenderSecurity(raw map[string]any) {
 	}
 	if len(ups) > 0 {
 		output.Printf("major upgrades available: %s (`orchard db upgrade <id> --to <major>`)\n", strings.Join(ups, ", "))
+	}
+}
+
+func dbMinorUpdateCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "update <dbId>",
+		Short: "Move a database to the newest minor release of its Postgres major",
+		Long: `Move a database to the newest minor release of its Postgres major, the minor update
+` + "`orchard db security`" + ` lists. Minor releases carry security and bug fixes only. CNPG restarts
+the instances one at a time, replicas first, so a database with replicas stays available and a
+single instance restarts once.
+
+Orchard refuses when the update also changes the operating system image and a database uses a
+non-C collation, because the new OS can sort text differently and corrupt text indexes.`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			prompt := fmt.Sprintf("update database %s to the newest Postgres minor release: its instances restart one at a time", args[0])
+			if err := output.Confirm(prompt, yesFlag); err != nil {
+				return err
+			}
+			cl, _, err := client()
+			if err != nil {
+				return err
+			}
+			var res map[string]any
+			if err := cl.Send(cmd.Context(), http.MethodPost, "/databases/"+url.PathEscape(args[0])+"/minor-update", map[string]any{}, &res); err != nil {
+				return err
+			}
+			if fmtFlag() == output.FormatJSON {
+				return output.JSON(res)
+			}
+			output.Printf("updating to Postgres %s; instances restart one at a time\n", pick(res, "to"))
+			return nil
+		},
 	}
 }
 
