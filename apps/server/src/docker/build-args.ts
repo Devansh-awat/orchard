@@ -1,4 +1,5 @@
 import { isBuilderEnvName } from '../env/reserved-env';
+import { shellQuote } from './build-input';
 
 export function buildArgDeclarations(keys: string[]): string {
   return keys.map((key) => `ARG ${key}`).join('\n');
@@ -9,7 +10,7 @@ export function injectBuildArgsScript(opts: { dockerfilePath: string; keys: stri
 echo "=== Injecting ARG declarations into Dockerfile ==="
 
 WORKSPACE="\${WORKSPACE:-/workspace}"
-DOCKERFILE_PATH="${opts.dockerfilePath}"
+DOCKERFILE_PATH=${shellQuote(opts.dockerfilePath)}
 DOCKERFILE="\${WORKSPACE}/\${DOCKERFILE_PATH}"
 
 if [ ! -f "\${DOCKERFILE}" ]; then

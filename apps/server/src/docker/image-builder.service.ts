@@ -24,6 +24,7 @@ import { sandboxStartFailure } from './build-sandbox';
 import { cacheEvictInitContainer } from './cache-evict';
 import { parseRepoUrl, withCloneCredentials } from './repo-url';
 import { gitCloneScript } from './clone-script';
+import { assertSafeBuildInputs, shellQuote } from './build-input';
 import {
   injectBuildArgsScript,
   injectableBuildArgKeys,
@@ -99,6 +100,13 @@ import { daemonTenantLabel, TENANT_KEY_LABEL } from './buildkit-daemon-policy';
 import { depotOutputFlags, depotScriptTail, depotSessionAuths } from './depot-session';
 import { BuildJobInformerService } from './build-job-informer.service';
 import { isUnseenTerminalSignal, remainingIntervalMs } from './build-poll-pacing';
+import {
+  ALPINE_GIT_IMAGE,
+  ALPINE_IMAGE,
+  BUILDPACK_DEPS_SCM_IMAGE,
+  RAILPACK_MISE_IMAGE,
+  SKOPEO_IMAGE
+} from './helper-images';
 
 interface BuildJobOptions {
   repoUrl: string;
@@ -204,9 +212,6 @@ type BuildctlArg = string | { shell: string };
 
 const S3_CACHE_KEY_ENV = 'ORCHARD_S3_CACHE_KEY_ID';
 const S3_CACHE_SECRET_ENV = 'ORCHARD_S3_CACHE_SECRET';
-
-const shellQuote = (arg: string) =>
-  /^[A-Za-z0-9_\-./:=@,+%]+$/.test(arg) ? arg : `'${arg.replace(/'/g, `'\\''`)}'`;
 
 const isSafeS3Credential = (value: string | undefined): boolean =>
   !value || /^[A-Za-z0-9+/=_.-]+$/.test(value);
@@ -324,8 +329,7 @@ export class ImageBuilderService {
     process.env.RAILPACK_FRONTEND_IMAGE ||
     `ghcr.io/railwayapp/railpack-frontend:${process.env.RAILPACK_VERSION || 'v0.43.0'}`;
 
-  private readonly railpackMiseImage =
-    process.env.RAILPACK_MISE_IMAGE || 'ghcr.io/railwayapp/railpack-mise:20260227';
+  private readonly railpackMiseImage = process.env.RAILPACK_MISE_IMAGE || RAILPACK_MISE_IMAGE;
 
   private readonly localCachePath = process.env.BUILDKIT_LOCAL_CACHE_PATH || '/cache/buildkit';
 
@@ -383,7 +387,7 @@ export class ImageBuilderService {
 
   private readonly sourceCpuLimit = (process.env.BUILDER_SOURCE_CPU_LIMIT || '').trim() || '2';
 
-  private readonly pusherImage = process.env.BUILDER_PUSHER_IMAGE || 'quay.io/skopeo/stable:latest';
+  private readonly pusherImage = process.env.BUILDER_PUSHER_IMAGE || SKOPEO_IMAGE;
 
   private readonly workspaceTmpfs = process.env.BUILDER_WORKSPACE_TMPFS === 'true';
 
@@ -1270,7 +1274,7 @@ ${registryConfigs}
         ? ''
         : '--build-arg "BUILDKIT_DOCKERFILE_CHECK=skip=SecretsUsedInArgOrEnv"';
 
-    const targetFlag = target ? `--target "${target}"` : '';
+    const targetFlag = target ? `--target ${shellQuote(target)}` : '';
 
     const injectGitSha = buildType !== 'railpack' && !('GIT_SHA' in envVars);
     const gitShaArgLine = injectGitSha ? '--build-arg "GIT_SHA=$GIT_SHA"' : '';
@@ -1295,13 +1299,13 @@ echo 0 > /tmp/build_rc
 { depot build \\
   --progress plain \\
   --platform ${BUILD_PLATFORM} \\
-  -f "${dockerfileFlag}" \\
+  -f ${shellQuote(dockerfileFlag)} \\
   ${depotOutputFlags({ sidecarPush, imageName: depotImageName })} \\
   ${targetFlag} \\
   ${checkArgLine} \\
   ${gitShaArgLine} \\
   ${buildArgLines} \\
-  "${contextDir}" 2>&1 || echo "$?" > /tmp/build_rc; } | sed -u -e 's/\\[depot\\]/[super-build]/gi' -e 's|https://depot\\.dev/[^ ]*||g' -e 's/depot build/super build/gi'
+  ${shellQuote(contextDir)} 2>&1 || echo "$?" > /tmp/build_rc; } | sed -u -e 's/\\[depot\\]/[super-build]/gi' -e 's|https://depot\\.dev/[^ ]*||g' -e 's/depot build/super build/gi'
 BUILD_RC=$(cat /tmp/build_rc)
 ${depotTail.post}if [ "$BUILD_RC" -ne 0 ]; then
   echo "=== Super Build failed (exit code $BUILD_RC) ==="
@@ -1313,7 +1317,7 @@ echo "=== Super Build completed ==="
 
     return {
       name: DEPOT_CONTAINER,
-      image: 'buildpack-deps:bookworm-scm',
+      image: BUILDPACK_DEPS_SCM_IMAGE,
       command: ['/bin/sh', '-c'],
       args: [depotScript],
       workingDir: '/workspace',
@@ -1578,6 +1582,7 @@ exit $EXIT_CODE
       persistentBuildCache = false,
       localContextUrl
     } = options;
+    assertSafeBuildInputs({ branch, dockerfilePath, target });
 
     // Filter once, here, so every consumer below agrees on the set: the ARG
     // declarations, the build args, the Railpack secrets that read the
@@ -1663,7 +1668,7 @@ exit $EXIT_CODE
     const sourceInit: k8s.V1Container = localContextUrl
       ? {
           name: 'context-fetch',
-          image: 'alpine:latest',
+          image: ALPINE_IMAGE,
           command: ['/bin/sh', '-c'],
           args: [
             `set -e
@@ -1696,7 +1701,7 @@ ls -la /workspace
         }
       : {
           name: 'git-clone',
-          image: 'alpine/git:latest',
+          image: ALPINE_GIT_IMAGE,
           command: ['/bin/sh', '-c'],
           args: [gitCloneScript(branch)],
           env: [secretEnv('CLONE_URL', buildEnvSecret, BUILD_ENV_SECRET_KEYS.cloneUrl)],
@@ -1740,7 +1745,7 @@ ls -la /workspace
     if (buildType === 'dockerfile' && injectedArgKeys.length > 0) {
       initContainers.push({
         name: 'inject-build-args',
-        image: 'alpine:latest',
+        image: ALPINE_IMAGE,
         command: ['/bin/sh', '-c'],
         args: [injectBuildArgsScript({ dockerfilePath, keys: injectedArgKeys })],
         workingDir: '/workspace',
@@ -4149,6 +4154,7 @@ fi
       cacheTenantKey,
       localContextUrl
     } = options;
+    assertSafeBuildInputs({ branch, dockerfilePath, target });
 
     let appPullAuths: RegistryAuths = {};
     try {

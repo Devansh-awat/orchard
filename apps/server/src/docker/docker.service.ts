@@ -28,6 +28,8 @@ import {
 } from './build-log-redaction';
 import { buildSafeEnv } from '../env/reserved-env';
 import { assertBuildRegistryConfigured, BUILD_PLATFORM } from './build-platform';
+import { isSafeGitRef } from './build-input';
+import { localBuildRefusal, localGitEnv } from './local-build';
 import {
   hasRegistryAuths,
   isPullAuthEnvKey,
@@ -38,18 +40,6 @@ import {
 } from './registry-pull-auth';
 
 const execAsync = promisify(exec);
-
-// Allow letters, digits, `_`, `.`, `/`, `-`. Reject leading `-` (git option
-// smuggling), `..` segments (path traversal in refs), and any whitespace.
-// This is intentionally narrower than git's full ref grammar: it's the
-// shape of every realistic branch/tag name in practice.
-function isSafeGitRef(ref: string): boolean {
-  if (!ref || typeof ref !== 'string') return false;
-  if (ref.length > 200) return false;
-  if (ref.startsWith('-')) return false;
-  if (ref.includes('..')) return false;
-  return /^[A-Za-z0-9._/-]+$/.test(ref);
-}
 
 type BuildType = 'dockerfile' | 'railpack';
 
@@ -437,14 +427,7 @@ export class DockerService {
           cloneUrl,
           tempDir
         ],
-        {
-          env: {
-            ...process.env,
-            PATH:
-              process.env.PATH || '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
-            GIT_TERMINAL_PROMPT: '0'
-          }
-        }
+        { env: localGitEnv() }
       );
 
       let _stdout = '';
@@ -1492,6 +1475,8 @@ export class DockerService {
       return this.buildWithKubernetes(options);
     }
 
+    const refusal = localBuildRefusal();
+    if (refusal) throw new BadRequestException(refusal);
     console.log('[Docker Service] Falling back to local Docker build');
     return this.buildWithLocalDocker(options);
   }

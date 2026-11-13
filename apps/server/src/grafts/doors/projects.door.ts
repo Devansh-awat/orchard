@@ -1,5 +1,6 @@
 import { Inject, Injectable, Scope } from '@nestjs/common';
 import { INQUIRER, ModuleRef } from '@nestjs/core';
+import { isSafeGitRef } from '../../docker/build-input';
 import { onEnvironmentEnvChanged, type EnvironmentEnvChange } from '../../env/env-change-signal';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { DeploymentsService } from '../../projects/deployments.service';
@@ -49,6 +50,7 @@ export class ProjectsDoorV1 {
 
   async setDeploymentBranch(deploymentId: string, branch: string): Promise<void> {
     this.requireWrite();
+    if (!isSafeGitRef(branch)) throw new Error('Invalid branch name');
     await this.prisma.deployment.update({
       where: { id: deploymentId },
       data: { githubBranch: branch }
