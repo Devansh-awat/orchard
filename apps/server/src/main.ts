@@ -1,18 +1,10 @@
+import './instrument';
 import 'reflect-metadata';
-import * as dotenv from 'dotenv';
-import { resolve } from 'path';
-
-// dd-trace must init before Nest/express/prisma are required so its module
-// patching can instrument them (APM traces + continuous profiler).
 import { NestFactory, HttpAdapterHost } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import cookieParser from 'cookie-parser';
 import { registerBodyParsers } from './http/body-limits';
 import { trustProxySetting } from './auth/client-ip';
-import { initDatadog } from './analytics/datadog';
-
-import { startTelemetry } from './analytics/telemetry';
-
 import { AppModule } from './app.module';
 import { attachTerminalWebSocket } from './kubernetes/terminal.gateway';
 import { execSessionEngine } from './kubernetes/exec-session-engine';
@@ -25,17 +17,6 @@ import { requestAuthStorage } from './auth/request-context';
 import { loadGrafts } from './grafts/loader';
 import { createWithGrafts, installApiAliases } from './grafts/boot';
 import { GraftHttpRegistry } from './grafts/http-registry';
-
-// dotenv MUST run before telemetry so POSTHOG_API_KEY is available, and
-// telemetry MUST run before Nest is imported so OTel instrumentation hooks
-// are installed before any application code emits a log.
-dotenv.config();
-const envPath1 = resolve(process.cwd(), '..', '.env');
-dotenv.config({ path: envPath1, override: false });
-const envPath2 = resolve(__dirname, '../../.env');
-dotenv.config({ path: envPath2, override: false });
-initDatadog();
-startTelemetry();
 
 declare global {
   interface BigInt {
