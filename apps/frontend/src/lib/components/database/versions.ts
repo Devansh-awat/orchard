@@ -1,7 +1,7 @@
 import { apiFetch } from '$lib/stores';
 import type { DropdownOption } from '$lib/components/ui';
 import type { Severity } from '$lib/components/ui/severity';
-import type { DatabaseSecurity, DatabaseVersion, DatabaseVersions } from './types';
+import type { DatabaseSecurity, DatabaseVersion, DatabaseVersions, MinorUpdate } from './types';
 
 let cached: Promise<DatabaseVersions | null> | null = null;
 
@@ -54,6 +54,15 @@ export function severityOf(score: number | null | undefined): Severity {
 	return 'low';
 }
 
+export function upgradeMajors(s: { upgrades: DatabaseVersion[] }): number[] {
+	return s.upgrades.map((v) => v.major).sort((a, b) => a - b);
+}
+
+export function minorUpdateLine(m: MinorUpdate): string {
+	if (m.blocked) return `${m.to} can't be applied in place`;
+	return m.automatic ? `${m.to} is applied automatically` : `update to ${m.to} available`;
+}
+
 export function securityHeadline(s: DatabaseSecurity): string | null {
 	if (s.action === 'none') return null;
 	const count = s.vulnerabilities.length;
@@ -61,9 +70,11 @@ export function securityHeadline(s: DatabaseSecurity): string | null {
 	if (s.supported === false)
 		return `Postgres ${s.major} no longer gets security fixes${vulns ? ` · ${vulns}` : ''}`;
 	if (s.action === 'minor_update' && s.minorUpdate)
-		return `${vulns || 'Update available'} · ${s.minorUpdate.to} ${s.minorUpdate.automatic ? 'is applied automatically' : 'is available'}`;
-	if (s.action === 'major_upgrade')
-		return `${vulns ? `${vulns} · ` : ''}upgrade to Postgres ${s.upgrades.at(-1) ?? ''} to fix`;
+		return `${vulns || 'Update available'} · ${minorUpdateLine(s.minorUpdate)}`;
+	if (s.action === 'major_upgrade') {
+		const newest = upgradeMajors(s).at(-1);
+		return `${vulns ? `${vulns} · ` : ''}${newest ? `upgrade to Postgres ${newest} to fix` : 'move to a supported version'}`;
+	}
 	if (s.endOfLifeSoon) return `Postgres ${s.major} support ends ${monthYear(s.eolDate)}`;
 	return vulns || null;
 }

@@ -3,7 +3,7 @@
 	import { apiFetch } from '$lib/stores';
 	import { Alert, Button, Dropdown, Field, Modal, ModalIntro, ToggleRow } from '$lib/components/ui';
 	import { duration, errorMessage } from './recovery';
-	import { loadVersions, versionNote } from './versions';
+	import { loadVersions, upgradeMajors, versionNote } from './versions';
 	import type {
 		DatabaseDetail,
 		DatabaseOperation,
@@ -37,7 +37,7 @@
 	$effect(() => {
 		const isOpen = open;
 		if (isOpen && !wasOpen) {
-			major = String(security.upgrades.at(-1) ?? '');
+			major = String(upgradeMajors(security).at(-1) ?? '');
 			rehearse = true;
 			error = null;
 			idempotencyKey = crypto.randomUUID();
@@ -60,8 +60,8 @@
 	}
 
 	const options = $derived(
-		[...security.upgrades]
-			.sort((a, b) => b - a)
+		upgradeMajors(security)
+			.reverse()
 			.map((m) => {
 				const v = versions?.versions.find((x) => x.major === m);
 				return {

@@ -22,6 +22,25 @@ const running = new Map<string, string>();
 
 const image = (minor: string) => `ghcr.io/cloudnative-pg/postgresql:${minor}-system-trixie`;
 
+export const orgAutoUpdate = new Map<string, boolean>();
+
+function autoUpdateOf(store: Store, db: MockDatabase) {
+	const orgId = store.project(db.projectId)?.organizationId;
+	const organization = !!(orgId && orgAutoUpdate.get(orgId));
+	return { enabled: organization, organization, instance: true };
+}
+
+function offered(c: (typeof CATALOG)[number]) {
+	return {
+		major: c.major,
+		image: image(c.minor),
+		minor: Number(c.minor.split('.')[1]),
+		supported: supported(c.major),
+		current: true,
+		eolDate: c.eolDate
+	};
+}
+
 function latestMinor(major: number) {
 	return CATALOG.find((c) => c.major === major)?.minor ?? `${major}.0`;
 }
@@ -84,7 +103,7 @@ const CVES_13 = [
 	}
 ];
 
-function security(db: MockDatabase) {
+function security(store: Store, db: MockDatabase) {
 	const major = Number(db.version);
 	const run = runningOf(db);
 	const latest = latestMinor(major);
@@ -95,9 +114,10 @@ function security(db: MockDatabase) {
 		url: `https://www.postgresql.org/support/security/${v.cve}/`
 	}));
 	const behind = run !== latest;
-	const upgrades = CATALOG.map((c) => c.major)
-		.filter((m) => m > major)
-		.sort((a, b) => a - b);
+	const upgrades = CATALOG.filter((c) => c.major > major)
+		.sort((a, b) => b.major - a.major)
+		.map(offered);
+	const autoUpdate = autoUpdateOf(store, db);
 	const action = !isSupported ? 'major_upgrade' : behind && vulns.length ? 'minor_update' : 'none';
 	return {
 		running: run,
@@ -111,7 +131,9 @@ function security(db: MockDatabase) {
 		highestScore: vulns.length ? Math.max(...vulns.map((v) => v.score)) : null,
 		action,
 		image: image(run),
-		minorUpdate: behind && isSupported ? { to: latest, automatic: true } : null,
+		minorUpdate:
+			behind && isSupported ? { to: latest, automatic: autoUpdate.enabled, blocked: null } : null,
+		autoUpdate,
 		upgrades,
 		advisoriesFetchedAt: new Date(Date.now() - 3 * 3_600_000).toISOString()
 	};
@@ -208,14 +230,7 @@ export function versionRoutes(r: Router, { store }: MockContext) {
 	seed(store);
 
 	r.get('/database-versions', () => ({
-		versions: CATALOG.map((c) => ({
-			major: c.major,
-			image: image(c.minor),
-			minor: c.minor,
-			supported: supported(c.major),
-			current: true,
-			eolDate: c.eolDate
-		})),
+		versions: CATALOG.map(offered),
 		defaultMajor: DEFAULT_MAJOR,
 		source: 'https://github.com/cloudnative-pg/postgres-containers',
 		catalogDate: new Date(Date.now() - 2 * DAY).toISOString()
@@ -225,7 +240,53 @@ export function versionRoutes(r: Router, { store }: MockContext) {
 		const db = store.database(params.id);
 		if (!db) return notFound('Database not found');
 		if (db.engine !== 'postgres') return reply(400, { message: 'Only Postgres databases' });
-		return security(db);
+		return security(store, db);
+	});
+
+	r.get('/projects/:id/database-security', ({ params }) => {
+		const dbs = store.state.databases.filter(
+			(d) => d.projectId === params.id && d.engine === 'postgres' && d.mode === 'cnpg'
+		);
+		const orgId = store.project(params.id)?.organizationId;
+		const organization = !!(orgId && orgAutoUpdate.get(orgId));
+		return {
+			autoUpdate: { enabled: organization, organization, instance: true },
+			advisoriesFetchedAt: new Date(Date.now() - 3 * 3_600_000).toISOString(),
+			databases: dbs.map((db) => {
+				const s = security(store, db);
+				return {
+					id: db.id,
+					name: db.name,
+					status: db.status,
+					environmentId: db.environmentId ?? null,
+					running: s.running,
+					major: s.major,
+					action: s.action,
+					vulnerabilities: s.vulnerabilities.length,
+					highestScore: s.highestScore,
+					supported: s.supported,
+					eolDate: s.eolDate,
+					endOfLifeSoon: s.endOfLifeSoon,
+					minorUpdate: s.minorUpdate,
+					upgrades: s.upgrades
+				};
+			})
+		};
+	});
+
+	r.post('/databases/:id/minor-update', ({ params }) => {
+		const db = store.database(params.id);
+		if (!db) return notFound('Database not found');
+		const from = runningOf(db);
+		const to = latestMinor(Number(db.version));
+		if (from === to)
+			return reply(400, {
+				message: `The database already runs the newest Postgres ${db.version} image Orchard offers`
+			});
+		running.set(db.id, to);
+		store.touch(db);
+		store.emit('database.changed', db.projectId, db.id);
+		return { from, to };
 	});
 
 	r.post('/databases/:id/upgrade', ({ params, body }) => {

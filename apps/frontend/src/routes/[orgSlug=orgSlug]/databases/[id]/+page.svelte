@@ -21,7 +21,8 @@
 		Pause,
 		Pencil,
 		Play,
-		Settings as SettingsIcon
+		Settings as SettingsIcon,
+		ShieldCheck
 	} from 'lucide-svelte';
 	import {
 		ActionRow,
@@ -277,11 +278,12 @@
 	let replicasDirty = $state(false);
 	let savingReplicas = $state(false);
 
-	type DbTab = 'overview' | 'backups' | 'observe' | 'settings';
+	type DbTab = 'overview' | 'backups' | 'observe' | 'security' | 'settings';
 	const TABS = [
 		{ id: 'overview' as const, label: 'Overview', icon: LayoutGrid },
 		{ id: 'backups' as const, label: 'Backups', icon: Archive },
 		{ id: 'observe' as const, label: 'Observe', icon: Activity },
+		{ id: 'security' as const, label: 'Security', icon: ShieldCheck },
 		{ id: 'settings' as const, label: 'Settings', icon: SettingsIcon }
 	];
 	const LEGACY_TABS: Record<string, [DbTab, string?]> = {
@@ -290,14 +292,14 @@
 		metrics: ['observe'],
 		queries: ['observe'],
 		resources: ['settings', 'resources'],
-		extensions: ['settings', 'extensions']
+		extensions: ['settings', 'extensions'],
+		version: ['security']
 	};
 	const SETTINGS_SECTIONS = [
 		'general',
 		'resources',
 		'protection',
 		'availability',
-		'version',
 		'pooler',
 		'users',
 		'parameters',
@@ -307,7 +309,8 @@
 	] as const;
 
 	function routeFrom(url: URL): { tab: DbTab; section: string } {
-		const raw = url.searchParams.get('tab') ?? 'overview';
+		const asked = url.searchParams.get('tab') ?? 'overview';
+		const raw = asked === 'settings' && url.searchParams.get('s') === 'version' ? 'version' : asked;
 		const legacy = LEGACY_TABS[raw];
 		const tab: DbTab = legacy
 			? legacy[0]
@@ -346,11 +349,6 @@
 		{
 			label: 'Postgres',
 			items: [
-				{
-					id: 'version',
-					label: 'Version and security',
-					href: hrefFor('settings', 'version')
-				},
 				{
 					id: 'availability',
 					label: 'High availability',
@@ -1668,7 +1666,7 @@
 									? Number(paramValue('max_connections')) || null
 									: null}
 								backupsHref={hrefFor('backups')}
-								versionHref={hrefFor('settings', 'version')}
+								versionHref={hrefFor('security')}
 								settingsHref={hrefFor('settings', 'resources')}
 							/>
 							<DatabaseActivity databaseId={database.id} observeHref={hrefFor('observe')} />
@@ -1721,6 +1719,21 @@
 						onReset={() => (showResetStatsModal = true)}
 						onEnable={enableQueryStats}
 					/>
+				</section>
+			{:else if activeTab === 'security'}
+				<section class="db-panel db-stack">
+					{#if database.mode === 'cnpg'}
+						<VersionCard
+							{database}
+							onupgrade={() => {
+								fetchDatabase(true);
+								gotoTab('backups');
+							}}
+							onupdated={() => fetchDatabase(true)}
+						/>
+					{:else}
+						<EmptyState title="Security reports need a dedicated database" />
+					{/if}
 				</section>
 			{:else if activeTab === 'settings'}
 				<section class="db-panel db-settings">
@@ -1799,18 +1812,6 @@
 									database.restoreTests = next.restoreTests;
 								}}
 							/>
-						{:else if settingsSection === 'version'}
-							{#if database.mode === 'cnpg'}
-								<VersionCard
-									{database}
-									onupgrade={() => {
-										fetchDatabase(true);
-										gotoTab('backups');
-									}}
-								/>
-							{:else}
-								<EmptyState title="Upgrades need a dedicated database" />
-							{/if}
 						{:else if settingsSection === 'availability'}
 							{#if database.mode === 'cnpg'}
 								<ReplicationCard {database} resourcesHref={hrefFor('settings', 'resources')} />

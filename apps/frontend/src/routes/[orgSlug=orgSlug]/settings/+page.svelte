@@ -111,6 +111,9 @@
 	let publicIp = $state('');
 	let publicIpSaving = $state(false);
 	let instanceDefaultPublicIp = $state<string | null>(null);
+	let postgresAutoUpdate = $state(false);
+	let postgresAutoUpdateAllowed = $state(true);
+	let postgresAutoUpdateSaving = $state(false);
 
 	let notifLoading = $state(false);
 	let notifChannels = $state<NotificationChannel[]>([]);
@@ -319,6 +322,8 @@
 			backupSecretKey = '';
 			publicIp = d.databasePublicIp || '';
 			instanceDefaultPublicIp = d.instanceDefaultPublicIp || null;
+			postgresAutoUpdate = Boolean(d.postgresAutoUpdate);
+			postgresAutoUpdateAllowed = d.postgresAutoUpdateAllowed !== false;
 		} finally {
 			backupLoading = false;
 		}
@@ -735,6 +740,36 @@
 		}
 	}
 
+	async function togglePostgresAutoUpdate(enabled: boolean) {
+		if (!organization) return;
+		postgresAutoUpdateSaving = true;
+		postgresAutoUpdate = enabled;
+		try {
+			const r = await apiFetch(`/apiv1/organizations/${organization.id}`, {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ postgresAutoUpdate: enabled })
+			});
+			if (!r.ok) {
+				const d = await r.json().catch(() => ({}));
+				throw new Error(d.message || "Couldn't save");
+			}
+			toasts.add({
+				title: enabled ? 'Automatic Postgres updates on' : 'Automatic Postgres updates off',
+				color: 'success'
+			});
+		} catch (e) {
+			postgresAutoUpdate = !enabled;
+			toasts.add({
+				title: "Couldn't save",
+				description: e instanceof Error ? e.message : "Couldn't save",
+				color: 'error'
+			});
+		} finally {
+			postgresAutoUpdateSaving = false;
+		}
+	}
+
 	async function savePublicIp() {
 		if (!organization) return;
 		publicIpSaving = true;
@@ -1055,6 +1090,10 @@
 				{publicIpSaving}
 				{instanceDefaultPublicIp}
 				onSavePublicIp={savePublicIp}
+				{postgresAutoUpdate}
+				{postgresAutoUpdateAllowed}
+				{postgresAutoUpdateSaving}
+				onTogglePostgresAutoUpdate={togglePostgresAutoUpdate}
 			/>
 		{/if}
 		{#if activeTab === 'backups'}

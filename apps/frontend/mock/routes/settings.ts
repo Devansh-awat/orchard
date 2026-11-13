@@ -4,6 +4,7 @@ import { notFound, reply, type Router } from '../router.ts';
 import { memberRow, orgRow, ssoProviderRow, userRow } from '../serialize.ts';
 import type { Store } from '../store.ts';
 import type { MockSsoProvider } from '../types.ts';
+import { orgAutoUpdate } from './versions.ts';
 
 const MIB = 1024 ** 2;
 
@@ -166,6 +167,8 @@ export function settingsRoutes(r: Router, { store }: MockContext) {
 		if (!o) return notFound();
 		if (body?.name) o.name = String(body.name);
 		if (body?.description !== undefined) o.description = body.description;
+		if (typeof body?.postgresAutoUpdate === 'boolean')
+			orgAutoUpdate.set(o.id, body.postgresAutoUpdate);
 		store.emitOrg(o.id, 'membership.changed');
 		return orgRow(store, o);
 	});
@@ -198,7 +201,9 @@ export function settingsRoutes(r: Router, { store }: MockContext) {
 		store.emitOrg(m.organizationId, 'membership.changed', m.userId);
 		return { ok: true };
 	});
-	r.get('/organizations/:id/backup-settings', () => ({
+	r.get('/organizations/:id/backup-settings', ({ params }) => ({
+		postgresAutoUpdate: !!orgAutoUpdate.get(params.id),
+		postgresAutoUpdateAllowed: true,
 		endpoint: 'https://r2.orchard.my',
 		bucket: 'orchard-backups',
 		region: 'auto',

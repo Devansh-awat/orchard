@@ -54,6 +54,7 @@
 		TransferOwnershipModal,
 		MoveToOrgModal,
 		TransferBanner,
+		ProjectSecurityTab,
 		type ProjectTab
 	} from '$lib/components/project';
 	import { SharedVarsEditor } from '$lib/components/environment';
@@ -108,6 +109,7 @@
 		'compose',
 		'templates',
 		'members',
+		'security',
 		'settings'
 	];
 	function tabFromUrl(url: URL): ProjectTab {
@@ -762,6 +764,7 @@
 		compose: 'Compose',
 		templates: 'Templates',
 		members: 'Members',
+		security: 'Security',
 		settings: 'Settings'
 	};
 	const showSettings = $derived(canDelete || canTransferOwnership || canMoveToOrg || canEdit);
@@ -769,7 +772,8 @@
 		PROJECT_TABS.filter(
 			(t) =>
 				(t !== 'settings' || showSettings) &&
-				(t !== 'templates' || templateInstances.length > 0 || activeTab === 'templates')
+				(t !== 'templates' || templateInstances.length > 0 || activeTab === 'templates') &&
+				(t !== 'security' || databases.some((d) => d.mode === 'cnpg') || activeTab === 'security')
 		).map((t) => ({
 			id: t,
 			label: TAB_LABEL[t],
@@ -1183,6 +1187,8 @@
 						onEnsureOrgMembersLoaded={ensureOrgMembersLoaded}
 						onTransferOwnership={() => (showTransferModal = true)}
 					/>
+				{:else if activeTab === 'security'}
+					<ProjectSecurityTab projectId={project?.id ?? ''} {orgSlug} {canEdit} />
 				{:else if activeTab === 'settings'}
 					<ProjectSettingsTab
 						projectId={project?.id ?? ''}

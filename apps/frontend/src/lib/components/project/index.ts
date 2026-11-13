@@ -6,6 +6,7 @@ export { default as CustomizeModal } from './CustomizeModal.svelte';
 export { default as TransferOwnershipModal } from './TransferOwnershipModal.svelte';
 export { default as MoveToOrgModal } from './MoveToOrgModal.svelte';
 export { default as TransferBanner } from './TransferBanner.svelte';
+export { default as ProjectSecurityTab } from './ProjectSecurityTab.svelte';
 export type {
 	ProjectTab,
 	Project,

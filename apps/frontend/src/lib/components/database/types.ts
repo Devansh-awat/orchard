@@ -317,7 +317,7 @@ export interface DeletedDatabase {
 export interface DatabaseVersion {
 	major: number;
 	image: string;
-	minor: string | null;
+	minor: number | null;
 	supported: boolean | null;
 	current: boolean;
 	eolDate: string | null;
@@ -340,19 +340,57 @@ export interface Vulnerability {
 	url: string;
 }
 
+export interface MinorUpdate {
+	to: string;
+	automatic: boolean;
+	blocked: string | null;
+}
+
+export interface AutoUpdateState {
+	enabled: boolean;
+	organization: boolean;
+	instance: boolean;
+}
+
+export type SecurityAction = 'none' | 'minor_update' | 'major_upgrade' | 'unknown';
+
 export interface DatabaseSecurity {
-	running: string;
+	running: string | null;
 	major: number;
 	minor: number | null;
-	latestMinor: string | null;
+	latestMinor: number | null;
 	supported: boolean | null;
 	eolDate: string | null;
 	endOfLifeSoon: boolean;
 	vulnerabilities: Vulnerability[];
 	highestScore: number | null;
-	action: 'none' | 'minor_update' | 'major_upgrade' | 'unknown';
+	action: SecurityAction;
 	image: string | null;
-	minorUpdate: { to: string; automatic: boolean } | null;
-	upgrades: number[];
+	minorUpdate: MinorUpdate | null;
+	autoUpdate: AutoUpdateState;
+	upgrades: DatabaseVersion[];
 	advisoriesFetchedAt: string | null;
+}
+
+export interface ProjectDatabaseSecurityRow {
+	id: string;
+	name: string;
+	status: string;
+	environmentId: string | null;
+	running: string | null;
+	major: number;
+	action: SecurityAction;
+	vulnerabilities: number;
+	highestScore: number | null;
+	supported: boolean | null;
+	eolDate: string | null;
+	endOfLifeSoon: boolean;
+	minorUpdate: MinorUpdate | null;
+	upgrades: DatabaseVersion[];
+}
+
+export interface ProjectDatabaseSecurity {
+	autoUpdate: AutoUpdateState;
+	advisoriesFetchedAt: string | null;
+	databases: ProjectDatabaseSecurityRow[];
 }

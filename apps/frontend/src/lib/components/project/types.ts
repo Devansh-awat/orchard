@@ -4,6 +4,7 @@ export type ProjectTab =
 	| 'compose'
 	| 'templates'
 	| 'members'
+	| 'security'
 	| 'settings';
 
 export interface DeploymentUser {

@@ -1,8 +1,10 @@
 <script lang="ts">
 	import { safeHttpUrl } from '$lib/utils/html';
 	import { onMount } from 'svelte';
+	import { page } from '$app/stores';
 	import { ArrowUpRight, CircleArrowUp, RefreshCw, ShieldCheck } from 'lucide-svelte';
 	import { apiFetch, toasts } from '$lib/stores';
+	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import {
 		ActionRow,
 		Alert,
@@ -19,20 +21,26 @@
 	import RelativeTime from '$lib/components/ui/RelativeTime.svelte';
 	import { formatRelativeTime } from '$lib/utils/format';
 	import UpgradeSheet from './UpgradeSheet.svelte';
-	import { monthYear, severityOf } from './versions';
+	import { monthYear, severityOf, upgradeMajors } from './versions';
 	import type { DatabaseDetail, DatabaseOperation, DatabaseSecurity, Vulnerability } from './types';
 
 	let {
 		database,
-		onupgrade
+		onupgrade,
+		onupdated = undefined
 	}: {
 		database: DatabaseDetail;
 		onupgrade: (op: DatabaseOperation) => void;
+		onupdated?: () => void;
 	} = $props();
 
 	let security = $state<DatabaseSecurity | null>(null);
 	let failed = $state(false);
 	let sheetOpen = $state(false);
+	let confirmMinor = $state(false);
+	let updating = $state(false);
+
+	const orgSettingsHref = $derived(`/${$page.params.orgSlug}/settings?tab=database`);
 
 	async function load() {
 		failed = false;
@@ -48,7 +56,50 @@
 	onMount(load);
 
 	const upgrading = $derived(database.status === 'upgrading');
-	const newest = $derived(security?.upgrades.length ? Math.max(...security.upgrades) : null);
+	const newest = $derived(security ? (upgradeMajors(security).at(-1) ?? null) : null);
+	const busy = $derived(upgrading || database.status !== 'ready');
+
+	const autoLine = $derived.by(() => {
+		const a = security?.autoUpdate;
+		if (!a) return '';
+		if (!a.instance) return 'Turned off for this whole instance by its operator.';
+		if (a.enabled)
+			return 'On for this organization. Orchard applies them a few at a time each morning (UTC).';
+		return 'Off for this organization. Nothing changes until someone updates it here, or an org admin turns them on.';
+	});
+
+	async function applyMinor() {
+		confirmMinor = false;
+		if (!security?.minorUpdate) return;
+		updating = true;
+		try {
+			const res = await apiFetch(`/apiv1/databases/${database.id}/minor-update`, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					'Idempotency-Key': crypto.randomUUID()
+				},
+				body: '{}'
+			});
+			const body = await res.json().catch(() => ({}));
+			if (!res.ok) throw new Error(body.message || "Couldn't start the update");
+			toasts.add({
+				title: `Updating ${database.name} to Postgres ${body.to ?? security.minorUpdate.to}`,
+				description: 'Instances restart one at a time, replicas first.',
+				color: 'success'
+			});
+			onupdated?.();
+			await load();
+		} catch (e) {
+			toasts.add({
+				title: "Couldn't update",
+				description: e instanceof Error ? e.message : "Couldn't start the update",
+				color: 'error'
+			});
+		} finally {
+			updating = false;
+		}
+	}
 	const ended = $derived(
 		!!security &&
 			(security.supported === false ||
@@ -129,7 +180,7 @@
 				</Alert>
 			{/if}
 			<SettingsList>
-				<ActionRow label={`Postgres ${security.running}`} hint={supportLine}>
+				<ActionRow label={`Postgres ${security.running ?? security.major}`} hint={supportLine}>
 					{#if newest}
 						<Button
 							size="sm"
@@ -145,14 +196,36 @@
 				</ActionRow>
 				{#if security.minorUpdate}
 					<ActionRow
-						label={`Minor update to ${security.minorUpdate.to} ${security.minorUpdate.automatic ? 'is applied automatically' : 'is available'}`}
-						hint={fixedByMinor
-							? `Fixes ${fixedByMinor === security.vulnerabilities.length ? 'every vulnerability' : `${fixedByMinor} of the vulnerabilities`} below. Instances restart one at a time.`
-							: 'Instances restart one at a time.'}
+						label={`Postgres ${security.minorUpdate.to} is available`}
+						hint={security.minorUpdate.blocked
+							? security.minorUpdate.blocked
+							: fixedByMinor
+								? `Fixes ${fixedByMinor === security.vulnerabilities.length ? 'every vulnerability' : `${fixedByMinor} of the vulnerabilities`} below. Instances restart one at a time, replicas first.`
+								: 'Bug and security fixes only. Instances restart one at a time, replicas first.'}
 					>
-						<span></span>
+						{#if security.minorUpdate.blocked}
+							<span></span>
+						{:else}
+							<Button
+								size="sm"
+								variant={newest ? 'secondary' : 'primary'}
+								icon={CircleArrowUp}
+								disabled={busy || updating}
+								loading={updating}
+								onclick={() => (confirmMinor = true)}
+							>
+								Update to {security.minorUpdate.to}
+							</Button>
+						{/if}
 					</ActionRow>
 				{/if}
+				<ActionRow label="Automatic minor updates" hint={autoLine}>
+					{#if !security.autoUpdate?.enabled && security.autoUpdate?.instance}
+						<Button size="sm" variant="ghost" href={orgSettingsHref}>Organization settings</Button>
+					{:else}
+						<span></span>
+					{/if}
+				</ActionRow>
 				{#if sorted.length === 0}
 					<ActionRow
 						label="No known vulnerabilities"
@@ -207,6 +280,20 @@
 
 {#if security && newest}
 	<UpgradeSheet bind:open={sheetOpen} {database} {security} onstarted={started} />
+{/if}
+
+{#if security?.minorUpdate && !security.minorUpdate.blocked}
+	<ConfirmModal
+		bind:open={confirmMinor}
+		title={`Update ${database.name} to Postgres ${security.minorUpdate.to}?`}
+		description={database.replicas && database.replicas > 1
+			? 'CNPG restarts the replicas first, then switches over to one and restarts the old primary. Connections drop briefly during the switchover.'
+			: 'The database restarts once on the new release. Connections drop for the few seconds it takes to come back.'}
+		confirmLabel="Update"
+		danger={false}
+		onconfirm={applyMinor}
+		oncancel={() => (confirmMinor = false)}
+	/>
 {/if}
 
 <style>
