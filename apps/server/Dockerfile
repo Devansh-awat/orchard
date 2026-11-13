@@ -27,7 +27,7 @@ RUN go build -o /usr/local/bin/signhostbin ./cmd/signhostbin
 RUN --mount=type=secret,id=hostctl_signing_key,required=false \
     signhostbin -dir /out -version "${VERSION}" -key /run/secrets/hostctl_signing_key -require="${REQUIRE_SIGNED}"
 
-FROM node:22.23.4-alpine AS base
+FROM node:22.23.5-alpine AS base
 
 RUN apk add --no-cache openssl ca-certificates
 

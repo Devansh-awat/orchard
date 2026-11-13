@@ -2,7 +2,7 @@
 # Build from the project root: docker build -f apps/server/Dockerfile.mcp -t orchard-mcp .
 # Requires BuildKit. On Docker 23+ this is on by default; otherwise set DOCKER_BUILDKIT=1.
 
-FROM node:22.23.4-alpine AS base
+FROM node:22.23.5-alpine AS base
 
 RUN apk add --no-cache openssl ca-certificates
 

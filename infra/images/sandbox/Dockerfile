@@ -5,7 +5,7 @@ RUN go mod download
 COPY apps/cli/ ./
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/orchard .
 
-FROM node:22.23.4-bookworm-slim AS node
+FROM node:22.23.5-bookworm-slim AS node
 
 FROM ubuntu:24.04
 
