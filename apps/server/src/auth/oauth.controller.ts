@@ -219,7 +219,7 @@ export class OAuthController {
       const token = req.cookies?.session_token;
       if (token) {
         const oauthService = this.oauthService;
-        const payload = await oauthService.verifySessionToken(token);
+        const payload = await oauthService.verifySessionSignature(token);
         if (payload.sessionId) {
           let userId = payload.sub;
           if (payload.externalAuthId) {

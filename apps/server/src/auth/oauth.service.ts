@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { SignJWT, jwtVerify } from 'jose';
+import { SessionsService } from './sessions.service';
 
 export interface HackClubUser {
   id: string;
@@ -60,7 +61,7 @@ export class OAuthService {
 
   private oidcEndpoints: OAuthEndpoints | null = null;
 
-  constructor() {
+  constructor(private readonly sessions: SessionsService) {
     const jwtSecretString = process.env.JWT_SECRET;
     if (!jwtSecretString) {
       throw new Error('JWT_SECRET environment variable is required');
@@ -308,6 +309,14 @@ export class OAuthService {
   }
 
   async verifySessionToken(token: string): Promise<TokenPayload> {
+    const payload = await this.verifySessionSignature(token);
+    if (!payload.sessionId || !(await this.sessions.validateSession(payload.sessionId))) {
+      throw new Error('Invalid or expired token');
+    }
+    return payload;
+  }
+
+  async verifySessionSignature(token: string): Promise<TokenPayload> {
     try {
       const { payload } = await jwtVerify(token, this.jwtSecret);
 
