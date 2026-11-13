@@ -67,6 +67,7 @@ jobs:
             sudo ip link set orchard0 up
             extra=(--node-ip=203.0.113.10 --advertise-address=203.0.113.10)
           fi
+          sudo env ORCHARD_LIB_ONLY=1 bash -c 'source install/install.sh; allow_container_signals'
           curl -sfL https://get.k3s.io | INSTALL_K3S_CHANNEL=stable sh -s - server \
             --disable=traefik \
             --write-kubeconfig-mode=644 "${extra[@]}"
@@ -164,5 +165,7 @@ jobs:
             kubectl -n "$ns" logs apiserver-probe --tail=20 || true
             kubectl -n "$ns" describe pod db-1 | tail -40 || true
             kubectl -n "$ns" logs db-1 -c postgres --tail=60 || true
+            kubectl -n "$ns" logs db-1 -c postgres | grep -v 57P03 | tail -40 || true
           done
           kubectl get events -A --sort-by=.lastTimestamp | tail -60 || true
+          sudo dmesg | grep -i apparmor | tail -20 || true
