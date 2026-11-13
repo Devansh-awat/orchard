@@ -67,11 +67,14 @@ for dir in "$CACHE_ROOT"/*/; do
   name=\${dir#"$CACHE_ROOT"/}
   name=\${name%/}
   [ "$name" = "$SELF" ] && continue
-  newest=$(find "$dir" -maxdepth 2 -exec stat $STAT_FMT {} + 2>/dev/null | sort -rn | head -1)
+  stamps=$(find "$dir" -maxdepth 2 -exec stat $STAT_FMT {} + 2>/dev/null) || stamps=
+  newest=$(printf '%s\n' "$stamps" | sort -rn | head -1)
   # An age we could not read must never be treated as "infinitely old" — that
   # would turn one broken stat into a full wipe of every tenant's cache. find
   # always reports at least the directory itself, so an empty answer means
-  # something is wrong; leave the tenant alone and let a later build retry.
+  # something is wrong. GNU find still stats a directory it cannot open and
+  # then exits non-zero, so a failed walk counts as unknown too; leave the
+  # tenant alone and let a later build retry.
   if [ -z "$newest" ]; then
     echo "Skipping $name: could not determine age"
     continue
@@ -89,7 +92,8 @@ done < "$WORK/tenants.lru"
 if [ -d "$CACHE_ROOT/$SELF" ]; then
   for dir in "$CACHE_ROOT/$SELF"/*/; do
     [ -f "\${dir}index.json" ] || continue
-    newest=$(find "$dir" -maxdepth 1 -exec stat $STAT_FMT {} + 2>/dev/null | sort -rn | head -1)
+    stamps=$(find "$dir" -maxdepth 1 -exec stat $STAT_FMT {} + 2>/dev/null) || continue
+    newest=$(printf '%s\n' "$stamps" | sort -rn | head -1)
     [ -n "$newest" ] || continue
     [ "$newest" -lt "$AGE_CUTOFF" ] || continue
     echo "Evicting stale image cache: \${dir%/}"
