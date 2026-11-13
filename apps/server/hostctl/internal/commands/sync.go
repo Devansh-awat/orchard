@@ -69,6 +69,7 @@ func All() []*cli.Command {
 		Logs(),
 		Status(),
 		K3s(),
+		ImageGC(),
 		Images(),
 		Sync(),
 		Uninstall(),

@@ -168,7 +168,9 @@ func Update() *cli.Command {
 		Usage: `orchardctl update - upgrade this instance
 
 Runs orchardctl harden first, which fixes an install from before the registry
-was locked down and the firewall was opened.
+was locked down and the firewall was opened. If this server has no image
+garbage collection settings yet, it writes Orchard's and restarts k3s once (see
+orchardctl image-gc --help).
 
 Then it turns on, once, what newer releases do by default: metrics, the log
 store, the Orchard image scanner and, when no object storage is configured
@@ -193,6 +195,7 @@ ORCHARD_ADDON_UPDATES=off in /etc/orchard/env.
 			if err := harden(c); err != nil {
 				return err
 			}
+			liveImageGCHost(c).ensureDefaults(c)
 			allowRootlessBuilds(c, usernsProcPath, usernsSysctlConf, c.Run)
 			if err := migrateValues(c); err != nil {
 				return err
