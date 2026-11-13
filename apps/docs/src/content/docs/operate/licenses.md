@@ -29,7 +29,7 @@ Each part of Orchard includes the copyright notices and license texts of the ope
 | [Host commands](/operate/host-commands/) | `orchardctl licenses`                                                                         |
 | This documentation                       | [third-party-notices.txt](/third-party-notices.txt)                                           |
 
-For all notices in one place, refer to [orchard.my/credits](https://orchard.my/credits).
+For all notices in one place, refer to [orchard.my/credits](https://orchard.hackclub.com/credits).
 
 ## Related resources
 

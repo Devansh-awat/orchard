@@ -250,6 +250,13 @@ export const directory: DirectoryItem[] = [
     group: 'Configure'
   },
   {
+    title: 'Game servers',
+    text: 'Run Minecraft, Valheim and other game servers next to your apps.',
+    href: '/run/game-servers/',
+    icon: 'box',
+    group: 'Configure'
+  },
+  {
     title: 'Webhooks',
     text: 'Trigger a deploy from outside Orchard.',
     href: '/run/webhooks/',

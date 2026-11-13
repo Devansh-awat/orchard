@@ -66,7 +66,7 @@ A tap is a folder on an `https` host that people add once and then install from 
 
 ## List a community graft
 
-Community grafts appear in the [Extension Marketplace](https://orchard.my/extensions), labeled with their publisher. The code stays in your own repository.
+Community grafts appear in the [Extension Marketplace](https://orchard.hackclub.com/extensions), labeled with their publisher. The code stays in your own repository.
 
 1. Run `graft keygen`, and store the private key as a GitHub Actions secret.
 2. Add a workflow that packs, signs, and attaches `<id>-<version>.graft` to each GitHub Release:

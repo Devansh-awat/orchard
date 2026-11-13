@@ -1,6 +1,6 @@
 ---
 title: Architecture
-description: Review the components of an Orchard instance, and how Orchard reads from and writes to Kubernetes.
+description: Review the components of an Orchard instance, what keeps running if the control plane stops, and how Orchard reads from and writes to Kubernetes.
 sidebar:
   order: 1
 ---
@@ -61,6 +61,10 @@ Orchard sends state changes to the dashboard as server-sent events over Redis St
 Background work that must not run twice, such as watching the cluster, uses a Kubernetes lease. This lets the server run more than one replica.
 
 By default, each server pod serves the API and runs the queues. To run builds, notifications, and the apply queue in separate pods, set `server.workers.enabled` to `true` in the chart.
+
+## If the control plane stops
+
+Apps, databases, and routes are ordinary Kubernetes objects, so they do not depend on the Orchard server, frontend, or engine. If those stop, apps keep running and serving traffic, and CloudNativePG keeps managing database failover and backups. Builds, deploys, and other changes wait until Orchard is back. An upgrade of Orchard does not restart apps either. For more information, refer to [Upgrade Orchard](/operate/upgrades/#effect-on-running-apps).
 
 ## Related resources
 

@@ -74,7 +74,7 @@ If a graft includes a cluster chart for CRDs or RBAC, `add` installs it as the H
 
 ## Install with Helm values
 
-Add an entry to your values. The graft's [Extension Marketplace](https://orchard.my/extensions) page shows the entry to copy.
+Add an entry to your values. The graft's [Extension Marketplace](https://orchard.hackclub.com/extensions) page shows the entry to copy.
 
 ```yaml
 grafts:

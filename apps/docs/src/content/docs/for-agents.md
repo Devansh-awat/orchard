@@ -10,8 +10,8 @@ To give an agent access to this documentation, use the Markdown sources. To let 
 Add `.md` to a documentation URL:
 
 ```txt
-https://docs.orchard.my/start/install/      the page
-https://docs.orchard.my/start/install.md    its Markdown source
+https://docs.orchard.hackclub.com/start/install/      the page
+https://docs.orchard.hackclub.com/start/install.md    its Markdown source
 ```
 
 The home page is at `/index.md`.
@@ -30,10 +30,10 @@ The menu next to them has **Open in Claude**, **Open in ChatGPT**, and **Connect
 
 Two files follow the [llms.txt](https://llmstxt.org) convention.
 
-| File                                                      | Contents                                                         |
-| --------------------------------------------------------- | ---------------------------------------------------------------- |
-| [`/llms.txt`](https://docs.orchard.my/llms.txt)           | An index of every page, grouped by section, with Markdown links. |
-| [`/llms-full.txt`](https://docs.orchard.my/llms-full.txt) | The entire documentation set as one document.                    |
+| File                                                                | Contents                                                         |
+| ------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| [`/llms.txt`](https://docs.orchard.hackclub.com/llms.txt)           | An index of every page, grouped by section, with Markdown links. |
+| [`/llms-full.txt`](https://docs.orchard.hackclub.com/llms-full.txt) | The entire documentation set as one document.                    |
 
 Use `llms.txt` to decide what to read. Use `llms-full.txt` to load everything in one request.
 

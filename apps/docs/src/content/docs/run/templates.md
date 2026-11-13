@@ -206,7 +206,7 @@ Deploy a template end to end before you publish it. A template can deploy withou
 
 ## The community registry
 
-Orchard publishes its built-in templates and community templates to `https://assets.orchard.my/registry`. The gallery is at [orchard.my/templates](https://orchard.my/templates).
+Orchard publishes its built-in templates and community templates to `https://assets.orchard.my/registry`. The gallery is at [orchard.my/templates](https://orchard.hackclub.com/templates).
 
 Each instance reads the catalog when it starts and every six hours. To use another registry, set `TEMPLATE_REGISTRY_URL`. On an air-gapped instance, set the variable to an empty value. The built-in templates still load from the server image.
 

@@ -1,7 +1,7 @@
 import type { CollectionEntry } from 'astro:content';
 import { toPlainMarkdown } from './markdown';
 
-export const SITE = 'https://docs.orchard.my';
+export const SITE = 'https://docs.orchard.hackclub.com';
 
 type Doc = CollectionEntry<'docs'>;
 

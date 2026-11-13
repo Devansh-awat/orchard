@@ -1,17 +1,17 @@
 import type { IconName } from './icons';
 
-export const SITE_URL = 'https://docs.orchard.my';
+export const SITE_URL = 'https://docs.orchard.hackclub.com';
 export const REPO_URL = 'https://github.com/hackclub/orchard';
 export const MCP_URL = 'https://mcp.your-orchard-domain';
 
 export const DOCS_PROMPT =
-  'Read the Orchard docs at https://docs.orchard.my/llms.txt and use them to help me. Fetch the pages you need before you answer, and link the pages you used.';
+  'Read the Orchard docs at https://docs.orchard.hackclub.com/llms.txt and use them to help me. Fetch the pages you need before you answer, and link the pages you used.';
 
 export const INSTALL_PROMPT =
-  'Install Orchard on my server following https://docs.orchard.my/start/install.md. Ask me before anything that is not reversible.';
+  'Install Orchard on my server following https://docs.orchard.hackclub.com/start/install.md. Ask me before anything that is not reversible.';
 
 export const SETUP_PROMPT =
-  'Connect to my Orchard instance over MCP. Follow https://docs.orchard.my/agent-setup.md. Ask me for my Orchard domain first.';
+  'Connect to my Orchard instance over MCP. Follow https://docs.orchard.hackclub.com/agent-setup.md. Ask me for my Orchard domain first.';
 
 export const groupIcons: Record<string, IconName> = {
   Deploy: 'rocket',
@@ -72,7 +72,7 @@ export const footerColumns = [
   {
     title: 'Project',
     links: [
-      { label: 'orchard.my', href: 'https://orchard.my' },
+      { label: 'orchard.hackclub.com', href: 'https://orchard.hackclub.com' },
       { label: 'GitHub', href: REPO_URL },
       { label: 'Report an issue', href: `${REPO_URL}/issues/new` },
       { label: 'Licenses', href: '/operate/licenses/' }

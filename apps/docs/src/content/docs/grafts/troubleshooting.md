@@ -103,7 +103,7 @@ Remove the failing graft, then set `graftSettings.safeMode` back to `false`.
 
 ## Still stuck?
 
-Collect the phase and reason from **Instance admin** > **Grafts**, and the output of `sudo orchardctl graft list`. Then contact the graft's publisher. Its details are on its [Extension Marketplace](https://orchard.my/extensions) page.
+Collect the phase and reason from **Instance admin** > **Grafts**, and the output of `sudo orchardctl graft list`. Then contact the graft's publisher. Its details are on its [Extension Marketplace](https://orchard.hackclub.com/extensions) page.
 
 ## Related resources
 

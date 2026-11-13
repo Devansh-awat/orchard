@@ -5,7 +5,7 @@ import starlightOpenAPI, { openAPISidebarGroups } from 'starlight-openapi';
 import rehypeWrapTables from './src/lib/rehype-wrap-tables.mjs';
 
 export default defineConfig({
-  site: 'https://docs.orchard.my',
+  site: 'https://docs.orchard.hackclub.com',
   redirects: {
     '/run/sandboxes': '/greenhouse/',
     '/operate/node-pools': '/operate/nodes/'
@@ -64,6 +64,7 @@ export default defineConfig({
           items: [
             { label: 'Overview', link: '/' },
             { label: 'What is Orchard', slug: 'start/what-is-orchard' },
+            { label: 'Features', slug: 'start/features' },
             { label: 'Install', slug: 'start/install' },
             { label: 'First deploy', slug: 'start/first-deploy' },
             { label: 'Concepts', slug: 'start/concepts' },
@@ -83,6 +84,7 @@ export default defineConfig({
                 { label: 'From your terminal', slug: 'deploy/deploy-from-terminal' },
                 { label: 'Compose stacks', slug: 'run/compose' },
                 { label: 'Templates', slug: 'run/templates' },
+                { label: 'Game servers', slug: 'run/game-servers' },
                 { label: 'Builds', slug: 'deploy/builds' },
                 { label: 'score.yaml', slug: 'deploy/score' }
               ]

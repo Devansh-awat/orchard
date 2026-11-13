@@ -399,7 +399,7 @@ Use `lan` mode for a machine that you reach over Tailscale. The installer detect
 An agent with SSH access to the machine can run the installer. Point the agent at the [Markdown version of this page](/for-agents/#get-a-page-as-markdown):
 
 ```text
-Install Orchard on <host> following https://docs.orchard.my/start/install.md
+Install Orchard on <host> following https://docs.orchard.hackclub.com/start/install.md
 My domain is example.com.
 Ask me before anything that is not reversible.
 ```

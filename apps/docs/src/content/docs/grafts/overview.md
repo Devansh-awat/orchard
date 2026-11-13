@@ -5,7 +5,7 @@ sidebar:
   order: 1
 ---
 
-A graft is an extension that adds features to an Orchard instance without a fork. It can add pages, API endpoints, its own database tables, [Model Context Protocol (MCP) tools](/mcp/#choose-toolsets), instance settings, and cards or tabs on existing pages. You find grafts in the [Extension Marketplace](https://orchard.my/extensions). You install them with [`orchardctl graft add`](/grafts/install/) or with Helm values, and Orchard rolls out the change like an upgrade.
+A graft is an extension that adds features to an Orchard instance without a fork. It can add pages, API endpoints, its own database tables, [Model Context Protocol (MCP) tools](/mcp/#choose-toolsets), instance settings, and cards or tabs on existing pages. You find grafts in the [Extension Marketplace](https://orchard.hackclub.com/extensions). You install them with [`orchardctl graft add`](/grafts/install/) or with Helm values, and Orchard rolls out the change like an upgrade.
 
 :::caution
 Only install grafts you trust. A graft runs inside Orchard with the same access as Orchard: your database, your users' data, and your cluster. Orchard checks signatures, versions, and declared requirements, and shows them to you before you install. These checks are not a sandbox.

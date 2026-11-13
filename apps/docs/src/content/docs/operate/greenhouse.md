@@ -39,7 +39,7 @@ grafts:
     digest: sha256:<digest>
 ```
 
-The [Extension Marketplace page](https://orchard.my/extensions/greenhouse) shows the current version and digest. The rollout works like an [Orchard upgrade](/operate/upgrades/).
+The [Extension Marketplace page](https://orchard.hackclub.com/extensions/greenhouse) shows the current version and digest. The rollout works like an [Orchard upgrade](/operate/upgrades/).
 
 ### Control who can use Greenhouse
 
