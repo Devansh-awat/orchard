@@ -1,4 +1,5 @@
 import type * as k8s from '@kubernetes/client-node';
+import { DEFAULT_BUILDKIT_IMAGE, DEFAULT_BUILDKIT_ROOTLESS_IMAGE } from './buildkit-image';
 
 export type BuildPosture = 'vm-sandbox' | 'rootless' | 'privileged-host';
 
@@ -50,8 +51,11 @@ export function rootlessImageFor(image: string, override?: string): string {
 }
 
 export function buildkitImageFor(posture: BuildPosture, env: PostureEnv = process.env): string {
-  const image = env.BUILDKIT_IMAGE || 'moby/buildkit:v0.34.2';
+  const image = env.BUILDKIT_IMAGE || DEFAULT_BUILDKIT_IMAGE;
   if (posture !== 'rootless') return image;
+  if (image === DEFAULT_BUILDKIT_IMAGE && !(env.BUILDKIT_ROOTLESS_IMAGE || '').trim()) {
+    return DEFAULT_BUILDKIT_ROOTLESS_IMAGE;
+  }
   return rootlessImageFor(image, env.BUILDKIT_ROOTLESS_IMAGE);
 }
 

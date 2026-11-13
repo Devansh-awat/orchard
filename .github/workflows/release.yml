@@ -456,9 +456,10 @@ jobs:
       - name: Pin + publish chart
         run: |
           set -euo pipefail
-          sudo curl -fsSL -o /usr/local/bin/yq \
-            https://github.com/mikefarah/yq/releases/download/v4.44.3/yq_linux_amd64
-          sudo chmod +x /usr/local/bin/yq
+          curl -fsSL -o "$RUNNER_TEMP/yq" \
+            https://github.com/mikefarah/yq/releases/download/v4.54.3/yq_linux_amd64
+          echo "129534601871538efe0ba4c5e62a34fb1d5f469bcb975c4fddeb467d82974973  $RUNNER_TEMP/yq" | sha256sum -c -
+          sudo install -m 0755 "$RUNNER_TEMP/yq" /usr/local/bin/yq
 
           M=.release-please-manifest.json
           FRONTEND=$(jq -r '."apps/frontend"' "$M"); SERVER=$(jq -r '."apps/server"' "$M")

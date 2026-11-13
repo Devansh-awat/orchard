@@ -6,7 +6,8 @@ export const TAILSCALE_EGRESS_EXCEPT = [
   '100.64.0.0/10'
 ] as const;
 
-export const DEFAULT_TAILSCALE_IMAGE = 'ghcr.io/tailscale/tailscale:latest';
+export const DEFAULT_TAILSCALE_IMAGE =
+  'ghcr.io/tailscale/tailscale:v1.104.7@sha256:72c1e19e0aedca96b8533bbb0b4368564410ff20b17e53b804eb6c1f04a31be4';
 
 export const tailscaleImage = (): string =>
   process.env.TAILSCALE_IMAGE?.trim() || DEFAULT_TAILSCALE_IMAGE;

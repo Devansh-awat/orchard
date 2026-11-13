@@ -1,3 +1,5 @@
+import { ALPINE_IMAGE } from './helper-images';
+
 /**
  * Tenant-level eviction for the shared BuildKit cache PVC.
  *
@@ -124,7 +126,7 @@ echo "=== Shared build cache at $(usage)% after eviction ==="
 export function cacheEvictInitContainer(opts: CacheEvictOptions) {
   return {
     name: 'cache-evict',
-    image: 'alpine:latest',
+    image: ALPINE_IMAGE,
     command: ['/bin/sh', '-c'],
     args: [cacheEvictScript(opts)],
     // Puts the tail of this container's output in terminated.message when it

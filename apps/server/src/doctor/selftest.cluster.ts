@@ -27,8 +27,10 @@ import {
   type SelfTestPodInput
 } from './selftest.types';
 
-const DEFAULT_PROBE_IMAGE = 'docker.io/library/debian:12-slim';
-const DEFAULT_LISTENER_IMAGE = 'docker.io/library/busybox:1.36';
+const DEFAULT_PROBE_IMAGE =
+  'docker.io/library/debian:12.15-slim@sha256:734a72b3d6142a71993b4bc580ca01d8ca687f77a2c422d96a961d3376b179bc';
+const DEFAULT_LISTENER_IMAGE =
+  'docker.io/library/busybox:1.38.0@sha256:a46257e06c82ad85242d0d38077d0a52d9896389ca60a1a59d3463db586e5fa4';
 const MAX_PLATFORM_PORTS_PER_SERVICE = 6;
 const MAX_INGRESS_PODS = 10;
 const GiB = 1024 ** 3;

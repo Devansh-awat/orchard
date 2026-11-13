@@ -1,1 +1,7 @@
-export const BUILDKIT_IMAGE = process.env.BUILDKIT_IMAGE || 'moby/buildkit:v0.34.2';
+export const DEFAULT_BUILDKIT_IMAGE =
+  'moby/buildkit:v0.34.2@sha256:c5f8862f52499773af85bc07695b2379ef08e8002352b0df2c4864c91d78dabe';
+
+export const DEFAULT_BUILDKIT_ROOTLESS_IMAGE =
+  'moby/buildkit:v0.34.2-rootless@sha256:c8252268760e1baba80780d63d738ef9f260fb7c7c0973c78494cb9ddd99eda1';
+
+export const BUILDKIT_IMAGE = process.env.BUILDKIT_IMAGE || DEFAULT_BUILDKIT_IMAGE;

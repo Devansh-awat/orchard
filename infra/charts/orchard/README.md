@@ -237,7 +237,9 @@ Routing (Traefik IngressRoute on `Host(ingress.host, ...ingress.extraHosts)`):
 ## 4. Values reference
 
 The keys most installs touch, with defaults from `values.yaml`. `values.yaml` itself
-is the complete list.
+is the complete list. Each third-party image default below is a version tag pinned to
+its multi-arch index digest (`repo:tag@sha256:…`) in `values.yaml`; the tables show the
+tag. `orchardctl update` moves them within their policy and pins the digest it pulled.
 
 ### Top-level
 
@@ -437,7 +439,7 @@ is the single place the MCP's address is configured.
 | `builders.enabled` | `true` | Install the `orchard-builders` namespace + RBAC + secrets. |
 | `builders.namespace` | `orchard-builders` | Namespace where BuildKit pods will run. |
 | `builders.buildkitImage` | `moby/buildkit:v0.34.2` | BuildKit image for builds. `orchardctl update` moves it to the newest patch version. |
-| `builders.buildkitRootlessImage` | `""` | BuildKit image for rootless builds. Empty adds `-rootless` to the `buildkitImage` tag. |
+| `builders.buildkitRootlessImage` | `moby/buildkit:v0.34.2-rootless` | BuildKit image for rootless builds, the default. `orchardctl update` moves it to the newest patch version. Empty adds `-rootless` to the `buildkitImage` tag and drops its digest, so set both when you mirror BuildKit. |
 | `builders.allowPrivilegedOnHost` | `false` | Without `builderSandbox`, builds run in rootless BuildKit. `true` restores a PRIVILEGED BuildKit container on the node runtime, where a Dockerfile `RUN` step is root on the node. Do not enable it for untrusted builders. |
 | `builders.railpackVersion` | `v0.43.0` | Railpack version for builds without a Dockerfile. |
 | `builders.harbor.username` | `""` | Registry username (written to `harbor-registry-creds` dockerconfigjson). Required when `hosts` is set. |
@@ -501,7 +503,7 @@ Both off by default, and both need the runtime on every node first, or pods fail
 | `builderSandbox.runtimeClassName` / `handler` | `kata` / `kata` | RuntimeClass for build Jobs, as `BUILDER_RUNTIME_CLASS`. |
 | `builderSandbox.depotRuntimeClassName` | `gvisor` | RuntimeClass for super builds (Depot), which never execute repo code. It must exist, and `tenantSandbox` renders it. `""` reuses `runtimeClassName`. |
 | `builderSandbox.sidecarPush` | `true` | Move BuildKit to an init container with no registry credentials and push from a separate container. |
-| `builderSandbox.pusherImage` | `quay.io/skopeo/stable:latest` | Image for that container. Must have `skopeo` on `PATH`. |
+| `builderSandbox.pusherImage` | `quay.io/skopeo/stable:v1.24.1` | Image for that container. Must have `skopeo` on `PATH`. |
 | `builderSandbox.tmpfsWorkspace` | `false` | Back workspace and output `emptyDir`s with memory. Counts against the container's memory limit. |
 | `builderSandbox.scratch.mode` | `""` | `tmpfs`, `disk` or `block`. Empty follows the isolation setting. |
 | `builderSandbox.scratch.size` / `storageClass` | `40Gi` / `""` | Size and class of the BuildKit scratch. The class only applies in block mode; empty uses the default StorageClass. With tmpfs, `size` is a RAM reservation. |
@@ -539,8 +541,8 @@ that.
 |---|---|---|
 | `objectStorage.local.enabled` | `false` | Deploy the store in `objectStorage.local.namespace`. |
 | `objectStorage.local.namespace` | `orchard-object-storage` | Its namespace. A NetworkPolicy admits only the release namespace (the server) and `r2Proxy.namespace`; tenant pods cannot reach it at all. |
-| `objectStorage.local.image` | `versity/versitygw:v1.10.0` | The S3 gateway, POSIX backend on `/data`. The filesystem needs user xattrs (ext4 and xfs have them). |
-| `objectStorage.local.bucketImage` | `amazon/aws-cli:2.39.3` | Image of the Job that creates the bucket. Its name hashes bucket, image and region, so a change runs it again. |
+| `objectStorage.local.image` | `versity/versitygw:v1.11.0` | The S3 gateway, POSIX backend on `/data`. The filesystem needs user xattrs (ext4 and xfs have them). |
+| `objectStorage.local.bucketImage` | `amazon/aws-cli:2.40.2` | Image of the Job that creates the bucket. Its name hashes bucket, image and region, so a change runs it again. |
 | `objectStorage.local.bucket` | `orchard-backups` | The bucket backups go to. |
 | `objectStorage.local.region` | `auto` | The region every client signs with. versitygw rejects any other; the server and r2-proxy sign with `auto`. |
 | `objectStorage.local.backups` | `true` | Make this the instance backup target. Requires `r2Proxy.enabled`: the render fails otherwise, because tenant databases must only ever get per-prefix proxy credentials, never the root key. |
@@ -669,7 +671,7 @@ outside Orchard.
 |---|---|---|
 | `databaseDumps.enabled` | `false` | Render the CronJobs. |
 | `databaseDumps.schedule` | `15 2 * * *` | Cron, unless a target sets its own `schedule`. |
-| `databaseDumps.image` / `uploaderImage` | `postgres:17-alpine` / `amazon/aws-cli:2.39.3` | Dump and upload images. Keep the Postgres major at or above your server's. |
+| `databaseDumps.image` / `uploaderImage` | `postgres:17.12-alpine` / `amazon/aws-cli:2.40.2` | Dump and upload images. Keep the Postgres major at or above your server's. |
 | `databaseDumps.destination.bucket` | `""` | Required when there are targets. |
 | `databaseDumps.destination.prefix` | `platform-dumps` | Key prefix. |
 | `databaseDumps.destination.endpointURL` | `""` | S3 endpoint, for anything that is not AWS. |
@@ -689,13 +691,13 @@ outside Orchard.
 | `metrics.ingress.haproxy.namespaces` | `[network]` | Namespaces vmagent scrapes the HAProxy ingress pods from. Also sent as `INGRESS_METRICS_HAPROXY_NAMESPACE`. |
 | `metrics.ingress.haproxy.labels` | `{app.kubernetes.io/name: kubernetes-ingress}` | Pod labels that identify the HAProxy ingress pods. |
 | `metrics.ingress.haproxy.portName` | `stat` | Container port name of the HAProxy stats exporter. |
-| `metrics.victoriametrics.image` | `victoriametrics/victoria-metrics:v1.155.0` | VM image. Keep it on the same version as `metrics.vmagent.image`. |
+| `metrics.victoriametrics.image` | `victoriametrics/victoria-metrics:v1.156.0` | VM image. Keep it on the same version as `metrics.vmagent.image`. |
 | `metrics.victoriametrics.retention` | `30d` | `-retentionPeriod` flag. |
 | `metrics.victoriametrics.storage.size` | `5Gi` | StatefulSet PVC size. |
 | `metrics.victoriametrics.storage.storageClass` | `""` | StorageClass for the VM data PVC. Empty keeps the live StatefulSet's class, or uses the cluster default. |
 | `metrics.victoriametrics.memoryAllowedPercent` | `60` | `-memory.allowedPercent`. VM sizes its cache off the memory *limit*, so it grows to fill whatever it is given; lower this and the limit together to shrink idle RSS. |
 | `metrics.victoriametrics.resources` | requests `100m/256Mi`, limits `1/1Gi` | Resource block. |
-| `metrics.vmagent.image` | `victoriametrics/vmagent:v1.155.0` | vmagent image. |
+| `metrics.vmagent.image` | `victoriametrics/vmagent:v1.156.0` | vmagent image. |
 | `metrics.vmagent.resources` | requests `50m/128Mi`, limits `500m/512Mi` | Resource block. |
 | `metrics.kubeStateMetrics.image` | `registry.k8s.io/kube-state-metrics/kube-state-metrics:v2.20.0` | kube-state-metrics image. Each release tracks one Kubernetes client-go minor (v2.20 is v1.36), so bump it with the cluster. |
 | `metrics.kubeStateMetrics.resources` | requests `20m/64Mi`, limits `200m/256Mi` | Resource block. |
@@ -715,7 +717,7 @@ VictoriaLogs plus a Vector DaemonSet, in `metrics.namespace` but toggled indepen
 | `logs.enabled` | `true` | Install VictoriaLogs + Vector and inject `VICTORIALOGS_URL` (`http://victorialogs.<metrics.namespace>.svc.cluster.local:9428`) into the server. |
 | `logs.retention` | `14d` | `-retentionPeriod`. |
 | `logs.maxDiskSpaceUsage` | `16GiB` | `-retention.maxDiskSpaceUsageBytes`. Oldest days are dropped past this whatever the retention says. Keep it below the PVC size. |
-| `logs.victorialogs.image` | `victoriametrics/victoria-logs:v1.53.0` | VictoriaLogs image. |
+| `logs.victorialogs.image` | `victoriametrics/victoria-logs:v1.54.0` | VictoriaLogs image. |
 | `logs.victorialogs.storage.size` / `storageClass` | `20Gi` / cluster default | StatefulSet PVC. A StatefulSet cannot change class in place: `orchardctl update` recreates one whose volume never bound, and pins the values to the live class of one that did. |
 | `logs.victorialogs.resources` | requests `100m/256Mi`, limits `1/1Gi` | Resource block. |
 | `logs.vector.image` | `timberio/vector:0.61.0-distroless-libc` | Vector image. |
@@ -745,7 +747,7 @@ it reaches the installer's zot.
 |-----|---------|-------------|
 | `trivy.enabled` | `false` | Install the Trivy server in `trivy.namespace` and inject `TRIVY_SERVER_URL`, `TRIVY_SCAN_NAMESPACE`, `TRIVY_IMAGE`, `TRIVY_SERVER_TOKEN`, `TRIVY_MAX_CONCURRENT_SCANS`, `TRIVY_SCAN_TIMEOUT_SECONDS` and `ORCHARD_INTERNAL_URL` (`http://server.<namespace>.svc.cluster.local:<server.service.port>`, unless `server.env` sets it) into the server. |
 | `trivy.namespace` | `orchard-scans` | Namespace for the server and the scan jobs. Created by the chart, Pod Security `restricted`. |
-| `trivy.image` | `ghcr.io/aquasecurity/trivy:0.76.1` | Used for both the server and the jobs. Keep it the Alpine-based upstream image: jobs run `sh` and `wget`. |
+| `trivy.image` | `ghcr.io/aquasecurity/trivy:0.76.2` | Used for both the server and the jobs. Keep it the Alpine-based upstream image: jobs run `sh` and `wget`. |
 | `trivy.token` | generated | Shared secret between the jobs and the server, kept across upgrades in `trivy-server-token`. |
 | `trivy.maxConcurrentScans` | `3` | Scans running at once; a scan request past this is refused with a "try again" message. |
 | `trivy.scanTimeoutSeconds` | `900` | `activeDeadlineSeconds` of each scan job. Trivy's own timeout is a minute less. |

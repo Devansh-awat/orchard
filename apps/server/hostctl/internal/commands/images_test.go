@@ -80,6 +80,23 @@ func TestSplitImage(t *testing.T) {
 	if _, _, ok := splitImage("redis@sha256:abc"); ok {
 		t.Error("a digest has no tag to move")
 	}
+	repo, tag, ok = splitImage("localhost:5000/redis:8.10.3-alpine@sha256:abc")
+	if !ok || repo != "localhost:5000/redis" || tag != "8.10.3-alpine" {
+		t.Errorf("a pinned tag: got %q %q %v", repo, tag, ok)
+	}
+}
+
+func TestFloatingTargetCanCrossACalendarYear(t *testing.T) {
+	tags := []string{"2026.11.0", "2026.12.1", "2027.1.0", "2027.1.1", "latest"}
+	held := map[string]bool{"cf:2027.1.1": true}
+	best, _ := floatingTarget(mustTag(t, "2026.11.0"), tags, held, "cf", true)
+	if best.raw != "2027.1.0" {
+		t.Errorf("calendar best %s", best.raw)
+	}
+	best, ahead := floatingTarget(mustTag(t, "v2.1.20"), []string{"v2.1.23", "v3.0.0"}, nil, "zot", false)
+	if best.raw != "v2.1.23" || ahead.raw != "v3.0.0" {
+		t.Errorf("semver best %s ahead %s", best.raw, ahead.raw)
+	}
 }
 
 func TestRegistryRef(t *testing.T) {
@@ -136,7 +153,7 @@ func TestReportLeavesAnImageTheUserSet(t *testing.T) {
 		values(t, "redis: {image: 'my.registry/redis:6.0.0'}"),
 		values(t, "{}"),
 		func(string) ([]string, error) { t.Fatal("no registry call for a pinned image"); return nil, nil },
-		nil)
+		noDigest(t), nil)
 	if !report.pinned || report.chosen != "my.registry/redis:6.0.0" {
 		t.Errorf("got %+v", report)
 	}
@@ -148,17 +165,17 @@ func TestReportNeverGoesBelowTheChartOrTheLastVersion(t *testing.T) {
 	tags := func(string) ([]string, error) {
 		return []string{"0.60.0-distroless-libc", "0.61.0-distroless-libc", "0.62.0-distroless-libc"}, nil
 	}
-	report := reportImage(entry, chart, values(t, "{}"), values(t, "{}"), tags, nil)
-	if report.running != "timberio/vector:0.61.0-distroless-libc" || report.chosen != "timberio/vector:0.62.0-distroless-libc" {
+	report := reportImage(entry, chart, values(t, "{}"), values(t, "{}"), tags, digestOf, nil)
+	if report.running != "timberio/vector:0.61.0-distroless-libc" || report.chosen != "timberio/vector:0.62.0-distroless-libc@sha256:0.62.0-distroless-libc" {
 		t.Errorf("got %+v", report)
 	}
 	previous := values(t, "logs: {vector: {image: 'timberio/vector:0.63.0-distroless-libc'}}")
-	report = reportImage(entry, chart, values(t, "{}"), previous, tags, nil)
-	if report.chosen != "timberio/vector:0.63.0-distroless-libc" {
+	report = reportImage(entry, chart, values(t, "{}"), previous, tags, digestOf, nil)
+	if report.chosen != "timberio/vector:0.63.0-distroless-libc@sha256:0.63.0-distroless-libc" {
 		t.Errorf("went backwards: %+v", report)
 	}
 	older := values(t, "logs: {vector: {image: 'timberio/vector:0.50.0-distroless-libc'}}")
-	report = reportImage(entry, chart, values(t, "{}"), older, tags, nil)
+	report = reportImage(entry, chart, values(t, "{}"), older, tags, digestOf, nil)
 	if report.running != "timberio/vector:0.61.0-distroless-libc" {
 		t.Errorf("a new chart should win over an older record: %+v", report)
 	}
@@ -168,9 +185,55 @@ func TestReportKeepsTheVersionWhenARegistryFails(t *testing.T) {
 	failure := errors.New("no route")
 	report := reportImage(bundledImage{path: "redis.image"},
 		values(t, "redis: {image: 'redis:8.10.3-alpine'}"), values(t, "{}"), values(t, "{}"),
-		func(string) ([]string, error) { return nil, failure }, nil)
+		func(string) ([]string, error) { return nil, failure }, noDigest(t), nil)
 	if !errors.Is(report.err, failure) || report.chosen != "redis:8.10.3-alpine" {
 		t.Errorf("got %+v", report)
+	}
+}
+
+func digestOf(_, tag string) (string, error) {
+	return "sha256:" + tag, nil
+}
+
+func noDigest(t *testing.T) func(string, string) (string, error) {
+	return func(string, string) (string, error) {
+		t.Fatal("no digest lookup expected")
+		return "", nil
+	}
+}
+
+func TestReportKeepsAPinnedChartDigest(t *testing.T) {
+	chart := values(t, "redis: {image: 'redis:8.10.3-alpine@sha256:chart'}")
+	tags := func(string) ([]string, error) { return []string{"8.10.3-alpine", "8.11.0-alpine"}, nil }
+	report := reportImage(bundledImage{path: "redis.image", patchOnly: true}, chart, values(t, "{}"), values(t, "{}"), tags, noDigest(t), nil)
+	if report.chosen != "redis:8.10.3-alpine@sha256:chart" || report.ahead != "redis:8.11.0-alpine" {
+		t.Errorf("got %+v", report)
+	}
+	unpinned := values(t, "redis: {image: 'redis:8.10.3-alpine'}")
+	report = reportImage(bundledImage{path: "redis.image", patchOnly: true}, unpinned, values(t, "{}"), values(t, "{}"), tags, digestOf, nil)
+	if report.chosen != "redis:8.10.3-alpine@sha256:8.10.3-alpine" {
+		t.Errorf("a tag without a digest should be pinned: %+v", report)
+	}
+	failure := errors.New("no digest")
+	report = reportImage(bundledImage{path: "redis.image"}, unpinned, values(t, "{}"), values(t, "{}"),
+		func(string) ([]string, error) { return []string{"8.10.4-alpine"}, nil },
+		func(string, string) (string, error) { return "", failure }, nil)
+	if !errors.Is(report.err, failure) || report.chosen != "redis:8.10.3-alpine" {
+		t.Errorf("a failed digest lookup should keep the version: %+v", report)
+	}
+}
+
+func TestEveryChartImageIsPinnedToADigest(t *testing.T) {
+	raw, err := os.ReadFile("../../../../../infra/charts/orchard/values.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	chart := values(t, string(raw))
+	for _, entry := range bundledImages {
+		image := imageAt(chart, entry.path)
+		if _, _, ok := splitImage(image); !ok || !strings.Contains(image, "@sha256:") {
+			t.Errorf("%s is %q, not a tag pinned to a digest", entry.path, image)
+		}
 	}
 }
 

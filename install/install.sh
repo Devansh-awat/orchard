@@ -2753,7 +2753,7 @@ control_plane_dump_values() {
 # undo, not disaster recovery: the dumps share a disk with the database.
 databaseDumps:
   enabled: true
-  image: postgres:18-alpine
+  image: postgres:18.7-alpine@sha256:75dcac3dfb1cd01ca3536910bbc84128759362f8b118bf8c55b38a94f68f3b73
   destination:
     bucket: orchard-backups
     prefix: _control-plane
@@ -2972,12 +2972,40 @@ ensure_helm() {
   run_step "downloading helm" 20s helm_download
 }
 
-YQ_VERSION=${YQ_VERSION:-v4.44.3}
+YQ_PINNED=v4.54.3
+YQ_VERSION=${YQ_VERSION:-$YQ_PINNED}
+
+yq_sha256() {
+  if [ -n "${YQ_SHA256:-}" ]; then
+    printf '%s' "$YQ_SHA256"
+    return
+  fi
+  [ "$YQ_VERSION" = "$YQ_PINNED" ] || return 1
+  case "$ARCH" in
+    amd64) printf '%s' 129534601871538efe0ba4c5e62a34fb1d5f469bcb975c4fddeb467d82974973 ;;
+    arm64) printf '%s' 89f69310b61b68d1245065a1241d1fc843f7a36cd6103ffd77ad987613bd1b67 ;;
+    *) return 1 ;;
+  esac
+}
 
 yq_download() {
-  curl -fsSL -o /usr/local/bin/yq \
-    "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_${ARCH}"
-  chmod +x /usr/local/bin/yq
+  local sum tmp
+  if ! sum=$(yq_sha256); then
+    echo "yq $YQ_VERSION has no known checksum; set YQ_SHA256 to the sha256 of yq_linux_$ARCH" >&2
+    return 1
+  fi
+  tmp=$(mktemp)
+  if ! curl -fsSL -o "$tmp" "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_${ARCH}"; then
+    rm -f "$tmp"
+    return 1
+  fi
+  if [ "$(sha256sum "$tmp" | cut -d' ' -f1)" != "$sum" ]; then
+    rm -f "$tmp"
+    echo "yq_linux_$ARCH $YQ_VERSION doesn't match its sha256" >&2
+    return 1
+  fi
+  install -m 0755 "$tmp" /usr/local/bin/yq
+  rm -f "$tmp"
 }
 
 # Backs orchard-config. Editing the values file by hand is the alternative, and
@@ -3082,7 +3110,7 @@ registry_htpasswd() {
   if command -v htpasswd >/dev/null 2>&1; then
     htpasswd -nbB "$REGISTRY_USER" "$REGISTRY_PASSWORD"
   else
-    kubectl run zot-htpasswd --rm -i --quiet --restart=Never --image=httpd:2.4-alpine \
+    kubectl run zot-htpasswd --rm -i --quiet --restart=Never --image=httpd:2.4.71-alpine@sha256:32bd0639bcc4917ef1fd9363a1d9dd2dd9c498565118b062a10d51e43a5c3a24 \
       --command -- htpasswd -nbB "$REGISTRY_USER" "$REGISTRY_PASSWORD"
   fi
 }
@@ -3165,7 +3193,7 @@ spec:
     spec:
       containers:
         - name: zot
-          image: ghcr.io/project-zot/zot-linux-${ARCH}:latest
+          image: ghcr.io/project-zot/zot:v2.1.23@sha256:9d3de83ac2099e6f4843045b4c9b65b7e8baf40f92d28f54906dee9d4d390fd7
           args: ["serve", "/etc/zot/config.json"]
           ports:
             - containerPort: 5000
@@ -3268,7 +3296,7 @@ spec:
     spec:
       containers:
         - name: cloudflared
-          image: cloudflare/cloudflared:latest
+          image: cloudflare/cloudflared:2026.11.0@sha256:b94b96edf2c9c4360f8879c8580cfaa99077f19c849ec595ca2f711b27d4f344
           args: ["tunnel", "--no-autoupdate", "run"]
           env:
             - name: TUNNEL_TOKEN

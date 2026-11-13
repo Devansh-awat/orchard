@@ -59,7 +59,7 @@ To move a store that holds data to another class, set the value explicitly. The 
 | `logs.enabled`                           | `true`                                                 | `true`                                   |
 | `logs.retention`                         | `14d`                                                  | `7d`                                     |
 | `logs.maxDiskSpaceUsage`                 | `16GiB`                                                | From free disk                           |
-| `logs.victorialogs.image`                | `victoriametrics/victoria-logs:v1.53.0`                |                                          |
+| `logs.victorialogs.image`                | `victoriametrics/victoria-logs:v1.54.0`                |                                          |
 | `logs.victorialogs.storage.size`         | `20Gi`                                                 | From free disk                           |
 | `logs.victorialogs.storage.storageClass` | Empty, the cluster default                             | `local-path`                             |
 | `logs.victorialogs.resources`            | Requests `100m/256Mi`, limits `1/1Gi`                  | Requests `50m/96Mi`, limits `1/384Mi`    |

@@ -22,6 +22,7 @@ import {
   daemonTenantLabel,
   LEGACY_DAEMON_INGRESS_POLICY
 } from './buildkit-daemon-policy';
+import { ALPINE_IMAGE } from './helper-images';
 
 const POSTURE_ANNOTATION = 'orchard.my/build-posture';
 
@@ -281,7 +282,7 @@ export class BuildKitPoolService {
               initContainers: [
                 {
                   name: 'own-state',
-                  image: 'alpine:latest',
+                  image: ALPINE_IMAGE,
                   command: ['/bin/sh', '-c'],
                   args: [`chown -R ${ROOTLESS_UID}:${ROOTLESS_UID} /state`],
                   securityContext: { runAsUser: 0, allowPrivilegeEscalation: false },

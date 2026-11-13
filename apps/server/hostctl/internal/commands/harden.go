@@ -208,7 +208,7 @@ func htpasswdLine(c *cli.Context, password string) (string, error) {
 		out, err = c.Capture("htpasswd", "-nbB", registryUser, password)
 	} else {
 		out, err = c.Capture("kubectl", "-n", c.Env.Namespace, "run", "zot-htpasswd", "--rm", "-i", "--quiet",
-			"--restart=Never", "--image=httpd:2.4-alpine", "--command", "--", "htpasswd", "-nbB", registryUser, password)
+			"--restart=Never", "--image=httpd:2.4.71-alpine@sha256:32bd0639bcc4917ef1fd9363a1d9dd2dd9c498565118b062a10d51e43a5c3a24", "--command", "--", "htpasswd", "-nbB", registryUser, password)
 	}
 	if err != nil {
 		return "", fmt.Errorf("couldn't hash the registry password: %w", err)

@@ -27,6 +27,8 @@ var bundledImages = []bundledImage{
 	{path: "redis.image", patchOnly: true},
 	{path: "postgres.pooler.image", patchOnly: true},
 	{path: "builders.buildkitImage", patchOnly: true},
+	{path: "builders.buildkitRootlessImage", patchOnly: true},
+	{path: "builderSandbox.pusherImage"},
 	{path: "metrics.victoriametrics.image"},
 	{path: "metrics.vmagent.image"},
 	{path: "metrics.kubeStateMetrics.image"},
@@ -42,11 +44,12 @@ var bundledImages = []bundledImage{
 type floatingWorkload struct {
 	namespace string
 	name      string
+	anyMajor  bool
 }
 
 var floatingWorkloads = []floatingWorkload{
 	{namespace: "orchard", name: "zot"},
-	{namespace: "cloudflared", name: "cloudflared"},
+	{namespace: "cloudflared", name: "cloudflared", anyMajor: true},
 }
 
 const (
@@ -89,11 +92,16 @@ func (t imageTag) newerThan(o imageTag) bool {
 }
 
 func splitImage(image string) (repo, tag string, ok bool) {
-	i := strings.LastIndex(image, ":")
-	if i < 0 || strings.Contains(image[i:], "/") || strings.Contains(image, "@") {
+	ref, _, _ := strings.Cut(image, "@")
+	i := strings.LastIndex(ref, ":")
+	if i < 0 || strings.Contains(ref[i:], "/") {
 		return "", "", false
 	}
-	return image[:i], image[i+1:], true
+	return ref[:i], ref[i+1:], true
+}
+
+func pinnedRef(repo, tag, digest string) string {
+	return repo + ":" + tag + "@" + digest
 }
 
 func chooseImageTag(current imageTag, tags []string, patchOnly bool, held map[string]bool, repo string) (best, ahead imageTag) {
@@ -118,6 +126,23 @@ func chooseImageTag(current imageTag, tags []string, patchOnly bool, held map[st
 		}
 	}
 	return best, ahead
+}
+
+func floatingTarget(current imageTag, tags []string, held map[string]bool, repo string, anyMajor bool) (best, ahead imageTag) {
+	if !anyMajor {
+		return chooseImageTag(current, tags, false, held, repo)
+	}
+	best = current
+	for _, raw := range tags {
+		tag, ok := parseImageTag(raw)
+		if !ok || tag.prefix != current.prefix || tag.suffix != current.suffix || held[repo+":"+raw] {
+			continue
+		}
+		if tag.newerThan(best) {
+			best = tag
+		}
+	}
+	return best, best
 }
 
 func registryRef(repo string) (host, path string) {
@@ -365,7 +390,7 @@ func imageAt(values *cli.Values, path string) string {
 	return s
 }
 
-func reportImage(entry bundledImage, chart, user, pinnedFile *cli.Values, tagsFor func(string) ([]string, error), held map[string]bool) imageReport {
+func reportImage(entry bundledImage, chart, user, pinnedFile *cli.Values, tagsFor func(string) ([]string, error), digestFor func(repo, tag string) (string, error), held map[string]bool) imageReport {
 	report := imageReport{path: entry.path}
 	if pinned := imageAt(user, entry.path); pinned != "" {
 		report.running, report.chosen, report.pinned = pinned, pinned, true
@@ -399,10 +424,18 @@ func reportImage(entry bundledImage, chart, user, pinnedFile *cli.Values, tagsFo
 		return report
 	}
 	best, ahead := chooseImageTag(current, tags, entry.patchOnly, held, repo)
-	report.chosen = repo + ":" + best.raw
 	if ahead.raw != best.raw {
 		report.ahead = repo + ":" + ahead.raw
 	}
+	if best.raw == current.raw && strings.Contains(report.chosen, "@") {
+		return report
+	}
+	digest, err := digestFor(repo, best.raw)
+	if err != nil {
+		report.err = err
+		return report
+	}
+	report.chosen = pinnedRef(repo, best.raw, digest)
 	return report
 }
 
@@ -438,7 +471,7 @@ func imageReports(c *cli.Context) ([]imageReport, *cli.Values, *cli.Values, erro
 	held := readHeld(c)
 	reports := make([]imageReport, 0, len(bundledImages))
 	for _, entry := range bundledImages {
-		reports = append(reports, reportImage(entry, chart, user, pinnedFile, tagsFor, held))
+		reports = append(reports, reportImage(entry, chart, user, pinnedFile, tagsFor, client.digest, held))
 	}
 	return reports, chart, pinnedFile, nil
 }
@@ -472,6 +505,7 @@ func refreshBundledImages(c *cli.Context) []imageChange {
 				report.ahead, report.path, report.chosen, report.path, c.Env.Values)
 		}
 		if report.chosen == imageAt(chart, report.path) {
+			pinnedFile.Unset(report.path)
 			continue
 		}
 		if err := pinnedFile.Put(report.path, report.chosen); err != nil {
@@ -575,7 +609,7 @@ func revertFailedImages(c *cli.Context, changes []imageChange, reapply func() er
 		if err := pinnedFile.Put(change.path, change.previous); err != nil {
 			c.Warnf("note: couldn't go back on %s: %s\n", change.path, err)
 		}
-		if err := appendHeld(c, change.next); err != nil {
+		if err := appendHeld(c, withoutDigest(change.next)); err != nil {
 			c.Warnf("note: couldn't record %s: %s\n", change.next, err)
 		}
 	}
@@ -586,6 +620,11 @@ func revertFailedImages(c *cli.Context, changes []imageChange, reapply func() er
 	if err := reapply(); err != nil {
 		c.Warnf("note: going back failed: %s\n", err)
 	}
+}
+
+func withoutDigest(image string) string {
+	ref, _, _ := strings.Cut(image, "@")
+	return ref
 }
 
 func runningDigests(body []byte) []string {
@@ -617,46 +656,93 @@ func refreshFloatingWorkloads(c *cli.Context) {
 		return
 	}
 	client := newRegistryClient()
+	held := readHeld(c)
 	for _, workload := range floatingWorkloads {
 		image, err := c.Capture("kubectl", "-n", workload.namespace, "get", "deploy", workload.name,
 			"-o", "jsonpath={.spec.template.spec.containers[0].image}")
 		if err != nil {
 			continue
 		}
-		repo, tag, ok := splitImage(strings.TrimSpace(image))
-		if !ok || tag != "latest" {
+		image = strings.TrimSpace(image)
+		repo, tag, ok := splitImage(image)
+		if !ok {
 			continue
 		}
-		digest, err := client.digest(repo, tag)
-		if err != nil {
-			c.Warnf("note: couldn't check %s: %s\n", repo, err)
-			continue
+		if tag == "latest" {
+			restartOnNewLatest(c, client, workload, repo)
+		} else {
+			movePinnedWorkload(c, client, workload, image, repo, tag, held)
 		}
-		pods, err := c.Capture("kubectl", "-n", workload.namespace, "get", "pods", "-l", "app="+workload.name, "-o", "json")
-		if err != nil {
-			continue
-		}
-		running := runningDigests([]byte(pods))
-		if len(running) == 0 {
-			continue
-		}
-		current := true
-		for _, d := range running {
-			if d != digest {
-				current = false
+	}
+}
+
+func restartOnNewLatest(c *cli.Context, client *registryClient, workload floatingWorkload, repo string) {
+	digest, err := client.digest(repo, "latest")
+	if err != nil {
+		c.Warnf("note: couldn't check %s: %s\n", repo, err)
+		return
+	}
+	pods, err := c.Capture("kubectl", "-n", workload.namespace, "get", "pods", "-l", "app="+workload.name, "-o", "json")
+	if err != nil {
+		return
+	}
+	running := runningDigests([]byte(pods))
+	if len(running) == 0 {
+		return
+	}
+	for _, d := range running {
+		if d != digest {
+			c.Printf("%s: a new %s:latest is out\n", workload.name, repo)
+			if err := c.Run("kubectl", "-n", workload.namespace, "rollout", "restart", "deploy/"+workload.name); err != nil {
+				c.Warnf("note: couldn't restart %s: %s\n", workload.name, err)
+				return
 			}
+			if err := c.Run("kubectl", "-n", workload.namespace, "rollout", "status", "deploy/"+workload.name, "--timeout=5m"); err != nil {
+				c.Warnf("note: %s didn't come back: %s\n", workload.name, err)
+			}
+			return
 		}
-		if current {
-			continue
-		}
-		c.Printf("%s: a new %s:latest is out\n", workload.name, repo)
-		if err := c.Run("kubectl", "-n", workload.namespace, "rollout", "restart", "deploy/"+workload.name); err != nil {
-			c.Warnf("note: couldn't restart %s: %s\n", workload.name, err)
-			continue
-		}
-		if err := c.Run("kubectl", "-n", workload.namespace, "rollout", "status", "deploy/"+workload.name, "--timeout=5m"); err != nil {
-			c.Warnf("note: %s didn't come back: %s\n", workload.name, err)
-		}
+	}
+}
+
+func movePinnedWorkload(c *cli.Context, client *registryClient, workload floatingWorkload, image, repo, rawTag string, held map[string]bool) {
+	current, ok := parseImageTag(rawTag)
+	if !ok {
+		return
+	}
+	tags, err := client.tags(repo)
+	if err != nil {
+		c.Warnf("note: couldn't check %s: %s\n", repo, err)
+		return
+	}
+	best, ahead := floatingTarget(current, tags, held, repo, workload.anyMajor)
+	if ahead.raw != best.raw {
+		c.Warnf("note: %s:%s is out and needs a person. %s stays on %s:%s.\n", repo, ahead.raw, workload.name, repo, best.raw)
+	}
+	if best.raw == current.raw {
+		return
+	}
+	digest, err := client.digest(repo, best.raw)
+	if err != nil {
+		c.Warnf("note: couldn't check %s: %s\n", repo, err)
+		return
+	}
+	next := pinnedRef(repo, best.raw, digest)
+	deploy := "deploy/" + workload.name
+	c.Printf("%s: %s to %s\n", workload.name, image, next)
+	if err := c.Run("kubectl", "-n", workload.namespace, "set", "image", deploy, workload.name+"="+next); err != nil {
+		c.Warnf("note: couldn't update %s: %s\n", workload.name, err)
+		return
+	}
+	if err := c.Run("kubectl", "-n", workload.namespace, "rollout", "status", deploy, "--timeout=5m"); err == nil {
+		return
+	}
+	c.Warnf("note: %s didn't come up. Going back to %s, and it won't be tried again.\n", next, image)
+	if err := c.Run("kubectl", "-n", workload.namespace, "rollout", "undo", deploy); err != nil {
+		c.Warnf("note: going back failed: %s\n", err)
+	}
+	if err := appendHeld(c, repo+":"+best.raw); err != nil {
+		c.Warnf("note: couldn't record %s: %s\n", next, err)
 	}
 }
 
@@ -710,8 +796,10 @@ image you set in your values file stays as you set it.
   Redis, pgbouncer and BuildKit   patches only
   everything else listed          any version in the same major version
 
-A new major version always needs a person. If a new version doesn't come up, the
-update goes back and doesn't try that version again. To turn this off, set
+Each version it picks is pinned to the digest the registry served for it. The
+installer's zot and cloudflared move the same way, cloudflared to any newer
+release. A new major version always needs a person. If a new version doesn't
+come up, the update goes back and doesn't try that version again. To turn this off, set
 ORCHARD_ADDON_UPDATES=off in /etc/orchard/env.
 `,
 		Run: func(c *cli.Context, args []string) error {

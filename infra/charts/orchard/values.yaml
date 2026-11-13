@@ -272,7 +272,7 @@ networkPolicy:
 # enabled. The app degrades to local-only delivery + polling if it's absent.
 redis:
   enabled: true
-  image: redis:8.10.3-alpine
+  image: redis:8.10.3-alpine@sha256:7958cfbb9d152f87dadfbc89f1b0b15938f0b81ff8982feb327476f4911935c3
   storage: 1Gi
   storageClass: ""
   # Override to point at an external/managed Redis; otherwise the in-cluster
@@ -386,7 +386,7 @@ postgres:
     instances: 2
     defaultPoolSize: 20
     maxClientConn: 1000
-    image: ghcr.io/cloudnative-pg/pgbouncer:1.26.1
+    image: ghcr.io/cloudnative-pg/pgbouncer:1.26.1@sha256:6c91fd7383b8b098bc0c3b71dba4e98bd568c0d301b9fc66027fbc23259c6a7d
     resources:
       requests: { cpu: 50m, memory: 64Mi }
       limits: { memory: 256Mi }
@@ -419,10 +419,11 @@ ingress:
 builders:
   enabled: true
   namespace: orchard-builders
-  buildkitImage: moby/buildkit:v0.34.2
-  # Image for rootless builds. Empty derives it from buildkitImage by adding the
-  # "-rootless" tag suffix (moby/buildkit:v0.34.2-rootless).
-  buildkitRootlessImage: ""
+  buildkitImage: moby/buildkit:v0.34.2@sha256:c5f8862f52499773af85bc07695b2379ef08e8002352b0df2c4864c91d78dabe
+  # Image for rootless builds, which is what runs by default. Empty derives it
+  # from buildkitImage by adding the "-rootless" tag suffix and dropping any
+  # digest, so set both when you mirror BuildKit.
+  buildkitRootlessImage: moby/buildkit:v0.34.2-rootless@sha256:c8252268760e1baba80780d63d738ef9f260fb7c7c0973c78494cb9ddd99eda1
   # Without builderSandbox, builds run in rootless BuildKit: no privileged
   # container, uid 1000, user namespaces. It needs nodes that allow unprivileged
   # user namespaces. Setting this true restores the old behaviour, a PRIVILEGED
@@ -567,7 +568,7 @@ metrics:
         app.kubernetes.io/name: kubernetes-ingress
       portName: stat
   victoriametrics:
-    image: victoriametrics/victoria-metrics:v1.155.0
+    image: victoriametrics/victoria-metrics:v1.156.0@sha256:da8a90ac0912f16589be2b96a6441a2fca4bca415c83783d972d92e3b5b66970
     retention: 30d
     # VictoriaMetrics sizes its cache as a share of the memory *limit*, so it
     # grows to fill whatever it's given. Lower the limit to lower idle RSS.
@@ -580,17 +581,17 @@ metrics:
       # Empty uses the cluster's default StorageClass.
       storageClass: ""
   vmagent:
-    image: victoriametrics/vmagent:v1.155.0
+    image: victoriametrics/vmagent:v1.156.0@sha256:d3229ab469c54ae5266e86246932266bad29b06668b5371acbd6d3de1b3035e7
     resources:
       requests: { cpu: "50m", memory: "128Mi" }
       limits: { cpu: "500m", memory: "512Mi" }
   kubeStateMetrics:
-    image: registry.k8s.io/kube-state-metrics/kube-state-metrics:v2.20.0
+    image: registry.k8s.io/kube-state-metrics/kube-state-metrics:v2.20.0@sha256:42cfe3723a5f058171c627537fb57a3ea0f26e4380fa18555a95cb1a1b4cfc5b
     resources:
       requests: { cpu: "20m", memory: "64Mi" }
       limits: { cpu: "200m", memory: "256Mi" }
   nodeExporter:
-    image: prom/node-exporter:v1.12.1
+    image: prom/node-exporter:v1.12.1@sha256:1b4e4438faca4dd7e001dd445d161a4a2091b0fededa84093b3a8dfeae1f1be0
     resources:
       requests: { cpu: "20m", memory: "32Mi" }
       limits: { cpu: "200m", memory: "128Mi" }
@@ -606,7 +607,7 @@ logs:
   # the retention says. Keep it under storage.size.
   maxDiskSpaceUsage: 16GiB
   victorialogs:
-    image: victoriametrics/victoria-logs:v1.53.0
+    image: victoriametrics/victoria-logs:v1.54.0@sha256:ee4e820cac3721f5f5d91641b950c22439593adc4224f9655e5333d5a84c1dfe
     resources:
       requests: { cpu: "100m", memory: "256Mi" }
       limits: { cpu: "1", memory: "1Gi" }
@@ -615,7 +616,7 @@ logs:
       # Empty uses the cluster's default StorageClass.
       storageClass: ""
   vector:
-    image: timberio/vector:0.61.0-distroless-libc
+    image: timberio/vector:0.61.0-distroless-libc@sha256:1a3451978644d5cd4b99a0b28c990791e2f7e1efbea4184122f1c59a56448143
     # Host directory for file checkpoints, so a restarted pod resumes where it
     # left off instead of re-shipping every file.
     dataDir: /var/lib/vector-orchard
@@ -724,7 +725,7 @@ certificates:
 trivy:
   enabled: false
   namespace: orchard-scans
-  image: ghcr.io/aquasecurity/trivy:0.76.1
+  image: ghcr.io/aquasecurity/trivy:0.76.2@sha256:8f6bb947dbc528902e11f2f5be52f7b519f6a39d5d148f41166f2040499768fb
   # Shared secret between the scan jobs and the Trivy server. Generated and
   # kept across upgrades when empty.
   token: ""
@@ -871,9 +872,9 @@ objectStorage:
   local:
     enabled: false
     namespace: orchard-object-storage
-    image: versity/versitygw:v1.10.0
+    image: versity/versitygw:v1.11.0@sha256:8319a530d08d537426e2f855bae5280709795dc73a3f0c347973ef915d6343c5
     # Runs once per chart change to create the bucket.
-    bucketImage: amazon/aws-cli:2.39.3
+    bucketImage: amazon/aws-cli:2.40.2@sha256:acc32af784911165a8e78b63950625d174ba79b800a66a436c974689c87cd755
     bucket: orchard-backups
     # Avatars, icons and other uploads when no S3 storage is set. The server
     # serves them through its API, so this bucket stays private. Empty turns
@@ -936,13 +937,14 @@ priorityClasses:
 # Kubernetes >= 1.30. Every policy fails open (failurePolicy Ignore, missing
 # parameters skip the rule), so a fault in the guard cannot block the cluster.
 #
-# validationActions: [Warn, Audit] reports violations without refusing them; set
-# [Deny] after a week with no unexpected warnings (kubectl get events, API audit
-# log). hardeningActions covers the rules legacy pods may fail (drop ALL
-# capabilities, tenant RuntimeClass), so it is advisory by default.
+# validationActions: [Deny] refuses violations. Every object Orchard builds is
+# admitted (policies/fixtures/benign), so only shapes Orchard never creates are
+# refused. Set [Warn, Audit] to report without refusing. hardeningActions covers
+# the rules legacy pods may fail (drop ALL capabilities, tenant RuntimeClass), so
+# it stays advisory by default: a refusal there would stop old pods restarting.
 admissionPolicies:
   enabled: true
-  validationActions: [Warn, Audit]
+  validationActions: [Deny]
   hardeningActions: [Warn, Audit]
   # Defaults to system:serviceaccount:<namespace>:orchard-server.
   serverUser: ""
@@ -1008,10 +1010,10 @@ builderSandbox:
   # quay.io/skopeo/stable is the upstream Red Hat image. If you want to be
   # airtight, mirror this into your own registry and point at the
   # mirrored copy:
-  #   skopeo copy docker://quay.io/skopeo/stable:latest \
-  #               docker://registry.example.com/orchard/skopeo:latest
-  # Then set pusherImage: registry.example.com/orchard/skopeo:latest
-  pusherImage: quay.io/skopeo/stable:latest
+  #   skopeo copy docker://quay.io/skopeo/stable:v1.24.1 \
+  #               docker://registry.example.com/orchard/skopeo:v1.24.1
+  # Then set pusherImage: registry.example.com/orchard/skopeo:v1.24.1
+  pusherImage: quay.io/skopeo/stable:v1.24.1@sha256:9fdeeda2801cf93a0a15bfb2154e44a0c5a0f3650e54586165bd1b732e503702
   # Back workspace and output emptyDirs with tmpfs (memory) instead of disk.
   # Bypasses virtio-fs overhead in kata VMs — filesystem ops happen at memory
   # speed inside the guest. Counts against the container's memory limit.
@@ -1195,8 +1197,8 @@ graftSettings:
 databaseDumps:
   enabled: false
   schedule: "15 2 * * *"
-  image: postgres:17-alpine
-  uploaderImage: amazon/aws-cli:2.39.3
+  image: postgres:17.12-alpine@sha256:34261f594522cf41dfcb76aefd42b9d201098b0e6b23c9c68733f169e4218b6f
+  uploaderImage: amazon/aws-cli:2.40.2@sha256:acc32af784911165a8e78b63950625d174ba79b800a66a436c974689c87cd755
   destination:
     bucket: ""
     prefix: platform-dumps
