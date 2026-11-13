@@ -1,6 +1,6 @@
 module github.com/hackclub/orchard/cli // v0.1.1
 
-go 1.26.10
+go 1.26.11
 
 require (
 	github.com/charmbracelet/bubbles v0.20.0
