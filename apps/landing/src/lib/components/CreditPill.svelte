@@ -20,7 +20,7 @@
 	</span>
 	{#if explain}
 		<a href={explain} class="what">
-			What is Hack Club?
+			<span class="what-label">What is Hack Club?</span>
 			<ArrowDown size={16} strokeWidth={2.25} aria-hidden="true" />
 		</a>
 	{/if}
@@ -107,13 +107,43 @@
 
 	@media (max-width: 639px) {
 		.credit {
-			border-radius: 1.25rem;
-			font-size: 0.9375rem;
+			flex-wrap: nowrap;
+			gap: 0.5rem;
+			font-size: 0.8125rem;
 		}
 
 		.credit.with-explain {
-			padding: 0.5rem;
-			padding-left: 0.875rem;
+			padding: 0.25rem 0.25rem 0.25rem 0.75rem;
+		}
+
+		.who :global(svg) {
+			height: 19px;
+		}
+
+		.what {
+			width: 1.75rem;
+			height: 1.75rem;
+			padding: 0;
+			justify-content: center;
+		}
+
+		.what-label {
+			position: absolute;
+			width: 1px;
+			height: 1px;
+			overflow: hidden;
+			clip-path: inset(50%);
+			white-space: nowrap;
+		}
+	}
+
+	@media (max-width: 359px) {
+		.credit {
+			font-size: 0.75rem;
+		}
+
+		.who :global(svg) {
+			height: 17px;
 		}
 	}
 </style>

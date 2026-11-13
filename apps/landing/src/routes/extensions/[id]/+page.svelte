@@ -92,7 +92,7 @@
 </script>
 
 <Seo
-	title="{m.name} · Extensions · Hack Club Orchard"
+	title="{m.name} · Extensions · Orchard"
 	description={m.description ?? `${m.name}, a graft for Orchard.`}
 />
 
@@ -101,7 +101,7 @@
 		<nav class="flex items-center justify-between gap-4" aria-label="Main">
 			<a
 				href="/"
-				aria-label="Hack Club Orchard home"
+				aria-label="Orchard home"
 				class="rounded-sm focus-visible:outline-3 focus-visible:outline-offset-4 focus-visible:outline-cream"
 			>
 				<Logo />

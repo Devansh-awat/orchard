@@ -10,7 +10,7 @@ function escape(text: string) {
 
 function safeHref(href: string) {
 	try {
-		const url = new URL(href, 'https://orchard.my');
+		const url = new URL(href, 'https://orchard.hackclub.com');
 		if (url.protocol !== 'https:' && url.protocol !== 'http:') return null;
 		return escape(url.href);
 	} catch {

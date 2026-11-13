@@ -75,7 +75,7 @@
 		{ icon: MessageSquare, where: 'Discord · #alerts', text: 'App crashing: api' },
 		{ icon: MessageSquare, where: 'Discord · #alerts', text: 'App recovered: api' },
 		{ icon: Webhook, where: 'Webhook', text: 'Backup completed: site-db' },
-		{ icon: Slack, where: 'Slack · #deploys', text: 'Job run succeeded: nightly-backup #42' }
+		{ icon: Slack, where: 'Slack · #deploys', text: 'Job run succeeded: nightly-cleanup #42' }
 	];
 
 	const AGO = ['now', '2m', '9m', '14m'];
@@ -106,8 +106,10 @@
 		'Deployment protection',
 		'Compose stacks',
 		'Public status pages',
-		'Node pools and quotas',
-		'Command-K search'
+		'Image scanning',
+		'Blue/green deploys',
+		'Tailscale',
+		'Terraform provider'
 	];
 
 	let grid = $state<HTMLElement | null>(null);
@@ -428,7 +430,7 @@
 				{@render head(
 					Database,
 					'Postgres databases',
-					'A full Postgres next to your app, with backups and extensions.'
+					'A full Postgres next to your app. Restore to any second, fork it, or upgrade it in one click.'
 				)}
 				<div class="window h-[252px] p-3.5" aria-hidden="true">
 					<p class="flex items-center gap-2.5">
@@ -441,18 +443,18 @@
 							><span class="size-1.5 rounded-full bg-[#10b981]"></span>Ready</span
 						>
 						<span class="ml-auto flex gap-1 font-mono text-[10px] text-[#75696b]">
-							<span class="rounded bg-[#f4f1f1] px-1.5 py-0.5">PG 17</span>
+							<span class="rounded bg-[#f4f1f1] px-1.5 py-0.5">PG 18</span>
 							<span class="rounded bg-[#f4f1f1] px-1.5 py-0.5">10Gi</span>
 						</span>
 					</p>
 					<p class="mt-3 flex gap-3 border-b border-[#efeaea] pb-2 text-[11.5px] text-[#75696b]">
 						<span class="rounded-md bg-[#f4f1f1] px-2 py-0.5 font-medium text-[#1c1718]"
-							>Connection</span
+							>Overview</span
 						>
 						<span class="py-0.5">Backups</span>
-						<span class="py-0.5">Terminal</span>
-						<span class="py-0.5">Extensions</span>
-						<span class="py-0.5 max-sm:hidden">Queries</span>
+						<span class="py-0.5">Observe</span>
+						<span class="py-0.5">Security</span>
+						<span class="py-0.5 max-sm:hidden">Settings</span>
 					</p>
 					<div class="mt-3 rounded-lg border border-[#e8e4e4] bg-[#faf8f8]">
 						<p class="flex gap-0.5 p-1 text-[11px]">
@@ -491,7 +493,7 @@
 					</div>
 					<p class="mt-2.5 grid grid-cols-[64px_1fr] gap-y-1 px-1 text-[11px]">
 						<span class="font-medium">Host</span><span class="truncate font-mono text-[#75696b]"
-							>site-db-rw.orchard.svc.cluster.local</span
+							>site-db-rw.orchard-site-8ea1e1.svc.cluster.local</span
 						>
 						<span class="font-medium">Port</span><span class="font-mono text-[#75696b]">5432</span>
 					</p>
@@ -664,10 +666,14 @@
 				class:tile-on={active === 3}
 				class="tile lg:col-span-2"
 			>
-				{@render head(CalendarClock, 'Jobs and pipelines', 'Run nightly backups or pipelines.')}
+				{@render head(
+					CalendarClock,
+					'Jobs and pipelines',
+					'Run cron jobs, migrations or pipelines.'
+				)}
 				<div class="window h-[214px] p-3" aria-hidden="true">
 					<p class="flex items-center gap-1.5 text-[10.5px] text-[#75696b]">
-						<ArrowLeft size={10} /> nightly-backup
+						<ArrowLeft size={10} /> nightly-cleanup
 					</p>
 					<p class="mt-1 flex items-center gap-2">
 						<span class="text-[15px] font-bold">Run #42</span>
@@ -701,7 +707,7 @@
 									><Check size={9} strokeWidth={3.5} /></span
 								>
 							{/if}
-							<span class="font-medium">back up site-db</span>
+							<span class="font-medium">prune old sessions</span>
 							<span class="ml-auto font-mono text-[10.5px] text-[#75696b]"
 								>{running ? '…' : '12s'}</span
 							>
@@ -710,10 +716,10 @@
 							class="mt-1.5 min-h-[44px] rounded-md border border-[#efeaea] bg-white px-2 py-1.5 font-mono text-[10px] leading-[1.6] text-[#3a3233]"
 						>
 							{#if stdout > 0}<li in:fade={{ duration: 160 }}>
-									<span class="text-[#b3a9ab]">03:00:01</span> pg_dump: dumping site-db
+									<span class="text-[#b3a9ab]">03:00:01</span> deleting expired sessions
 								</li>{/if}
 							{#if stdout > 1}<li in:fade={{ duration: 160 }}>
-									<span class="text-[#b3a9ab]">03:00:12</span> uploaded 124 MB
+									<span class="text-[#b3a9ab]">03:00:12</span> removed 1,284 rows
 								</li>{/if}
 						</ul>
 					</div>

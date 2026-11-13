@@ -45,13 +45,13 @@
 		{
 			tool: 'create_database',
 			args: 'projectId: "c3a9…", name: "site-db"',
-			result: 'site-db ready · postgres 16',
+			result: 'site-db ready · postgres 18',
 			verb: 'Provisioning',
 			ms: 1200
 		},
 		{
 			tool: 'set_env_vars',
-			args: 'deploymentId: "4b8e…", envVars: [{"key":"DATABASE_URL",…}]',
+			args: 'deploymentId: "4b8e…", DATABASE_URL: "${{resource.site-db.url}}"',
 			result: '1 variable set · pods restarting',
 			verb: 'Wiring',
 			ms: 900

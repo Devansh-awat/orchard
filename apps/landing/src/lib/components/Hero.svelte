@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { animate, stagger } from 'motion';
+	import { Github } from 'lucide-svelte';
 	import Logo from './Logo.svelte';
 	import HeroMark from './HeroMark.svelte';
 	import PromptCopy from './PromptCopy.svelte';
@@ -128,7 +129,7 @@
 		<nav class="relative flex items-center justify-between gap-4" aria-label="Main">
 			<a
 				href="/"
-				aria-label="Hack Club Orchard home"
+				aria-label="Orchard home"
 				data-intro-hide
 				data-cascade="nav"
 				class="rounded-sm focus-visible:outline-3 focus-visible:outline-cream focus-visible:outline-offset-4"
@@ -141,15 +142,23 @@
 				data-cascade="nav"
 				class="absolute left-1/2 inline-flex -translate-x-1/2 items-center max-lg:hidden"
 			/>
-			<a href={links.install} data-intro-hide data-cascade="nav" class="pill pill-sm">
-				Install Orchard
-			</a>
+			<div class="flex items-center gap-2" data-intro-hide data-cascade="nav">
+				<a
+					href={links.github}
+					aria-label="Orchard on GitHub"
+					title="Orchard on GitHub"
+					class="gh inline-flex size-11 items-center justify-center rounded-lg text-white"
+				>
+					<Github size={20} strokeWidth={2} aria-hidden="true" />
+				</a>
+				<a href={links.install} class="pill pill-sm">Install Orchard</a>
+			</div>
 		</nav>
 		<CreditPill
 			explain="#hackclub"
 			data-intro-hide
 			data-cascade="nav"
-			class="mt-5 inline-flex items-center self-start lg:hidden"
+			class="mt-5 inline-flex items-center justify-center self-center text-center lg:hidden"
 		/>
 
 		<div class="my-auto pt-10 pb-20 max-md:my-0">
@@ -192,3 +201,20 @@
 		</div>
 	</div>
 </header>
+
+<style>
+	.gh {
+		background: rgb(195 16 38 / 0.35);
+		box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.16);
+		transition: background-color 0.18s ease;
+	}
+
+	.gh:hover {
+		background: var(--color-crimson-deep);
+	}
+
+	.gh:focus-visible {
+		outline: 3px solid var(--color-cream);
+		outline-offset: 3px;
+	}
+</style>

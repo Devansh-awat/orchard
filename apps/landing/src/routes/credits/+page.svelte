@@ -200,7 +200,7 @@
 </script>
 
 <Seo
-	title="Credits · Hack Club Orchard"
+	title="Credits · Orchard"
 	description="The people, typefaces, artwork and open-source packages behind Orchard."
 />
 
@@ -272,7 +272,7 @@
 		<nav class="flex items-center justify-between gap-4" aria-label="Main">
 			<a
 				href="/"
-				aria-label="Hack Club Orchard home"
+				aria-label="Orchard home"
 				class="rounded-sm focus-visible:outline-3 focus-visible:outline-offset-4 focus-visible:outline-cream"
 			>
 				<Logo />

@@ -12,12 +12,53 @@
 	import Footer from '$lib/components/Footer.svelte';
 	import Seo from '$lib/components/Seo.svelte';
 
-	const title = 'Hack Club Orchard · Your own cloud in one command';
+	import { links } from '$lib/links';
+	import { SITE } from '$lib/site';
+
+	const title = 'Orchard · Open-source, self-hosted PaaS';
 	const description =
-		'Orchard turns a GitHub repo into a running app on your own Kubernetes cluster, with databases, HTTPS, logs, and an MCP server for your agents.';
+		'Orchard is an open-source, self-hosted platform as a service from Hack Club. One command installs it on a Linux server, then you deploy apps from Git with Postgres, HTTPS, logs and an MCP server.';
+
+	const jsonLd = {
+		'@context': 'https://schema.org',
+		'@graph': [
+			{
+				'@type': 'Organization',
+				'@id': 'https://hackclub.com/#org',
+				name: 'Hack Club',
+				url: 'https://hackclub.com',
+				sameAs: ['https://en.wikipedia.org/wiki/Hack_Club', 'https://github.com/hackclub']
+			},
+			{
+				'@type': 'WebSite',
+				'@id': `${SITE}/#site`,
+				url: SITE,
+				name: 'Orchard',
+				alternateName: 'Orchard',
+				publisher: { '@id': 'https://hackclub.com/#org' }
+			},
+			{
+				'@type': 'SoftwareApplication',
+				'@id': `${SITE}/#app`,
+				name: 'Orchard',
+				alternateName: 'Orchard',
+				description,
+				applicationCategory: 'DeveloperApplication',
+				operatingSystem: 'Linux',
+				url: SITE,
+				downloadUrl: links.install,
+				softwareHelp: links.docs,
+				license: 'https://www.gnu.org/licenses/agpl-3.0.html',
+				isAccessibleForFree: true,
+				offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+				publisher: { '@id': 'https://hackclub.com/#org' },
+				sameAs: [links.github]
+			}
+		]
+	};
 </script>
 
-<Seo {title} {description} />
+<Seo {title} {description} {jsonLd} />
 
 <Hero />
 <FloatingNav />

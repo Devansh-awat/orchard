@@ -41,7 +41,7 @@
 </script>
 
 <Seo
-	title="{t.displayName} · Templates · Hack Club Orchard"
+	title="{t.displayName} · Templates · Orchard"
 	description={t.description ?? `Deploy ${t.displayName} on Orchard.`}
 	image={preview ? `${data.registry}/${preview}` : undefined}
 />
@@ -51,7 +51,7 @@
 		<nav class="flex items-center justify-between gap-4" aria-label="Main">
 			<a
 				href="/"
-				aria-label="Hack Club Orchard home"
+				aria-label="Orchard home"
 				class="rounded-sm focus-visible:outline-3 focus-visible:outline-offset-4 focus-visible:outline-cream"
 			>
 				<Logo />

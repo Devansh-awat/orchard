@@ -2,7 +2,7 @@ import { catalog, graftCatalog } from '$lib/server/registry';
 import { absolute } from '$lib/site';
 import type { RequestHandler } from './$types';
 
-const PAGES = ['/', '/templates', '/extensions', '/credits'];
+const PAGES = ['/', '/self-hosted-paas', '/compare', '/templates', '/extensions', '/credits'];
 
 function entry(path: string, modified?: string) {
 	const time = modified ? new Date(modified) : null;

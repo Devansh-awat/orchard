@@ -15,7 +15,7 @@
 </script>
 
 <svelte:head>
-	<title>{page.status} · Hack Club Orchard</title>
+	<title>{page.status} · Orchard</title>
 	<meta name="robots" content="noindex" />
 </svelte:head>
 
@@ -25,7 +25,7 @@
 			<nav class="relative flex items-center justify-between gap-4" aria-label="Main">
 				<a
 					href="/"
-					aria-label="Hack Club Orchard home"
+					aria-label="Orchard home"
 					class="rounded-sm focus-visible:outline-3 focus-visible:outline-offset-4 focus-visible:outline-cream"
 				>
 					<Logo />

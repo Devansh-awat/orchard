@@ -81,7 +81,7 @@
 </script>
 
 <Seo
-	title="Extension Marketplace · Hack Club Orchard"
+	title="Extension Marketplace · Orchard"
 	description="Grafts are Orchard's extensions. Add pages, APIs and integrations to your Orchard instance, installed with one command and rolled out like an upgrade."
 />
 
@@ -90,7 +90,7 @@
 		<nav class="flex items-center justify-between gap-4" aria-label="Main">
 			<a
 				href="/"
-				aria-label="Hack Club Orchard home"
+				aria-label="Orchard home"
 				class="rounded-sm focus-visible:outline-3 focus-visible:outline-offset-4 focus-visible:outline-cream"
 			>
 				<Logo />

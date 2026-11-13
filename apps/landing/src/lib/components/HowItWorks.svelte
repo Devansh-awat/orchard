@@ -24,6 +24,7 @@
 		RefreshCw,
 		Search,
 		Settings2,
+		ShieldCheck,
 		Sprout,
 		SquareTerminal,
 		Timer,
@@ -49,7 +50,7 @@
 		},
 		{
 			title: "It's live",
-			body: 'You get an HTTPS URL. With the GitHub App, every push ships itself.',
+			body: 'You get an HTTPS URL, and every push ships itself.',
 			ms: 5500
 		}
 	];
@@ -61,11 +62,11 @@
 	];
 
 	const BUILD = [
-		{ label: 'Scheduling builder', took: '2.1s' },
-		{ label: 'Building image', took: '13.4s' },
-		{ label: 'Pushing image', took: '3.1s' },
-		{ label: 'Creating app', took: '4.0s' },
-		{ label: 'Done', took: '' }
+		{ label: 'Starting the builder', took: '1.4s' },
+		{ label: 'Cloning the repo', took: '0.7s' },
+		{ label: 'Building the image', took: '13.4s' },
+		{ label: 'Pushing the image', took: '3.1s' },
+		{ label: 'Rolling out', took: '' }
 	];
 
 	const LAYERS = [
@@ -365,8 +366,8 @@
 			{@attach reveal({ index: 1 })}
 			class="section-lead mx-auto mt-2 max-w-[640px] text-balance text-crimson-deep max-sm:text-left"
 		>
-			A hosting platform you run on your own servers. Connect a GitHub repo, and Orchard builds it,
-			runs it, and gives it a URL.
+			An open-source platform as a service that runs on your own servers. Connect a repo, and
+			Orchard builds it, runs it, and gives it a URL.
 		</p>
 
 		<div
@@ -755,10 +756,13 @@
 														><Variable size={12} /> Variables</span
 													>
 													<span class="flex items-center gap-1.5"
-														><History size={12} /> Deploys</span
+														><History size={12} /> Activity</span
 													>
 													<span class="flex items-center gap-1.5"><Eye size={12} /> Observe</span>
 													<span class="flex items-center gap-1.5"><Wifi size={12} /> Network</span>
+													<span class="flex items-center gap-1.5 max-xl:hidden"
+														><ShieldCheck size={12} /> Security</span
+													>
 													<span class="flex items-center gap-1.5"
 														><Settings2 size={12} /> Settings</span
 													>

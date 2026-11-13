@@ -78,7 +78,7 @@
 </script>
 
 <Seo
-	title="Templates · Hack Club Orchard"
+	title="Templates · Orchard"
 	description="One-click stacks for Orchard, built in and contributed by the community. Deploy a blog, a database, a whole app with its pieces wired together."
 />
 
@@ -87,7 +87,7 @@
 		<nav class="flex items-center justify-between gap-4" aria-label="Main">
 			<a
 				href="/"
-				aria-label="Hack Club Orchard home"
+				aria-label="Orchard home"
 				class="rounded-sm focus-visible:outline-3 focus-visible:outline-offset-4 focus-visible:outline-cream"
 			>
 				<Logo />

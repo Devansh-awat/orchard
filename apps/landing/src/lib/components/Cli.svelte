@@ -9,12 +9,15 @@
 
 	const LINES: Line[] = [
 		{ kind: 'cmd', text: 'orchard auth login' },
-		{ kind: 'ok', text: 'logged in to https://myorchardinstance.orchard.my as leafd' },
+		{
+			kind: 'ok',
+			text: 'signed in to https://myorchardinstance.orchard.my as leafd (context default)'
+		},
 		{ kind: 'cmd', text: 'orchard import owner/repo' },
 		{ kind: 'ok', text: 'imported owner/repo as project repo' },
 		{
 			kind: 'ok',
-			text: 'will be live at https://repo.myorchardinstance.orchard.my (visible to your org until made public)'
+			text: 'will be live at https://repo.myorchardinstance.orchard.my (visible to your organization until made public)'
 		},
 		{ kind: 'cmd', text: 'orchard deploy scale <id> 3' },
 		{ kind: 'ok', text: 'scaled <id> to 3 replicas' }
@@ -112,7 +115,12 @@
 					class="rounded-md bg-white/70 px-1.5 py-0.5 font-mono text-[0.88em] whitespace-nowrap ring-1 ring-crimson/10"
 					>orchard import owner/repo</code
 				>
-				and your project is live. Check logs or roll back without leaving your terminal.
+				and your project is live, or run
+				<code
+					class="rounded-md bg-white/70 px-1.5 py-0.5 font-mono text-[0.88em] whitespace-nowrap ring-1 ring-crimson/10"
+					>orchard up</code
+				>
+				in any folder. Check logs or roll back without leaving your terminal.
 			</p>
 			<div {@attach reveal({ index: 2 })} class="mt-8 flex flex-col items-start gap-4">
 				<CopyChip
