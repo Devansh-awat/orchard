@@ -1,4 +1,4 @@
-import tracer from 'dd-trace';
+import { tracer } from './datadog';
 
 export interface CacheStats {
   steps: number;
@@ -91,7 +91,7 @@ export function recordBuildPipeline(meta: {
   endedAt?: number;
 }): void {
   try {
-    const statsd = (tracer as unknown as { dogstatsd?: Statsd }).dogstatsd;
+    const statsd = (tracer() as unknown as { dogstatsd?: Statsd }).dogstatsd;
     if (!statsd) return;
     const cache = buildCacheStats(meta.logs);
     const kind = cacheClass(cache);

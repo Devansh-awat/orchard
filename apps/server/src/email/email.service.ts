@@ -3,7 +3,6 @@ import { EMAIL } from '../instance-config/instance-config.sections';
 import { Injectable } from '@nestjs/common';
 import * as nodemailer from 'nodemailer';
 import { Transporter } from 'nodemailer';
-import mjml2html from 'mjml';
 import * as fs from 'fs';
 import * as path from 'path';
 import { fillTemplate } from './render-template';
@@ -210,6 +209,7 @@ export class EmailService {
     }
     mjmlContent = output;
 
+    const mjml2html = (await import('mjml')).default;
     const { html, errors } = await mjml2html(mjmlContent);
     if (errors.length > 0) {
       console.warn(`MJML warnings for ${templateName}:`, errors);

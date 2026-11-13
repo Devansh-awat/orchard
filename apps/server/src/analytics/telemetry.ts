@@ -7,15 +7,14 @@
  * Disabled when POSTHOG_API_KEY is unset: useful for local dev where you
  * don't want every console.log shipped to PostHog.
  */
-import { NodeSDK } from '@opentelemetry/sdk-node';
 import { OTLPLogExporter } from '@opentelemetry/exporter-logs-otlp-http';
-import { BatchLogRecordProcessor } from '@opentelemetry/sdk-logs';
-import { resourceFromAttributes } from '@opentelemetry/resources';
+import { BatchLogRecordProcessor, LoggerProvider } from '@opentelemetry/sdk-logs';
+import { defaultResource, resourceFromAttributes } from '@opentelemetry/resources';
 import { logs, SeverityNumber } from '@opentelemetry/api-logs';
 
 const SHUTDOWN_DEADLINE_MS = 30_000;
 
-let sdk: NodeSDK | null = null;
+let sdk: LoggerProvider | null = null;
 
 export function startTelemetry(): void {
   const key = process.env.POSTHOG_API_KEY;
@@ -25,21 +24,24 @@ export function startTelemetry(): void {
   // PostHog Logs OTLP endpoint. See docs/logs/installation/nodejs.
   const endpoint = process.env.POSTHOG_OTLP_LOGS_ENDPOINT || `${host}/i/v1/logs`;
 
-  sdk = new NodeSDK({
-    resource: resourceFromAttributes({
-      'service.name': process.env.OTEL_SERVICE_NAME || 'orchard-server',
-      'service.namespace': 'orchard',
-      'deployment.environment': process.env.NODE_ENV || 'development'
-    }),
-    logRecordProcessor: new BatchLogRecordProcessor({
-      exporter: new OTLPLogExporter({
-        url: endpoint,
-        headers: { Authorization: `Bearer ${key}` }
+  sdk = new LoggerProvider({
+    resource: defaultResource().merge(
+      resourceFromAttributes({
+        'service.name': process.env.OTEL_SERVICE_NAME || 'orchard-server',
+        'service.namespace': 'orchard',
+        'deployment.environment': process.env.NODE_ENV || 'development'
       })
-    })
+    ),
+    processors: [
+      new BatchLogRecordProcessor({
+        exporter: new OTLPLogExporter({
+          url: endpoint,
+          headers: { Authorization: `Bearer ${key}` }
+        })
+      })
+    ]
   });
-
-  sdk.start();
+  logs.setGlobalLoggerProvider(sdk);
 
   // Flush on shutdown without racing Nest's own graceful close. Registering a
   // SIGTERM listener disables Node's default exit, so the first signal flushes

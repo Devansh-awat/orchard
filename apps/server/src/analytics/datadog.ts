@@ -10,7 +10,25 @@
  * (DD_AGENT_HOST / DD_TRACE_AGENT_URL, set by the helm chart) or when
  * DD_TRACE_ENABLED=true is set explicitly. Local dev stays silent.
  */
-import tracer from 'dd-trace';
+type Tracer = typeof import('dd-trace');
+
+const noopSpan = {
+  addTags: () => noopSpan,
+  setTag: () => noopSpan,
+  finish: () => {}
+};
+
+const noopTracer = {
+  startSpan: () => noopSpan,
+  scope: () => ({ active: () => null, activate: (_span: unknown, fn: () => unknown) => fn() }),
+  setUser: () => noopTracer
+} as unknown as Tracer;
+
+let active: Tracer = noopTracer;
+
+export function tracer(): Tracer {
+  return active;
+}
 import { redactSpanUrls } from './url-redaction';
 
 export function initDatadog(): void {
@@ -18,7 +36,8 @@ export function initDatadog(): void {
   const hasAgent = !!(process.env.DD_AGENT_HOST || process.env.DD_TRACE_AGENT_URL);
   if (!hasAgent && process.env.DD_TRACE_ENABLED !== 'true') return;
 
-  tracer.init({
+  active = require('dd-trace') as Tracer;
+  active.init({
     env: process.env.DD_ENV || process.env.NODE_ENV || 'development',
     service: process.env.DD_SERVICE || 'orchard-server',
     version: process.env.DD_VERSION,
@@ -29,7 +48,7 @@ export function initDatadog(): void {
     // Continuous Profiler: wall/CPU/heap profiles via @datadog/pprof.
     profiling: process.env.DD_PROFILING_ENABLED !== 'false'
   });
-  tracer.use('http', {
+  active.use('http', {
     server: {
       hooks: {
         request: (span) => redactSpanUrls(span)
@@ -41,7 +60,7 @@ export function initDatadog(): void {
 export function gauge(name: string, value: number, tags: string[] = []): void {
   try {
     const statsd = (
-      tracer as unknown as {
+      tracer() as unknown as {
         dogstatsd?: { gauge(name: string, value: number, tags?: string[]): void };
       }
     ).dogstatsd;
@@ -87,7 +106,7 @@ export function startBuildTrace(meta: {
   isRebuild?: boolean;
 }) {
   const repo = meta.repoUrl?.replace(/^https?:\/\/github\.com\//i, '').replace(/\.git$/, '');
-  const span = tracer.startSpan('build.pipeline', {
+  const span = tracer().startSpan('build.pipeline', {
     tags: {
       'service.name': 'orchard-builds',
       'resource.name': repo ? `${repo}@${meta.branch ?? 'main'}` : meta.deploymentName,
@@ -114,7 +133,7 @@ export function startBuildTrace(meta: {
      */
     activate<T>(fn: () => Promise<T>): Promise<T> {
       try {
-        return tracer.scope().activate(span, fn);
+        return tracer().scope().activate(span, fn);
       } catch {
         return fn();
       }
@@ -158,8 +177,8 @@ export function startPhaseSpan(
   name: string,
   tags?: Record<string, string | number | boolean | undefined>
 ) {
-  const span = tracer.startSpan(name, {
-    childOf: tracer.scope().active() ?? undefined,
+  const span = tracer().startSpan(name, {
+    childOf: tracer().scope().active() ?? undefined,
     tags: {
       'service.name': 'orchard-builds',
       'resource.name': name,
@@ -188,7 +207,7 @@ export function startPhaseSpan(
  */
 export function tagActiveSpan(tags: Record<string, string | number | boolean>): void {
   try {
-    tracer.scope().active()?.addTags(tags);
+    tracer().scope().active()?.addTags(tags);
   } catch {
     return;
   }
@@ -202,8 +221,8 @@ export function recordPhaseSpan(
 ): void {
   if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) return;
   try {
-    const span = tracer.startSpan(name, {
-      childOf: tracer.scope().active() ?? undefined,
+    const span = tracer().startSpan(name, {
+      childOf: tracer().scope().active() ?? undefined,
       startTime: startMs,
       tags: {
         'service.name': 'orchard-builds',
@@ -261,7 +280,7 @@ export function recordBuildOutcome(meta: {
       `suppressed:${!!meta.suppressed}`
     ];
     const statsd = (
-      tracer as unknown as {
+      tracer() as unknown as {
         dogstatsd?: {
           increment(name: string, value?: number, tags?: string[]): void;
           distribution(name: string, value: number, tags?: string[]): void;
@@ -277,8 +296,8 @@ export function recordBuildOutcome(meta: {
   }
 
   try {
-    const span = tracer.startSpan('build.outcome', {
-      childOf: tracer.scope().active() ?? undefined,
+    const span = tracer().startSpan('build.outcome', {
+      childOf: tracer().scope().active() ?? undefined,
       tags: {
         'service.name': 'orchard-builds',
         'resource.name': `build.outcome.${meta.outcome}`,
@@ -344,7 +363,7 @@ export function recordRecoveryDecision(meta: {
       `had_building_run:${meta.hadBuildingRun}`
     ];
     const statsd = (
-      tracer as unknown as {
+      tracer() as unknown as {
         dogstatsd?: {
           increment(name: string, value?: number, tags?: string[]): void;
           distribution(name: string, value: number, tags?: string[]): void;
@@ -360,8 +379,8 @@ export function recordRecoveryDecision(meta: {
   }
 
   try {
-    const span = tracer.startSpan('build.recovery', {
-      childOf: tracer.scope().active() ?? undefined,
+    const span = tracer().startSpan('build.recovery', {
+      childOf: tracer().scope().active() ?? undefined,
       tags: {
         'service.name': 'orchard-builds',
         'resource.name': `build.recovery.${meta.action}`,
@@ -397,7 +416,7 @@ export function recordRecoveryDecision(meta: {
  */
 export function setTraceUser(id: string, sessionId?: string): void {
   try {
-    tracer.setUser({ id, ...(sessionId ? { session_id: sessionId } : {}) });
+    tracer().setUser({ id, ...(sessionId ? { session_id: sessionId } : {}) });
   } catch {
     return;
   }
@@ -405,7 +424,7 @@ export function setTraceUser(id: string, sessionId?: string): void {
 
 export function markSpanError(exception: unknown): void {
   try {
-    const span = tracer.scope().active();
+    const span = tracer().scope().active();
     if (!span) return;
     span.setTag('error', exception instanceof Error ? exception : new Error(String(exception)));
   } catch {

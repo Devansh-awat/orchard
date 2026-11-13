@@ -154,7 +154,6 @@
     "@opentelemetry/exporter-logs-otlp-http": "^0.222.0",
     "@opentelemetry/resources": "^2.11.0",
     "@opentelemetry/sdk-logs": "^0.222.0",
-    "@opentelemetry/sdk-node": "^0.222.0",
     "@prisma/client": "^6.18.0",
     "@simplewebauthn/server": "^13.3.3",
     "@types/multer": "^2.2.0",
