@@ -145,7 +145,7 @@
       "tenantSandbox.enabled with a runtime installed on every node (optional)",
       "builderSandbox.enabled with Kata and KVM (optional)",
       "user-namespace sysctl on build nodes for rootless builds",
-      "admissionPolicies.validationActions [Deny] when warnings are clean (optional)",
+      "admissionPolicies.validationActions [Deny] (default)",
       "admissionPolicies.extraIssuers and storageClasses (optional)",
       "databases.runtimeClassName (optional)"
     ],

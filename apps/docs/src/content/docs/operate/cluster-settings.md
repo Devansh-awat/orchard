@@ -24,17 +24,19 @@ Values: `admissionPolicies.extraIssuers`, `admissionPolicies.storageClasses`.
 The admission guard can check which certificate issuer a tenant Ingress names and which StorageClass a tenant PVC names. The issuer rule always allows `tenant.certClusterIssuer`. Add any other issuer you hand out, such as a DNS-01 wildcard issuer, to `extraIssuers`. Set `storageClasses` to the classes tenants may use, for example `[longhorn]`. An empty list skips that rule.
 
 - **Check first.** `kubectl get ingress -A -o jsonpath='{range .items[*]}{.metadata.annotations.cert-manager\.io/cluster-issuer}{"\n"}{end}' | sort | uniq -c` and `kubectl get pvc -A -o custom-columns=SC:.spec.storageClassName | sort | uniq -c` list what is in use. Every value in those lists must appear in your setting.
-- **Mode.** The guard starts in `Warn` and `Audit`, so a wrong value shows as a warning in `kubectl` output and in API audit events. It refuses nothing. A mistake costs you noise, not an outage.
+- **Mode.** The guard refuses by default, so a missing issuer or class refuses that tenant's Ingress or PVC. To try a value without that risk, set `admissionPolicies.validationActions: [Warn, Audit]` first, read the warnings, then set it back to `[Deny]`.
 - **Undo.** Empty the list.
 
-## Move the guard from Warn to Deny
+## Move the hardening rules to Deny
 
-Value: `admissionPolicies.validationActions: [Deny]`.
+Value: `admissionPolicies.hardeningActions: [Deny]`.
 
-- **Check first.** Run in `Warn` and `Audit` for a week. Look for warnings on objects you did not expect (events on the namespace, API server audit log). Fix the cause, or add the missing issuer or class, and repeat.
-- **Known warning.** The Tailscale proxy pod that Orchard does not build itself may fail the "drop ALL capabilities" rule. That rule sits in `hardeningActions`, which you can leave at `[Warn, Audit]` while `validationActions` is `[Deny]`.
+The rest of the guard refuses by default (`admissionPolicies.validationActions: [Deny]`). The hardening rules (drop ALL capabilities, tenant RuntimeClass) only warn, because pods created before them can fail and a refusal would stop them restarting.
+
+- **Check first.** Look for hardening warnings (events on the namespace, API server audit log). Redeploy the apps that report one.
+- **Known warning.** The Tailscale proxy pod that Orchard does not build itself may fail the "drop ALL capabilities" rule.
 - **Safe by design.** Every policy has `failurePolicy: Ignore` and every binding tolerates a missing parameter, so a fault in the guard cannot block the cluster. cert-manager's solver objects and the Orchard server are exempt from the object rules.
-- **Undo.** Set it back to `[Warn, Audit]`. The change applies in seconds.
+- **Undo.** Set it back to `[Warn, Audit]`. The change applies in seconds. The same goes for `validationActions` if the guard ever refuses something it should not.
 
 ## Sandbox databases and disable the superuser login
 

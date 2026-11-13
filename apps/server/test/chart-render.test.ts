@@ -426,11 +426,16 @@ test('the metrics stack runs on pinned images from values', { skip: !helmAvailab
     )?.spec.template.spec.containers[0].image;
   const out = render([]);
   for (const name of ['victoriametrics', 'vmagent', 'kube-state-metrics', 'node-exporter']) {
-    assert.match(imageOf(out, name), /:v\d+\.\d+\.\d+$/, `${name} is pinned to a release`);
+    assert.match(
+      imageOf(out, name),
+      /:v\d+\.\d+\.\d+@sha256:[0-9a-f]{64}$/,
+      `${name} is pinned to a release digest`
+    );
   }
+  const tagOf = (image: string) => image.split('@')[0].split(':')[1];
   assert.equal(
-    imageOf(out, 'vmagent').split(':')[1],
-    imageOf(out, 'victoriametrics').split(':')[1],
+    tagOf(imageOf(out, 'vmagent')),
+    tagOf(imageOf(out, 'victoriametrics')),
     'vmagent matches victoriametrics'
   );
   const custom = render([
@@ -449,7 +454,10 @@ test('the pooler pins pgbouncer unless the image is cleared', { skip: !helmAvail
       .find((d) => d.kind === 'Pooler')
       ?.spec.template.spec.containers.find((c: { name: string }) => c.name === 'pgbouncer');
   const pinned = pgbouncer(render(['postgres.pooler.enabled=true']));
-  assert.match(pinned.image, /^ghcr\.io\/cloudnative-pg\/pgbouncer:\d+\.\d+\.\d+$/);
+  assert.match(
+    pinned.image,
+    /^ghcr\.io\/cloudnative-pg\/pgbouncer:\d+\.\d+\.\d+@sha256:[0-9a-f]{64}$/
+  );
   const operatorDefault = pgbouncer(
     render(['postgres.pooler.enabled=true', 'postgres.pooler.image='])
   );
@@ -764,19 +772,23 @@ test(
 );
 
 test(
-  'the tenant admission guard renders warn-only bindings for both namespace labels',
+  'the tenant admission guard denies by default and keeps hardening advisory',
   { skip: !helmAvailable() },
   () => {
     const out = render([]);
     const bindings = docs(out).filter((d) => d.includes('kind: ValidatingAdmissionPolicyBinding'));
     assert.ok(bindings.length >= 17, `bindings rendered: ${bindings.length}`);
-    for (const b of bindings) assert.match(b, /validationActions: \["Warn","Audit"\]/);
+    const hardening = bindings.filter((b) => b.includes('orchard-tenant-pods-hardening'));
+    assert.ok(hardening.length >= 1);
+    for (const b of hardening) assert.match(b, /validationActions: \["Warn","Audit"\]/);
+    for (const b of bindings.filter((b) => !hardening.includes(b)))
+      assert.match(b, /validationActions: \["Deny"\]/);
     assert.ok(bindings.some((b) => b.includes('key: orchard.dev/managed')));
     assert.ok(
       bindings.every((b) => !b.includes('paramRef') || b.includes('parameterNotFoundAction: Allow'))
     );
-    const deny = render(['admissionPolicies.validationActions={Deny}']);
-    assert.match(deny, /name: orchard-tenant-pods\n[\s\S]*?validationActions: \["Deny"\]/);
+    const warn = render(['admissionPolicies.validationActions={Warn,Audit}']);
+    assert.match(warn, /name: orchard-tenant-pods\n[\s\S]*?validationActions: \["Warn","Audit"\]/);
     assert.ok(!render(['admissionPolicies.enabled=false']).includes('orchard-tenant-policy'));
   }
 );

@@ -315,7 +315,7 @@ export function admissionCheck(inputs: DoctorInputs): DoctorCheck {
   const id = 'admission-policies';
   const title = 'Admission policies installed and enforcing';
   const fix =
-    'Install the chart with admissionPolicies.enabled=true on Kubernetes 1.30 or later. After a week without unexpected warnings set admissionPolicies.validationActions=[Deny] and hardeningActions=[Deny].';
+    'Install the chart with admissionPolicies.enabled=true on Kubernetes 1.30 or later. Set admissionPolicies.validationActions=[Deny] (the default). Set hardeningActions=[Deny] once no pod reports a hardening warning.';
   if (!inputs.admission.ok) return unreadable(id, title, inputs.admission.error, fix);
   const { policies, bindings } = inputs.admission.value;
   const installed = EXPECTED_POLICIES.filter((name) => policies.includes(name));

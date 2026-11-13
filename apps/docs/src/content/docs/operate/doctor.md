@@ -72,7 +72,7 @@ Fix: `kubectl label ns <name> pod-security.kubernetes.io/enforce=baseline --over
 
 The ten Orchard ValidatingAdmissionPolicies refuse object shapes Orchard never creates. None installed is a `warn`, a partial install is a `fail`, and policies that only `Warn` or `Audit` are a `warn`.
 
-Fix: install the chart with `admissionPolicies.enabled=true` on Kubernetes 1.30 or later. After a week without unexpected warnings, set `admissionPolicies.validationActions` and `hardeningActions` to `[Deny]`.
+Fix: install the chart with `admissionPolicies.enabled=true` on Kubernetes 1.30 or later. Set `admissionPolicies.validationActions` to `[Deny]` (the default). Set `hardeningActions` to `[Deny]` once no pod reports a hardening warning.
 
 ### `redis-auth`
 
@@ -181,7 +181,7 @@ The temporary namespace must carry the managed label, `default-deny-all`, both q
 
 ### `selftest-controls`
 
-The probe reached everything it must reach. Fix: make sure the probe image (`DOCTOR_PROBE_IMAGE`, default `debian:12-slim`) and listener image (`DOCTOR_LISTENER_IMAGE`, default `busybox:1.36`) can be pulled, the tenant RuntimeClass can start the pods, and tenant egress allows DNS and the internet. On an air-gapped cluster, point both images and `DOCTOR_EXTERNAL_TARGET` at internal mirrors.
+The probe reached everything it must reach. Fix: make sure the probe image (`DOCTOR_PROBE_IMAGE`, default `debian:12.15-slim`) and listener image (`DOCTOR_LISTENER_IMAGE`, default `busybox:1.38.0`) can be pulled, the tenant RuntimeClass can start the pods, and tenant egress allows DNS and the internet. On an air-gapped cluster, point both images and `DOCTOR_EXTERNAL_TARGET` at internal mirrors.
 
 ### `selftest-apiserver`
 

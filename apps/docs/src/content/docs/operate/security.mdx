@@ -174,15 +174,15 @@ The chart installs native `ValidatingAdmissionPolicy` objects for namespaces tha
 
 The policies are safe to install. Every policy fails open (`failurePolicy: Ignore`), every parameter is optional, and cert-manager, CloudNativePG and the Kubernetes controllers are recognised by the labels on what they create, not by a username that differs on every install.
 
-The default action is `Warn` and `Audit`, so nothing is refused yet. Pods and Tailscale proxies that were created before this change can fail the hardening rules, and a refusal would stop them restarting. Watch `kubectl get events` and the API server audit log for a week, then switch to refusing:
+The guard refuses by default. The hardening rules (drop ALL capabilities, tenant RuntimeClass) only warn, because pods and Tailscale proxies created before them can fail and a refusal would stop them restarting. Watch `kubectl get events` and the API server audit log, then switch those to refusing too:
 
 ```yaml
 admissionPolicies:
-  validationActions: [Deny]
+  hardeningActions: [Deny]
   extraIssuers: [letsencrypt-dns01-wildcard]
 ```
 
-Set `extraIssuers` to every other `ClusterIssuer` you use for tenant hosts, or the issuer rule reports them. Set `admissionPolicies.enabled: false` to remove the guard. The parameter reference, the CEL tests and the fixtures for a live dry run are in `infra/charts/orchard/policies/README.md`.
+Set `extraIssuers` to every other `ClusterIssuer` you use for tenant hosts, or the issuer rule refuses them. Set `validationActions: [Warn, Audit]` to report without refusing. Set `admissionPolicies.enabled: false` to remove the guard. The parameter reference, the CEL tests and the fixtures for a live dry run are in `infra/charts/orchard/policies/README.md`.
 
 ### Public TCP and UDP ports
 
@@ -214,7 +214,7 @@ The chart then installs a `MutatingAdmissionPolicy` that sets the runtime class 
 
 This setting is optional, and the default is empty, which changes nothing. Sandboxed Postgres has higher IO and latency overhead. The policy applies only to pods created after you install it. To move an existing cluster, do a switchover and then delete the old pods one at a time, so you control when each database restarts. Set `databases.runtimeClassFailurePolicy: Fail` to guarantee that no unsandboxed database pod is admitted. The default `Ignore` keeps a policy fault from blocking pod creation.
 
-The Tailscale proxy pod is created by Orchard. It uses the tenant runtime class (`TENANT_RUNTIME_CLASS`), drops all capabilities, and runs in userspace mode, so it needs neither `NET_ADMIN` nor `NET_RAW`. Its image defaults to `ghcr.io/tailscale/tailscale:latest`. Set `TAILSCALE_IMAGE` to a version tag or digest to pin it. Existing proxy pods pick up these settings when you next re-enable Tailscale on the app.
+The Tailscale proxy pod is created by Orchard. It uses the tenant runtime class (`TENANT_RUNTIME_CLASS`), drops all capabilities, and runs in userspace mode, so it needs neither `NET_ADMIN` nor `NET_RAW`. Its image defaults to a `ghcr.io/tailscale/tailscale` release pinned by digest. Set `TAILSCALE_IMAGE` to use another. Existing proxy pods pick up these settings when you next re-enable Tailscale on the app.
 
 ## Control-plane permissions
 

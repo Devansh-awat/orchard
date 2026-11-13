@@ -147,7 +147,7 @@ Rule for this document: where something is still unfixed it is described as hard
 **Not guaranteed.**
 
 - Authorization is enforced in services by convention, not by the data layer. There is no row-level security and no automated check that every Prisma query on a tenant table is scoped.
-- Superadmins can read every org.
+- Superadmins can read every org, but only as an unrestricted principal: a session not scoped to an org, or an API token with `exec` and no project or org restriction. Restricted tokens, org-scoped sessions and MCP grants of a superadmin act on their real memberships only (`holdsSuperAdminPower`, `AuthorizationService.isUnrestrictedSuperAdmin`).
 
 **Residual risk.** A missing scope check in one route. Response-shape parity between "not found" and "forbidden" is by convention outside the routes listed above (`UNVERIFIED` for routes that do their own lookups). Timing was not measured.
 
@@ -223,7 +223,7 @@ Rule for this document: where something is still unfixed it is described as hard
 
 - `tenantRuntimeClassName()` (`apps/server/src/kubernetes/trusted-images.ts`) reads `TENANT_RUNTIME_CLASS` and applies it to app Deployments (`K8sWorkloadService`), rollouts (`rollout-strategy.ts`), job runs and every image and job step (`JobsOrchestratorService`).
 - Containers use `hardenedSecurityContext()`: no privilege escalation, drop `ALL` then add `SETUID, SETGID, CHOWN, FOWNER, DAC_OVERRIDE, SYS_CHROOT`, `seccompProfile: RuntimeDefault`. PSA `baseline` is enforced on the namespace.
-- Admission guard (`templates/admission-policies.yaml`, `policies/orchard-tenant-policies.yaml`, nine ValidatingAdmissionPolicies, Kubernetes 1.30 or later): `orchard-tenant-pods`, `-pods-hardening`, `-services`, `-endpointslices`, `-ingresses`, `-pvcs`, `-networkpolicies`, `orchard-managed-namespaces`, `-rolebindings`, `-cnpg-clusters`. They refuse host-backed volumes, privileged pods, `externalIPs`, `ExternalName`, LoadBalancer pinning by anyone but the server, foreign Ingress annotations and cert-manager issuers, PVC volume hijacking, open NetworkPolicy egress, and unsafe CNPG settings. Every policy has `failurePolicy: Ignore`. The default `validationActions` is `[Warn, Audit]`, so nothing is refused until the operator sets `[Deny]`. The hardening policy (drop ALL, tenant RuntimeClass) has its own `hardeningActions`, advisory by default.
+- Admission guard (`templates/admission-policies.yaml`, `policies/orchard-tenant-policies.yaml`, nine ValidatingAdmissionPolicies, Kubernetes 1.30 or later): `orchard-tenant-pods`, `-pods-hardening`, `-services`, `-endpointslices`, `-ingresses`, `-pvcs`, `-networkpolicies`, `orchard-managed-namespaces`, `-rolebindings`, `-cnpg-clusters`. They refuse host-backed volumes, privileged pods, `externalIPs`, `ExternalName`, LoadBalancer pinning by anyone but the server, foreign Ingress annotations and cert-manager issuers, PVC volume hijacking, open NetworkPolicy egress, and unsafe CNPG settings. Every policy has `failurePolicy: Ignore`. The default `validationActions` is `[Deny]`; every object the server builds is admitted (`policies/fixtures/benign`). The hardening policy (drop ALL, tenant RuntimeClass) has its own `hardeningActions`, advisory by default.
 - Server-side shape controls that do not depend on the policies: ClusterIssuer is chosen by the server (`tenantIngressAnnotations`, `apps/server/src/kubernetes/ingress-annotations.ts`; tenant-supplied cert-manager annotations are ignored); PVC size and claim are validated on create; node ports are never tenant-chosen; load balancers, node ports and ephemeral storage are capped in every tenant namespace (`orchard-abuse-quota`, `apps/server/src/kubernetes/tenant-abuse-quota.ts`).
 - Managed databases: CNPG clusters are created with `enableSuperuserAccess: false` (`k8s-cnpg.service.ts`, `cnpg-recovery.ts`). Existing clusters keep it until `apps/server/scripts/cnpg-disable-superuser.sh` is run. Database, pooler and Tailscale proxy pods can be sandboxed by a MutatingAdmissionPolicy when `databases.runtimeClassName` is set (`templates/database-sandbox.yaml`).
 - Builds: with `builderSandbox` the build pod runs under `BUILDER_RUNTIME_CLASS` (Kata). Without it, builds run in rootless BuildKit by default (`resolveBuildPosture`, `apps/server/src/docker/build-posture.ts`: `vm-sandbox`, `rootless`, `privileged-host`). Rootless means uid 1000, not privileged, user namespaces, seccomp and AppArmor `Unconfined`. `builders.allowPrivilegedOnHost=true` restores the privileged posture and is logged at startup. Super builds (Depot) use `depotRuntimeClass` (`image-builder.service.ts`).
@@ -232,7 +232,7 @@ Rule for this document: where something is still unfixed it is described as hard
 
 - For kernel isolation: `tenantSandbox.enabled=true` with a runtime that exists on every node; `builderSandbox.enabled=true` with Kata and KVM.
 - Nodes that allow unprivileged user namespaces when running rootless builds (Ubuntu 24.04: `kernel.apparmor_restrict_unprivileged_userns=0`).
-- Admission policies at `validationActions: [Deny]` once warnings are clean; `admissionPolicies.extraIssuers` and `admissionPolicies.storageClasses` set, or those rules skip.
+- Admission policies at `validationActions: [Deny]` (the default); `admissionPolicies.extraIssuers` and `admissionPolicies.storageClasses` set, or those rules skip.
 
 **Not guaranteed.**
 
@@ -241,7 +241,7 @@ Rule for this document: where something is still unfixed it is described as hard
 - gVisor is not a hardware boundary; Kata is closer to a microVM.
 - Database pods are not sandboxed unless `databases.runtimeClassName` is set.
 - `restricted` PSA is not enforced; `readOnlyRootFilesystem` is not set.
-- The admission policies do not refuse anything in the default `Warn,Audit` mode, and they fail open by design.
+- The admission policies fail open by design (`failurePolicy: Ignore`), and the hardening policy only warns by default.
 
 **Residual risk.** Kernel and runtime escapes. A pod that needs a rule the admission policies skip because its parameter is empty. If `TENANT_RUNTIME_CLASS` is unset the pod silently runs on the node runtime (the hardening policy only warns).
 
@@ -436,7 +436,7 @@ Rule for this document: where something is still unfixed it is described as hard
 | `publicTls.db.mode: perDatabase`                                                            | One certificate per public database; the wildcard key stays out of tenant namespaces  | Needs a DNS-01 issuer; counts against ACME rate limits                                   |
 | `databases.runtimeClassName` (+ `runtimeClassFailurePolicy: Fail`)                          | Sandboxes database, pooler and Tailscale proxy pods through a MutatingAdmissionPolicy | Needs the MutatingAdmissionPolicy API; IO and latency cost; only pods created afterwards |
 | `tenant.nodePortExposure: false`                                                            | Stops NodePorts on a shared multi-node cluster                                        | Only a load-balancer IP remains for raw ports                                            |
-| `admissionPolicies.validationActions: [Deny]`                                               | The API server refuses what the policies describe                                     | Review warnings for a week first; legacy pods can fail the hardening rules               |
+| `admissionPolicies.hardeningActions: [Deny]`                                                | The API server refuses pods that keep capabilities or skip the tenant RuntimeClass    | Review warnings first; legacy and Tailscale proxy pods can fail the hardening rules      |
 | `admissionPolicies.extraIssuers`, `storageClasses`, `pgImagePrefixes`, `pgPreloadLibraries` | Fill the parameters; an empty list skips the rule                                     | Wrong values refuse legitimate objects once on `Deny`                                    |
 | PSA labels                                                                                  | Orchard sets `baseline` enforce, `restricted` warn and audit on tenant namespaces     | `restricted` enforcement breaks root and low-port images; do not remove the labels       |
 | `HOSTNAME_STYLE=readable`                                                                   | Readable generated hostnames                                                          | Reveals project and deployment names in DNS and CT logs                                  |

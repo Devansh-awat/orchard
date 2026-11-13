@@ -21,7 +21,7 @@
 - Every parameter is optional. An empty or missing key skips the rule it feeds.
 - No rule keys off the CNPG operator or cert-manager identity. Their objects are recognised by what they are: the `cnpg.io/cluster` label on pods and PVCs, and the `acme.cert-manager.io/http01-solver` label on solver pods, Services and Ingresses. The server identity is only used to **restrict** the server (LoadBalancer, EndpointSlice, RoleBinding rules) or to allow it to do what only it may do.
 - Rules that existing objects may fail (drop ALL, RuntimeClass) are in the separate `-hardening` policy with its own `hardeningActions`. Creation only: pods that already run are never touched.
-- Default `validationActions` is `[Warn, Audit]`. Read the warnings and the API audit log for a week, then set `admissionPolicies.validationActions: [Deny]`.
+- Default `validationActions` is `[Deny]`. Every benign fixture, built by the real manifest builders, is admitted. Set `admissionPolicies.validationActions: [Warn, Audit]` to report without refusing.
 
 ## Parameter ConfigMap (`orchard-tenant-policy`)
 
