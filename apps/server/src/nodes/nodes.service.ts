@@ -435,7 +435,7 @@ export class NodesService {
     userId: string;
   }) {
     const { nodePoolId, placementOverride, userId } = input;
-    if (await this.authz.isSuperAdmin(userId)) return;
+    if (await this.authz.isUnrestrictedSuperAdmin(userId)) return;
     if (placementOverride != null) {
       throw new ForbiddenException('placementOverride can only be set by superadmins');
     }

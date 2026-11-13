@@ -117,13 +117,17 @@ export class ForumController {
   @Auth()
   @Delete('threads/:id')
   async deleteThread(@GraftUserId() userId: string, @Param('id') id: string) {
-    return this.forum.deleteThread(id, userId, await this.auth.isSuperAdmin(userId));
+    return this.forum.deleteThread(id, userId, await this.auth.isUnrestrictedSuperAdmin(userId));
   }
 
   @Auth()
   @Delete('threads/:id/replies/:replyId')
   async deleteReply(@GraftUserId() userId: string, @Param('replyId') replyId: string) {
-    return this.forum.deleteReply(replyId, userId, await this.auth.isSuperAdmin(userId));
+    return this.forum.deleteReply(
+      replyId,
+      userId,
+      await this.auth.isUnrestrictedSuperAdmin(userId)
+    );
   }
 
   @Auth()

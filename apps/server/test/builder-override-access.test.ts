@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { ForbiddenException } from '@nestjs/common';
 import { DeploymentsService } from '../src/projects/deployments.service';
+import { AuthorizationService } from '../src/auth/authorization.service';
+import { requestAuthStorage } from '../src/auth/request-context';
 
 function harness(opts: { canEdit: boolean; superAdmin?: boolean }) {
   const deployment = {
@@ -24,12 +26,17 @@ function harness(opts: { canEdit: boolean; superAdmin?: boolean }) {
       update: async ({ data }: any) => Object.assign(deployment, data)
     }
   };
-  service.authz = {
-    requireProjectEdit: async () => {
-      if (!opts.canEdit) throw new ForbiddenException('Your role does not allow you to update');
-    },
-    isSuperAdmin: async () => !!opts.superAdmin
-  };
+  service.authz = Object.assign(
+    new AuthorizationService(
+      { user: { findUnique: async () => ({ isSuperAdmin: !!opts.superAdmin }) } } as any,
+      {} as any
+    ),
+    {
+      requireProjectEdit: async () => {
+        if (!opts.canEdit) throw new ForbiddenException('Your role does not allow you to update');
+      }
+    }
+  );
   service.audit = { log: () => {} };
   service.getDeployment = async () => deployment;
   return { service, deployment };
@@ -62,4 +69,27 @@ test('super builds and persistent cache stay superadmin-only', async () => {
     service.updateDeploymentBuildConfig('dep', { persistentBuildCache: true }, 'clerk'),
     ForbiddenException
   );
+});
+
+test('a superadmin sets super builds only from an unrestricted principal', async () => {
+  const { service, deployment } = harness({ canEdit: true, superAdmin: true });
+  for (const ctx of [
+    { apiTokenId: 't', tokenScopes: ['read', 'deploy', 'exec'], tokenProjectIds: ['project'] },
+    { apiTokenId: 't', tokenScopes: ['read', 'deploy'] },
+    { mcpGateway: true, tokenScopes: ['exec'] },
+    { browserSession: true, sessionOrgId: 'org' }
+  ]) {
+    await assert.rejects(
+      requestAuthStorage.run(ctx, () =>
+        service.updateDeploymentBuildConfig('dep', { buildWithDepot: true }, 'clerk')
+      ),
+      ForbiddenException,
+      JSON.stringify(ctx)
+    );
+  }
+  assert.equal(deployment.buildWithDepot, false);
+  await requestAuthStorage.run({ browserSession: true }, () =>
+    service.updateDeploymentBuildConfig('dep', { buildWithDepot: true }, 'clerk')
+  );
+  assert.equal(deployment.buildWithDepot, true);
 });

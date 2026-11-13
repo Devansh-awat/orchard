@@ -2,7 +2,11 @@ import { Injectable, ForbiddenException, NotFoundException } from '@nestjs/commo
 import { OrganizationRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { InstanceSettingsService } from '../instance-settings/instance-settings.service';
-import { requestAuthStorage, type RequestAuthContext } from './request-context';
+import {
+  holdsSuperAdminPower,
+  requestAuthStorage,
+  type RequestAuthContext
+} from './request-context';
 
 export type ProjectRoleName = 'admin' | 'member' | 'viewer';
 
@@ -97,6 +101,11 @@ export class AuthorizationService {
     return value;
   }
 
+  async isUnrestrictedSuperAdmin(userId: string): Promise<boolean> {
+    if (!holdsSuperAdminPower(requestAuthStorage.getStore())) return false;
+    return this.isSuperAdmin(userId);
+  }
+
   /** Drop the cached isSuperAdmin entry for a user. Call after toggling the flag. */
   invalidateSuperAdmin(userId: string) {
     this.superAdminCache.delete(userId);
@@ -128,7 +137,8 @@ export class AuthorizationService {
   }
 
   async orgRequiresSso(organizationId: string, userId: string): Promise<boolean> {
-    if (!this.sessionNeedsOrgSso(organizationId) || (await this.isSuperAdmin(userId))) return false;
+    if (!this.sessionNeedsOrgSso(organizationId) || (await this.isUnrestrictedSuperAdmin(userId)))
+      return false;
     const member = await this.prisma.organizationMember.findUnique({
       where: { organizationId_userId: { organizationId, userId } },
       select: { role: true }
@@ -138,7 +148,8 @@ export class AuthorizationService {
 
   async ssoBlockedOrgIds(userId: string): Promise<string[]> {
     const ctx = requestAuthStorage.getStore();
-    if (!actsForPerson(ctx) || ctx?.sessionOrgId || (await this.isSuperAdmin(userId))) return [];
+    if (!actsForPerson(ctx) || ctx?.sessionOrgId || (await this.isUnrestrictedSuperAdmin(userId)))
+      return [];
     const rows = await this.prisma.organizationMember.findMany({
       where: {
         userId,
@@ -238,7 +249,7 @@ export class AuthorizationService {
     if (tokenCtx?.sessionOrgId && tokenCtx.sessionOrgId !== organizationId) {
       return null;
     }
-    if (await this.isSuperAdmin(userId)) {
+    if (await this.isUnrestrictedSuperAdmin(userId)) {
       // Confirm the org actually exists. Without this, superadmins probing a
       // random UUID got a synthetic owner membership and downstream endpoints
       // returned inconsistent shapes (empty list vs 404), which is both a
@@ -251,7 +262,7 @@ export class AuthorizationService {
       return {
         organizationId,
         role: 'owner',
-        isAdmin: !tokenIsProjectScoped,
+        isAdmin: true,
         source: 'superadmin'
       };
     }
@@ -371,7 +382,7 @@ export class AuthorizationService {
     if (tokenCtx?.sessionOrgId && tokenCtx.sessionOrgId !== organizationId) {
       return null;
     }
-    if (await this.isSuperAdmin(userId)) {
+    if (await this.isUnrestrictedSuperAdmin(userId)) {
       return {
         projectId,
         organizationId,
@@ -553,14 +564,7 @@ export class AuthorizationService {
       tokenCtx?.tokenProjectIds && tokenCtx.tokenProjectIds.length > 0
         ? tokenCtx.tokenProjectIds
         : null;
-    if (await this.isSuperAdmin(userId)) {
-      if (!tokenAllowList) return null;
-      const projects = await this.prisma.project.findMany({
-        where: { organizationId, id: { in: tokenAllowList } },
-        select: { id: true }
-      });
-      return projects.map((p) => p.id);
-    }
+    if (await this.isUnrestrictedSuperAdmin(userId)) return null;
 
     const member = await this.prisma.organizationMember.findUnique({
       where: { organizationId_userId: { organizationId, userId } },

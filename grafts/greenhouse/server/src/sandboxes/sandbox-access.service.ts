@@ -82,7 +82,7 @@ export class SandboxAccessService {
     if (ctx?.tokenProjectIds && ctx.tokenProjectIds.length > 0) {
       return { role: null, orgAdmin: false, superadmin: false };
     }
-    if (await this.authz.isSuperAdmin(userId)) {
+    if (await this.authz.isUnrestrictedSuperAdmin(userId)) {
       return { role: 'owner', orgAdmin: true, superadmin: true };
     }
     if (!sandbox.organizationId) {

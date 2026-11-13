@@ -244,8 +244,6 @@ export const TOOL_CATALOG: Record<string, ToolSpec> = {
   list_template_instances: t('templates', 'read'),
   get_template_instance: t('templates', 'read'),
   get_template_yaml_guide: t('templates', 'read'),
-  create_template: t('templates', 'create'),
-  update_template: t('templates', 'destructive'),
   deploy_template: t('templates', 'create'),
 
   delete_project: t('dangerous', 'destructive'),
@@ -259,7 +257,6 @@ export const TOOL_CATALOG: Record<string, ToolSpec> = {
   upgrade_database: t('dangerous', 'destructive'),
   delete_ingress: t('dangerous', 'destructive'),
   delete_service: t('dangerous', 'destructive'),
-  delete_template: t('dangerous', 'destructive'),
   delete_template_instance: t('dangerous', 'destructive'),
   delete_deploy_webhook_token: t('dangerous', 'destructive'),
   delete_notification_channel: t('dangerous', 'destructive'),

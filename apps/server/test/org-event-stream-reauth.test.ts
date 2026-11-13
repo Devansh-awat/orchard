@@ -37,7 +37,7 @@ test('the org stream ends once the user stops being a member', async () => {
   const orgEvents = orgEventsFor();
   let calls = 0;
   const authz: any = {
-    isSuperAdmin: async () => false,
+    isUnrestrictedSuperAdmin: async () => false,
     listVisibleProjectIds: async () => {
       calls += 1;
       if (calls > 1) throw new NotFoundException('Organization not found');
@@ -63,7 +63,7 @@ test('project visibility is refreshed mid-stream', async () => {
   const orgEvents = orgEventsFor();
   let visible: string[] = ['p1'];
   const authz: any = {
-    isSuperAdmin: async () => false,
+    isUnrestrictedSuperAdmin: async () => false,
     listVisibleProjectIds: async () => visible
   };
   const ctrl = controllerWith(authz, orgEvents);

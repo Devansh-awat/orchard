@@ -68,6 +68,7 @@ export interface ContextDoor {
 
 export interface AuthDoor {
   isSuperAdmin(userId: string): Promise<boolean>;
+  isUnrestrictedSuperAdmin(userId: string): Promise<boolean>;
   getOrgAccess(organizationId: string, userId: string): Promise<OrgAccess | null>;
   getProjectAccess(projectId: string, userId: string): Promise<ProjectAccess | null>;
   requireOrgMember(organizationId: string, userId: string): Promise<OrgAccess>;

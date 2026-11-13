@@ -196,7 +196,7 @@ export class SandboxesService {
 
   /** The user's sandbox cap, or null when they are not capped at all. */
   async sandboxCap(userId: string): Promise<number | null> {
-    if (await this.authz.isSuperAdmin(userId)) return null;
+    if (await this.authz.isUnrestrictedSuperAdmin(userId)) return null;
     const limit = await this.prisma.userLimit.findUnique({
       where: { userId },
       select: { maxSandboxes: true }
@@ -257,7 +257,7 @@ export class SandboxesService {
     const row = await this.prisma.sandbox.findUnique({ where: { id }, include: WITH_IDENTITY });
     if (!row) throw new NotFoundException('Sandbox not found');
     if (row.userId === userId) return row;
-    if (await this.authz.isSuperAdmin(userId)) return row;
+    if (await this.authz.isUnrestrictedSuperAdmin(userId)) return row;
     if (row.organizationId) {
       const access = await this.authz
         .requireOrgMember(row.organizationId, userId)
@@ -272,7 +272,7 @@ export class SandboxesService {
   // files and git stay owner-only (platform superadmins excepted).
   async getOwnedStrict(id: string, userId: string): Promise<SandboxWithIdentity> {
     const row = await this.getOwned(id, userId);
-    if (row.userId !== userId && !(await this.authz.isSuperAdmin(userId))) {
+    if (row.userId !== userId && !(await this.authz.isUnrestrictedSuperAdmin(userId))) {
       throw new ForbiddenException('Only the sandbox owner can use this sandbox');
     }
     return row;

@@ -31,6 +31,7 @@
         "getOrgAccess": 2,
         "getProjectAccess": 2,
         "isSuperAdmin": 1,
+        "isUnrestrictedSuperAdmin": 1,
         "listVisibleProjectIds": 2,
         "mintDeviceToken": 1,
         "originAllowed": 2,
@@ -118,6 +119,7 @@
         "databaseTlsHostname": 2,
         "isLeader": 0,
         "onLeaderAcquired": 1,
+        "registerEngineShard": 1,
         "registerMirrorShard": 1
       },
       "properties": ["kc", "kubernetes"]

@@ -199,13 +199,8 @@ export class ProjectAccessService {
     const orgId = requestedOrgId ?? sessionOrgId;
 
     // Superadmins bypass membership checks: they can see all projects.
-    if (await this.authz.isSuperAdmin(userId)) {
-      const base = orgId ? { organizationId: orgId } : {};
-      const tokenCtx = requestAuthStorage.getStore();
-      if (tokenCtx?.tokenProjectIds && tokenCtx.tokenProjectIds.length > 0) {
-        return { AND: [base, { id: { in: tokenCtx.tokenProjectIds } }] };
-      }
-      return Object.keys(base).length > 0 ? base : {};
+    if (await this.authz.isUnrestrictedSuperAdmin(userId)) {
+      return orgId ? { organizationId: orgId } : {};
     }
 
     const blocked = new Set(await this.authz.ssoBlockedOrgIds(userId));

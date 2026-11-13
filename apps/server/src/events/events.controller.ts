@@ -40,7 +40,7 @@ export class EventsController {
   // a plain 404 instead of an empty 200 stream.
   async preflightOrg(req): Promise<void> {
     const orgId = req.params.orgId;
-    if (!(await this.authz.isSuperAdmin(req.user.sub))) {
+    if (!(await this.authz.isUnrestrictedSuperAdmin(req.user.sub))) {
       const orgMemberships = await this.memberships.getMembershipsForOrg(req.user.sub, orgId);
       if (orgMemberships.length === 0) {
         throw new NotFoundException('Organization not found');
@@ -61,7 +61,7 @@ export class EventsController {
       (typeof req.headers?.['last-event-id'] === 'string'
         ? req.headers['last-event-id']
         : undefined) || lastEventIdQuery;
-    const isSuperAdmin = await this.authz.isSuperAdmin(userId);
+    const isSuperAdmin = await this.authz.isUnrestrictedSuperAdmin(userId);
     if (!isSuperAdmin) {
       const orgMemberships = await this.memberships.getMembershipsForOrg(userId, orgId);
       if (orgMemberships.length === 0) {

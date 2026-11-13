@@ -235,20 +235,6 @@ Only checkpoints with status "durable" can be restored. Returns the operation (a
   );
 
   server.registerTool(
-    'delete_template',
-    {
-      description: 'DANGEROUS: Delete a custom template. Built-in templates cannot be deleted.',
-      inputSchema: {
-        templateId: z.guid().describe('The template UUID to delete')
-      }
-    },
-    async ({ templateId }) => {
-      await client.delete(path`/templates/${templateId}`);
-      return text('Template deleted successfully.');
-    }
-  );
-
-  server.registerTool(
     'delete_template_instance',
     {
       description:

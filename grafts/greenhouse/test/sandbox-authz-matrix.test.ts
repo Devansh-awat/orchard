@@ -719,7 +719,7 @@ function accessService(opts: {
     }
   };
   const authz = {
-    async isSuperAdmin(userId: string) {
+    async isUnrestrictedSuperAdmin(userId: string) {
       return (opts.superadmins ?? []).includes(userId);
     },
     async getOrgAccess(organizationId: string, userId: string) {
@@ -781,7 +781,7 @@ test('live, preview and terminal resolution see an uninvited org admin as nobody
     }
   };
   const authz = {
-    async isSuperAdmin(userId: string) {
+    async isUnrestrictedSuperAdmin(userId: string) {
       return userId === 'root';
     },
     async getOrgAccess(organizationId: string, userId: string) {
@@ -852,7 +852,7 @@ test('ssh honours org-scoped sessions and refuses project-scoped tokens', async 
     }
   };
   const authz = {
-    async isSuperAdmin(userId: string) {
+    async isUnrestrictedSuperAdmin(userId: string) {
       return userId === 'root';
     },
     async getOrgAccess(organizationId: string, userId: string) {
@@ -1018,4 +1018,20 @@ test('agent chat routes declare the contract minimum role', async () => {
   for (const name of Object.getOwnPropertyNames(SandboxAgentChatsController.prototype)) {
     assert.ok(covered.has(name), `SandboxAgentChatsController.${name} is missing from the matrix`);
   }
+});
+
+test('a superadmin acting through a restricted credential is an ordinary user', async () => {
+  const sandbox = { id: SANDBOX, userId: 'host', organizationId: ORG };
+  const prisma = { sandboxMember: { findUnique: async () => null } };
+  const authz = {
+    isSuperAdmin: async () => true,
+    isUnrestrictedSuperAdmin: async () => false,
+    getOrgAccess: async () => null
+  };
+  const service = new SandboxAccessService(prisma as any, authz as any);
+  assert.deepEqual(await service.sandboxRoleOf(sandbox, 'root'), {
+    role: null,
+    orgAdmin: false,
+    superadmin: false
+  });
 });

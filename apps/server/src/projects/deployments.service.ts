@@ -2968,7 +2968,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       (buildWithDepot !== undefined && buildWithDepot !== (deployment.buildWithDepot ?? false)) ||
       (persistentBuildCache !== undefined &&
         persistentBuildCache !== (deployment.persistentBuildCache ?? false));
-    if (changesSuperAdminFlags && !(await this.authz.isSuperAdmin(user.id))) {
+    if (changesSuperAdminFlags && !(await this.authz.isUnrestrictedSuperAdmin(user.id))) {
       throw new ForbiddenException(
         'Super builds and persistent build cache are superadmin-only settings'
       );
@@ -5346,7 +5346,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       data.cpuRequestMilli === 0 &&
       (data.memoryRequestBytes === 0 || data.memoryRequestBytes == null) &&
       userId &&
-      !(await this.authz.isSuperAdmin(userId))
+      !(await this.authz.isUnrestrictedSuperAdmin(userId))
     ) {
       throw new ForbiddenException('Only a superadmin can run an app without resource limits');
     }
@@ -7136,7 +7136,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
 
     if (
       (data.buildWithDepot || data.persistentBuildCache) &&
-      !(await this.authz.isSuperAdmin(user.id))
+      !(await this.authz.isUnrestrictedSuperAdmin(user.id))
     ) {
       throw new ForbiddenException(
         'Super builds and persistent build cache are superadmin-only settings'

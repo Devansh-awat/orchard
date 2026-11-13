@@ -20,7 +20,12 @@ import {
 } from './decorators';
 import { hashApiToken } from './api-tokens.service';
 import { ORG_SCOPED_DENY, deviceOrgScope } from './org-scoped-devices';
-import { requestAuthStorage, RequestAuthContext } from './request-context';
+import {
+  requestAuthStorage,
+  RequestAuthContext,
+  SUPERADMIN_CREDENTIAL_REFUSED,
+  holdsSuperAdminPower
+} from './request-context';
 import { setTraceUser } from '../analytics/datadog';
 import { scopeFromHeader } from '../mcp/mcp-scopes';
 import { accountEmail } from '../users/account-scope';
@@ -317,17 +322,7 @@ export class SuperAdminGuard implements CanActivate {
       if (requiresAuth && !requiresSuperadminGw) {
         return true;
       }
-      if (gatewayOrgScope) {
-        throw new ForbiddenException('You need superadmin access');
-      }
-      const sa = await this.prisma.user.findFirst({
-        where: { id: dbUserId },
-        select: { isSuperAdmin: true }
-      });
-      if (!sa || !sa.isSuperAdmin) {
-        throw new ForbiddenException('You need superadmin access');
-      }
-      return true;
+      throw new ForbiddenException(SUPERADMIN_CREDENTIAL_REFUSED);
     }
 
     // Try JWT first, then fall back to API token
@@ -556,6 +551,18 @@ export class SuperAdminGuard implements CanActivate {
 
     if (!user || !user.isSuperAdmin) {
       throw new ForbiddenException('You need superadmin access');
+    }
+    const auth = request['auth'] ?? {};
+    if (
+      !holdsSuperAdminPower({
+        apiTokenId: auth.apiTokenId,
+        tokenScopes: auth.tokenScopes,
+        tokenProjectIds: auth.tokenProjectIds,
+        sessionOrgId: auth.sessionOrgId,
+        mcpGateway: auth.viaMcpGateway
+      })
+    ) {
+      throw new ForbiddenException(SUPERADMIN_CREDENTIAL_REFUSED);
     }
 
     // Store the real DB user ID for downstream use

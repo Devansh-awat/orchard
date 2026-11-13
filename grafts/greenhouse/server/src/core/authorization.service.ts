@@ -14,6 +14,10 @@ export class AuthorizationService {
     return this.auth.isSuperAdmin(userId);
   }
 
+  isUnrestrictedSuperAdmin(userId: string): Promise<boolean> {
+    return this.auth.isUnrestrictedSuperAdmin(userId);
+  }
+
   getOrgAccess(organizationId: string, userId: string): Promise<OrgAccess | null> {
     return this.auth.getOrgAccess(organizationId, userId);
   }

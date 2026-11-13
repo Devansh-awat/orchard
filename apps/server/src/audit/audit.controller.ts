@@ -33,11 +33,7 @@ export class AuditController {
     @Query('action') action?: string
   ) {
     const userId = await this.resolveUserId(req);
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { isSuperAdmin: true }
-    });
-    if (!user?.isSuperAdmin) {
+    if (!(await this.authz.isUnrestrictedSuperAdmin(userId))) {
       throw new ForbiddenException('Superadmin access required');
     }
     return this.auditService.query({

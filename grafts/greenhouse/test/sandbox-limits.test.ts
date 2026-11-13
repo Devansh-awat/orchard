@@ -124,7 +124,7 @@ test('the per-user limit comes from the graft table, falling back to the instanc
   };
   const svc = Object.create(SandboxesService.prototype) as any;
   svc.prisma = prisma;
-  svc.authz = { isSuperAdmin: async (id: string) => id === 'root' };
+  svc.authz = { isUnrestrictedSuperAdmin: async (id: string) => id === 'root' };
   assert.equal(await svc.sandboxCap(ALICE), 7);
   assert.equal(await svc.sandboxCap(ADMIN), defaultMaxSandboxes());
   assert.equal(await svc.sandboxCap('root'), null);

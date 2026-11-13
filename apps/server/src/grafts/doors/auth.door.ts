@@ -53,6 +53,10 @@ export class AuthDoorV1 {
     return this.authz.isSuperAdmin(userId);
   }
 
+  isUnrestrictedSuperAdmin(userId: string) {
+    return this.authz.isUnrestrictedSuperAdmin(userId);
+  }
+
   getOrgAccess(organizationId: string, userId: string) {
     return this.authz.getOrgAccess(organizationId, userId);
   }
@@ -209,7 +213,7 @@ export class AuthDoorV1 {
     const declared = this.graft.manifest!.permissions[key];
     if (!declared)
       throw new Error(`graft ${this.graft.id} checks undeclared permission "${permission}"`);
-    if (await this.authz.isSuperAdmin(userId)) return true;
+    if (await this.authz.isUnrestrictedSuperAdmin(userId)) return true;
     const grants = new Set<string>(declared.defaultGrants);
     if (scope.projectId) {
       const access = await this.authz.getProjectAccess(scope.projectId, userId);

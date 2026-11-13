@@ -588,37 +588,6 @@ Common values:
   );
 
   server.registerTool(
-    'create_template',
-    {
-      description:
-        'Create a custom template from a YAML definition. Use get_template_yaml_guide to see the full format specification.',
-      inputSchema: {
-        yaml: z.string().describe('The full YAML template definition following the leaf/v1 format')
-      }
-    },
-    async ({ yaml }) => {
-      const template = await client.post('/templates', { yaml });
-      return json(template);
-    }
-  );
-
-  server.registerTool(
-    'update_template',
-    {
-      description:
-        'Update an existing custom template with a new YAML definition. Built-in templates cannot be updated.',
-      inputSchema: {
-        templateId: z.guid().describe('The template UUID to update'),
-        yaml: z.string().describe('The updated YAML template definition')
-      }
-    },
-    async ({ templateId, yaml }) => {
-      const template = await client.put(path`/templates/${templateId}`, { yaml });
-      return json(template);
-    }
-  );
-
-  server.registerTool(
     'deploy_template',
     {
       description: `Deploy a template to a project. This creates all the resources defined in the template (databases, deployments, ingresses) with the provided parameter values.

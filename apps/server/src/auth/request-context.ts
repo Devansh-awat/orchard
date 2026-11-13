@@ -30,3 +30,13 @@ export function personalSourceSelectionRefused(): boolean {
   const ctx = requestAuthStorage.getStore();
   return Boolean(ctx?.sessionOrgId || ctx?.tokenProjectIds?.length);
 }
+
+export const SUPERADMIN_CREDENTIAL_REFUSED =
+  "This credential can't use superadmin access. Use a browser session, or an API token with the exec scope that isn't limited to projects or an organization.";
+
+export function holdsSuperAdminPower(ctx: RequestAuthContext | undefined): boolean {
+  if (!ctx) return true;
+  if (ctx.sessionOrgId || ctx.mcpGateway || ctx.tokenProjectIds?.length) return false;
+  if (ctx.apiTokenId) return Boolean(ctx.tokenScopes?.includes('exec'));
+  return true;
+}
