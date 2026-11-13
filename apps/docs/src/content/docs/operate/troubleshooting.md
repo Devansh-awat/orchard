@@ -149,6 +149,12 @@ orchard db recovery <DATABASE_ID>
 
 **Fix:** Read the last termination reason. Raise the [memory of the database](/data/databases/#set-cpu-and-memory). Do not set [`shared_buffers`](/data/parameters/#shared-buffers) close to the memory limit. If you leave `shared_buffers` empty, Orchard sizes it.
 
+### A database never leaves recovery mode
+
+**Cause:** The node's kernel sets `kernel.apparmor_restrict_unprivileged_unconfined=1`, as Ubuntu 26.04 does. AppArmor then labels container processes `cri-containerd.apparmor.d//&unconfined`, and containerd's default profile stops them signalling each other. Postgres logs `could not signal for checkpoint: Permission denied`, and the node's kernel log shows `apparmor="DENIED" operation="signal"`.
+
+**Fix:** The installer and `orchardctl update` load a containerd profile that allows the stacked label. On a cluster you run yourself, load the same profile on every node before containerd starts. Copy it from `containerd_apparmor_profile` in [`install/install.sh`](https://github.com/hackclub/orchard/blob/main/install/install.sh) to `/etc/apparmor.d/cri-containerd.apparmor.d`, then run `apparmor_parser -r /etc/apparmor.d/cri-containerd.apparmor.d`. The profile replaces containerd's default, so running pods pick it up without a restart.
+
 ### The database page shows one replica and no pods
 
 **Cause:** The instance is not running. If the page lists the storage volume as dangling, Kubernetes does not recreate the pod.
