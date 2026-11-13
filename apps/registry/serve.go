@@ -18,6 +18,7 @@ import (
 )
 
 const (
+	assetCSP       = "default-src 'none'; style-src 'unsafe-inline'; sandbox"
 	cacheImmutable = "public, max-age=31536000, immutable"
 	cacheIndex     = "public, max-age=60, stale-while-revalidate=600"
 	cacheDefault   = "public, max-age=300"
@@ -74,11 +75,19 @@ func contentTypeFor(key, stored string) string {
 	return "application/octet-stream"
 }
 
+func servedDisposition(key, contentType, stored string) string {
+	if d := dispositionFor(key, contentType); d != "" {
+		return d
+	}
+	return stored
+}
+
 type entry struct {
 	body         []byte
 	etag         string
 	contentType  string
 	lastModified string
+	disposition  string
 	expires      time.Time
 }
 
@@ -149,6 +158,8 @@ func (s *server) resolve(p string) (key string, redirect string, ok bool) {
 }
 
 func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("Content-Security-Policy", assetCSP)
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers", "If-None-Match, If-Modified-Since, Range")
@@ -209,6 +220,9 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h := w.Header()
 	h.Set("Cache-Control", pol.header)
 	h.Set("Content-Type", e.contentType)
+	if e.disposition != "" {
+		h.Set("Content-Disposition", e.disposition)
+	}
 	h.Set("Accept-Ranges", "bytes")
 	if e.etag != "" {
 		h.Set("ETag", e.etag)
@@ -294,11 +308,13 @@ func (s *server) fetch(ctx context.Context, key string) (*entry, int, error) {
 	if len(body) > maxCachedBody {
 		return nil, resp.StatusCode, nil
 	}
+	ctype := contentTypeFor(key, resp.Header.Get("Content-Type"))
 	e := &entry{
 		body:         body,
 		etag:         resp.Header.Get("ETag"),
-		contentType:  contentTypeFor(key, resp.Header.Get("Content-Type")),
+		contentType:  ctype,
 		lastModified: resp.Header.Get("Last-Modified"),
+		disposition:  servedDisposition(key, ctype, resp.Header.Get("Content-Disposition")),
 		expires:      now.Add(pol.memory),
 	}
 	s.mu.Lock()
@@ -335,7 +351,11 @@ func (s *server) stream(w http.ResponseWriter, r *http.Request, key string) {
 			h.Set(name, v)
 		}
 	}
-	h.Set("Content-Type", contentTypeFor(key, resp.Header.Get("Content-Type")))
+	ctype := contentTypeFor(key, resp.Header.Get("Content-Type"))
+	h.Set("Content-Type", ctype)
+	if d := servedDisposition(key, ctype, resp.Header.Get("Content-Disposition")); d != "" {
+		h.Set("Content-Disposition", d)
+	}
 	h.Set("Cache-Control", cachePolicy(key).header)
 	w.WriteHeader(resp.StatusCode)
 	if r.Method == http.MethodGet {

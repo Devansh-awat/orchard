@@ -25,6 +25,7 @@ type fakeObject struct {
 	contentType  string
 	modified     time.Time
 	cacheControl string
+	disposition  string
 }
 
 type fakeS3 struct {
@@ -70,7 +71,7 @@ func (f *fakeS3) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodPut:
 		body, _ := io.ReadAll(r.Body)
-		f.objects[key] = fakeObject{body, r.Header.Get("Content-Type"), time.Now(), r.Header.Get("Cache-Control")}
+		f.objects[key] = fakeObject{body, r.Header.Get("Content-Type"), time.Now(), r.Header.Get("Cache-Control"), r.Header.Get("Content-Disposition")}
 		f.puts++
 		w.Header().Set("ETag", md5ETag(body))
 		w.WriteHeader(http.StatusOK)
@@ -83,6 +84,9 @@ func (f *fakeS3) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		etag := md5ETag(o.body)
 		w.Header().Set("ETag", etag)
 		w.Header().Set("Content-Type", o.contentType)
+		if o.disposition != "" {
+			w.Header().Set("Content-Disposition", o.disposition)
+		}
 		w.Header().Set("Last-Modified", o.modified.UTC().Format(http.TimeFormat))
 		if r.Header.Get("If-None-Match") == etag {
 			w.WriteHeader(http.StatusNotModified)
@@ -391,6 +395,34 @@ func TestPublishFetchesIcons(t *testing.T) {
 	}
 	if cat.Templates[1].IconUrl != "templates/redis/2.1.0/icon.png" || string(fake.objects["templates/redis/2.1.0/icon.png"].body) != strings.Repeat("r", 100) {
 		t.Fatalf("redis sidecar icon should win: %+v", cat.Templates[1].IconUrl)
+	}
+	for _, key := range []string{"templates/ghost/1.0.0/icon.svg", "templates/ghost/latest/icon.svg"} {
+		if got := fake.objects[key].disposition; got != "attachment" {
+			t.Errorf("%s stored with disposition %q, want attachment", key, got)
+		}
+	}
+	if got := fake.objects["templates/redis/2.1.0/icon.png"].disposition; got != "" {
+		t.Errorf("png icon should stay inline, got %q", got)
+	}
+}
+
+func TestPublishRepairsAnSvgStoredInline(t *testing.T) {
+	fake, bucket, dir, extras := setup(t)
+	svg := []byte(`<svg xmlns="http://www.w3.org/2000/svg"></svg>`)
+	os.WriteFile(filepath.Join(extras, "redis.svg"), svg, 0o644)
+	fake.objects["templates/redis/2.1.0/icon.svg"] = fakeObject{body: svg, contentType: "image/svg+xml", modified: time.Now()}
+	if _, err := newPublisher(bucket).run(context.Background(), []string{dir, extras}, ""); err != nil {
+		t.Fatalf("same bytes with new metadata must not count as editing a released version: %v", err)
+	}
+	if got := fake.objects["templates/redis/2.1.0/icon.svg"].disposition; got != "attachment" {
+		t.Fatalf("published svg kept disposition %q", got)
+	}
+	puts := fake.puts
+	if _, err := newPublisher(bucket).run(context.Background(), []string{dir, extras}, ""); err != nil {
+		t.Fatal(err)
+	}
+	if fake.puts != puts {
+		t.Fatalf("a second publish should upload nothing, uploaded %d", fake.puts-puts)
 	}
 }
 

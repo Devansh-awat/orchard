@@ -48,3 +48,67 @@ func TestLatestRedirectRefusesHostileIndexVersion(t *testing.T) {
 		t.Fatalf("%d %q", rec.Code, rec.Header().Get("Location"))
 	}
 }
+
+func TestEveryResponseCarriesNosniffAndCSP(t *testing.T) {
+	fake, bucket, _, _ := setup(t)
+	fake.objects["templates/ghost/1.0.0/icon.svg"] = fakeObject{body: []byte(`<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>`), contentType: "image/svg+xml"}
+	fake.objects["templates/ghost/1.0.0/template.yaml"] = fakeObject{body: []byte("kind: Template\n"), contentType: "application/yaml"}
+	fake.objects["grafts/forum/1.0.0/forum.graft"] = fakeObject{body: []byte("tarball"), contentType: "application/gzip"}
+	fake.objects["templates/index.json"] = fakeObject{body: []byte(`{"templates":[]}`), contentType: "application/json"}
+	s := newServer(bucket, "")
+	cases := []struct {
+		path        string
+		range_      string
+		disposition string
+	}{
+		{"/templates/ghost/1.0.0/icon.svg", "", "attachment"},
+		{"/templates/ghost/1.0.0/icon.svg", "bytes=0-3", "attachment"},
+		{"/templates/ghost/1.0.0/template.yaml", "", ""},
+		{"/grafts/forum/1.0.0/forum.graft", "", ""},
+		{"/templates/index.json", "", ""},
+		{"/templates/missing/1.0.0/icon.svg", "", ""},
+		{"/healthz", "", ""},
+	}
+	for _, c := range cases {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, c.path, nil)
+		if c.range_ != "" {
+			req.Header.Set("Range", c.range_)
+		}
+		s.ServeHTTP(rec, req)
+		if got := rec.Header().Get("X-Content-Type-Options"); got != "nosniff" {
+			t.Errorf("%s: nosniff = %q", c.path, got)
+		}
+		if got := rec.Header().Get("Content-Security-Policy"); got != assetCSP {
+			t.Errorf("%s: csp = %q", c.path, got)
+		}
+		if got := rec.Header().Get("Content-Disposition"); got != c.disposition {
+			t.Errorf("%s (range %q): disposition = %q, want %q", c.path, c.range_, got, c.disposition)
+		}
+	}
+}
+
+func TestDispositionFor(t *testing.T) {
+	attach := map[string]string{
+		"a/icon.svg":  "",
+		"a/icon.png":  "image/svg+xml; charset=utf-8",
+		"a/page.html": "text/html",
+		"a/x":         "application/xhtml+xml",
+	}
+	for key, ctype := range attach {
+		if dispositionFor(key, ctype) != "attachment" {
+			t.Errorf("%s %s should be an attachment", key, ctype)
+		}
+	}
+	inline := map[string]string{
+		"a/icon.png":    "image/png",
+		"a/index.json":  "application/json; charset=utf-8",
+		"a/x.graft":     "application/gzip",
+		"a/template.md": "text/markdown",
+	}
+	for key, ctype := range inline {
+		if dispositionFor(key, ctype) != "" {
+			t.Errorf("%s %s should stay inline", key, ctype)
+		}
+	}
+}

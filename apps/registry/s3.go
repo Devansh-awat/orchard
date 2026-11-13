@@ -13,6 +13,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"path"
 	"sort"
 	"strings"
 	"time"
@@ -30,10 +31,31 @@ type Bucket struct {
 }
 
 type Object struct {
-	Key          string
-	ETag         string
-	Size         int64
-	LastModified time.Time
+	Key                string
+	ETag               string
+	Size               int64
+	LastModified       time.Time
+	ContentDisposition string
+}
+
+var activeMediaTypes = map[string]bool{
+	"image/svg+xml":         true,
+	"text/html":             true,
+	"application/xhtml+xml": true,
+	"text/xml":              true,
+	"application/xml":       true,
+}
+
+var activeExtensions = map[string]bool{
+	".svg": true, ".svgz": true, ".html": true, ".htm": true, ".xhtml": true, ".xml": true,
+}
+
+func dispositionFor(key, contentType string) string {
+	media := strings.ToLower(strings.TrimSpace(strings.Split(contentType, ";")[0]))
+	if activeMediaTypes[media] || activeExtensions[strings.ToLower(path.Ext(key))] {
+		return "attachment"
+	}
+	return ""
 }
 
 var ErrNotFound = errors.New("object not found")
@@ -100,7 +122,7 @@ func (b *Bucket) Head(ctx context.Context, key string) (*Object, error) {
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("head %s: %s", key, resp.Status)
 	}
-	obj := &Object{Key: key, ETag: resp.Header.Get("ETag"), Size: resp.ContentLength}
+	obj := &Object{Key: key, ETag: resp.Header.Get("ETag"), Size: resp.ContentLength, ContentDisposition: resp.Header.Get("Content-Disposition")}
 	if t, err := http.ParseTime(resp.Header.Get("Last-Modified")); err == nil {
 		obj.LastModified = t
 	}
@@ -128,6 +150,9 @@ func (b *Bucket) Put(ctx context.Context, key string, body []byte, contentType, 
 		return err
 	}
 	req.Header.Set("Content-Type", contentType)
+	if d := dispositionFor(key, contentType); d != "" {
+		req.Header.Set("Content-Disposition", d)
+	}
 	if cacheControl != "" {
 		req.Header.Set("Cache-Control", cacheControl)
 	}

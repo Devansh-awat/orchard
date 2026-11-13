@@ -426,8 +426,9 @@ func (p *publisher) putIfChanged(ctx context.Context, key string, body []byte, c
 	case errors.Is(err, ErrNotFound):
 	case err != nil:
 		return false, err
-	case existing.ETag == md5ETag(body):
+	case existing.ETag == md5ETag(body) && existing.ContentDisposition == dispositionFor(key, contentType):
 		return false, nil
+	case existing.ETag == md5ETag(body):
 	case immutable:
 		return false, fmt.Errorf("%s is already published with different content; bump metadata.version instead of editing a released version: %w", key, errAlreadyPublished)
 	}
