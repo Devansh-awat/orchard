@@ -197,6 +197,7 @@ ORCHARD_ADDON_UPDATES=off in /etc/orchard/env.
 			}
 			liveImageGCHost(c).ensureDefaults(c)
 			allowRootlessBuilds(c, usernsProcPath, usernsSysctlConf, c.Run)
+			allowContainerSignals(c, apparmorStackingProc, apparmorDir, c.Run)
 			if err := migrateValues(c); err != nil {
 				return err
 			}
