@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>soon.</title>
+		<meta name="theme-color" content="#fffff8" />
+		<meta name="robots" content="noindex" />
+		<link rel="icon" href="/favicon.ico" />
+		<style>
+			html,
+			body {
+				margin: 0;
+				height: 100%;
+			}
+			body {
+				background: #fffff8;
+				min-height: 100svh;
+				overflow: hidden;
+			}
+			.scene {
+				position: fixed;
+				left: 50%;
+				bottom: 14svh;
+				width: min(56vw, 280px, 34svh);
+				transform: translateX(-50%) scale(var(--g, 1));
+				transform-origin: 50% 100%;
+			}
+			.scene img {
+				display: block;
+				width: 100%;
+				height: auto;
+				user-select: none;
+				-webkit-user-drag: none;
+			}
+			.ground {
+				margin-top: -2.7%;
+			}
+		</style>
+	</head>
+	<body>
+		<div class="scene">
+			<img class="flower" src="/flower.png" alt="a flower" width="500" height="521" />
+			<img class="ground" src="/ground.png" alt="" width="500" height="108" />
+		</div>
+		<script>
+			const scene = document.querySelector('.scene');
+			const key = 'orchard:g';
+			const max = 1.5;
+			let g = Math.min(max, Number(localStorage.getItem(key)) || 1);
+			scene.style.setProperty('--g', g);
+
+			document.addEventListener('visibilitychange', () => {
+				if (document.hidden) {
+					document.title = 'come back.';
+					g = Math.min(max, g * 1.06);
+					localStorage.setItem(key, g);
+					scene.style.setProperty('--g', g);
+				} else {
+					document.title = 'soon.';
+				}
+			});
+		</script>
+	</body>
+</html>
