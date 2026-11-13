@@ -65,7 +65,9 @@ export class BuildCacheService implements OnModuleInit, OnModuleDestroy {
 
   async onModuleInit(): Promise<void> {
     await this.refresh();
-    this.refreshTimer = setInterval(() => void this.refresh(), REFRESH_MS);
+    this.refreshTimer = setInterval(() => {
+      void this.refresh();
+    }, REFRESH_MS);
     this.refreshTimer.unref?.();
   }
 

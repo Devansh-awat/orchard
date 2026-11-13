@@ -811,6 +811,24 @@
     "bodyIds": [],
     "unseeded": []
   },
+  "GET /admin/build-cache": {
+    "class": "superadmin",
+    "auth": "superadmin",
+    "handler": "BuildCacheController.view",
+    "params": [],
+    "queryIds": [],
+    "bodyIds": [],
+    "unseeded": []
+  },
+  "GET /admin/build-cache/usage": {
+    "class": "superadmin",
+    "auth": "superadmin",
+    "handler": "BuildCacheController.usage",
+    "params": [],
+    "queryIds": [],
+    "bodyIds": [],
+    "unseeded": []
+  },
   "GET /admin/databases/plugin-migration": {
     "class": "superadmin",
     "auth": "superadmin",
@@ -3775,6 +3793,15 @@
     "bodyIds": [],
     "unseeded": []
   },
+  "PATCH /admin/build-cache": {
+    "class": "superadmin",
+    "auth": "superadmin",
+    "handler": "BuildCacheController.update",
+    "params": [],
+    "queryIds": [],
+    "bodyIds": [],
+    "unseeded": []
+  },
   "PATCH /admin/instance-settings/custom-domain-verification": {
     "class": "superadmin",
     "auth": "superadmin",
@@ -4419,6 +4446,15 @@
     "class": "superadmin",
     "auth": "superadmin",
     "handler": "AdminBackfillController.apply",
+    "params": [],
+    "queryIds": [],
+    "bodyIds": [],
+    "unseeded": []
+  },
+  "POST /admin/build-cache/prune": {
+    "class": "superadmin",
+    "auth": "superadmin",
+    "handler": "BuildCacheController.prune",
     "params": [],
     "queryIds": [],
     "bodyIds": [],
