@@ -189,7 +189,7 @@ recognised. Anything without a default is optional unless the description says o
 | `DEFAULT_DB_BACKUP_CRON` |  | Pins one cron for every default schedule instead of spreading them. |
 | `POSTGRES_IMAGE_CATALOG_URL` |  | Tenant Postgres images follow CNPG's published catalog (digest-pinned, one per major) so security patches land without an Orchard release. Point this at a mirror for self-hosted or air-gapped installs, or set it to off to use the images compiled into this release. |
 | `POSTGRES_IMAGE_17` |  | Pins one major to an exact image, e.g. POSTGRES_IMAGE_17=registry/postgresql:17.11 |
-| `POSTGRES_AUTO_UPDATE` |  | Existing databases move to the catalog's image a few at a time inside this UTC hour range (default 8-11). Set POSTGRES_AUTO_UPDATE=false to stop it. |
+| `POSTGRES_AUTO_UPDATE` |  | Databases in organizations whose admins turned on automatic Postgres updates move to the catalog's image a few at a time inside this UTC hour range (default 8-11). Every other database only moves when someone updates it. POSTGRES_AUTO_UPDATE=false stops it for the whole instance, whatever orgs chose. |
 | `POSTGRES_IMAGE_ROLLOUT_WINDOW` |  |  |
 | `POSTGRES_IMAGE_ROLLOUT_BATCH` |  |  |
 | `INSTANCE_RESOURCE_LIMITS` |  | Resource limits for the whole instance: on or off. Set, it wins and locks the setting in Instance admin, and Orchard stores the value, so unsetting it later keeps that value and unlocks the setting. Unset, the stored choice applies, and with no stored choice limits stay on. A change reaches a running app or database at its next restart or redeploy, or when the cluster replaces its pod. |

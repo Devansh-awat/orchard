@@ -7913,6 +7913,59 @@
         ]
       }
     },
+    "/databases/{id}/minor-update": {
+      "post": {
+        "description": "Auth: authenticated",
+        "operationId": "databases_minor_update",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": {},
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {},
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "POST /databases/:id/minor-update",
+        "tags": [
+          "databases"
+        ]
+      }
+    },
     "/databases/{id}/name": {
       "patch": {
         "description": "Auth: authenticated",
@@ -56971,6 +57024,48 @@
           }
         ],
         "summary": "POST /projects/:id/background-image",
+        "tags": [
+          "projects"
+        ]
+      }
+    },
+    "/projects/{id}/database-security": {
+      "get": {
+        "description": "Auth: authenticated",
+        "operationId": "projects_database_security_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {},
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "GET /projects/:id/database-security",
         "tags": [
           "projects"
         ]

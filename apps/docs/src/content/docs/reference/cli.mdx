@@ -15,7 +15,7 @@ brew install --cask leafdtk/tap/orchard-cli
 ```
 
 Every command accepts `-o json` for machine-readable output, and `--org` / `--env` to
-override the saved context. **425 commands** are available.
+override the saved context. **426 commands** are available.
 
 ## alert
 
@@ -1284,6 +1284,14 @@ orchard db trash restore <deletedId>
 | `--name` | string |  | name for the restored database (default: its old name) |
 | `--timeout` | duration | `10m0s` | give up waiting after this long (exit 8) |
 | `--wait` | bool | `false` | block until the operation reaches a terminal state |
+
+### `orchard db update`
+
+Move a database to the newest minor release of its Postgres major
+
+```bash
+orchard db update <dbId>
+```
 
 ### `orchard db upgrade`
 
@@ -3191,6 +3199,7 @@ orchard org update <slug-or-id>
 | Flag | Type | Default | Description |
 | --- | --- | --- | --- |
 | `--name` | string |  | new display name |
+| `--postgres-auto-update` | bool | `false` | let Orchard roll Postgres minor updates on this organization's databases (admins only) |
 | `--public-ip` | string |  | public IP advertised for exposed databases (empty to clear) |
 | `--subdomain` | string |  | custom subdomain (empty to clear) |
 
