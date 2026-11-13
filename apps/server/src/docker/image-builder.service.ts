@@ -2062,7 +2062,7 @@ exit $rc`
                 }
               : {}),
             resources: {
-              requests: { cpu: '500m', memory: '2Gi' },
+              requests: { cpu: '500m', memory: process.env.BUILDER_MEMORY_REQUEST || '2Gi' },
               limits: { cpu: '4', memory: process.env.BUILDER_MEMORY_LIMIT || '32Gi' }
             }
           } as k8s.V1Container;
