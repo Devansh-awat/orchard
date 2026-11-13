@@ -13,11 +13,11 @@ image:
   pullSecrets: []
 
 # Datadog APM for the server: traces, continuous profiler, runtime metrics,
-# error tracking. Talks to the agent DaemonSet through its ClusterIP service
-# (internalTrafficPolicy: Local → node-local agent). The app only activates
-# dd-trace when DD_AGENT_HOST is present, so disabling this turns it all off.
+# error tracking. Off unless you run a Datadog agent. Talks to the agent
+# DaemonSet through its ClusterIP service (internalTrafficPolicy: Local →
+# node-local agent). The app only loads dd-trace when DD_AGENT_HOST is present.
 datadog:
-  enabled: true
+  enabled: false
   agentHost: datadog.monitoring.svc.cluster.local
   env: production
   profiling: true

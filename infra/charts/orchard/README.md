@@ -270,12 +270,11 @@ tag. `orchardctl update` moves them within their policy and pins the digest it p
 
 ### Datadog (`datadog.*`)
 
-APM for the server, on by default because this project runs it. Turn it off unless you
-run a Datadog agent.
+APM for the server. Off by default; turn it on if you run a Datadog agent.
 
 | Key | Default | Description |
 |---|---|---|
-| `datadog.enabled` | `true` | Injects the `DD_*` env into the server, adds `pg_stat_statements` parameters to Postgres, and adds a `datadog` Postgres role whose password comes from an `orchard-db-datadog` Secret you create. |
+| `datadog.enabled` | `false` | Injects the `DD_*` env into the server, adds `pg_stat_statements` parameters to Postgres, and adds a `datadog` Postgres role whose password comes from an `orchard-db-datadog` Secret you create. |
 | `datadog.agentHost` | `datadog.monitoring.svc.cluster.local` | The agent Service, as `DD_AGENT_HOST`. |
 | `datadog.env` | `production` | `DD_ENV`. |
 | `datadog.profiling` | `true` | Continuous profiler. |
