@@ -7,34 +7,35 @@ sidebar:
 
 `orchardctl` operates an Orchard instance from the machine that runs it. The installer adds it to the host. The [`orchard` CLI](/cli/) is a different tool, which deploys apps to any instance over its API.
 
-| Command                        | Purpose                                                                               |
-| ------------------------------ | ------------------------------------------------------------------------------------- |
-| `orchardctl update`            | Upgrade to the latest chart and images.                                               |
-| `orchardctl harden`            | Close the registry to outside traffic and open the firewall for k3s.                  |
-| `orchardctl config`            | Read and change chart values.                                                         |
-| `orchardctl env`               | Read and change control-plane environment variables.                                  |
-| `orchardctl registry`          | Set where builds can push.                                                            |
-| `orchardctl policies`          | Set which namespaces can reach tenant apps.                                           |
-| `orchardctl mcp`               | Manage [the MCP endpoint](/operate/finishing-setup/#turn-the-mcp-endpoint-on-or-off). |
-| `orchardctl graft`             | Install and manage [grafts](/grafts/install/).                                        |
-| `orchardctl public-ip`         | Set the default address for public ports.                                             |
-| `orchardctl hostname`          | Change the dashboard domain, and add names that the dashboard answers on.             |
-| `orchardctl apps-domain`       | Change the domain that app addresses end in.                                          |
-| `orchardctl letsencrypt-email` | Change where Let's Encrypt sends notices.                                             |
-| `orchardctl claim`             | Print a link that claims the instance.                                                |
-| `orchardctl login`             | Print a one-time sign-in link.                                                        |
-| `orchardctl password`          | Set a password on the superadmin account.                                             |
-| `orchardctl backups s3`        | Show or change the [S3 storage](/operate/storage/) for backups and uploads.           |
-| `orchardctl stop`              | Stop the instance.                                                                    |
-| `orchardctl start`             | Start the instance.                                                                   |
-| `orchardctl restart`           | Stop and start the instance.                                                          |
-| `orchardctl logs [service]`    | Follow logs for `server`, `frontend`, or `mcp`.                                       |
-| `orchardctl status`            | Show the control-plane pods.                                                          |
-| `orchardctl k3s`               | Show the k3s version, apply a patch, or move to a newer minor version.                |
-| `orchardctl images`            | Show the bundled images, and what each can move to.                                   |
-| `orchardctl sync`              | Refresh these commands from the deployed image.                                       |
-| `orchardctl uninstall`         | Remove Orchard, k3s, and everything on them.                                          |
-| `orchardctl licenses`          | Print [third-party notices](/operate/licenses/#third-party-notices).                  |
+| Command                        | Purpose                                                                                                              |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
+| `orchardctl update`            | Upgrade to the latest chart and images.                                                                              |
+| `orchardctl harden`            | Close the registry to outside traffic and open the firewall for k3s.                                                 |
+| `orchardctl config`            | Read and change chart values.                                                                                        |
+| `orchardctl env`               | Read and change control-plane environment variables.                                                                 |
+| `orchardctl registry`          | Set where builds can push.                                                                                           |
+| `orchardctl policies`          | Set which namespaces can reach tenant apps.                                                                          |
+| `orchardctl mcp`               | Manage [the MCP endpoint](/operate/finishing-setup/#turn-the-mcp-endpoint-on-or-off).                                |
+| `orchardctl graft`             | Install and manage [grafts](/grafts/install/).                                                                       |
+| `orchardctl public-ip`         | Set the default address for public ports.                                                                            |
+| `orchardctl hostname`          | Change the dashboard domain, and add names that the dashboard answers on.                                            |
+| `orchardctl apps-domain`       | Change the domain that app addresses end in.                                                                         |
+| `orchardctl letsencrypt-email` | Change where Let's Encrypt sends notices.                                                                            |
+| `orchardctl claim`             | Print a link that claims the instance.                                                                               |
+| `orchardctl login`             | Print a one-time sign-in link.                                                                                       |
+| `orchardctl password`          | Set a password on the superadmin account.                                                                            |
+| `orchardctl backups s3`        | Show or change the [S3 storage](/operate/storage/) for backups and uploads.                                          |
+| `orchardctl stop`              | Stop the instance.                                                                                                   |
+| `orchardctl start`             | Start the instance.                                                                                                  |
+| `orchardctl restart`           | Stop and start the instance.                                                                                         |
+| `orchardctl logs [service]`    | Follow logs for `server`, `frontend`, or `mcp`.                                                                      |
+| `orchardctl status`            | Show the control-plane pods.                                                                                         |
+| `orchardctl k3s`               | Show the k3s version, apply a patch, or move to a newer minor version.                                               |
+| `orchardctl images`            | Show the bundled images, and what each can move to.                                                                  |
+| `orchardctl image-gc`          | Show or change when the node removes unused images, or [remove them now](/operate/disk-space/#old-container-images). |
+| `orchardctl sync`              | Refresh these commands from the deployed image.                                                                      |
+| `orchardctl uninstall`         | Remove Orchard, k3s, and everything on them.                                                                         |
+| `orchardctl licenses`          | Print [third-party notices](/operate/licenses/#third-party-notices).                                                 |
 
 Most commands also exist with a hyphen, such as `orchard-config` and `orchard-update`. All commands except `logs`, `status`, and `licenses` need root.
 
@@ -68,16 +69,17 @@ Any extra arguments go to `helm upgrade`.
 
 On its next `update`, a host installed earlier gets the same defaults as a new install. Orchard prints each change and edits the values file before the upgrade. To review the result, run `orchardctl config list`.
 
-| Item              | Change                                                                                                                                   |
-| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| Metrics           | Sets `metrics.enabled: true`, including when an older installer wrote `false`.                                                           |
-| Image scanning    | Sets `trivy.enabled: true`.                                                                                                              |
-| Storage classes   | Gives the log store, metrics, and scanner volumes the class that Postgres uses.                                                          |
-| Log disk limit    | Sets `logs.maxDiskSpaceUsage` from free disk.                                                                                            |
-| Small machines    | Under 8 GB of memory, reduces requests and limits for metrics, logs, and the scanner, keeps 7 days of logs, and runs one scan at a time. |
-| Backups           | Sets `objectStorage.local.enabled: true` and `r2Proxy.enabled: true`, sized from free disk.                                              |
-| Database operator | Sets `CNPG_OPERATOR_NAMESPACE` to `cnpg-system`, if it is not set.                                                                       |
-| Install mode      | Sets `INSTALL_INGRESS_MODE` from your values, if it is not set. The dashboard uses it to show these commands instead of Helm values.     |
+| Item              | Change                                                                                                                                             |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Metrics           | Sets `metrics.enabled: true`, including when an older installer wrote `false`.                                                                     |
+| Image scanning    | Sets `trivy.enabled: true`.                                                                                                                        |
+| Storage classes   | Gives the log store, metrics, and scanner volumes the class that Postgres uses.                                                                    |
+| Log disk limit    | Sets `logs.maxDiskSpaceUsage` from free disk.                                                                                                      |
+| Small machines    | Under 8 GB of memory, reduces requests and limits for metrics, logs, and the scanner, keeps 7 days of logs, and runs one scan at a time.           |
+| Backups           | Sets `objectStorage.local.enabled: true` and `r2Proxy.enabled: true`, sized from free disk.                                                        |
+| Database operator | Sets `CNPG_OPERATOR_NAMESPACE` to `cnpg-system`, if it is not set.                                                                                 |
+| Image cleanup     | Writes Orchard's [image garbage collection](/operate/disk-space/#old-container-images) settings if the file does not exist, and restarts k3s once. |
+| Install mode      | Sets `INSTALL_INGRESS_MODE` from your values, if it is not set. The dashboard uses it to show these commands instead of Helm values.               |
 
 Orchard turns on the local backup store only when no object storage is configured. It checks for `R2_ENDPOINT`, `R2_ACCOUNT_ID`, or `R2_BACKUP_BUCKET` in `server.env`, `server.envFrom`, `r2Proxy.upstream.endpoint`, and values at **Instance admin** > **Configuration** > **Object storage**. If it cannot read the database, it leaves the store off and prints the commands that turn it on.
 

@@ -26,7 +26,7 @@ The installer creates a single-node k3s cluster. It then installs Traefik, Cloud
 - Root access.
 - OpenSSL 3 or newer, which the published installer uses to check release signatures. Without it, the installer stops, unless you set `ORCHARD_ALLOW_UNSIGNED_COMMANDS=true` to install without the check.
 - At least 20 GB of free disk on `/var/lib`. The installer refuses less, and it warns below 60 GB. For real use, plan for at least 40 GB of disk.
-- 8 GiB of RAM is recommended. With less, the installer still installs and warns you, and Orchard may behave unexpectedly. At 4 GiB, image builds may not schedule, but image apps and databases work. At 3 GiB, databases may not schedule either, but the dashboard and image apps work. A small instance with two builds and a database uses about 2.5 GiB of RAM at idle, requests up to 4.5 GiB, and uses up to 19 GB of disk.
+- At least 2 GiB of RAM. Under 3.5 GiB, the installer uses its smallest profile, so that most of the memory stays free for your apps. For more information, refer to [Run on a small server](/operate/small-servers/). With 8 GiB or more, Orchard runs more builds at once and keeps more logs.
 - For `public` mode, ports 80 and 443 free and reachable from the internet. A domain is optional. To try Orchard without one, refer to [Try Orchard without a domain](#try-orchard-without-a-domain).
 - For `tunnel` mode, a domain and a Cloudflare Tunnel token.
 - Outbound internet access. For the hosts the installer contacts, refer to [Outbound connections](/operate/outbound-connections/).
@@ -284,7 +284,9 @@ The installer sizes build concurrency and volumes from the machine.
 | Backups     | One fifth of free disk, from 5 GB to 50 GB |
 | Log store   | One tenth of free disk, from 5 GB to 20 GB |
 
-Under 8 GiB of RAM, metrics, logs, and the scanner use lower memory requests and limits. Logs are kept for 7 days instead of 14, and one scan runs at a time. To change any of these values, use `sudo orchardctl config set`.
+Under 8 GiB of RAM, metrics, logs, and the scanner use lower memory requests and limits. Logs are kept for 7 days instead of 14, and one scan runs at a time. Under 3.5 GiB, the installer also uses its [smallest profile](/operate/small-servers/#the-smallest-profile). To change any of these values, use `sudo orchardctl config set`.
+
+The build cache is pruned automatically when it grows past the size of its volume, and the node removes container images that it has not used for 72 hours. For more information, refer to [Free disk space](/operate/disk-space/).
 
 ### Change settings after the install
 
