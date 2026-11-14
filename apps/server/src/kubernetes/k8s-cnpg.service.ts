@@ -42,6 +42,7 @@ import {
   backupOomLooping,
   walCapPatchFor,
   pdbEnabledFor,
+  primaryLeaseSpecFor,
   pdbPatchFor,
   WAL_ARCHIVE_MAX_PARALLEL
 } from './cnpg-defaults';
@@ -685,7 +686,13 @@ export class K8sCnpgService implements OnApplicationBootstrap {
       namespace,
       this.CNPG_PLURAL,
       clusterName,
-      { spec: { instances: desired, enablePDB: pdbEnabledFor(desired) } },
+      {
+        spec: {
+          instances: desired,
+          enablePDB: pdbEnabledFor(desired),
+          ...primaryLeaseSpecFor(desired)
+        }
+      },
       undefined,
       undefined,
       undefined,
@@ -1773,6 +1780,7 @@ export class K8sCnpgService implements OnApplicationBootstrap {
     const clusterSpec: any = {
       instances: Math.max(1, Math.trunc(options.instances || 1)),
       enablePDB: pdbEnabledFor(options.instances),
+      ...(pdbEnabledFor(options.instances) ? {} : primaryLeaseSpecFor(options.instances)),
       imageName: options.imageName || resolvePostgresImage(17, null),
       primaryUpdateStrategy: 'unsupervised',
       storage: {

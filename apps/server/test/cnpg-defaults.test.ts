@@ -9,6 +9,8 @@ import {
   walArchivePatchFor,
   walCapPatchFor,
   pdbEnabledFor,
+  primaryLeaseSpecFor,
+  SINGLE_INSTANCE_PRIMARY_LEASE,
   pdbPatchFor
 } from '../src/kubernetes/cnpg-defaults';
 import { pemCertificates, completeChain } from '../src/kubernetes/tls-secret-sync';
@@ -319,4 +321,22 @@ test('a single instance gets no disruption budget, so drains and updates are nev
   assert.equal(pdbPatchFor({ spec: { instances: 1, enablePDB: false } }), null);
   assert.equal(pdbPatchFor({ spec: { instances: 3 } }), null);
   assert.deepEqual(pdbPatchFor({ spec: { instances: 2, enablePDB: false } }), { enablePDB: true });
+});
+
+test('a single-instance cluster gets a tolerant primary lease and no isolation check', () => {
+  assert.deepEqual(primaryLeaseSpecFor(1), {
+    primaryLease: SINGLE_INSTANCE_PRIMARY_LEASE,
+    probes: { liveness: { isolationCheck: { enabled: false } } }
+  });
+  const lease = SINGLE_INSTANCE_PRIMARY_LEASE;
+  assert.ok(lease.leaseDurationSeconds > lease.renewDeadlineSeconds);
+  assert.ok(lease.renewDeadlineSeconds > lease.retryPeriodSeconds * 1.2);
+  assert.ok(lease.renewDeadlineSeconds + lease.retryPeriodSeconds + 1 < lease.leaseDurationSeconds);
+});
+
+test('scaling past one instance hands the lease and isolation check back to CNPG defaults', () => {
+  assert.deepEqual(primaryLeaseSpecFor(3), {
+    primaryLease: null,
+    probes: { liveness: { isolationCheck: null } }
+  });
 });

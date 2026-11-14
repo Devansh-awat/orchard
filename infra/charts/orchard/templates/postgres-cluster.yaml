@@ -8,6 +8,16 @@ metadata:
     {{- include "orchard.labels" (dict "root" . "name" "postgres") | nindent 4 }}
 spec:
   instances: {{ .Values.postgres.instances }}
+  {{- if eq (int .Values.postgres.instances) 1 }}
+  primaryLease:
+    leaseDurationSeconds: 60
+    renewDeadlineSeconds: 40
+    retryPeriodSeconds: 15
+  probes:
+    liveness:
+      isolationCheck:
+        enabled: false
+  {{- end }}
   {{- if .Values.priorityClasses.enabled }}
   priorityClassName: orchard-platform
   {{- end }}

@@ -164,3 +164,22 @@ export function repairedCaBundle(
   if (bundle.length === base.length) return null;
   return Buffer.from(`${bundle.join('\n')}\n`, 'utf8').toString('base64');
 }
+
+export const SINGLE_INSTANCE_PRIMARY_LEASE = {
+  leaseDurationSeconds: 60,
+  renewDeadlineSeconds: 40,
+  retryPeriodSeconds: 15
+};
+
+export function primaryLeaseSpecFor(instances: number | null | undefined): {
+  primaryLease: typeof SINGLE_INSTANCE_PRIMARY_LEASE | null;
+  probes: { liveness: { isolationCheck: { enabled: boolean } | null } };
+} {
+  if (pdbEnabledFor(instances)) {
+    return { primaryLease: null, probes: { liveness: { isolationCheck: null } } };
+  }
+  return {
+    primaryLease: SINGLE_INSTANCE_PRIMARY_LEASE,
+    probes: { liveness: { isolationCheck: { enabled: false } } }
+  };
+}
