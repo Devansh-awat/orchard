@@ -54,6 +54,7 @@ const STATS_MIN_GAP_MS = 10 * 1000;
 const STATS_REFRESH_MS = 60 * 1000;
 const STATS_QUERY_TIMEOUT_MS = 10 * 1000;
 const DATA_DIR_MEASURE_EVERY_MS = 5 * 60 * 1000;
+const STATS_FALLBACK_WARN_MS = 10 * 60 * 1000;
 const CONFIRM_AFTER_MS = 90 * 1000;
 const SETTLING_STATUSES = new Set(['deleting', 'restoring', 'provisioning', 'error']);
 
@@ -109,6 +110,8 @@ export class CnpgConsumer implements OnModuleDestroy {
   private readonly sampling = new Set<string>();
 
   private readonly vm = new VictoriaMetricsService();
+
+  private statsFallbackWarnedAt = 0;
 
   private readonly scheduleAbsentSince = new Map<string, number>();
 
@@ -679,10 +682,27 @@ export class CnpgConsumer implements OnModuleDestroy {
         this.vm.queryInstantVector(DB_STATS_METRIC_QUERIES.connections, STATS_QUERY_TIMEOUT_MS),
         this.vm.queryInstantVector(DB_STATS_METRIC_QUERIES.walPending, STATS_QUERY_TIMEOUT_MS)
       ]);
-      return dbStatsFromMetrics(primaries, { size, connections, walPending });
-    } catch {
+      const sampled = dbStatsFromMetrics(primaries, { size, connections, walPending });
+      const missing = primaries.filter((p) => !sampled.has(`${p.namespace}/${p.pod}`));
+      if (missing.length > 0) {
+        this.warnStatsFallback(
+          `no metrics for ${missing.map((p) => `${p.namespace}/${p.pod}`).join(', ')}; sampling them by exec`
+        );
+      }
+      return sampled;
+    } catch (err) {
+      this.warnStatsFallback(
+        `metrics store unavailable (${(err as Error)?.message ?? err}); sampling ${primaries.length} databases by exec`
+      );
       return new Map();
     }
+  }
+
+  private warnStatsFallback(message: string): void {
+    const now = Date.now();
+    if (now - this.statsFallbackWarnedAt < STATS_FALLBACK_WARN_MS) return;
+    this.statsFallbackWarnedAt = now;
+    this.logger.warn(`database stats: ${message}`);
   }
 
   async sampleStats(

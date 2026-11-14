@@ -517,7 +517,12 @@ export class EngineService implements OnApplicationBootstrap, OnModuleDestroy {
       .$transaction(
         held.map((runtime) => this.heartbeatUpsert(runtime, this.lease.replicaIdentity))
       )
-      .catch(() => {});
+      .catch(async (err) => {
+        this.logger.warn(
+          `batched heartbeat failed, writing shards one by one: ${err?.message ?? err}`
+        );
+        for (const runtime of held) await this.writeHeartbeat(runtime, this.lease.replicaIdentity);
+      });
   }
 
   private async writeHeartbeat(runtime: ShardRuntime, holder: string): Promise<void> {

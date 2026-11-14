@@ -191,8 +191,12 @@ export class LeaseElector extends EventEmitter implements Elector {
       await this.replace(lease);
       this.onRenewed(false, started);
       return true;
-    } catch {
+    } catch (error) {
       this.held = undefined;
+      const status = (error as { response?: { statusCode?: number } }).response?.statusCode;
+      if (status !== 409) {
+        this.logger.warn(`lease renew failed, rereading: ${(error as Error).message}`);
+      }
       return false;
     }
   }
