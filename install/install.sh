@@ -4255,23 +4255,36 @@ install_orchard() {
   fi
 }
 
+write_host_env() {
+  local env_file="$STATE_DIR/env" k3s_updates=on kept=''
+  if [ -n "$K3S_VERSION" ] || grep -qs '^ORCHARD_K3S_UPDATES=off$' "$env_file"; then
+    k3s_updates=off
+  fi
+  if [ -f "$env_file" ]; then
+    kept=$(grep -vE '^(ORCHARD_VALUES|ORCHARD_CHART|ORCHARD_NAMESPACE|ORCHARD_K3S_UPDATES|ORCHARD_ALLOW_UNSIGNED_COMMANDS)=' "$env_file" | grep -v '^[[:space:]]*$' || true)
+  fi
+  mkdir -p "$STATE_DIR"
+  (
+    umask 077
+    {
+      printf 'ORCHARD_VALUES=%s\n' "$VALUES_FILE"
+      printf 'ORCHARD_CHART=%s\n' "$CHART_REF"
+      printf 'ORCHARD_NAMESPACE=orchard\n'
+      printf 'ORCHARD_K3S_UPDATES=%s\n' "$k3s_updates"
+      printf 'ORCHARD_ALLOW_UNSIGNED_COMMANDS=%s\n' "$(unsigned_commands_allowed)"
+      if [ -n "$kept" ]; then printf '%s\n' "$kept"; fi
+    } > "$env_file.tmp"
+  )
+  mv -f "$env_file.tmp" "$env_file"
+  chmod 600 "$env_file"
+}
+
 install_updater() {
   step
 
   # Runtime paths for the host commands, which ship as static files inside the
   # server image rather than being generated here with these baked in.
-  local k3s_updates=on
-  if [ -n "$K3S_VERSION" ] || grep -qs '^ORCHARD_K3S_UPDATES=off$' "$STATE_DIR/env"; then
-    k3s_updates=off
-  fi
-  cat > "$STATE_DIR/env" <<EOF
-ORCHARD_VALUES=$VALUES_FILE
-ORCHARD_CHART=$CHART_REF
-ORCHARD_NAMESPACE=orchard
-ORCHARD_K3S_UPDATES=$k3s_updates
-ORCHARD_ALLOW_UNSIGNED_COMMANDS=$(unsigned_commands_allowed)
-EOF
-  chmod 600 "$STATE_DIR/env"
+  write_host_env
 
   # The commands run unrendered, so this is a plain copy: pull the sync script
   # out of the image and let it install the rest.

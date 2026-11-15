@@ -2574,3 +2574,30 @@ test('a tiny box starts lean and keeps what was asked for', () => {
     box.cleanup();
   }
 });
+
+test('a re-run keeps the host settings the installer does not own', () => {
+  const box = sandbox();
+  try {
+    const env = join(box.state, 'env');
+    mkdirSync(box.state, { recursive: true });
+    writeFileSync(
+      env,
+      'ORCHARD_VALUES=/old/values.yaml\nORCHARD_K3S_UPDATES=off\nORCHARD_ADDON_UPDATES=off\n\nORCHARD_CUSTOM=kept\n'
+    );
+    box.run('K3S_VERSION=; write_host_env');
+    const written = readFileSync(env, 'utf8');
+    assert.match(written, new RegExp(`^ORCHARD_VALUES=${box.state}/values.yaml$`, 'm'));
+    assert.doesNotMatch(written, /\/old\/values\.yaml/);
+    assert.match(written, /^ORCHARD_K3S_UPDATES=off$/m);
+    assert.match(written, /^ORCHARD_ADDON_UPDATES=off$/m);
+    assert.match(written, /^ORCHARD_CUSTOM=kept$/m);
+    assert.equal(written.match(/^ORCHARD_VALUES=/gm)?.length, 1);
+    assert.equal(statSync(env).mode & 0o777, 0o600);
+
+    rmSync(env);
+    box.run('K3S_VERSION=; write_host_env');
+    assert.match(readFileSync(env, 'utf8'), /^ORCHARD_K3S_UPDATES=on$/m);
+  } finally {
+    box.cleanup();
+  }
+});
