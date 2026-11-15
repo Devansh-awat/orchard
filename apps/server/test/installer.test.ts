@@ -2506,6 +2506,92 @@ test(
   }
 );
 
+function firewallBox(tool: 'ufw' | 'firewall-cmd') {
+  const box = sandbox();
+  const calls = join(box.dir, 'firewall-calls');
+  const status =
+    tool === 'ufw'
+      ? 'if [ "$1" = status ]; then echo "Status: active"; exit 0; fi'
+      : 'if [ "$1" = --state ]; then echo running; exit 0; fi';
+  writeFileSync(
+    join(box.dir, tool),
+    `#!/bin/sh\n${status}\nprintf '%s\\n' "$*" >> "${calls}"\nexit 0\n`
+  );
+  chmodSync(join(box.dir, tool), 0o755);
+  writeFileSync(
+    join(box.dir, 'ip'),
+    '#!/bin/sh\necho "192.168.1.0/24 dev eth0 proto kernel scope link src 192.168.1.5"\n'
+  );
+  chmodSync(join(box.dir, 'ip'), 0o755);
+  const configure = (mode = 'public') => {
+    rmSync(calls, { force: true });
+    const out = box.run(`INGRESS_MODE=${mode}; configure_firewall`);
+    return { out, calls: readFileSync(calls, 'utf8').trim().split('\n') };
+  };
+  return { ...box, configure };
+}
+
+test('ufw closes node-exporter and flannel to everything but the cluster', () => {
+  const box = firewallBox('ufw');
+  try {
+    for (const mode of ['public', 'tunnel']) {
+      const { calls } = box.configure(mode);
+      const at = (rule: string) => calls.indexOf(rule);
+      const pods = at('allow from 10.42.0.0/16 to any comment k3s pods');
+      const services = at('allow from 10.43.0.0/16 to any comment k3s services');
+      const metrics = at('deny 9100/tcp comment node-exporter, cluster only');
+      const vxlan = at('deny 8472/udp comment flannel vxlan, single node');
+      assert.ok(pods >= 0 && services >= 0, calls.join('\n'));
+      assert.ok(metrics > pods && metrics > services, 'ufw stops at the first match');
+      assert.ok(vxlan > pods && vxlan > services, calls.join('\n'));
+      assert.ok(
+        calls.includes(
+          'allow from 192.168.1.0/24 to any port 6443 proto tcp comment kubernetes api'
+        )
+      );
+    }
+    assert.deepEqual(
+      box.configure().calls,
+      box.configure().calls,
+      'a re-run asks for the same rules'
+    );
+  } finally {
+    box.cleanup();
+  }
+});
+
+test('firewalld drops node-exporter and flannel outside the trusted pod networks', () => {
+  const box = firewallBox('firewall-cmd');
+  try {
+    const { calls } = box.configure();
+    for (const rule of [
+      '--permanent --zone=trusted --add-source=10.42.0.0/16',
+      '--permanent --zone=trusted --add-source=10.43.0.0/16',
+      '--permanent --add-rich-rule=rule port port=9100 protocol=tcp drop',
+      '--permanent --add-rich-rule=rule port port=8472 protocol=udp drop'
+    ]) {
+      assert.ok(calls.includes(rule), `${rule} in\n${calls.join('\n')}`);
+    }
+    assert.equal(calls.at(-1), '--reload');
+  } finally {
+    box.cleanup();
+  }
+});
+
+test('with no host firewall the installer names the ports to close', () => {
+  const box = sandbox();
+  try {
+    writeFileSync(join(box.dir, 'ufw'), '#!/bin/sh\necho "Status: inactive"\n');
+    chmodSync(join(box.dir, 'ufw'), 0o755);
+    const out = box.run('configure_firewall');
+    assert.match(out, /no host firewall active/);
+    assert.match(out, /9100\/tcp/);
+    assert.match(out, /8472\/udp/);
+  } finally {
+    box.cleanup();
+  }
+});
+
 test('the pull policy follows the image tag unless one is given', () => {
   const box = sandbox();
   try {

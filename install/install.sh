@@ -2924,6 +2924,8 @@ ufw_rules() {
   for cidr in $(lan_cidrs) 100.64.0.0/10; do
     ufw allow from "$cidr" to any port 6443 proto tcp comment 'kubernetes api'
   done
+  ufw deny 9100/tcp comment 'node-exporter, cluster only'
+  ufw deny 8472/udp comment 'flannel vxlan, single node'
   if [ "$INGRESS_MODE" != tunnel ]; then
     ufw_port_denied "$HTTP_PORT" || ufw allow "$HTTP_PORT/tcp" comment 'orchard http'
     ufw_port_denied "$HTTPS_PORT" || ufw allow "$HTTPS_PORT/tcp" comment 'orchard https'
@@ -2940,6 +2942,8 @@ firewalld_rules() {
     firewall-cmd --permanent \
       --add-rich-rule="rule family=ipv4 source address=$cidr port port=6443 protocol=tcp accept"
   done
+  firewall-cmd --permanent --add-rich-rule="rule port port=9100 protocol=tcp drop"
+  firewall-cmd --permanent --add-rich-rule="rule port port=8472 protocol=udp drop"
   if [ "$INGRESS_MODE" != tunnel ]; then
     firewall-cmd --permanent --add-port="$HTTP_PORT/tcp"
     firewall-cmd --permanent --add-port="$HTTPS_PORT/tcp"
@@ -2952,7 +2956,7 @@ firewalld_rules() {
 configure_firewall() {
   local lo=${NODE_PORT_RANGE%-*} hi=${NODE_PORT_RANGE#*-} port
   if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -q '^Status: active'; then
-    run_step "opening ufw for k3s and Orchard" 10s ufw_rules "$lo" "$hi"
+    run_step "configuring ufw for k3s and Orchard" 10s ufw_rules "$lo" "$hi"
     if [ "$INGRESS_MODE" != tunnel ]; then
       for port in "$HTTP_PORT" "$HTTPS_PORT"; do
         if ufw_port_denied "$port"; then
@@ -2963,9 +2967,10 @@ configure_firewall() {
       done
     fi
   elif command -v firewall-cmd >/dev/null 2>&1 && firewall-cmd --state >/dev/null 2>&1; then
-    run_step "opening firewalld for k3s and Orchard" 20s firewalld_rules "$lo" "$hi"
+    run_step "configuring firewalld for k3s and Orchard" 20s firewalld_rules "$lo" "$hi"
   else
     info "no host firewall active; install/README.md lists what this machine will listen on"
+    note "Close 9100/tcp (node metrics) and 8472/udp (flannel) to the internet in your provider's firewall."
   fi
 }
 

@@ -196,9 +196,10 @@ sudo orchardctl password set    # a password on the superadmin account
 
 ## What the box listens on
 
-The installer opens these itself when ufw or firewalld is active, and prints a
-note when neither is. If something else fronts the box, a cloud firewall or a
-router, this is the list to allow.
+The installer opens these itself when ufw or firewalld is active, closes `9100`
+and `8472` in the same firewall, and prints a note when neither is active. If
+something else fronts the box, a cloud firewall or a router, this is the list to
+allow, and the list to block.
 
 A ufw deny rule doesn't close `80` or `443`: that traffic is forwarded to pods and
 passes around ufw. The installer keeps your rule and warns. To close a port, use a
@@ -211,12 +212,20 @@ firewall in front of the box.
 | `6443`        | every interface | the Kubernetes API                | `kubectl` from your LAN or Tailscale only    |
 | `5000`        | `127.0.0.1`     | the image registry, password only | nobody outside the box                       |
 | `10250`       | every interface | the kubelet                       | nothing off the box; needs a client cert     |
+| `9100`        | the node's IP   | node-exporter, password only      | the pod network only; closed to the rest     |
+| `8472/udp`    | every interface | flannel VXLAN between nodes       | nothing; a single node has no peers          |
 
-Nothing else is meant to be reachable. In `tunnel` mode only `6443` and `10250`
-are bound at all. The pod and service networks, `10.42.0.0/16` and
-`10.43.0.0/16`, must be allowed to reach the host: that is how every pod talks
-to the API, and a firewall that drops it makes the whole cluster time out after
-the next reboot.
+Nothing else is meant to be reachable. `9100` is bound while metrics are on.
+In `tunnel` mode, `80`, `443` and the app ports are not bound. The pod and
+service networks, `10.42.0.0/16` and `10.43.0.0/16`, must be allowed to reach
+the host: that is how every pod talks to the API, and a firewall that drops it
+makes the whole cluster time out after the next reboot.
+
+The installer adds a deny rule for `9100/tcp` and `8472/udp` after its allow
+rules for the pod and service networks, so vmagent still scrapes node-exporter
+from inside the cluster, and traffic from the box itself arrives on loopback,
+which both firewalls accept. With no host firewall, close both ports in your
+provider's firewall.
 
 Installs from before this list existed had the registry on a node port with no
 password. `sudo orchardctl update` fixes that on its way through, and
