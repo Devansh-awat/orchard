@@ -7,6 +7,7 @@ export interface InstanceFeatures {
 	sandboxes: boolean;
 	earlyAccessOpen: boolean;
 	fastBuilder: boolean;
+	email: boolean;
 	resourceLimits: 'on' | 'off';
 	storage: {
 		s3: boolean;
@@ -28,6 +29,7 @@ const features = writable<InstanceFeatures>({
 	sandboxes: false,
 	earlyAccessOpen: false,
 	fastBuilder: false,
+	email: true,
 	resourceLimits: 'on',
 	storage: STORAGE_DEFAULT
 });
@@ -45,6 +47,7 @@ export const instanceFeatures = {
 			sandboxes: false,
 			earlyAccessOpen: false,
 			fastBuilder: false,
+			email: true,
 			resourceLimits: 'on' as const,
 			storage: STORAGE_DEFAULT,
 			...((await response.json()) as Partial<InstanceFeatures>)
@@ -66,6 +69,8 @@ function loadedOnUse<T>(store: Readable<T>): Readable<T> {
 export const uploadsEnabled = loadedOnUse(
 	derived(features, ($features) => $features.storage.uploads)
 );
+
+export const emailEnabled = loadedOnUse(derived(features, ($features) => $features.email));
 
 export const backupsOnThisServer = loadedOnUse(
 	derived(features, ($features) => $features.storage.backups === 'local')

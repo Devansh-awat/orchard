@@ -21,7 +21,7 @@
 		ToneTile
 	} from '$lib/components/ui';
 	import { formatRelativeTime } from '$lib/utils/format';
-	import { toasts } from '$lib/stores';
+	import { emailEnabled, toasts } from '$lib/stores';
 	import {
 		addDestination,
 		clearScopeSettings,
@@ -226,7 +226,12 @@
 		return scopeType.charAt(0).toUpperCase() + scopeType.slice(1);
 	}
 
+	function emailUnavailable(dest: UserDestination): boolean {
+		return dest.type === 'email' && !$emailEnabled;
+	}
+
 	function destStatus(dest: UserDestination): string | undefined {
+		if (emailUnavailable(dest)) return "This instance can't send email";
 		if (dest.circuitOpenUntil && new Date(dest.circuitOpenUntil).getTime() > Date.now()) {
 			return `Paused until ${formatRelativeTime(new Date(dest.circuitOpenUntil))}`;
 		}
@@ -303,7 +308,7 @@
 							<Switch
 								label={dest.enabled ? `Turn off ${meta.label}` : `Turn on ${meta.label}`}
 								bind:checked={() => dest.enabled, () => toggleDestination(dest)}
-								disabled={busyId === dest.id}
+								disabled={busyId === dest.id || (emailUnavailable(dest) && !dest.enabled)}
 							/>
 							<Menu>
 								{#snippet trigger(props)}

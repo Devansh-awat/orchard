@@ -39,7 +39,7 @@
 		replayChannel
 	} from '$lib/components/notifications';
 	import { formatRelativeTime } from '$lib/utils/format';
-	import { toasts } from '$lib/stores';
+	import { emailEnabled, toasts } from '$lib/stores';
 
 	import type { NotificationChannel, ChannelPayload } from './notification-types';
 
@@ -85,13 +85,17 @@
 	let replayingId = $state<string | null>(null);
 	const formId = $props.id();
 
+	const NO_EMAIL = "This instance can't send email";
+
 	const TYPE_OPTIONS = $derived(
 		Object.entries(CHANNEL_TYPE_META).map(([value, meta]) => ({
 			value,
 			label: meta.label,
-			description: meta.hint,
+			description: value === 'email' && !$emailEnabled ? NO_EMAIL : meta.hint,
 			icon: meta.icon,
-			disabled: editingId !== null && formType !== value
+			disabled:
+				(editingId !== null && formType !== value) ||
+				(editingId === null && value === 'email' && !$emailEnabled)
 		}))
 	);
 
@@ -277,7 +281,11 @@
 								>
 								<MenuItem
 									icon={channel.enabled ? Pause : Play}
-									disabled={togglingId === channel.id}
+									description={!channel.enabled && channel.type === 'email' && !$emailEnabled
+										? NO_EMAIL
+										: undefined}
+									disabled={togglingId === channel.id ||
+										(!channel.enabled && channel.type === 'email' && !$emailEnabled)}
 									onclick={() => onToggleChannel(channel.id, !channel.enabled)}
 									>{channel.enabled ? 'Pause' : 'Resume'}</MenuItem
 								>

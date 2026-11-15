@@ -11,6 +11,7 @@ export {
 	instanceFeatures,
 	uploadsEnabled,
 	backupsOnThisServer,
+	emailEnabled,
 	type InstanceFeatures
 } from './instance-features';
 export { earlyAccessFlag } from './early-access';

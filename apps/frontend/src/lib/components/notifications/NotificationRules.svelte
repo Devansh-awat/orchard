@@ -20,7 +20,7 @@
 		statusMeta
 	} from '$lib/components/ui';
 	import Checkbox from '$lib/components/ui/Checkbox.svelte';
-	import { toasts } from '$lib/stores';
+	import { emailEnabled, toasts } from '$lib/stores';
 	import {
 		createChannel,
 		createRule,
@@ -88,11 +88,14 @@
 				: formChannelId.length > 0)
 	);
 
-	const TYPE_OPTIONS = Object.entries(CHANNEL_TYPE_META).map(([value, meta]) => ({
-		value,
-		label: meta.label,
-		icon: meta.icon
-	}));
+	const TYPE_OPTIONS = $derived(
+		Object.entries(CHANNEL_TYPE_META).map(([value, meta]) => ({
+			value,
+			label: meta.label,
+			icon: meta.icon,
+			disabled: value === 'email' && !$emailEnabled
+		}))
+	);
 
 	const channelOptions = $derived([
 		...channels.map((channel) => ({
@@ -308,7 +311,7 @@
 					/>
 				</Field>
 				{#if creatingChannel}
-					<Field label="Type">
+					<Field label="Type" hint={$emailEnabled ? undefined : "This instance can't send email"}>
 						<SegmentedControl
 							label="Destination type"
 							options={TYPE_OPTIONS}
