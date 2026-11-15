@@ -1,0 +1,100 @@
+- name: area/server
+  color: '1d76db'
+  description: apps/server
+- name: area/hostctl
+  color: '1d76db'
+  description: apps/server/hostctl
+- name: area/frontend
+  color: '1d76db'
+  description: apps/frontend
+- name: area/gateway
+  color: '1d76db'
+  description: apps/gateway
+- name: area/cli
+  color: '1d76db'
+  description: apps/cli
+- name: area/r2-proxy
+  color: '1d76db'
+  description: apps/r2-proxy
+- name: area/registry
+  color: '1d76db'
+  description: apps/registry and registry content
+- name: area/fc-builder
+  color: '1d76db'
+  description: apps/fc-builder
+- name: area/landing
+  color: '1d76db'
+  description: apps/landing
+- name: area/chart
+  color: '0e8a16'
+  description: infra/charts
+- name: area/install
+  color: '0e8a16'
+  description: install
+- name: area/sandbox
+  color: '0e8a16'
+  description: infra/images/sandbox
+- name: area/grafts
+  color: '6f42c1'
+  description: grafts and the graft SDK/UI packages
+- name: area/contracts
+  color: '6f42c1'
+  description: packages/contracts
+- name: area/docs
+  color: '006b75'
+  description: apps/docs and docs
+- name: area/ci
+  color: '006b75'
+  description: GitHub workflows and repo automation
+- name: migration
+  color: 'b60205'
+  description: Adds a Prisma migration
+- name: dependencies
+  color: '0366d6'
+  description: Dependency update
+- name: security
+  color: 'ee0701'
+  description: Fixes a known vulnerability
+- name: type/digest
+  color: 'ffec19'
+  description: Digest or pin update
+- name: type/patch
+  color: 'ffec19'
+  description: Patch update
+- name: type/minor
+  color: 'ff9800'
+  description: Minor update
+- name: type/major
+  color: 'f6412d'
+  description: Major update, read the changelog before merging
+- name: 'autorelease: pending'
+  color: 'ededed'
+- name: 'autorelease: tagged'
+  color: 'ededed'
+- name: bug
+  color: 'd73a4a'
+  description: Something isn't working
+- name: enhancement
+  color: 'a2eeef'
+  description: New feature or request
+- name: documentation
+  color: '0075ca'
+  description: Improvements or additions to documentation
+- name: question
+  color: 'd876e3'
+  description: Further information is requested
+- name: good first issue
+  color: '7057ff'
+  description: Good for newcomers
+- name: help wanted
+  color: '008672'
+  description: Extra attention is needed
+- name: duplicate
+  color: 'cfd3d7'
+  description: This issue or pull request already exists
+- name: invalid
+  color: 'e4e669'
+  description: This doesn't seem right
+- name: wontfix
+  color: 'ffffff'
+  description: This will not be worked on

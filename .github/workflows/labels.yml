@@ -1,0 +1,27 @@
+name: labels
+
+on:
+  push:
+    branches: [main]
+    paths: ['.github/labels.yml']
+  pull_request:
+    paths: ['.github/labels.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    if: github.repository == 'hackclub/orchard'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: EndBug/label-sync@52074158190acb45f3077f9099fea818aa43f97a # v2.3.3
+        with:
+          config-file: .github/labels.yml
+          delete-other-labels: true
+          dry-run: ${{ github.event_name == 'pull_request' }}

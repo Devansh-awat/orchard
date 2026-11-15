@@ -1,0 +1,51 @@
+area/server:
+  - changed-files:
+      - all-globs-to-any-file: ['apps/server/**', '!apps/server/hostctl/**']
+area/hostctl:
+  - changed-files:
+      - any-glob-to-any-file: ['apps/server/hostctl/**']
+area/frontend:
+  - changed-files:
+      - any-glob-to-any-file: ['apps/frontend/**']
+area/gateway:
+  - changed-files:
+      - any-glob-to-any-file: ['apps/gateway/**']
+area/cli:
+  - changed-files:
+      - any-glob-to-any-file: ['apps/cli/**']
+area/r2-proxy:
+  - changed-files:
+      - any-glob-to-any-file: ['apps/r2-proxy/**']
+area/registry:
+  - changed-files:
+      - any-glob-to-any-file: ['apps/registry/**', 'registry/**']
+area/fc-builder:
+  - changed-files:
+      - any-glob-to-any-file: ['apps/fc-builder/**']
+area/landing:
+  - changed-files:
+      - any-glob-to-any-file: ['apps/landing/**']
+area/docs:
+  - changed-files:
+      - any-glob-to-any-file: ['apps/docs/**', 'docs/**']
+area/chart:
+  - changed-files:
+      - any-glob-to-any-file: ['infra/charts/**']
+area/install:
+  - changed-files:
+      - any-glob-to-any-file: ['install/**']
+area/sandbox:
+  - changed-files:
+      - any-glob-to-any-file: ['infra/images/sandbox/**']
+area/grafts:
+  - changed-files:
+      - any-glob-to-any-file: ['grafts/**', 'packages/graft-sdk/**', 'packages/graft-ui/**']
+area/contracts:
+  - changed-files:
+      - any-glob-to-any-file: ['packages/contracts/**']
+area/ci:
+  - changed-files:
+      - any-glob-to-any-file: ['.github/**']
+migration:
+  - changed-files:
+      - any-glob-to-any-file: ['apps/server/prisma/migrations/**']
