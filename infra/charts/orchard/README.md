@@ -222,6 +222,7 @@ new class on a fresh volume.
 | `orchard-object-storage` | Only with `objectStorage.local.enabled`: versitygw Deployment + Service + data PVC, root-credentials Secret, the bucket Job, NetworkPolicy |
 | `orchard-fc-builders` | Only with `fcBuilder.enabled`: the Firecracker builder StatefulSet, its Secrets, NetworkPolicy |
 | `orchard-sandboxes` | Only with `sandbox.install` or `sandbox.enabled`: machine quota, LimitRange, NetworkPolicy, RBAC |
+| `orchard-netpol` | Only with `networkPolicy.enforcer.enabled`: the `kube-router` policy enforcer DaemonSet and its ServiceAccount, bound to the `orchard-kube-router` ClusterRole |
 | cluster-scoped     | `ClusterRole`/`ClusterRoleBinding` for builder management and metrics scraping |
 
 The server deployment gets `DATABASE_URL` injected automatically from the
@@ -360,6 +361,13 @@ The chart sets `TENANT_SECRETS_CLUSTER_ROLE` to `<release>-tenant-secrets`, the 
 | --- | --- | --- |
 | `networkPolicy.platform.enabled` | `true` | Ingress policies for the release namespace and the metrics namespace. Tenant namespaces (the managed label), the builders, sandbox, fc-builder and trivy namespaces cannot connect to a control-plane pod. Every other namespace keeps its access. Redis keeps its own, narrower policy. Needs a CNI that enforces NetworkPolicy. |
 | `networkPolicy.platform.untrustedNamespaces` | `[]` | More namespaces to treat like tenants. |
+| `networkPolicy.enforcer.enabled` | `false` | Run kube-router on every node in policy-only mode (`--run-firewall=true --run-router=false --run-service-proxy=false --enable-cni=false`), the same controller k3s embeds. For clusters whose CNI is plain Flannel, such as the Talos default, which ignores NetworkPolicy. Do not enable it next to Cilium, Calico, Antrea, Canal or k3s's built-in controller. The doctor's `cni-enforcement` check finds the `kube-router` DaemonSet; run the isolation self-test to confirm. |
+| `networkPolicy.enforcer.namespace` | `orchard-netpol` | Namespace for the DaemonSet. The chart creates it with the `privileged` Pod Security labels, unless it is `kube-system`. |
+| `networkPolicy.enforcer.image` | `cloudnativelabs/kube-router:v2.12.0` | kube-router image. |
+| `networkPolicy.enforcer.priorityClassName` | `system-node-critical` | Priority class of the enforcer pods. |
+| `networkPolicy.enforcer.resources` | requests `250m/250Mi` | Resource block. |
+| `networkPolicy.enforcer.tolerations` | every `NoSchedule` and `NoExecute` taint, `CriticalAddonsOnly` | Runs on every node, control plane included. A node without the enforcer does not enforce policy for its pods. |
+| `networkPolicy.enforcer.extraArgs` | `[]` | Extra kube-router flags, for example `--enable-ipv6=true` on a dual-stack cluster. |
 
 ### Redis (`redis.*`)
 

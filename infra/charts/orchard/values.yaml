@@ -265,6 +265,22 @@ networkPolicy:
   # the list). Tenant namespaces get the same policy from the server.
   egressDeny:
     enabled: true
+  # Run kube-router on every node as a policy-only enforcer, the controller k3s
+  # embeds. For clusters whose CNI is plain Flannel (the Talos default), which
+  # ignores NetworkPolicy. Do not enable it next to Cilium, Calico, Antrea,
+  # Canal or k3s's own controller: they already enforce.
+  enforcer:
+    enabled: false
+    namespace: orchard-netpol
+    image: cloudnativelabs/kube-router:v2.12.0@sha256:e1da38f71e2f1521e7a74c5cdaa511fdee9d2ee76972b25c9b5785b030b96fe4
+    priorityClassName: system-node-critical
+    resources:
+      requests: { cpu: 250m, memory: 250Mi }
+    tolerations:
+      - { operator: Exists, effect: NoSchedule }
+      - { operator: Exists, effect: NoExecute }
+      - { key: CriticalAddonsOnly, operator: Exists }
+    extraArgs: []
 
 # Control-plane Redis. Backs the cross-replica SSE event bus (Redis Streams)
 # so live updates reach SSE clients on every server replica, and is available

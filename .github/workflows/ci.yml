@@ -675,6 +675,14 @@ jobs:
           if grep -nE 'db\.orchard\.my|longhorn' minimal.yaml; then exit 1; fi
           dupes=$(yq -N 'select(.spec.template.spec.containers) | .spec.template.spec.containers[] | (.env // []) | map(.name) | group_by(.) | map(select(length > 1) | .[0]) | .[]' minimal.yaml)
           test -z "$dupes" || { echo "duplicate env names: $dupes"; exit 1; }
+      - name: The Flannel policy enforcer renders only when enabled
+        run: |
+          if grep -n 'kube-router' minimal.yaml; then exit 1; fi
+          helm template orchard infra/charts/orchard --namespace orchard \
+            -f infra/charts/orchard/examples/minimal-values.yaml \
+            --set networkPolicy.enforcer.enabled=true > enforcer.yaml
+          test "$(yq -N 'select(.kind == "DaemonSet" and .metadata.name == "kube-router") | .metadata.namespace' enforcer.yaml)" = orchard-netpol
+          test "$(yq -N 'select(.kind == "Namespace" and .metadata.name == "orchard-netpol") | .metadata.labels["pod-security.kubernetes.io/enforce"]' enforcer.yaml)" = privileged
 
   validate-images:
     needs: changes

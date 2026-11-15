@@ -10,6 +10,7 @@ import {
   SANDBOX_INGRESS_PORTS
 } from '../../../grafts/greenhouse/server/src/sandboxes/runners/kubernetes.runner';
 import { PREVIEW_PORTS } from '../../../grafts/greenhouse/server/src/sandboxes/preview/preview-auth';
+import { cniCheck, type DoctorInputs } from '../src/doctor/doctor.checks';
 
 const chart = resolve(__dirname, '../../../infra/charts/orchard');
 
@@ -871,4 +872,60 @@ test('the log throttle rate is a chart value and 0 removes it', { skip: !helmAva
   const off = vectorConfig(render(['logs.vector.throttle.eventsPerSecond=0']));
   assert.equal(off.transforms.tenant_throttle, undefined);
   assert.deepEqual(off.sinks.victorialogs.inputs, ['tenant_shape', 'ingress_shape']);
+});
+
+test('the flannel policy enforcer renders only when enabled', { skip: !helmAvailable() }, () => {
+  assert.ok(!parsed(render([])).some((d) => d.metadata?.name === 'kube-router'));
+  const out = parsed(render(['networkPolicy.enforcer.enabled=true']));
+  const ns = out.find((d) => d.kind === 'Namespace' && d.metadata.name === 'orchard-netpol');
+  assert.equal(ns?.metadata.labels['pod-security.kubernetes.io/enforce'], 'privileged');
+  const ds = out.find((d) => d.kind === 'DaemonSet' && d.metadata.name === 'kube-router');
+  assert.equal(ds?.metadata.namespace, 'orchard-netpol');
+  const pod = ds.spec.template.spec;
+  assert.equal(pod.hostNetwork, true);
+  assert.equal(pod.priorityClassName, 'system-node-critical');
+  assert.equal(pod.serviceAccountName, 'kube-router');
+  assert.match(
+    pod.containers[0].image,
+    /^cloudnativelabs\/kube-router:v[\d.]+@sha256:[0-9a-f]{64}$/
+  );
+  for (const flag of [
+    '--run-firewall=true',
+    '--run-router=false',
+    '--run-service-proxy=false',
+    '--enable-cni=false'
+  ]) {
+    assert.ok(pod.containers[0].args.includes(flag), flag);
+  }
+  const role = out.find(
+    (d) => d.kind === 'ClusterRole' && d.metadata.name === 'orchard-kube-router'
+  );
+  for (const rule of role.rules) assert.deepEqual(rule.verbs, ['get', 'list', 'watch']);
+  const binding = out.find(
+    (d) => d.kind === 'ClusterRoleBinding' && d.metadata.name === 'orchard-kube-router'
+  );
+  assert.deepEqual(binding.subjects, [
+    { kind: 'ServiceAccount', name: 'kube-router', namespace: 'orchard-netpol' }
+  ]);
+  const doctor = cniCheck({
+    apiGroups: { ok: true, value: [] },
+    nodes: { ok: true, value: [{ name: 'n1', kubelet: 'v1.34.1' }] },
+    daemonSets: {
+      ok: true,
+      value: [
+        { name: 'kube-flannel', namespace: 'kube-system', desired: 1, ready: 1 },
+        { name: ds.metadata.name, namespace: ds.metadata.namespace, desired: 1, ready: 1 }
+      ]
+    }
+  } as DoctorInputs);
+  assert.equal(doctor.status, 'pass');
+});
+
+test('the policy enforcer can live in kube-system', { skip: !helmAvailable() }, () => {
+  const out = parsed(
+    render(['networkPolicy.enforcer.enabled=true', 'networkPolicy.enforcer.namespace=kube-system'])
+  );
+  assert.ok(!out.some((d) => d.kind === 'Namespace' && d.metadata.name === 'kube-system'));
+  const ds = out.find((d) => d.kind === 'DaemonSet' && d.metadata.name === 'kube-router');
+  assert.equal(ds?.metadata.namespace, 'kube-system');
 });
