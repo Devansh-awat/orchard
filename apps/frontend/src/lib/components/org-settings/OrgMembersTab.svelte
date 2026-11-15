@@ -134,7 +134,7 @@
 		onAddMember: () => void;
 		onRemoveMember: (memberId: string) => void;
 		onUpdateMemberRole: (memberId: string, role: 'owner' | 'admin' | 'member' | 'guest') => void;
-		onResendInvitation: (id: string) => void;
+		onResendInvitation: (id: string, email: string) => void;
 		onCancelInvitation: (id: string) => void;
 	} = $props();
 
@@ -473,7 +473,7 @@
 								: `Resend the invitation to ${invitation.email}`}
 							loading={resendingInvitationId === invitation.id}
 							disabled={resendingInvitationId === invitation.id}
-							onclick={() => onResendInvitation(invitation.id)}
+							onclick={() => onResendInvitation(invitation.id, invitation.email)}
 						/>
 						<Button
 							variant="ghost"

@@ -91,6 +91,7 @@
 	let resendingInvitationId = $state<string | null>(null);
 	let inviteLinks = $state<{ email: string; link: string }[]>([]);
 	let reissuedLink = $state(false);
+	let inviteEmailFailed = $state(false);
 	let cancellingInvitationId = $state<string | null>(null);
 	let removingMemberId = $state<string | null>(null);
 	let memberToRemove = $state<Member | null>(null);
@@ -575,6 +576,7 @@
 			if (invitation.inviteLink) {
 				inviteLinks = [{ email: invitation.email, link: invitation.inviteLink }];
 				reissuedLink = false;
+				inviteEmailFailed = invitation.emailFailed === true;
 				toasts.add({ title: 'Invitation created', color: 'success' });
 			} else {
 				toasts.add({ title: `Invitation sent to ${invitation.email}`, color: 'success' });
@@ -690,7 +692,7 @@
 		}
 	}
 
-	async function resendInvitation(invitationId: string) {
+	async function resendInvitation(invitationId: string, email: string) {
 		if (!organization) return;
 		resendingInvitationId = invitationId;
 		try {
@@ -702,8 +704,16 @@
 				const d = await r.json();
 				throw new Error(d.message || "Couldn't resend invitation");
 			}
+			const result = await r.json().catch(() => ({}));
 			await fetchOrganization();
-			toasts.add({ title: 'Invitation resent', color: 'success' });
+			if (result.inviteLink) {
+				inviteLinks = [{ email, link: result.inviteLink }];
+				reissuedLink = true;
+				inviteEmailFailed = result.emailFailed === true;
+				toasts.add({ title: 'New invite link created', color: 'success' });
+			} else {
+				toasts.add({ title: 'Invitation resent', color: 'success' });
+			}
 		} catch (e) {
 			toasts.add({
 				title: "Couldn't resend invitation",
@@ -1066,7 +1076,11 @@
 				onResendInvitation={resendInvitation}
 				onCancelInvitation={cancelInvitation}
 			/>
-			<InviteLinkModal bind:links={inviteLinks} reissued={reissuedLink} />
+			<InviteLinkModal
+				bind:links={inviteLinks}
+				reissued={reissuedLink}
+				emailFailed={inviteEmailFailed}
+			/>
 			{#if currentUserRole && currentUserRole !== 'owner' && organization}
 				<SectionCard
 					title="Leave organization"

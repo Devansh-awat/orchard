@@ -4,10 +4,12 @@
 
 	let {
 		links = $bindable([]),
-		reissued = false
+		reissued = false,
+		emailFailed = false
 	}: {
 		links?: { email: string; link: string }[];
 		reissued?: boolean;
+		emailFailed?: boolean;
 	} = $props();
 </script>
 
@@ -18,8 +20,8 @@
 >
 	<div class="body">
 		<p>
-			This instance can't send email, so send the link yourself. It works once and expires in 7
-			days. You won't see it again.
+			{#if emailFailed}The invitation email didn't send{:else}This instance can't send email{/if},
+			so send the link yourself. It works once and expires in 7 days. You won't see it again.
 			{#if reissued}The old link no longer works.{/if}
 		</p>
 		{#each links as { email, link } (email)}

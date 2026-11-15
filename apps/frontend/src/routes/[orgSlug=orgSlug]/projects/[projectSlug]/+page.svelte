@@ -362,6 +362,7 @@
 	}
 
 	let inviteLinks = $state<{ email: string; link: string }[]>([]);
+	let inviteEmailFailed = $state(false);
 
 	async function addMembers(emails: string[], role: 'admin' | 'member' | 'viewer') {
 		if (!project || emails.length === 0) return false;
@@ -369,6 +370,7 @@
 		let added = 0;
 		let invited = 0;
 		let needsOrgAdmin = 0;
+		let emailFailed = 0;
 		const links: { email: string; link: string }[] = [];
 		const failed: string[] = [];
 		for (const email of emails) {
@@ -382,6 +384,7 @@
 				const result = await response.json().catch(() => ({}));
 				if (result.invited) {
 					invited++;
+					if (result.invitation?.emailFailed) emailFailed++;
 					if (result.invitation?.inviteLink) {
 						links.push({ email, link: result.invitation.inviteLink });
 					} else if (result.invitation?.delivery === 'link') {
@@ -401,11 +404,14 @@
 			toasts.add({ title: parts.join(', '), color: 'success' });
 			await fetchProject();
 		}
+		inviteEmailFailed = emailFailed > 0;
 		inviteLinks = links;
 		if (needsOrgAdmin) {
 			toasts.add({
 				title: 'Ask an organization admin for the invite link',
-				description: "This instance can't send email. They can create it in Organization settings.",
+				description: emailFailed
+					? "The invitation email didn't send. They can create a link in Organization settings."
+					: "This instance can't send email. They can create it in Organization settings.",
 				color: 'warning'
 			});
 		}
@@ -1165,7 +1171,7 @@
 						projectSlug={projectSlug ?? ''}
 					/>
 				{:else if activeTab === 'members'}
-					<InviteLinkModal bind:links={inviteLinks} />
+					<InviteLinkModal bind:links={inviteLinks} emailFailed={inviteEmailFailed} />
 					<MembersTab
 						{projectMembers}
 						{pendingInvitations}
