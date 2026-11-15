@@ -1746,7 +1746,7 @@
 							<Field label="Replicas" layout="row">
 								<Stepper bind:value={replicas} min={1} max={20} label="Replicas" />
 							</Field>
-							{#if $isSuperAdmin && isRepoSource}
+							{#if $isSuperAdmin && isRepoSource && $instanceFeatures.superBuilds}
 								<ToggleRow bind:checked={buildWithDepot} label="Orchard's super builds" />
 							{/if}
 						</Disclosure>

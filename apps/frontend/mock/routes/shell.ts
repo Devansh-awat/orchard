@@ -183,6 +183,7 @@ export function shellRoutes(r: Router, { store, hub, log }: MockContext) {
 		sandboxes: false,
 		fastBuilder: true,
 		email: true,
+		superBuilds: true,
 		resourceLimits: store.state.resourceLimits ?? 'on',
 		grafts: [],
 		storage: storageFeatures

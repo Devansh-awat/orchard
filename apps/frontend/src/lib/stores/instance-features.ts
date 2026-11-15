@@ -8,6 +8,7 @@ export interface InstanceFeatures {
 	earlyAccessOpen: boolean;
 	fastBuilder: boolean;
 	email: boolean;
+	superBuilds: boolean;
 	resourceLimits: 'on' | 'off';
 	storage: {
 		s3: boolean;
@@ -30,6 +31,7 @@ const features = writable<InstanceFeatures>({
 	earlyAccessOpen: false,
 	fastBuilder: false,
 	email: true,
+	superBuilds: false,
 	resourceLimits: 'on',
 	storage: STORAGE_DEFAULT
 });
@@ -48,6 +50,7 @@ export const instanceFeatures = {
 			earlyAccessOpen: false,
 			fastBuilder: false,
 			email: true,
+			superBuilds: false,
 			resourceLimits: 'on' as const,
 			storage: STORAGE_DEFAULT,
 			...((await response.json()) as Partial<InstanceFeatures>)

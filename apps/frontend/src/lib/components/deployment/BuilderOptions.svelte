@@ -58,11 +58,13 @@
 				bind:checked={persistentBuildCache}
 				onchange={() => commit(() => (persistentBuildCache = !persistentBuildCache))}
 			/>
-			<ToggleRow
-				label="Orchard's super builds"
-				bind:checked={buildWithDepot}
-				onchange={() => commit(() => (buildWithDepot = !buildWithDepot))}
-			/>
+			{#if $instanceFeatures.superBuilds || buildWithDepot}
+				<ToggleRow
+					label="Orchard's super builds"
+					bind:checked={buildWithDepot}
+					onchange={() => commit(() => (buildWithDepot = !buildWithDepot))}
+				/>
+			{/if}
 		{/if}
 		{#if $instanceFeatures.fastBuilder}
 			<SettingRow label="Fast builder" hint="Auto lets Orchard decide">
