@@ -82,7 +82,9 @@ const SRC = {
 		'https://github.com/kubero-dev/kubero/blob/main/server/src/auth/strategies/oauth2.strategy.ts',
 	kuberoUsers: 'https://github.com/kubero-dev/kubero/blob/main/server/src/users/users.service.ts',
 	kuberoBuild:
-		'https://github.com/kubero-dev/kubero/blob/main/server/src/deployments/templates/nixpacks.yaml.ts'
+		'https://github.com/kubero-dev/kubero/blob/main/server/src/deployments/templates/nixpacks.yaml.ts',
+	kuberoDeploy:
+		'https://github.com/kubero-dev/kubero-operator/blob/main/helm-charts/kuberoapp/templates/deployment-web.yaml'
 };
 
 const yes = (href: string): Cell => ({ text: 'Yes', href });
@@ -104,7 +106,7 @@ const ROW = {
 	selfHeal: {
 		feature: 'Apps move off a server that fails',
 		cells: [
-			say('Yes, on multi-node clusters', `${DOCS}/operate/nodes/`),
+			say('Multi-node clusters, apps without node-local volumes', `${DOCS}/operate/nodes/`),
 			say('Not automatic', SRC.coolifyMultiServer),
 			say('Through Docker Swarm', SRC.dokployDeployment),
 			yes(SRC.kuberoFeatures),
@@ -119,7 +121,10 @@ const ROW = {
 	drain: {
 		feature: 'Apps stay up while a server drains',
 		cells: [
-			yes(`${DOCS}/deploy/update-strategies/#keep-pods-ready-during-a-node-drain`),
+			say(
+				'Apps with more than one replica',
+				`${DOCS}/deploy/update-strategies/#keep-pods-ready-during-a-node-drain`
+			),
 			none,
 			none,
 			none,
@@ -130,7 +135,7 @@ const ROW = {
 	rollbackDb: {
 		feature: 'Rollback restores the database too',
 		cells: [
-			yes(`${DOCS}/deploy/rollbacks/`),
+			say('With backup storage', `${DOCS}/deploy/rollbacks/`),
 			say('No', SRC.coolifyRollback),
 			none,
 			none,
@@ -166,7 +171,14 @@ const ROW = {
 	},
 	restoreTests: {
 		feature: 'Automatic restore tests',
-		cells: [say('Weekly', `${DOCS}/data/protection/`), none, none, none, none, none]
+		cells: [
+			say('Weekly, with backup storage', `${DOCS}/data/protection/`),
+			none,
+			none,
+			none,
+			none,
+			none
+		]
 	},
 	buildIsolation: {
 		feature: 'Builds kept apart from the host',
@@ -204,7 +216,7 @@ const ROW = {
 	requests: {
 		feature: 'Request analytics and attack signals',
 		cells: [
-			say('Both', `${DOCS}/deploy/security-tab/`),
+			say('Both, with Traefik or HAProxy', `${DOCS}/deploy/security-tab/`),
 			say('Requests', SRC.coolifyTraffic),
 			say('Requests', SRC.dokployRequests),
 			say('Response times', SRC.kuberoFeatures),
@@ -317,7 +329,14 @@ const ROW = {
 	},
 	pitr: {
 		feature: 'Point-in-time restore',
-		cells: [say('To any second', `${DOCS}/data/backups/`), none, none, none, none, none]
+		cells: [
+			say('To any second in 30 days, with backup storage', `${DOCS}/data/backups/`),
+			none,
+			none,
+			none,
+			none,
+			none
+		]
 	},
 	failover: {
 		feature: 'Postgres failover and read replicas',
@@ -395,7 +414,7 @@ const ROW = {
 			say('Rolling or blue/green, apps without volumes', `${DOCS}/deploy/update-strategies/`),
 			say('Rolling, not for Compose apps', SRC.coolifyRolling),
 			yes(SRC.dokployZeroDowntime),
-			none,
+			say('Rolling, through Kubernetes', SRC.kuberoDeploy),
 			yes(SRC.dokkuZeroDowntime),
 			say('Apps without volumes', SRC.caproverScaling)
 		]
