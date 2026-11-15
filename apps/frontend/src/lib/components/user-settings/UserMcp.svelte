@@ -187,8 +187,8 @@
 			<div class="steps">
 				{#if client === 'claude'}
 					<p class="step">
-						In Claude, open Settings, Connectors and choose Add custom connector. Paste the server
-						URL, then sign in with your Orchard account.
+						In Claude, open Customize, Connectors, then choose Add and Add custom connector. Paste
+						the server URL, then sign in with your Orchard account.
 					</p>
 				{:else if client === 'claude-code'}
 					<p class="step">
