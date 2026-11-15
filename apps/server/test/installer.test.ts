@@ -2601,3 +2601,17 @@ test('a re-run keeps the host settings the installer does not own', () => {
     box.cleanup();
   }
 });
+
+test('the registry mirror and its password stay readable by root only', () => {
+  const box = sandbox();
+  try {
+    box.run('ensure_registry_mirror');
+    assert.equal(statSync(box.registries).mode & 0o777, 0o600);
+
+    chmodSync(box.registries, 0o644);
+    box.run('ensure_registry_mirror');
+    assert.equal(statSync(box.registries).mode & 0o777, 0o600, 'an unchanged mirror is repaired');
+  } finally {
+    box.cleanup();
+  }
+});

@@ -3369,13 +3369,15 @@ configs:
       password: "$REGISTRY_PASSWORD"
 EOF
 )
+  if [ -f "$REGISTRIES_FILE" ]; then chmod 600 "$REGISTRIES_FILE"; fi
   if [ ! -f "$pending" ] && [ -f "$REGISTRIES_FILE" ] && [ "$(cat "$REGISTRIES_FILE")" = "$wanted" ]; then
     info "registry mirror unchanged, k3s keeps running"
     return 0
   fi
   mkdir -p "$(dirname "$REGISTRIES_FILE")" "$STATE_DIR"
   : > "$pending"
-  printf '%s\n' "$wanted" > "$REGISTRIES_FILE"
+  (umask 077 && printf '%s\n' "$wanted" > "$REGISTRIES_FILE")
+  chmod 600 "$REGISTRIES_FILE"
   run_step "reloading k3s with the registry mirror" 45s restart_k3s
   rm -f "$pending"
 }
