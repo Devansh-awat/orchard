@@ -43,7 +43,7 @@ No, not unless you opt in. Anonymous usage reports are off until a superadmin tu
 
 ## How does Orchard compare to Coolify, Dokku, and similar tools?
 
-Coolify, Dokploy, and CapRover run apps as Docker containers and manage them from a web dashboard. Dokku gives you git-push deploys on a Docker host. Orchard runs on Kubernetes, with k3s set up for you by the installer. Because of this, apps get default-deny network isolation, managed Postgres runs on CloudNativePG with point-in-time restore, builds run in rootless BuildKit, and the Helm chart can run Orchard on a multi-node cluster. The cost is weight: the cluster, the operators, and the metrics and logs stack use memory before your first app runs. Orchard runs on 2 GiB of RAM, and 8 GiB is recommended.
+Coolify, Dokploy, and CapRover run apps as Docker containers and manage them from a web dashboard. Dokku gives you git-push deploys on a Docker host. Orchard runs on Kubernetes, with k3s set up for you by the installer. Because of this, apps get default-deny network isolation on a network plugin (CNI) that enforces NetworkPolicy, managed Postgres runs on CloudNativePG with point-in-time restore, builds run in rootless BuildKit, and the Helm chart can run Orchard on a multi-node cluster. The cost is weight: the cluster, the operators, and the metrics and logs stack use memory before your first app runs. Orchard runs on 2 GiB of RAM, and 8 GiB is recommended.
 
 For a feature-by-feature table with sources, refer to [Compare](https://orchard.hackclub.com/compare).
 
@@ -55,4 +55,4 @@ Orchard is licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
 
 Yes. On any install, you can send backups to your own S3-compatible storage instead of the store on the server. Refer to [Add S3 storage](/operate/storage/).
 
-With the Helm chart, you choose the rest. You can use Harbor or another OCI registry instead of zot, a replicated StorageClass instead of `local-path`, any ingress controller for app URLs, and an external Redis with `redis.url`. Refer to [Turn on image builds](/start/install/#turn-on-image-builds) and [Use your own registry](/operate/finishing-setup/#use-your-own-registry).
+With the Helm chart, you choose the rest. You can use Harbor or another OCI registry instead of zot, a replicated StorageClass instead of `local-path`, any ingress controller for app URLs (request metrics and request logs need Traefik or HAProxy), and an external Redis with `redis.url`. Refer to [Turn on image builds](/start/install/#turn-on-image-builds) and [Use your own registry](/operate/finishing-setup/#use-your-own-registry).

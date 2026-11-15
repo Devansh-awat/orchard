@@ -5,7 +5,7 @@ sidebar:
   order: 1
 ---
 
-Orchard is an open-source, self-hosted platform as a service (PaaS) from [Hack Club](https://hackclub.com). It gives you the push-to-deploy workflow of a hosted platform on hardware that you control. You connect a Git repository, and Orchard builds the app, runs it behind an HTTPS URL, and runs a managed Postgres database next to it, with backups and point-in-time restore.
+Orchard is an open-source, self-hosted platform as a service (PaaS) from [Hack Club](https://hackclub.com). It gives you the push-to-deploy workflow of a hosted platform on hardware that you control. You connect a Git repository, and Orchard builds the app, runs it behind an HTTPS URL, and runs a managed Postgres database next to it, with backups to S3-compatible storage and point-in-time restore.
 
 Orchard runs on Kubernetes, but you do not need to know Kubernetes to use it. On a single Linux server, one command sets up a k3s cluster and every component Orchard needs. On a cluster that you already operate, a Helm chart installs Orchard on top of it. After that, you work in the dashboard, the CLI, or an AI agent, the same way you would on a hosted platform.
 
@@ -14,12 +14,12 @@ Orchard is free and licensed under [AGPL-3.0](/operate/licenses/). The SDK for b
 ## How it works
 
 1. You install Orchard. The installer sets up k3s, Orchard, a container registry, and the operators for databases and certificates. The Helm chart installs Orchard on a cluster that already has them.
-2. You connect a repository from GitHub, GitLab, Gitea, or another Git host. You can also deploy a container image, or deploy a folder from your computer with `orchard up`.
+2. You connect a repository from GitHub, GitLab, Gitea, or another Git host over HTTPS. You can also deploy a container image, or, when the instance has S3 storage, deploy a folder from your computer with `orchard up`.
 3. Orchard builds an image on your cluster. It uses your Dockerfile, or it detects your language and builds the app without one.
-4. Orchard runs the app, routes HTTPS traffic to it, and keeps it running. By default, the new version must be ready before Orchard stops the old one.
-5. Each push to the branch that you choose deploys again. If a deploy goes wrong, you roll back to an earlier build.
+4. Orchard runs the app, routes HTTPS traffic to it, and keeps it running. By default, the new version must be ready before Orchard stops the old one. An app with a volume stops first instead.
+5. With auto-deploy on, each push to the branch that you choose deploys again. On GitHub, this needs the GitHub App. If a deploy goes wrong, you roll back to an earlier build.
 
-Your apps and databases run as normal Kubernetes workloads, so they do not depend on the Orchard dashboard or API. If Orchard itself stops, your apps keep serving traffic, and only new deploys and changes wait until it is back. For the components and how they connect, refer to [Architecture](/operate/architecture/).
+Your apps and databases run as normal Kubernetes workloads, so they do not depend on the Orchard dashboard or API. If Orchard itself stops, your apps keep serving traffic, and only new deploys and changes wait until it is back. The exception is a domain with access protection, which routes requests through the Orchard server. For the components and how they connect, refer to [Architecture](/operate/architecture/).
 
 ## Who it is for
 
@@ -67,6 +67,8 @@ Before you go live on either setup, work through [Go to production](/operate/pro
 - Orchard is not fully tenant-isolated by default. Apps cannot reach each other over the network, but they share the host kernel, and builds run on it too. Before you let people you do not trust deploy code, install gVisor and Kata and follow [Requirements for untrusted code](/operate/security/#requirements-for-untrusted-code).
 - Orchard uses Kubernetes words where they matter. Pods, replicas, and namespaces appear in the dashboard under those names.
 - Managed databases are Postgres only. Other databases, such as MariaDB or MongoDB, run as apps from [templates](/run/templates/).
+
+For the full list, grouped by area, refer to [Known limitations](/start/limitations/).
 
 ## Related resources
 

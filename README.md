@@ -9,12 +9,12 @@
 [![License](https://img.shields.io/badge/license-AGPL--3.0-c93a4f?style=for-the-badge&labelColor=1a0f11)](LICENSE)
 [![Docs](https://img.shields.io/badge/docs-docs.orchard.hackclub.com-1a0f11?style=for-the-badge)](https://docs.orchard.hackclub.com)
 
-Turn any Linux box into a private hosting platform.
+Turn a Linux server into a private hosting platform.
 
 Orchard is an open-source, self-hosted platform as a service (PaaS) from Hack Club. Connect a repository
 from GitHub, GitLab, Gitea or another Git host, and Orchard builds it and runs it behind HTTPS, with a
-Postgres database that has point-in-time restore, logs, metrics and rollbacks. Use the dashboard, the
-CLI, or your AI agent through the MCP server.
+Postgres database that has point-in-time restore from S3-compatible storage, logs, metrics and
+rollbacks. Use the dashboard, the CLI, or your AI agent through the MCP server.
 
 Orchard runs on Kubernetes, but you do not have to touch Kubernetes. One command turns a single Linux
 server into a k3s cluster with everything Orchard needs, which suits a home lab, a side project, a small
@@ -51,9 +51,9 @@ curl -fsSL https://assets.orchard.my/install.sh -o orchard-install.sh && sudo ba
 ![Installing Orchard on a Linux server](.github/assets/install.gif)
 
 > [!IMPORTANT]
-> Deployments are network isolated from each other and from the platform by default, but they **share
-> the host kernel** unless you install gVisor or Kata and switch them on. Running untrusted code is not
-> safe out of the box. Read [Security and isolation](https://docs.orchard.hackclub.com/operate/security/) before
+> Deployments are network isolated from each other and from the platform by default (on the Helm chart,
+> your CNI must enforce NetworkPolicy), but they **share the host kernel** unless you install gVisor or
+> Kata and switch them on. Running untrusted code is not safe out of the box. Read [Security and isolation](https://docs.orchard.hackclub.com/operate/security/) before
 > letting strangers deploy things.
 
 > [!TIP]
@@ -80,9 +80,9 @@ flag.
 Coolify, Dokploy and CapRover run apps as Docker containers and manage them from a web dashboard. Dokku
 gives you git-push deploys on a Docker host, and Kamal deploys containers to servers you manage over SSH.
 Orchard runs on Kubernetes instead, with k3s set up for you by the installer. Because of that, apps get
-default-deny network isolation from each other, managed Postgres runs on CloudNativePG with
-point-in-time restore, builds run in rootless BuildKit, and the Helm chart can run Orchard on a
-multi-node cluster. The cost is weight: the cluster, the operators and the metrics and logs stack use
+default-deny network isolation from each other on a CNI that enforces NetworkPolicy, managed Postgres
+runs on CloudNativePG with point-in-time restore, builds run in rootless BuildKit, and the Helm chart
+can run Orchard on a multi-node cluster. The cost is weight: the cluster, the operators and the metrics and logs stack use
 memory before your first app runs. The [comparison table](https://orchard.hackclub.com/compare) has the
 details, with sources.
 
@@ -106,14 +106,22 @@ Install Orchard on my server following https://docs.orchard.hackclub.com/start/i
 ## Features
 
 - **Deploy from anywhere.** Deploy from GitHub, GitLab, Gitea or another Git host, from a container
-  image, or from a folder on your computer. With a connected repo, every push builds and deploys your app.
-- **HTTPS and domains.** Every app gets an HTTPS URL, and you can add [your own domains](https://docs.orchard.hackclub.com/deploy/domains/) or use a [wildcard certificate](https://docs.orchard.hackclub.com/operate/wildcard-certificates/).
+  image, or from a folder on your computer (with S3 storage). With auto-deploy on, every push builds and
+  deploys your app. On GitHub, auto-deploy needs the GitHub App.
+- **HTTPS and domains.** Every web port can get an HTTPS URL (self-signed on a LAN install), and you can add [your own domains](https://docs.orchard.hackclub.com/deploy/domains/) or use a [wildcard certificate](https://docs.orchard.hackclub.com/operate/wildcard-certificates/).
 - **Tailscale.** Put an app on your [tailnet](https://docs.orchard.hackclub.com/deploy/tailscale/) instead of the public internet.
-- **Managed Postgres.** Add a database with backups and point-in-time restore.
-- **Logs and metrics.** Search logs and see requests, errors and resource use for each app.
+- **Managed Postgres.** Add a database with backups to S3-compatible storage and point-in-time restore.
+- **Logs and metrics.** Search logs and see requests, errors and resource use for each app. Request data
+  needs Traefik or HAProxy as the ingress controller.
 - **Rollbacks.** Go back to an earlier version when a deploy goes wrong.
 - **Templates.** Deploy any of 90+ [ready-made apps](https://orchard.hackclub.com/templates).
 - **Teams.** Organizations, roles, SSO and audit logs.
+
+## Limitations
+
+An installer host is single-node and cannot take more nodes for now, Postgres is the only managed
+database, and control-plane backups are off by default. [Known limitations](https://docs.orchard.hackclub.com/start/limitations/)
+lists the rest, grouped by area, with a workaround where one exists. Read it before you install.
 
 ## Contributing
 

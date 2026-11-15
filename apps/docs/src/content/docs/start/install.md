@@ -9,7 +9,7 @@ You can install Orchard on a single Linux machine with one command, or on a Kube
 
 ## Choose how to run Orchard
 
-The one-command installer builds a single-node k3s cluster on one machine. It puts app data on `local-path` disks, runs a zot registry that only that machine can pull from, and keeps backups in an S3 store on the same disk. You answer a few questions and the installer configures everything else, which makes it the fastest way to a working instance. It suits a home lab, a side project, a small team, or a trial. Because everything runs on one machine, that machine is a single point of failure.
+The one-command installer builds a single-node k3s cluster on one machine. It puts app data on `local-path` disks, runs a zot registry that only that machine can pull from, and keeps backups in an S3 store on the same disk. You answer a few questions and the installer configures the cluster and Orchard, which makes it the fastest way to a working instance. Some items, such as kernel sandboxing and off-server backups, stay with you. For the list, refer to [What the installer does not configure](#what-the-installer-does-not-configure). It suits a home lab, a side project, a small team, or a trial. Because everything runs on one machine, that machine is a single point of failure.
 
 For production, Orchard recommends the Helm chart on a multi-node cluster built for it, such as [Talos Linux](https://docs.siderolabs.com/talos). Hack Club runs Orchard this way, on six Talos Linux nodes. You operate the cluster, and you can replace bundled components with ones that you run yourself: [Harbor](https://goharbor.io/docs/) or another registry instead of zot, external S3 storage for backups, and a replicated StorageClass instead of `local-path`.
 
