@@ -81,3 +81,57 @@ test('a failed lookup deletes nothing', async (t) => {
   assert.deepEqual(artifacts, { 'sha256:same': ['v1', 'v11'] });
   assert.deepEqual(calls, ['GET v1']);
 });
+
+function fakeRegistry(t: TestContext, harbor: number | 'down', manifest: number | 'down') {
+  const calls: string[] = [];
+  t.mock.method(globalThis, 'fetch', async (input: string, init?: { method?: string }) => {
+    calls.push(`${init?.method ?? 'GET'} ${input}`);
+    const status = input.includes('/api/v2.0/') ? harbor : manifest;
+    if (status === 'down') throw new TypeError('fetch failed');
+    return new Response(null, { status });
+  });
+  return calls;
+}
+
+function zotService(t: TestContext) {
+  const svc = service(t);
+  Object.assign(svc, {
+    harborRegistryPush: 'zot.orchard.svc.cluster.local:5000',
+    harborRegistryPull: 'registry.orchard.local',
+    plainHttpRegistries: new Set(['zot.orchard.svc.cluster.local:5000'])
+  });
+  return svc;
+}
+
+const zotImage = `zot.orchard.svc.cluster.local:5000/${PROJECT}/${REPO}:v1`;
+
+test('a pushed image is found on a registry without the Harbor API', async (t) => {
+  const calls = fakeRegistry(t, 'down', 200);
+  assert.equal(await zotService(t).imageExistsInRegistry(zotImage), true);
+  assert.ok(
+    calls.includes(
+      `HEAD http://zot.orchard.svc.cluster.local:5000/v2/${PROJECT}/${REPO}/manifests/v1`
+    )
+  );
+});
+
+test('a missing image is reported missing on a registry without the Harbor API', async (t) => {
+  fakeRegistry(t, 404, 404);
+  assert.equal(await zotService(t).imageExistsInRegistry(zotImage), false);
+});
+
+test('an unreachable registry answers unknown, not missing', async (t) => {
+  fakeRegistry(t, 'down', 'down');
+  assert.equal(await zotService(t).imageExistsInRegistry(zotImage), null);
+});
+
+test('Harbor still answers for its own images', async (t) => {
+  const calls = fakeRegistry(t, 200, 401);
+  assert.equal(await zotService(t).imageExistsInRegistry(zotImage), true);
+  assert.equal(calls.length, 1);
+});
+
+test('a Harbor 404 stays missing when the manifest endpoint refuses basic auth', async (t) => {
+  fakeRegistry(t, 404, 401);
+  assert.equal(await zotService(t).imageExistsInRegistry(zotImage), false);
+});

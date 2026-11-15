@@ -172,6 +172,9 @@ const BUILDKIT_PUSH_PHASE_RE =
 
 const BUILDKIT_STEP_RE = /(?:^|\n)#(?:[0-9a-f]{8}|\d+)\s/;
 
+const MANIFEST_ACCEPT =
+  'application/vnd.oci.image.manifest.v1+json, application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.v2+json, application/vnd.docker.distribution.manifest.list.v2+json';
+
 /** Main container of a super build Job; BuildKit jobs use `buildkit`. */
 const DEPOT_CONTAINER = 'depot-build';
 
@@ -4649,13 +4652,32 @@ fi
       const auth = this.getHarborAuth();
       if (!auth) return null;
       const url = `${auth.registryUrl}/api/v2.0/projects/${this.harborProject}/repositories/${encodeURIComponent(repoName)}/artifacts/${encodeURIComponent(tag)}`;
-      const response = await fetch(url, { headers: { Authorization: auth.authHeader } });
-      if (response.ok) return true;
-      if (response.status === 404) return false;
+      const response = await fetch(url, { headers: { Authorization: auth.authHeader } }).catch(
+        () => null
+      );
+      if (response?.ok) return true;
+      const manifest = await this.manifestStatus(repoName, tag, auth.authHeader);
+      if (manifest === 200) return true;
+      if (manifest === 404 || response?.status === 404) return false;
       return null;
     } catch {
       return null;
     }
+  }
+
+  private async manifestStatus(
+    repoName: string,
+    tag: string,
+    authHeader: string
+  ): Promise<number | null> {
+    const host = this.harborRegistryPush;
+    if (!host) return null;
+    const scheme = this.plainHttpRegistries.has(host) ? 'http' : 'https';
+    const response = await fetch(
+      `${scheme}://${host}/v2/${this.harborProject}/${repoName}/manifests/${encodeURIComponent(tag)}`,
+      { method: 'HEAD', headers: { Authorization: authHeader, Accept: MANIFEST_ACCEPT } }
+    ).catch(() => null);
+    return response ? response.status : null;
   }
 
   getImagePath(imageName: string, tag = 'latest'): string {
@@ -4789,12 +4811,10 @@ fi
     const list = await fetch(`${base}/tags/list`, { headers });
     if (!list.ok) return;
     const tags: string[] = (await list.json()).tags ?? [];
-    const accept =
-      'application/vnd.oci.image.manifest.v1+json, application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.v2+json, application/vnd.docker.distribution.manifest.list.v2+json';
     for (const tag of tags) {
       const head = await fetch(`${base}/manifests/${encodeURIComponent(tag)}`, {
         method: 'HEAD',
-        headers: { ...headers, Accept: accept }
+        headers: { ...headers, Accept: MANIFEST_ACCEPT }
       });
       const digest = head.headers.get('docker-content-digest');
       if (!head.ok || !digest) continue;
