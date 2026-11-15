@@ -545,7 +545,7 @@ test(
 
       const output = box.run('load_previous_answers; write_values');
 
-      assert.equal(read('.hostDefaults'), '4');
+      assert.equal(read('.hostDefaults'), '5');
       assert.equal(env('CNPG_OPERATOR_NAMESPACE'), 'cnpg-system');
       assert.equal(read('.logs.retention'), '14d');
       assert.equal(read('.trivy.enabled'), 'true');
@@ -2489,7 +2489,7 @@ test(
       assert.equal(read('.server.image.tag // ""'), '');
       assert.equal(read('.frontend.image.tag // ""'), '');
       assert.equal(read('.image.pullPolicy // ""'), '');
-      assert.equal(read('.hostDefaults'), '4');
+      assert.equal(read('.hostDefaults'), '5');
 
       box.run(
         `yq -i '.server.image.tag = "latest" | .frontend.image.tag = "latest"' "$VALUES_FILE"`
@@ -2500,6 +2500,35 @@ test(
 
       box.run(`ORCHARD_VERSION=2.85.0; ${settle}`);
       assert.equal(read('.server.image.tag // ""'), '', 'a pinned chart version pins the images');
+    } finally {
+      box.cleanup();
+    }
+  }
+);
+
+test(
+  'a re-run turns off the gateway an older installer wrote, once',
+  { skip: !has('yq', '--version') },
+  () => {
+    const box = sandbox();
+    try {
+      const { read } = readValues(box);
+      box.run(`mkdir -p "${box.state}"; write_values`);
+      assert.equal(read('.gateway.enabled'), 'null', 'a fresh file follows the chart default');
+      assert.equal(read('.gateway.http.appDomain'), 'apps.example.com');
+
+      box.run(
+        `yq -i '.hostDefaults = 4 | .gateway.enabled = true | .gateway.namespace = "network" | .gateway.http.enabled = false' "$VALUES_FILE"`
+      );
+      const output = box.run('load_previous_answers; write_values');
+      assert.match(output, /gateway\.enabled: removed/);
+      assert.equal(read('.gateway.enabled'), 'null');
+      assert.equal(read('.gateway.http.appDomain'), 'apps.example.com');
+      assert.equal(read('.hostDefaults'), '5');
+
+      box.run(`yq -i '.gateway.enabled = true' "$VALUES_FILE"`);
+      box.run('load_previous_answers; write_values');
+      assert.equal(read('.gateway.enabled'), 'true', 'a gateway turned on after the round stays');
     } finally {
       box.cleanup();
     }

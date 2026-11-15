@@ -19,7 +19,6 @@ IMAGE_GC_FILE=${ORCHARD_IMAGE_GC_FILE:-/var/lib/rancher/k3s/agent/etc/kubelet.co
 K3S_VERSION=${K3S_VERSION:-}
 K3S_CHANNEL=${K3S_CHANNEL:-v1.36}
 HELM_VERSION=${HELM_VERSION:-v4.3.1}
-GATEWAY_API_VERSION=${GATEWAY_API_VERSION:-v1.6.1}
 NODE_PORT_RANGE=${ORCHARD_NODE_PORT_RANGE:-30000-30100}
 HTTP_PORT=${ORCHARD_HTTP_PORT:-80}
 HTTPS_PORT=${ORCHARD_HTTPS_PORT:-443}
@@ -94,7 +93,7 @@ PREV_PUBLIC_IP=''
 PREV_EMAIL=''
 PREV_UPDATES=''
 
-HOST_DEFAULTS_VERSION=4
+HOST_DEFAULTS_VERSION=5
 
 IMAGE_TAG=${ORCHARD_IMAGE_TAG:-}
 IMAGE_PULL_POLICY=${ORCHARD_IMAGE_PULL_POLICY:-}
@@ -366,7 +365,6 @@ usage() {
     --k3s-channel <channel>      K3S_CHANNEL            k3s release channel (default: v1.36)
     --k3s-version <version>      K3S_VERSION            pin k3s, and turn off its automatic patches
                                  HELM_VERSION           helm release to install (default: v4.3.1)
-    --gateway-api-version <ver>  GATEWAY_API_VERSION
     --node-port-range <lo-hi>    ORCHARD_NODE_PORT_RANGE  ports apps can claim
     --registry-port <port>       ORCHARD_REGISTRY_PORT    loopback port the kubelet pulls through
     --registry-host <host>       ORCHARD_REGISTRY_HOST    name the kubelet pulls by
@@ -424,7 +422,6 @@ parse_args() {
       --image-repository) need_value "$1" "${2:-}"; IMAGE_REPOSITORY=$2; shift 2 ;;
       --k3s-channel) need_value "$1" "${2:-}"; K3S_CHANNEL=$2; shift 2 ;;
       --k3s-version) need_value "$1" "${2:-}"; K3S_VERSION=$2; shift 2 ;;
-      --gateway-api-version) need_value "$1" "${2:-}"; GATEWAY_API_VERSION=$2; shift 2 ;;
       --node-port-range) need_value "$1" "${2:-}"; NODE_PORT_RANGE=$2; shift 2 ;;
     --http-port) need_value "$1" "${2:-}"; HTTP_PORT=$2; shift 2 ;;
     --https-port) need_value "$1" "${2:-}"; HTTPS_PORT=$2; shift 2 ;;
@@ -3159,9 +3156,6 @@ add_helm_repos() {
 install_operators() {
   step
 
-  run_step "Gateway API CRDs" 15s \
-    kubectl apply -f "https://github.com/kubernetes-sigs/gateway-api/releases/download/$GATEWAY_API_VERSION/standard-install.yaml"
-
   run_step "fetching chart repositories" 20s add_helm_repos
 
   # A LoadBalancer service means k3s servicelb, which binds 80 and 443 on the
@@ -3173,7 +3167,6 @@ install_operators() {
 
   run_step "Traefik" 1m30s helm upgrade --install traefik traefik/traefik \
     --namespace traefik --create-namespace \
-    --set providers.kubernetesGateway.enabled=true \
     --set gateway.enabled=false \
     --set service.spec.type="$traefik_service" \
     --set ports.web.exposedPort="$HTTP_PORT" \
@@ -3790,6 +3783,12 @@ clientIp:
   pullPolicy: $IMAGE_PULL_POLICY"
   fi
 
+  local gateway_line=""
+  if [ "$HOST_DEFAULTS_VERSION" -lt 5 ] 2>/dev/null; then
+    gateway_line="
+  enabled: true"
+  fi
+
   local image_block=""
   if [ -n "$IMAGE_TAG" ]; then
     image_block="  image:
@@ -3865,16 +3864,8 @@ ingress:
   tls:
     enabled: $tls_enabled$tls_issuer
 
-gateway:
-  enabled: true
-  namespace: network
-  gatewayClassName: traefik
+gateway:$gateway_line
   http:
-    # The server routes everything through Ingress and never creates an
-    # HTTPRoute, so this listener carries no traffic. Enabled, it also declares
-    # a certificateRef for a wildcard Secret that nothing here creates. Off,
-    # matching production.
-    enabled: false
     appDomain: $ORCHARD_APP_DOMAIN
 
 postgres:

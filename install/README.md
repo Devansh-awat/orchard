@@ -379,19 +379,24 @@ change. A host that keeps a `latest` tag keeps `Always`.
 
 ### Cluster
 
-| Flag                          | Environment variable      | Default                  |
-| ----------------------------- | ------------------------- | ------------------------ |
-| `--k3s-channel <channel>`     | `K3S_CHANNEL`             | `v1.36`                  |
-| `--k3s-version <version>`     | `K3S_VERSION`             | none                     |
-| `--gateway-api-version <ver>` | `GATEWAY_API_VERSION`     | `v1.6.1`                 |
-| `--node-port-range <lo-hi>`   | `ORCHARD_NODE_PORT_RANGE` | `30000-30100`            |
-| `--registry-port <port>`      | `ORCHARD_REGISTRY_PORT`   | `5000`                   |
-| `--registry-host <host>`      | `ORCHARD_REGISTRY_HOST`   | `registry.orchard.local` |
-| `--state-dir <path>`          | `ORCHARD_STATE_DIR`       | `/etc/orchard`           |
+| Flag                        | Environment variable      | Default                  |
+| --------------------------- | ------------------------- | ------------------------ |
+| `--k3s-channel <channel>`   | `K3S_CHANNEL`             | `v1.36`                  |
+| `--k3s-version <version>`   | `K3S_VERSION`             | none                     |
+| `--node-port-range <lo-hi>` | `ORCHARD_NODE_PORT_RANGE` | `30000-30100`            |
+| `--registry-port <port>`    | `ORCHARD_REGISTRY_PORT`   | `5000`                   |
+| `--registry-host <host>`    | `ORCHARD_REGISTRY_HOST`   | `registry.orchard.local` |
+| `--state-dir <path>`        | `ORCHARD_STATE_DIR`       | `/etc/orchard`           |
 
 The node port range is what your apps can claim, so it is also the range you
 forward on a router. The registry port is bound to loopback only and must sit
 outside the range; the installer refuses to start if it does not.
+
+Orchard does not use Gateway API, so the installer does not apply its CRDs or
+turn on Traefik's Gateway provider. Earlier installers did both and wrote
+`gateway.enabled: true`. On such a host, the next re-run or `orchardctl update`
+removes that key once, and the chart upgrade deletes the chart's Gateways. CRDs
+already on the cluster stay: removing one deletes every object of its kind.
 
 ## Seeing what an install looks like
 
