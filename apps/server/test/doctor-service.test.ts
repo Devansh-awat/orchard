@@ -125,6 +125,31 @@ test('the report includes the latest self-test summary when one exists', async (
   assert.equal(report.selftest?.id, 'st-1');
 });
 
+test('the latest self-test result reaches the cni-enforcement check', async () => {
+  const svc: any = service(
+    reader({ apiGroups: async () => [], daemonSets: async () => [] }),
+    okFetch
+  );
+  svc.selftest = {
+    latestFinished: () => ({
+      id: 'st-2',
+      finishedAt: '2026-01-01T00:00:00.000Z',
+      summary: { pass: 3, warn: 0, fail: 0, unknown: 0 },
+      checks: [
+        { id: 'selftest-namespace-shape', status: 'pass' },
+        { id: 'selftest-controls', status: 'pass' },
+        { id: 'selftest-cross-tenant', status: 'pass' }
+      ]
+    })
+  };
+  const inputs = await svc.gather(null, env);
+  assert.equal(inputs.selftest?.id, 'st-2');
+  const report = await svc.report(null);
+  const cni = report.checks.find((c: any) => c.id === 'cni-enforcement');
+  assert.equal(cni.status, 'pass');
+  assert.match(cni.evidence, /st-2/);
+});
+
 test('http probes report failures and server errors as not ok', async () => {
   const refused = (async () => {
     throw new Error('connect ECONNREFUSED');

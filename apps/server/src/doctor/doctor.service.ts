@@ -139,7 +139,8 @@ export class DoctorService {
       issuer: clusterIssuer,
       settings,
       metrics,
-      logs
+      logs,
+      selftest: this.lastSelfTest()
     };
   }
 

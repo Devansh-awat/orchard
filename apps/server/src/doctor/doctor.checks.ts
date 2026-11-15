@@ -53,6 +53,12 @@ export interface RequestFact {
   resolved: string;
 }
 
+export interface SelfTestFact {
+  id: string;
+  finishedAt: string | null;
+  checks: Pick<DoctorCheck, 'id' | 'status'>[];
+}
+
 export interface DoctorInputs {
   env: Record<string, string | undefined>;
   request: RequestFact | null;
@@ -70,6 +76,7 @@ export interface DoctorInputs {
   settings: Fact<SettingsFact>;
   metrics: Fact<ProbeFact>;
   logs: Fact<ProbeFact>;
+  selftest: SelfTestFact | null;
 }
 
 export const DENY_POLICY_NAME = 'default-deny-all';
@@ -117,9 +124,7 @@ function listNames(names: string[], max = 5): string {
   return names.length > max ? `${shown} and ${names.length - max} more` : shown;
 }
 
-export function cniCheck(inputs: DoctorInputs): DoctorCheck {
-  const id = 'cni-enforcement';
-  const title = 'NetworkPolicy-capable CNI present';
+function cniByName(inputs: DoctorInputs, id: string, title: string): DoctorCheck {
   if (!inputs.apiGroups.ok && !inputs.daemonSets.ok) {
     return unreadable(id, title, inputs.apiGroups.error, CNI_FIX);
   }
@@ -166,7 +171,7 @@ export function cniCheck(inputs: DoctorInputs): DoctorCheck {
       id,
       title,
       'pass',
-      `${found.join(', ')} detected (CRDs or daemonset). Detection shows the CNI is installed, not that it enforces; the self-test proves enforcement.`
+      `${found.join(', ')} detected (CRDs or daemonset). Detection shows the CNI is installed, not that it enforces. Run orchard doctor --selftest to prove enforcement.`
     );
   }
   if (k3sNodes) {
@@ -175,7 +180,7 @@ export function cniCheck(inputs: DoctorInputs): DoctorCheck {
       title,
       'unknown',
       'k3s or RKE2 nodes: the distribution ships an embedded NetworkPolicy controller that is not visible as a daemonset, and it can be disabled. Cannot tell passively.',
-      'Run the isolation self-test. Make sure k3s was not started with --disable-network-policy.'
+      'Run orchard doctor --selftest. Make sure k3s was not started with --disable-network-policy.'
     );
   }
   if (daemonSets.some((d) => NON_ENFORCING_CNIS.test(d.name))) {
@@ -191,10 +196,56 @@ export function cniCheck(inputs: DoctorInputs): DoctorCheck {
     id,
     title,
     'unknown',
-    'No known policy-enforcing CNI was detected. Managed CNIs (EKS, GKE Dataplane V2, AKS) do not appear as daemonsets here.',
-    'Run the isolation self-test. If it reports the tenant namespace can reach platform targets, ' +
+    'No known policy-enforcing CNI was found by name. The name match is only a hint: managed CNIs (GKE Dataplane V2, the AWS VPC CNI network policy agent, AKS network policy) and CNIs it does not list can enforce without matching.',
+    'Run orchard doctor --selftest. The isolation self-test proves enforcement whatever the CNI, and this check uses its last result. If it reports that a tenant pod reached another tenant, ' +
       CNI_FIX
   );
+}
+
+function selfTestProof(
+  selftest: SelfTestFact | null,
+  id: string,
+  title: string
+): DoctorCheck | null {
+  if (!selftest) return null;
+  const byId = new Map(selftest.checks.map((c) => [c.id, c.status]));
+  if (byId.get('selftest-namespace-shape') !== 'pass') return null;
+  const crossTenant = byId.get('selftest-cross-tenant');
+  const run = `Isolation self-test ${selftest.id}${selftest.finishedAt ? ` (finished ${selftest.finishedAt})` : ''}`;
+  if (crossTenant === 'fail') {
+    return check(
+      id,
+      title,
+      'fail',
+      `${run}: a pod in one tenant namespace connected to a pod in another, although both namespaces carry default-deny-all. NetworkPolicy is not enforced.`,
+      CNI_FIX
+    );
+  }
+  if (crossTenant === 'pass' && byId.get('selftest-controls') === 'pass') {
+    return check(
+      id,
+      title,
+      'pass',
+      `${run} proved enforcement: traffic between two tenant namespaces was dropped while the positive controls connected. The CNI name does not matter once this passes.`
+    );
+  }
+  return null;
+}
+
+export function cniCheck(inputs: DoctorInputs): DoctorCheck {
+  const id = 'cni-enforcement';
+  const title = 'NetworkPolicy-capable CNI present';
+  const byName = cniByName(inputs, id, title);
+  const proof = selfTestProof(inputs.selftest, id, title);
+  if (!proof) return byName;
+  if (proof.status === 'fail') return proof;
+  if (byName.status === 'warn' && byName.fix !== FLANNEL_FIX) {
+    return {
+      ...byName,
+      evidence: `${byName.evidence} ${proof.evidence} The self-test probe ran on one node only.`
+    };
+  }
+  return proof;
 }
 
 export function defaultDenyCheck(inputs: DoctorInputs): DoctorCheck {

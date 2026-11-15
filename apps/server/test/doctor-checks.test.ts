@@ -72,6 +72,7 @@ function inputs(overrides: Partial<DoctorInputs> = {}): DoctorInputs {
     settings: ok({ signupMode: 'invite_only', customDomainVerification: true }),
     metrics: ok({ ok: true, detail: 'HTTP 200' }),
     logs: ok({ ok: true, detail: 'HTTP 200' }),
+    selftest: null,
     ...overrides
   };
 }
@@ -218,6 +219,103 @@ test('cni: group CRDs alone count, and one unreadable source still allows a verd
   assert.equal(cniCheck(inputs({ daemonSets: bad })).status, 'pass');
   assert.equal(cniCheck(inputs({ apiGroups: bad })).status, 'pass');
   assert.equal(cniCheck(inputs({ apiGroups: bad, daemonSets: bad })).status, 'unknown');
+});
+
+const selftestRun = (statuses: Record<string, string>) => ({
+  id: 'st-abc',
+  finishedAt: '2026-11-01T10:00:00.000Z',
+  checks: Object.entries(statuses).map(([id, status]) => ({ id, status: status as any }))
+});
+
+const PASSING_SELFTEST = selftestRun({
+  'selftest-namespace-shape': 'pass',
+  'selftest-controls': 'pass',
+  'selftest-cross-tenant': 'pass',
+  'selftest-nodes': 'fail'
+});
+
+const unnamed = { apiGroups: ok([]), daemonSets: ok([]) };
+
+test('cni: a passing isolation self-test proves enforcement whatever the CNI name', () => {
+  const managed = cniCheck(inputs({ ...unnamed, selftest: PASSING_SELFTEST }));
+  assert.equal(managed.status, 'pass');
+  assert.match(managed.evidence, /st-abc/);
+  const k3s = cniCheck(
+    inputs({
+      ...unnamed,
+      nodes: ok([{ name: 'n1', kubelet: 'v1.30.2+k3s1' }]),
+      selftest: PASSING_SELFTEST
+    })
+  );
+  assert.equal(k3s.status, 'pass');
+  const flannel = cniCheck(
+    inputs({
+      apiGroups: ok([]),
+      daemonSets: ok([
+        { name: 'kube-flannel-ds', namespace: 'kube-flannel', desired: 1, ready: 1 }
+      ]),
+      selftest: PASSING_SELFTEST
+    })
+  );
+  assert.equal(flannel.status, 'pass');
+  assert.equal(cniCheck(inputs({ selftest: PASSING_SELFTEST })).status, 'pass');
+  const blind = cniCheck(inputs({ apiGroups: bad, daemonSets: bad, selftest: PASSING_SELFTEST }));
+  assert.equal(blind.status, 'pass');
+});
+
+test('cni: a self-test where one tenant reached another fails the check even with a known CNI', () => {
+  const leaky = selftestRun({
+    'selftest-namespace-shape': 'pass',
+    'selftest-controls': 'pass',
+    'selftest-cross-tenant': 'fail'
+  });
+  const result = cniCheck(inputs({ selftest: leaky }));
+  assert.equal(result.status, 'fail');
+  assert.match(result.evidence, /st-abc/);
+  assert.match(result.fix, /NetworkPolicy/);
+});
+
+test('cni: unready agents and two enforcers still warn after a passing self-test', () => {
+  const unready = cniCheck(
+    inputs({
+      daemonSets: ok([{ name: 'cilium', namespace: 'kube-system', desired: 3, ready: 1 }]),
+      selftest: PASSING_SELFTEST
+    })
+  );
+  assert.equal(unready.status, 'warn');
+  assert.match(unready.evidence, /one node only/);
+  const doubled = cniCheck(
+    inputs({
+      daemonSets: ok([{ name: 'kube-router', namespace: 'orchard-netpol', desired: 3, ready: 3 }]),
+      selftest: PASSING_SELFTEST
+    })
+  );
+  assert.equal(doubled.status, 'warn');
+  assert.match(doubled.fix, /networkPolicy\.enforcer\.enabled=false/);
+});
+
+test('cni: an inconclusive self-test falls back to the name match', () => {
+  const noControls = selftestRun({
+    'selftest-namespace-shape': 'pass',
+    'selftest-controls': 'unknown',
+    'selftest-cross-tenant': 'unknown'
+  });
+  assert.equal(cniCheck(inputs({ ...unnamed, selftest: noControls })).status, 'unknown');
+  const badShape = selftestRun({
+    'selftest-namespace-shape': 'fail',
+    'selftest-controls': 'pass',
+    'selftest-cross-tenant': 'fail'
+  });
+  assert.equal(cniCheck(inputs({ selftest: badShape })).status, 'pass');
+  const errored = { id: 'st-err', finishedAt: null, checks: [] };
+  assert.equal(cniCheck(inputs({ ...unnamed, selftest: errored })).status, 'unknown');
+});
+
+test('cni: with nothing found by name the result points at the self-test and calls the match a hint', () => {
+  const none = cniCheck(inputs(unnamed));
+  assert.equal(none.status, 'unknown');
+  assert.match(none.evidence, /only a hint/);
+  assert.match(none.fix, /orchard doctor --selftest/);
 });
 
 test('default-deny: counts namespaces without the policy', () => {
