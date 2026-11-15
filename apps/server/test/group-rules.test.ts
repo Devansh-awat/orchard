@@ -93,6 +93,31 @@ test('overage markers mean unknown, not empty', () => {
   assert.equal(extractGroups({ groups: ['a'], hasgroups: true }, 'groups').kind, 'groups');
 });
 
+test('an Entra SAML groups.link attribute in place of the groups means overage', () => {
+  const link = 'http://schemas.microsoft.com/claims/groups.link';
+  const entraGroups = 'http://schemas.microsoft.com/ws/2008/06/identity/claims/groups';
+  const url = 'https://graph.windows.net/tenant/users/user/getMemberObjects';
+  for (const claim of [entraGroups, 'groups']) {
+    assert.deepEqual(extractGroups({ [link]: url }, claim), { kind: 'unknown', reason: 'overage' });
+    assert.deepEqual(extractGroups({ [link]: undefined }, claim), {
+      kind: 'unknown',
+      reason: 'overage'
+    });
+  }
+  assert.deepEqual(extractGroups({ [entraGroups]: ['g1', 'g2'] }, entraGroups), {
+    kind: 'groups',
+    groups: new Set(['g1', 'g2'])
+  });
+  assert.deepEqual(extractGroups({ [entraGroups]: ['g1'], [link]: url }, entraGroups), {
+    kind: 'groups',
+    groups: new Set(['g1'])
+  });
+  assert.deepEqual(extractGroups({ 'groups.link': url }, entraGroups), {
+    kind: 'groups',
+    groups: new Set()
+  });
+});
+
 test('claim lookup takes a literal key first, then a bounded dotted path', () => {
   assert.deepEqual(extractGroups({ 'a.b': ['x'], a: { b: ['y'] } }, 'a.b'), {
     kind: 'groups',

@@ -4,6 +4,7 @@ export const MAX_CLAIM_BYTES = 16 * 1024;
 export const MAX_RULES_PER_ORG = 1000;
 export const MAX_CLAIM_NAME_LENGTH = 256;
 const MAX_CLAIM_PATH_DEPTH = 4;
+const ENTRA_SAML_GROUPS_LINK = 'http://schemas.microsoft.com/claims/groups.link';
 
 export const MAPPABLE_ROLES = ['admin', 'member', 'guest'] as const;
 export type MappableRole = (typeof MAPPABLE_ROLES)[number];
@@ -98,7 +99,7 @@ function lookup(claims: Record<string, unknown>, name: string): unknown {
 }
 
 function hasOverageMarker(claims: Record<string, unknown>, name: string): boolean {
-  if (claims.hasgroups === true) return true;
+  if (claims.hasgroups === true || Object.hasOwn(claims, ENTRA_SAML_GROUPS_LINK)) return true;
   const names = claims._claim_names;
   return (
     typeof names === 'object' &&

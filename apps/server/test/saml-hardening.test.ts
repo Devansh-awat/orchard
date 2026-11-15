@@ -8,6 +8,7 @@ import { SsoLoginService } from '../src/sso/sso-login.service';
 import { SsoService } from '../src/sso/sso.service';
 import { SamlRequestStore } from '../src/sso/saml-request.store';
 import { cleanEmail, extractIdentity } from '../src/sso/saml-response';
+import { extractGroups } from '../src/sso/group-rules';
 import { SAML_TEST_KEYS as KEYS } from './saml-test-keys';
 
 const samlRequire = createRequire(require.resolve('@node-saml/node-saml'));
@@ -91,6 +92,7 @@ interface Opts {
   sha1?: boolean;
   email?: string | string[];
   groups?: string[];
+  attributes?: Record<string, string[]>;
   extraAssertion?: boolean;
   wrap?: (xml: string) => string;
 }
@@ -126,9 +128,13 @@ function response(o: Opts): string {
   const irt = o.requestId ? ` InResponseTo="${o.requestId}"` : '';
   const emails = Array.isArray(o.email) ? o.email : [o.email ?? 'ana@acme.test'];
   const values = emails.map((e) => `<saml:AttributeValue>${e}</saml:AttributeValue>`).join('');
-  const groupAttr = o.groups
-    ? `<saml:Attribute Name="groups">${o.groups.map((g) => `<saml:AttributeValue>${g}</saml:AttributeValue>`).join('')}</saml:Attribute>`
-    : '';
+  const attr = (name: string, list: string[]) =>
+    `<saml:Attribute Name="${name}">${list.map((v) => `<saml:AttributeValue>${v}</saml:AttributeValue>`).join('')}</saml:Attribute>`;
+  const groupAttr =
+    (o.groups ? attr('groups', o.groups) : '') +
+    Object.entries(o.attributes ?? {})
+      .map(([name, list]) => attr(name, list))
+      .join('');
   const assertion = (id: string) =>
     `<saml:Assertion xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="${id}" Version="2.0" IssueInstant="${iso(now)}">` +
     `<saml:Issuer>${o.assertionIssuer ?? IDP}</saml:Issuer>` +
@@ -223,6 +229,58 @@ test('groups reach the mapper only from the signed assertion', async () => {
       s2.startToken
     )
   );
+});
+
+const GROUPS_LINK = 'http://schemas.microsoft.com/claims/groups.link';
+const ENTRA_GROUPS = 'http://schemas.microsoft.com/ws/2008/06/identity/claims/groups';
+const GRAPH_LINK = 'https://graph.windows.net/tenant/users/user/getMemberObjects';
+
+test('an Entra groups.link attribute in the signed assertion reaches the mapper as overage', async () => {
+  const login = harness();
+  const s = await begin(login, 'provA');
+  const out = await login.handleSamlCallback(
+    'provA',
+    response({ requestId: s.requestId, attributes: { [GROUPS_LINK]: [GRAPH_LINK] } }),
+    s.relay,
+    s.startToken
+  );
+  assert.equal(out.profile.claims[GROUPS_LINK], GRAPH_LINK);
+  assert.deepEqual(extractGroups(out.profile.claims, ENTRA_GROUPS), {
+    kind: 'unknown',
+    reason: 'overage'
+  });
+
+  const t = await begin(login, 'provA');
+  const normal = await login.handleSamlCallback(
+    'provA',
+    response({ requestId: t.requestId, attributes: { [ENTRA_GROUPS]: ['g1', 'g2'] } }),
+    t.relay,
+    t.startToken
+  );
+  assert.deepEqual(extractGroups(normal.profile.claims, ENTRA_GROUPS), {
+    kind: 'groups',
+    groups: new Set(['g1', 'g2'])
+  });
+});
+
+test('a groups.link attribute added after signing is refused', async () => {
+  const login = harness();
+  const forged = `<saml:Attribute Name="${GROUPS_LINK}"><saml:AttributeValue>${GRAPH_LINK}</saml:AttributeValue></saml:Attribute>`;
+  for (const wrap of [
+    (xml: string) =>
+      xml.replace('</saml:AttributeStatement>', `${forged}</saml:AttributeStatement>`),
+    (xml: string) => xml.replace(/<saml:Attribute Name="groups">.*?<\/saml:Attribute>/, forged)
+  ]) {
+    const s = await begin(login, 'provA');
+    await rejected(
+      login.handleSamlCallback(
+        'provA',
+        response({ requestId: s.requestId, groups: ['eng'], wrap }),
+        s.relay,
+        s.startToken
+      )
+    );
+  }
 });
 
 test('an unsolicited response carrying admin groups is still refused', async () => {

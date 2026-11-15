@@ -345,6 +345,87 @@ test('overage and oversized claims deny without removing anyone', async () => {
   assert.ok(f.audits.every((a) => a.metadata.reason.startsWith('groups_')));
 });
 
+test('Entra SAML overage denies without removing anyone, unlike an empty group list', async () => {
+  const entraGroups = 'http://schemas.microsoft.com/ws/2008/06/identity/claims/groups';
+  const overage = {
+    'http://schemas.microsoft.com/claims/groups.link':
+      'https://graph.windows.net/tenant/users/u1/getMemberObjects'
+  };
+  const f = new Fake();
+  const p = f.orgProvider({ protocol: 'saml', groupClaim: entraGroups });
+  f.rule('pA', 'orgA', 'eng', 'admin');
+  f.member('orgA', 'u1', 'admin', 'pA');
+  f.projectRules.push({
+    providerId: 'pA',
+    projectId: 'proj1',
+    organizationId: 'orgA',
+    value: 'eng',
+    roleId: 'role-admin',
+    role: { name: 'admin' }
+  });
+  f.projectMembers.push({
+    id: 'pm-1',
+    projectId: 'proj1',
+    userId: 'u1',
+    roleId: 'role-admin',
+    managedByProviderId: 'pA'
+  });
+
+  const ctx = await f.service.prepare(p, overage, 'u1');
+  assert.deepEqual(ctx.groups, { kind: 'unknown', reason: 'overage' });
+  assert.equal(ctx.allowed, false);
+  assert.equal(ctx.decisions.size, 0);
+  assert.equal(ctx.pending.length, 0);
+  await assert.rejects(
+    () => f.service.deny(p, ctx, { email: u1.email, userId: 'u1' }),
+    (e: any) => e instanceof UnauthorizedException && e.message === 'sso_not_mapped'
+  );
+  await f.service.apply(p, u1, ctx);
+  assert.equal(f.roleOf('orgA', 'u1'), 'admin');
+  assert.equal(f.projectMembers.length, 1);
+  assert.equal(f.detached.length, 0);
+  assert.equal(f.revoked.length, 0);
+  assert.equal(f.audits.length, 1);
+  assert.equal(f.audits[0].action, 'sso.login.denied');
+  assert.equal(f.audits[0].metadata.reason, 'groups_overage');
+
+  const owner = new Fake();
+  const op = owner.orgProvider({ protocol: 'saml', groupClaim: entraGroups });
+  owner.rule('pA', 'orgA', 'eng', 'guest');
+  owner.member('orgA', 'u1', 'owner', 'pA');
+  const octx = await owner.service.prepare(op, overage, 'u1');
+  await owner.service.apply(op, u1, octx);
+  assert.equal(owner.roleOf('orgA', 'u1'), 'owner');
+
+  const normal = new Fake();
+  const np = normal.orgProvider({ protocol: 'saml', groupClaim: entraGroups });
+  normal.rule('pA', 'orgA', 'eng', 'admin');
+  normal.rule('pA', 'orgA', 'staff', 'member');
+  normal.member('orgA', 'u1', 'admin', 'pA');
+  const nctx = await normal.service.prepare(np, { [entraGroups]: ['staff'] });
+  assert.equal(nctx.allowed, true);
+  await normal.service.apply(np, u1, nctx);
+  assert.equal(normal.roleOf('orgA', 'u1'), 'member');
+  assert.equal(normal.revoked.length, 1);
+});
+
+test('Entra SAML overage on an instance provider grants and creates nothing', async () => {
+  const f = new Fake();
+  const p = f.instanceProvider();
+  f.rule('pI', 'orgA', 'eng', 'admin');
+  f.rule('pI', 'orgB', 'eng', 'member');
+  f.member('orgB', 'u1', 'member', 'pI');
+  const ctx = await f.service.prepare(p, {
+    'http://schemas.microsoft.com/claims/groups.link':
+      'https://graph.windows.net/t/users/u1/getMemberObjects'
+  });
+  assert.equal(ctx.allowed, false);
+  await assert.rejects(() => f.service.deny(p, ctx, { email: u1.email, userId: 'u1' }));
+  await f.service.apply(p, u1, ctx);
+  assert.equal(f.roleOf('orgA', 'u1'), undefined);
+  assert.equal(f.roleOf('orgB', 'u1'), 'member');
+});
+
 test('a protocol that cannot carry groups is denied when rules exist', async () => {
   const f = new Fake();
   const p = f.orgProvider({ protocol: 'oauth2' });
