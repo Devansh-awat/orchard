@@ -1,0 +1,59 @@
+name: renovate
+
+on:
+  schedule:
+    - cron: '0 6 * * *'
+  push:
+    branches: [main]
+    paths: ['.github/renovate.json5']
+  issues:
+    types: [edited]
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: Plan updates without creating branches or PRs
+        type: boolean
+        default: false
+      log-level:
+        description: Renovate log level
+        type: choice
+        options: [info, debug]
+        default: info
+
+permissions:
+  contents: read
+
+concurrency:
+  group: renovate
+  cancel-in-progress: false
+
+jobs:
+  renovate:
+    if: >-
+      github.repository == 'hackclub/orchard' &&
+      (github.event_name != 'issues' ||
+      (github.event.issue.title == 'Dependency Dashboard' && github.event.sender.type != 'Bot'))
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
+        id: app-token
+        with:
+          app-id: 1090304
+          private-key: ${{ secrets.LEAFDBOT_PRIVATE_KEY }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+          permission-pull-requests: write
+          permission-issues: write
+          permission-workflows: write
+          permission-vulnerability-alerts: read
+      - name: Dry run
+        if: inputs.dry-run
+        run: echo "RENOVATE_DRY_RUN=full" >> "$GITHUB_ENV"
+      - uses: renovatebot/github-action@266fef21329c44765ad42f9dea1f01f5d2d91084 # v46.3.13
+        env:
+          LOG_LEVEL: ${{ inputs.log-level || 'info' }}
+          RENOVATE_REPOSITORIES: ${{ github.repository }}
+          RENOVATE_ONBOARDING: 'false'
+          RENOVATE_REQUIRE_CONFIG: required
+        with:
+          token: ${{ steps.app-token.outputs.token }}
