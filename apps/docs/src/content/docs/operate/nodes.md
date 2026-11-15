@@ -34,10 +34,10 @@ Orchard also adds the addresses of the new node to the egress deny list of every
 ### Remove a node from a Helm cluster
 
 1. Stop new pods from landing on the node:
+   1. Go to **Instance admin** > **Nodes**, and select the node.
+   2. Select **Cordon**.
 
-   ```bash
-   kubectl cordon <NODE_NAME>
-   ```
+   Orchard marks the node unschedulable in Kubernetes, the same as `kubectl cordon <NODE_NAME>`. Pods that already run on the node keep running. To undo this, select **Uncordon**.
 
 2. Move its pods to other nodes:
 
@@ -52,10 +52,6 @@ Orchard also adds the addresses of the new node to the egress deny list of every
    ```bash
    kubectl delete node <NODE_NAME>
    ```
-
-:::note
-Use `kubectl cordon`, not the **Cordon** button in **Instance admin** > **Nodes**. That button changes only the status that Orchard shows for the node. It does not mark the node unschedulable in Kubernetes.
-:::
 
 When a node leaves the cluster, Orchard keeps its row and its organization assignments for 30 minutes, in case the node registers again. After that, Orchard removes the node from **Instance admin** > **Nodes**, together with its organization assignments.
 
