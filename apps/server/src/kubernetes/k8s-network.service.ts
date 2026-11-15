@@ -9,6 +9,13 @@ import {
 import * as k8s from '@kubernetes/client-node';
 import { PublicIpPolicyService } from './public-ip-policy.service';
 import { sharedIpAnnotations, servicesToAlign, type ShareWith } from './public-ip-policy';
+import {
+  publicEndpointStatus,
+  SERVICELB_NAME_LABEL,
+  SERVICELB_NAMESPACE_LABEL,
+  UNKNOWN_PUBLIC_ENDPOINT,
+  type PublicEndpointStatus
+} from './public-endpoint';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   KubernetesService,
@@ -39,6 +46,8 @@ import {
   publicDeploymentPolicy,
   publicDeploymentPolicyName
 } from './security-policies';
+
+const PUBLIC_ENDPOINT_READ_MS = 4000;
 
 export type ProtectionProxyResult = 'applied' | 'ingress-missing' | 'failed';
 
@@ -2250,7 +2259,7 @@ export class K8sNetworkService implements OnModuleInit {
     }
   }
 
-  private publicServiceName(clusterName: string): string {
+  publicServiceName(clusterName: string): string {
     return truncateK8sName(`${clusterName}-public`, 63);
   }
 
@@ -2296,6 +2305,72 @@ export class K8sNetworkService implements OnModuleInit {
       } catch (e: any) {
         this.logger.warn(`Couldn't align IP sharing on ${namespace}/${name}: ${e?.message ?? e}`);
       }
+    }
+  }
+
+  async publicEndpointStatuses(
+    namespace: string,
+    names: string[]
+  ): Promise<Map<string, PublicEndpointStatus>> {
+    const unique = [...new Set(names.filter(Boolean))];
+    const out = new Map<string, PublicEndpointStatus>();
+    if (unique.length === 0) return out;
+    try {
+      this.ensureKubeConfig();
+      const coreApi = this.kc.makeApiClient(k8s.CoreV1Api);
+      const readService = async (name: string): Promise<k8s.V1Service | null> => {
+        try {
+          return (await coreApi.readNamespacedService(name, namespace)).body;
+        } catch (e: any) {
+          if ((e?.statusCode ?? e?.response?.statusCode) === 404) return null;
+          throw e;
+        }
+      };
+      let timer: NodeJS.Timeout | undefined;
+      const timeout = new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error('timed out')), PUBLIC_ENDPOINT_READ_MS);
+        timer.unref?.();
+      });
+      const [services, events, pods] = await Promise.race([
+        Promise.all([
+          Promise.all(unique.map(readService)),
+          coreApi
+            .listNamespacedEvent(
+              namespace,
+              undefined,
+              undefined,
+              undefined,
+              'involvedObject.kind=Service'
+            )
+            .then((r) => r.body.items),
+          coreApi
+            .listPodForAllNamespaces(
+              undefined,
+              undefined,
+              undefined,
+              `${SERVICELB_NAMESPACE_LABEL}=${namespace}`
+            )
+            .then((r) => r.body.items)
+        ]),
+        timeout
+      ]).finally(() => clearTimeout(timer));
+      const now = Date.now();
+      unique.forEach((name, i) => {
+        out.set(
+          name,
+          publicEndpointStatus({
+            service: services[i],
+            events,
+            balancerPods: pods.filter((p) => p.metadata?.labels?.[SERVICELB_NAME_LABEL] === name),
+            now
+          })
+        );
+      });
+      return out;
+    } catch (e: any) {
+      this.logger.warn(`Couldn't read public endpoints in ${namespace}: ${k8sErrorMessage(e)}`);
+      for (const name of unique) out.set(name, UNKNOWN_PUBLIC_ENDPOINT);
+      return out;
     }
   }
 
@@ -2415,11 +2490,7 @@ export class K8sNetworkService implements OnModuleInit {
     return this.PUBLIC_DEPLOYMENT_BASE_DOMAIN;
   }
 
-  private publicDeploymentServiceName(
-    deploymentName: string,
-    port: number,
-    protocol: string
-  ): string {
+  publicDeploymentServiceName(deploymentName: string, port: number, protocol: string): string {
     const proto = protocol.toLowerCase() === 'udp' ? 'u' : 't';
     return truncateK8sName(`${deploymentName}-pub-${proto}${port}`, 63);
   }

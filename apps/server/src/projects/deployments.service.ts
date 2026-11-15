@@ -31,6 +31,7 @@ import {
   certificateStatusFrom
 } from '../kubernetes/k8s-network.service';
 import { snapshotPublicPortState, publicPortKey } from '../kubernetes/port-utils';
+import { UNKNOWN_PUBLIC_ENDPOINT } from '../kubernetes/public-endpoint';
 import { resolvePullPolicy } from '../kubernetes/trusted-images';
 import { startArgsFor, resolveStartArgs } from '../kubernetes/start-command';
 import { disruptionBudgetActive } from '../kubernetes/disruption-budget';
@@ -1706,7 +1707,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           })
         : Promise.resolve([] as any[]),
       this.mirroredRollout(deployment),
-      this.latestVerdict(deployment.id)
+      this.latestVerdict(deployment.id),
+      this.attachPublicStatus(deploymentWithInternalUrls)
     ]);
     const warnings = this.synthesizePodWarnings(pods);
     const totalCpuUsage: number | null = null;
@@ -6058,6 +6060,25 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       this.instanceConfig.defaultPublicIp() ||
       null
     );
+  }
+
+  async attachPublicStatus(deployment: any): Promise<void> {
+    const namespace = deployment?.namespace;
+    const name = deployment?.name;
+    if (!namespace || !name || !Array.isArray(deployment.services)) return;
+    const ports: any[] = deployment.services
+      .flatMap((s: any) => s.ports ?? [])
+      .filter((p: any) => p.publicEnabled && p.publicPort && p.publicAddress);
+    if (ports.length === 0) return;
+    const serviceNameOf = (p: any) =>
+      this.k8sNetwork.publicDeploymentServiceName(name, p.publicPort, p.protocol ?? 'TCP');
+    const statuses = await this.k8sNetwork.publicEndpointStatuses(
+      namespace,
+      ports.map(serviceNameOf)
+    );
+    for (const port of ports) {
+      port.publicStatus = statuses.get(serviceNameOf(port)) ?? UNKNOWN_PUBLIC_ENDPOINT;
+    }
   }
 
   addInternalUrlsToServices(services: any[], namespace: string, publicHost: string | null = null) {

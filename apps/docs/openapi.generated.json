@@ -6809,6 +6809,40 @@
                         "null"
                       ]
                     },
+                    "publicStatus": {
+                      "properties": {
+                        "addresses": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "reason": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "state": {
+                          "enum": [
+                            "ready",
+                            "pending",
+                            "failed",
+                            "unknown"
+                          ],
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "state",
+                        "addresses",
+                        "reason"
+                      ],
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
                     "r2ProxyAccessKey": {
                       "type": [
                         "string",
@@ -11081,6 +11115,12 @@
                                     "protocol": {
                                       "type": "string"
                                     },
+                                    "publicAddress": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ]
+                                    },
                                     "publicEnabled": {
                                       "type": "boolean"
                                     },
@@ -11089,6 +11129,37 @@
                                         "number",
                                         "null"
                                       ]
+                                    },
+                                    "publicStatus": {
+                                      "properties": {
+                                        "addresses": {
+                                          "items": {
+                                            "type": "string"
+                                          },
+                                          "type": "array"
+                                        },
+                                        "reason": {
+                                          "type": [
+                                            "string",
+                                            "null"
+                                          ]
+                                        },
+                                        "state": {
+                                          "enum": [
+                                            "ready",
+                                            "pending",
+                                            "failed",
+                                            "unknown"
+                                          ],
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": [
+                                        "state",
+                                        "addresses",
+                                        "reason"
+                                      ],
+                                      "type": "object"
                                     },
                                     "serviceId": {
                                       "type": "string"
@@ -11709,6 +11780,12 @@
                                 "protocol": {
                                   "type": "string"
                                 },
+                                "publicAddress": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
                                 "publicEnabled": {
                                   "type": "boolean"
                                 },
@@ -11717,6 +11794,37 @@
                                     "number",
                                     "null"
                                   ]
+                                },
+                                "publicStatus": {
+                                  "properties": {
+                                    "addresses": {
+                                      "items": {
+                                        "type": "string"
+                                      },
+                                      "type": "array"
+                                    },
+                                    "reason": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ]
+                                    },
+                                    "state": {
+                                      "enum": [
+                                        "ready",
+                                        "pending",
+                                        "failed",
+                                        "unknown"
+                                      ],
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "state",
+                                    "addresses",
+                                    "reason"
+                                  ],
+                                  "type": "object"
                                 },
                                 "serviceId": {
                                   "type": "string"
@@ -12530,6 +12638,12 @@
                                     "protocol": {
                                       "type": "string"
                                     },
+                                    "publicAddress": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ]
+                                    },
                                     "publicEnabled": {
                                       "type": "boolean"
                                     },
@@ -12538,6 +12652,37 @@
                                         "number",
                                         "null"
                                       ]
+                                    },
+                                    "publicStatus": {
+                                      "properties": {
+                                        "addresses": {
+                                          "items": {
+                                            "type": "string"
+                                          },
+                                          "type": "array"
+                                        },
+                                        "reason": {
+                                          "type": [
+                                            "string",
+                                            "null"
+                                          ]
+                                        },
+                                        "state": {
+                                          "enum": [
+                                            "ready",
+                                            "pending",
+                                            "failed",
+                                            "unknown"
+                                          ],
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": [
+                                        "state",
+                                        "addresses",
+                                        "reason"
+                                      ],
+                                      "type": "object"
                                     },
                                     "serviceId": {
                                       "type": "string"
@@ -13158,6 +13303,12 @@
                                 "protocol": {
                                   "type": "string"
                                 },
+                                "publicAddress": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
                                 "publicEnabled": {
                                   "type": "boolean"
                                 },
@@ -13166,6 +13317,37 @@
                                     "number",
                                     "null"
                                   ]
+                                },
+                                "publicStatus": {
+                                  "properties": {
+                                    "addresses": {
+                                      "items": {
+                                        "type": "string"
+                                      },
+                                      "type": "array"
+                                    },
+                                    "reason": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ]
+                                    },
+                                    "state": {
+                                      "enum": [
+                                        "ready",
+                                        "pending",
+                                        "failed",
+                                        "unknown"
+                                      ],
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "state",
+                                    "addresses",
+                                    "reason"
+                                  ],
+                                  "type": "object"
                                 },
                                 "serviceId": {
                                   "type": "string"
@@ -13949,6 +14131,12 @@
                                     "protocol": {
                                       "type": "string"
                                     },
+                                    "publicAddress": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ]
+                                    },
                                     "publicEnabled": {
                                       "type": "boolean"
                                     },
@@ -13957,6 +14145,37 @@
                                         "number",
                                         "null"
                                       ]
+                                    },
+                                    "publicStatus": {
+                                      "properties": {
+                                        "addresses": {
+                                          "items": {
+                                            "type": "string"
+                                          },
+                                          "type": "array"
+                                        },
+                                        "reason": {
+                                          "type": [
+                                            "string",
+                                            "null"
+                                          ]
+                                        },
+                                        "state": {
+                                          "enum": [
+                                            "ready",
+                                            "pending",
+                                            "failed",
+                                            "unknown"
+                                          ],
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": [
+                                        "state",
+                                        "addresses",
+                                        "reason"
+                                      ],
+                                      "type": "object"
                                     },
                                     "serviceId": {
                                       "type": "string"
@@ -14577,6 +14796,12 @@
                                 "protocol": {
                                   "type": "string"
                                 },
+                                "publicAddress": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
                                 "publicEnabled": {
                                   "type": "boolean"
                                 },
@@ -14585,6 +14810,37 @@
                                     "number",
                                     "null"
                                   ]
+                                },
+                                "publicStatus": {
+                                  "properties": {
+                                    "addresses": {
+                                      "items": {
+                                        "type": "string"
+                                      },
+                                      "type": "array"
+                                    },
+                                    "reason": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ]
+                                    },
+                                    "state": {
+                                      "enum": [
+                                        "ready",
+                                        "pending",
+                                        "failed",
+                                        "unknown"
+                                      ],
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "state",
+                                    "addresses",
+                                    "reason"
+                                  ],
+                                  "type": "object"
                                 },
                                 "serviceId": {
                                   "type": "string"
@@ -15326,6 +15582,12 @@
                                     "protocol": {
                                       "type": "string"
                                     },
+                                    "publicAddress": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ]
+                                    },
                                     "publicEnabled": {
                                       "type": "boolean"
                                     },
@@ -15334,6 +15596,37 @@
                                         "number",
                                         "null"
                                       ]
+                                    },
+                                    "publicStatus": {
+                                      "properties": {
+                                        "addresses": {
+                                          "items": {
+                                            "type": "string"
+                                          },
+                                          "type": "array"
+                                        },
+                                        "reason": {
+                                          "type": [
+                                            "string",
+                                            "null"
+                                          ]
+                                        },
+                                        "state": {
+                                          "enum": [
+                                            "ready",
+                                            "pending",
+                                            "failed",
+                                            "unknown"
+                                          ],
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": [
+                                        "state",
+                                        "addresses",
+                                        "reason"
+                                      ],
+                                      "type": "object"
                                     },
                                     "serviceId": {
                                       "type": "string"
@@ -15954,6 +16247,12 @@
                                 "protocol": {
                                   "type": "string"
                                 },
+                                "publicAddress": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
                                 "publicEnabled": {
                                   "type": "boolean"
                                 },
@@ -15962,6 +16261,37 @@
                                     "number",
                                     "null"
                                   ]
+                                },
+                                "publicStatus": {
+                                  "properties": {
+                                    "addresses": {
+                                      "items": {
+                                        "type": "string"
+                                      },
+                                      "type": "array"
+                                    },
+                                    "reason": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ]
+                                    },
+                                    "state": {
+                                      "enum": [
+                                        "ready",
+                                        "pending",
+                                        "failed",
+                                        "unknown"
+                                      ],
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "state",
+                                    "addresses",
+                                    "reason"
+                                  ],
+                                  "type": "object"
                                 },
                                 "serviceId": {
                                   "type": "string"
@@ -16741,6 +17071,12 @@
                                     "protocol": {
                                       "type": "string"
                                     },
+                                    "publicAddress": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ]
+                                    },
                                     "publicEnabled": {
                                       "type": "boolean"
                                     },
@@ -16749,6 +17085,37 @@
                                         "number",
                                         "null"
                                       ]
+                                    },
+                                    "publicStatus": {
+                                      "properties": {
+                                        "addresses": {
+                                          "items": {
+                                            "type": "string"
+                                          },
+                                          "type": "array"
+                                        },
+                                        "reason": {
+                                          "type": [
+                                            "string",
+                                            "null"
+                                          ]
+                                        },
+                                        "state": {
+                                          "enum": [
+                                            "ready",
+                                            "pending",
+                                            "failed",
+                                            "unknown"
+                                          ],
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": [
+                                        "state",
+                                        "addresses",
+                                        "reason"
+                                      ],
+                                      "type": "object"
                                     },
                                     "serviceId": {
                                       "type": "string"
@@ -17369,6 +17736,12 @@
                                 "protocol": {
                                   "type": "string"
                                 },
+                                "publicAddress": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
                                 "publicEnabled": {
                                   "type": "boolean"
                                 },
@@ -17377,6 +17750,37 @@
                                     "number",
                                     "null"
                                   ]
+                                },
+                                "publicStatus": {
+                                  "properties": {
+                                    "addresses": {
+                                      "items": {
+                                        "type": "string"
+                                      },
+                                      "type": "array"
+                                    },
+                                    "reason": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ]
+                                    },
+                                    "state": {
+                                      "enum": [
+                                        "ready",
+                                        "pending",
+                                        "failed",
+                                        "unknown"
+                                      ],
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "state",
+                                    "addresses",
+                                    "reason"
+                                  ],
+                                  "type": "object"
                                 },
                                 "serviceId": {
                                   "type": "string"
@@ -18135,6 +18539,12 @@
                                     "protocol": {
                                       "type": "string"
                                     },
+                                    "publicAddress": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ]
+                                    },
                                     "publicEnabled": {
                                       "type": "boolean"
                                     },
@@ -18143,6 +18553,37 @@
                                         "number",
                                         "null"
                                       ]
+                                    },
+                                    "publicStatus": {
+                                      "properties": {
+                                        "addresses": {
+                                          "items": {
+                                            "type": "string"
+                                          },
+                                          "type": "array"
+                                        },
+                                        "reason": {
+                                          "type": [
+                                            "string",
+                                            "null"
+                                          ]
+                                        },
+                                        "state": {
+                                          "enum": [
+                                            "ready",
+                                            "pending",
+                                            "failed",
+                                            "unknown"
+                                          ],
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": [
+                                        "state",
+                                        "addresses",
+                                        "reason"
+                                      ],
+                                      "type": "object"
                                     },
                                     "serviceId": {
                                       "type": "string"
@@ -18763,6 +19204,12 @@
                                 "protocol": {
                                   "type": "string"
                                 },
+                                "publicAddress": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
                                 "publicEnabled": {
                                   "type": "boolean"
                                 },
@@ -18771,6 +19218,37 @@
                                     "number",
                                     "null"
                                   ]
+                                },
+                                "publicStatus": {
+                                  "properties": {
+                                    "addresses": {
+                                      "items": {
+                                        "type": "string"
+                                      },
+                                      "type": "array"
+                                    },
+                                    "reason": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ]
+                                    },
+                                    "state": {
+                                      "enum": [
+                                        "ready",
+                                        "pending",
+                                        "failed",
+                                        "unknown"
+                                      ],
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "state",
+                                    "addresses",
+                                    "reason"
+                                  ],
+                                  "type": "object"
                                 },
                                 "serviceId": {
                                   "type": "string"
@@ -19870,6 +20348,12 @@
                                     "protocol": {
                                       "type": "string"
                                     },
+                                    "publicAddress": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ]
+                                    },
                                     "publicEnabled": {
                                       "type": "boolean"
                                     },
@@ -19878,6 +20362,37 @@
                                         "number",
                                         "null"
                                       ]
+                                    },
+                                    "publicStatus": {
+                                      "properties": {
+                                        "addresses": {
+                                          "items": {
+                                            "type": "string"
+                                          },
+                                          "type": "array"
+                                        },
+                                        "reason": {
+                                          "type": [
+                                            "string",
+                                            "null"
+                                          ]
+                                        },
+                                        "state": {
+                                          "enum": [
+                                            "ready",
+                                            "pending",
+                                            "failed",
+                                            "unknown"
+                                          ],
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": [
+                                        "state",
+                                        "addresses",
+                                        "reason"
+                                      ],
+                                      "type": "object"
                                     },
                                     "serviceId": {
                                       "type": "string"
@@ -20510,6 +21025,12 @@
                                 "protocol": {
                                   "type": "string"
                                 },
+                                "publicAddress": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
                                 "publicEnabled": {
                                   "type": "boolean"
                                 },
@@ -20518,6 +21039,37 @@
                                     "number",
                                     "null"
                                   ]
+                                },
+                                "publicStatus": {
+                                  "properties": {
+                                    "addresses": {
+                                      "items": {
+                                        "type": "string"
+                                      },
+                                      "type": "array"
+                                    },
+                                    "reason": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ]
+                                    },
+                                    "state": {
+                                      "enum": [
+                                        "ready",
+                                        "pending",
+                                        "failed",
+                                        "unknown"
+                                      ],
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "state",
+                                    "addresses",
+                                    "reason"
+                                  ],
+                                  "type": "object"
                                 },
                                 "serviceId": {
                                   "type": "string"
@@ -21393,6 +21945,12 @@
                                     "protocol": {
                                       "type": "string"
                                     },
+                                    "publicAddress": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ]
+                                    },
                                     "publicEnabled": {
                                       "type": "boolean"
                                     },
@@ -21401,6 +21959,37 @@
                                         "number",
                                         "null"
                                       ]
+                                    },
+                                    "publicStatus": {
+                                      "properties": {
+                                        "addresses": {
+                                          "items": {
+                                            "type": "string"
+                                          },
+                                          "type": "array"
+                                        },
+                                        "reason": {
+                                          "type": [
+                                            "string",
+                                            "null"
+                                          ]
+                                        },
+                                        "state": {
+                                          "enum": [
+                                            "ready",
+                                            "pending",
+                                            "failed",
+                                            "unknown"
+                                          ],
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": [
+                                        "state",
+                                        "addresses",
+                                        "reason"
+                                      ],
+                                      "type": "object"
                                     },
                                     "serviceId": {
                                       "type": "string"
@@ -22021,6 +22610,12 @@
                                 "protocol": {
                                   "type": "string"
                                 },
+                                "publicAddress": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
                                 "publicEnabled": {
                                   "type": "boolean"
                                 },
@@ -22029,6 +22624,37 @@
                                     "number",
                                     "null"
                                   ]
+                                },
+                                "publicStatus": {
+                                  "properties": {
+                                    "addresses": {
+                                      "items": {
+                                        "type": "string"
+                                      },
+                                      "type": "array"
+                                    },
+                                    "reason": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ]
+                                    },
+                                    "state": {
+                                      "enum": [
+                                        "ready",
+                                        "pending",
+                                        "failed",
+                                        "unknown"
+                                      ],
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "state",
+                                    "addresses",
+                                    "reason"
+                                  ],
+                                  "type": "object"
                                 },
                                 "serviceId": {
                                   "type": "string"
@@ -22786,6 +23412,12 @@
                                     "protocol": {
                                       "type": "string"
                                     },
+                                    "publicAddress": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ]
+                                    },
                                     "publicEnabled": {
                                       "type": "boolean"
                                     },
@@ -22794,6 +23426,37 @@
                                         "number",
                                         "null"
                                       ]
+                                    },
+                                    "publicStatus": {
+                                      "properties": {
+                                        "addresses": {
+                                          "items": {
+                                            "type": "string"
+                                          },
+                                          "type": "array"
+                                        },
+                                        "reason": {
+                                          "type": [
+                                            "string",
+                                            "null"
+                                          ]
+                                        },
+                                        "state": {
+                                          "enum": [
+                                            "ready",
+                                            "pending",
+                                            "failed",
+                                            "unknown"
+                                          ],
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": [
+                                        "state",
+                                        "addresses",
+                                        "reason"
+                                      ],
+                                      "type": "object"
                                     },
                                     "serviceId": {
                                       "type": "string"
@@ -23414,6 +24077,12 @@
                                 "protocol": {
                                   "type": "string"
                                 },
+                                "publicAddress": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
                                 "publicEnabled": {
                                   "type": "boolean"
                                 },
@@ -23422,6 +24091,37 @@
                                     "number",
                                     "null"
                                   ]
+                                },
+                                "publicStatus": {
+                                  "properties": {
+                                    "addresses": {
+                                      "items": {
+                                        "type": "string"
+                                      },
+                                      "type": "array"
+                                    },
+                                    "reason": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ]
+                                    },
+                                    "state": {
+                                      "enum": [
+                                        "ready",
+                                        "pending",
+                                        "failed",
+                                        "unknown"
+                                      ],
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "state",
+                                    "addresses",
+                                    "reason"
+                                  ],
+                                  "type": "object"
                                 },
                                 "serviceId": {
                                   "type": "string"
@@ -24576,6 +25276,12 @@
                                     "protocol": {
                                       "type": "string"
                                     },
+                                    "publicAddress": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ]
+                                    },
                                     "publicEnabled": {
                                       "type": "boolean"
                                     },
@@ -24584,6 +25290,37 @@
                                         "number",
                                         "null"
                                       ]
+                                    },
+                                    "publicStatus": {
+                                      "properties": {
+                                        "addresses": {
+                                          "items": {
+                                            "type": "string"
+                                          },
+                                          "type": "array"
+                                        },
+                                        "reason": {
+                                          "type": [
+                                            "string",
+                                            "null"
+                                          ]
+                                        },
+                                        "state": {
+                                          "enum": [
+                                            "ready",
+                                            "pending",
+                                            "failed",
+                                            "unknown"
+                                          ],
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": [
+                                        "state",
+                                        "addresses",
+                                        "reason"
+                                      ],
+                                      "type": "object"
                                     },
                                     "serviceId": {
                                       "type": "string"
@@ -25216,6 +25953,12 @@
                                 "protocol": {
                                   "type": "string"
                                 },
+                                "publicAddress": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
                                 "publicEnabled": {
                                   "type": "boolean"
                                 },
@@ -25224,6 +25967,37 @@
                                     "number",
                                     "null"
                                   ]
+                                },
+                                "publicStatus": {
+                                  "properties": {
+                                    "addresses": {
+                                      "items": {
+                                        "type": "string"
+                                      },
+                                      "type": "array"
+                                    },
+                                    "reason": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ]
+                                    },
+                                    "state": {
+                                      "enum": [
+                                        "ready",
+                                        "pending",
+                                        "failed",
+                                        "unknown"
+                                      ],
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "state",
+                                    "addresses",
+                                    "reason"
+                                  ],
+                                  "type": "object"
                                 },
                                 "serviceId": {
                                   "type": "string"
@@ -26324,6 +27098,12 @@
                                     "protocol": {
                                       "type": "string"
                                     },
+                                    "publicAddress": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ]
+                                    },
                                     "publicEnabled": {
                                       "type": "boolean"
                                     },
@@ -26332,6 +27112,37 @@
                                         "number",
                                         "null"
                                       ]
+                                    },
+                                    "publicStatus": {
+                                      "properties": {
+                                        "addresses": {
+                                          "items": {
+                                            "type": "string"
+                                          },
+                                          "type": "array"
+                                        },
+                                        "reason": {
+                                          "type": [
+                                            "string",
+                                            "null"
+                                          ]
+                                        },
+                                        "state": {
+                                          "enum": [
+                                            "ready",
+                                            "pending",
+                                            "failed",
+                                            "unknown"
+                                          ],
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": [
+                                        "state",
+                                        "addresses",
+                                        "reason"
+                                      ],
+                                      "type": "object"
                                     },
                                     "serviceId": {
                                       "type": "string"
@@ -26952,6 +27763,12 @@
                                 "protocol": {
                                   "type": "string"
                                 },
+                                "publicAddress": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
                                 "publicEnabled": {
                                   "type": "boolean"
                                 },
@@ -26960,6 +27777,37 @@
                                     "number",
                                     "null"
                                   ]
+                                },
+                                "publicStatus": {
+                                  "properties": {
+                                    "addresses": {
+                                      "items": {
+                                        "type": "string"
+                                      },
+                                      "type": "array"
+                                    },
+                                    "reason": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ]
+                                    },
+                                    "state": {
+                                      "enum": [
+                                        "ready",
+                                        "pending",
+                                        "failed",
+                                        "unknown"
+                                      ],
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "state",
+                                    "addresses",
+                                    "reason"
+                                  ],
+                                  "type": "object"
                                 },
                                 "serviceId": {
                                   "type": "string"
@@ -28074,6 +28922,12 @@
                                     "protocol": {
                                       "type": "string"
                                     },
+                                    "publicAddress": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ]
+                                    },
                                     "publicEnabled": {
                                       "type": "boolean"
                                     },
@@ -28082,6 +28936,37 @@
                                         "number",
                                         "null"
                                       ]
+                                    },
+                                    "publicStatus": {
+                                      "properties": {
+                                        "addresses": {
+                                          "items": {
+                                            "type": "string"
+                                          },
+                                          "type": "array"
+                                        },
+                                        "reason": {
+                                          "type": [
+                                            "string",
+                                            "null"
+                                          ]
+                                        },
+                                        "state": {
+                                          "enum": [
+                                            "ready",
+                                            "pending",
+                                            "failed",
+                                            "unknown"
+                                          ],
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": [
+                                        "state",
+                                        "addresses",
+                                        "reason"
+                                      ],
+                                      "type": "object"
                                     },
                                     "serviceId": {
                                       "type": "string"
@@ -28714,6 +29599,12 @@
                                 "protocol": {
                                   "type": "string"
                                 },
+                                "publicAddress": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
                                 "publicEnabled": {
                                   "type": "boolean"
                                 },
@@ -28722,6 +29613,37 @@
                                     "number",
                                     "null"
                                   ]
+                                },
+                                "publicStatus": {
+                                  "properties": {
+                                    "addresses": {
+                                      "items": {
+                                        "type": "string"
+                                      },
+                                      "type": "array"
+                                    },
+                                    "reason": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ]
+                                    },
+                                    "state": {
+                                      "enum": [
+                                        "ready",
+                                        "pending",
+                                        "failed",
+                                        "unknown"
+                                      ],
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "state",
+                                    "addresses",
+                                    "reason"
+                                  ],
+                                  "type": "object"
                                 },
                                 "serviceId": {
                                   "type": "string"
@@ -30189,6 +31111,12 @@
                                     "protocol": {
                                       "type": "string"
                                     },
+                                    "publicAddress": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ]
+                                    },
                                     "publicEnabled": {
                                       "type": "boolean"
                                     },
@@ -30197,6 +31125,37 @@
                                         "number",
                                         "null"
                                       ]
+                                    },
+                                    "publicStatus": {
+                                      "properties": {
+                                        "addresses": {
+                                          "items": {
+                                            "type": "string"
+                                          },
+                                          "type": "array"
+                                        },
+                                        "reason": {
+                                          "type": [
+                                            "string",
+                                            "null"
+                                          ]
+                                        },
+                                        "state": {
+                                          "enum": [
+                                            "ready",
+                                            "pending",
+                                            "failed",
+                                            "unknown"
+                                          ],
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": [
+                                        "state",
+                                        "addresses",
+                                        "reason"
+                                      ],
+                                      "type": "object"
                                     },
                                     "serviceId": {
                                       "type": "string"
@@ -30817,6 +31776,12 @@
                                 "protocol": {
                                   "type": "string"
                                 },
+                                "publicAddress": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
                                 "publicEnabled": {
                                   "type": "boolean"
                                 },
@@ -30825,6 +31790,37 @@
                                     "number",
                                     "null"
                                   ]
+                                },
+                                "publicStatus": {
+                                  "properties": {
+                                    "addresses": {
+                                      "items": {
+                                        "type": "string"
+                                      },
+                                      "type": "array"
+                                    },
+                                    "reason": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ]
+                                    },
+                                    "state": {
+                                      "enum": [
+                                        "ready",
+                                        "pending",
+                                        "failed",
+                                        "unknown"
+                                      ],
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "state",
+                                    "addresses",
+                                    "reason"
+                                  ],
+                                  "type": "object"
                                 },
                                 "serviceId": {
                                   "type": "string"
@@ -33307,6 +34303,12 @@
                                     "protocol": {
                                       "type": "string"
                                     },
+                                    "publicAddress": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ]
+                                    },
                                     "publicEnabled": {
                                       "type": "boolean"
                                     },
@@ -33315,6 +34317,37 @@
                                         "number",
                                         "null"
                                       ]
+                                    },
+                                    "publicStatus": {
+                                      "properties": {
+                                        "addresses": {
+                                          "items": {
+                                            "type": "string"
+                                          },
+                                          "type": "array"
+                                        },
+                                        "reason": {
+                                          "type": [
+                                            "string",
+                                            "null"
+                                          ]
+                                        },
+                                        "state": {
+                                          "enum": [
+                                            "ready",
+                                            "pending",
+                                            "failed",
+                                            "unknown"
+                                          ],
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": [
+                                        "state",
+                                        "addresses",
+                                        "reason"
+                                      ],
+                                      "type": "object"
                                     },
                                     "serviceId": {
                                       "type": "string"
@@ -33935,6 +34968,12 @@
                                 "protocol": {
                                   "type": "string"
                                 },
+                                "publicAddress": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
                                 "publicEnabled": {
                                   "type": "boolean"
                                 },
@@ -33943,6 +34982,37 @@
                                     "number",
                                     "null"
                                   ]
+                                },
+                                "publicStatus": {
+                                  "properties": {
+                                    "addresses": {
+                                      "items": {
+                                        "type": "string"
+                                      },
+                                      "type": "array"
+                                    },
+                                    "reason": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ]
+                                    },
+                                    "state": {
+                                      "enum": [
+                                        "ready",
+                                        "pending",
+                                        "failed",
+                                        "unknown"
+                                      ],
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "state",
+                                    "addresses",
+                                    "reason"
+                                  ],
+                                  "type": "object"
                                 },
                                 "serviceId": {
                                   "type": "string"
@@ -35431,6 +36501,12 @@
                                     "protocol": {
                                       "type": "string"
                                     },
+                                    "publicAddress": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ]
+                                    },
                                     "publicEnabled": {
                                       "type": "boolean"
                                     },
@@ -35439,6 +36515,37 @@
                                         "number",
                                         "null"
                                       ]
+                                    },
+                                    "publicStatus": {
+                                      "properties": {
+                                        "addresses": {
+                                          "items": {
+                                            "type": "string"
+                                          },
+                                          "type": "array"
+                                        },
+                                        "reason": {
+                                          "type": [
+                                            "string",
+                                            "null"
+                                          ]
+                                        },
+                                        "state": {
+                                          "enum": [
+                                            "ready",
+                                            "pending",
+                                            "failed",
+                                            "unknown"
+                                          ],
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": [
+                                        "state",
+                                        "addresses",
+                                        "reason"
+                                      ],
+                                      "type": "object"
                                     },
                                     "serviceId": {
                                       "type": "string"
@@ -36059,6 +37166,12 @@
                                 "protocol": {
                                   "type": "string"
                                 },
+                                "publicAddress": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
                                 "publicEnabled": {
                                   "type": "boolean"
                                 },
@@ -36067,6 +37180,37 @@
                                     "number",
                                     "null"
                                   ]
+                                },
+                                "publicStatus": {
+                                  "properties": {
+                                    "addresses": {
+                                      "items": {
+                                        "type": "string"
+                                      },
+                                      "type": "array"
+                                    },
+                                    "reason": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ]
+                                    },
+                                    "state": {
+                                      "enum": [
+                                        "ready",
+                                        "pending",
+                                        "failed",
+                                        "unknown"
+                                      ],
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "state",
+                                    "addresses",
+                                    "reason"
+                                  ],
+                                  "type": "object"
                                 },
                                 "serviceId": {
                                   "type": "string"
@@ -38329,6 +39473,12 @@
                                     "protocol": {
                                       "type": "string"
                                     },
+                                    "publicAddress": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ]
+                                    },
                                     "publicEnabled": {
                                       "type": "boolean"
                                     },
@@ -38337,6 +39487,37 @@
                                         "number",
                                         "null"
                                       ]
+                                    },
+                                    "publicStatus": {
+                                      "properties": {
+                                        "addresses": {
+                                          "items": {
+                                            "type": "string"
+                                          },
+                                          "type": "array"
+                                        },
+                                        "reason": {
+                                          "type": [
+                                            "string",
+                                            "null"
+                                          ]
+                                        },
+                                        "state": {
+                                          "enum": [
+                                            "ready",
+                                            "pending",
+                                            "failed",
+                                            "unknown"
+                                          ],
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": [
+                                        "state",
+                                        "addresses",
+                                        "reason"
+                                      ],
+                                      "type": "object"
                                     },
                                     "serviceId": {
                                       "type": "string"
@@ -38957,6 +40138,12 @@
                                 "protocol": {
                                   "type": "string"
                                 },
+                                "publicAddress": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
                                 "publicEnabled": {
                                   "type": "boolean"
                                 },
@@ -38965,6 +40152,37 @@
                                     "number",
                                     "null"
                                   ]
+                                },
+                                "publicStatus": {
+                                  "properties": {
+                                    "addresses": {
+                                      "items": {
+                                        "type": "string"
+                                      },
+                                      "type": "array"
+                                    },
+                                    "reason": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ]
+                                    },
+                                    "state": {
+                                      "enum": [
+                                        "ready",
+                                        "pending",
+                                        "failed",
+                                        "unknown"
+                                      ],
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "state",
+                                    "addresses",
+                                    "reason"
+                                  ],
+                                  "type": "object"
                                 },
                                 "serviceId": {
                                   "type": "string"
@@ -48481,6 +49699,12 @@
                               "protocol": {
                                 "type": "string"
                               },
+                              "publicAddress": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
                               "publicEnabled": {
                                 "type": "boolean"
                               },
@@ -48489,6 +49713,37 @@
                                   "number",
                                   "null"
                                 ]
+                              },
+                              "publicStatus": {
+                                "properties": {
+                                  "addresses": {
+                                    "items": {
+                                      "type": "string"
+                                    },
+                                    "type": "array"
+                                  },
+                                  "reason": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  },
+                                  "state": {
+                                    "enum": [
+                                      "ready",
+                                      "pending",
+                                      "failed",
+                                      "unknown"
+                                    ],
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "state",
+                                  "addresses",
+                                  "reason"
+                                ],
+                                "type": "object"
                               },
                               "serviceId": {
                                 "type": "string"
@@ -58521,6 +59776,12 @@
                                       "protocol": {
                                         "type": "string"
                                       },
+                                      "publicAddress": {
+                                        "type": [
+                                          "string",
+                                          "null"
+                                        ]
+                                      },
                                       "publicEnabled": {
                                         "type": "boolean"
                                       },
@@ -58529,6 +59790,37 @@
                                           "number",
                                           "null"
                                         ]
+                                      },
+                                      "publicStatus": {
+                                        "properties": {
+                                          "addresses": {
+                                            "items": {
+                                              "type": "string"
+                                            },
+                                            "type": "array"
+                                          },
+                                          "reason": {
+                                            "type": [
+                                              "string",
+                                              "null"
+                                            ]
+                                          },
+                                          "state": {
+                                            "enum": [
+                                              "ready",
+                                              "pending",
+                                              "failed",
+                                              "unknown"
+                                            ],
+                                            "type": "string"
+                                          }
+                                        },
+                                        "required": [
+                                          "state",
+                                          "addresses",
+                                          "reason"
+                                        ],
+                                        "type": "object"
                                       },
                                       "serviceId": {
                                         "type": "string"
@@ -59149,6 +60441,12 @@
                                   "protocol": {
                                     "type": "string"
                                   },
+                                  "publicAddress": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  },
                                   "publicEnabled": {
                                     "type": "boolean"
                                   },
@@ -59157,6 +60455,37 @@
                                       "number",
                                       "null"
                                     ]
+                                  },
+                                  "publicStatus": {
+                                    "properties": {
+                                      "addresses": {
+                                        "items": {
+                                          "type": "string"
+                                        },
+                                        "type": "array"
+                                      },
+                                      "reason": {
+                                        "type": [
+                                          "string",
+                                          "null"
+                                        ]
+                                      },
+                                      "state": {
+                                        "enum": [
+                                          "ready",
+                                          "pending",
+                                          "failed",
+                                          "unknown"
+                                        ],
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "state",
+                                      "addresses",
+                                      "reason"
+                                    ],
+                                    "type": "object"
                                   },
                                   "serviceId": {
                                     "type": "string"
@@ -60036,6 +61365,12 @@
                                     "protocol": {
                                       "type": "string"
                                     },
+                                    "publicAddress": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ]
+                                    },
                                     "publicEnabled": {
                                       "type": "boolean"
                                     },
@@ -60044,6 +61379,37 @@
                                         "number",
                                         "null"
                                       ]
+                                    },
+                                    "publicStatus": {
+                                      "properties": {
+                                        "addresses": {
+                                          "items": {
+                                            "type": "string"
+                                          },
+                                          "type": "array"
+                                        },
+                                        "reason": {
+                                          "type": [
+                                            "string",
+                                            "null"
+                                          ]
+                                        },
+                                        "state": {
+                                          "enum": [
+                                            "ready",
+                                            "pending",
+                                            "failed",
+                                            "unknown"
+                                          ],
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": [
+                                        "state",
+                                        "addresses",
+                                        "reason"
+                                      ],
+                                      "type": "object"
                                     },
                                     "serviceId": {
                                       "type": "string"
@@ -60664,6 +62030,12 @@
                                 "protocol": {
                                   "type": "string"
                                 },
+                                "publicAddress": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
                                 "publicEnabled": {
                                   "type": "boolean"
                                 },
@@ -60672,6 +62044,37 @@
                                     "number",
                                     "null"
                                   ]
+                                },
+                                "publicStatus": {
+                                  "properties": {
+                                    "addresses": {
+                                      "items": {
+                                        "type": "string"
+                                      },
+                                      "type": "array"
+                                    },
+                                    "reason": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ]
+                                    },
+                                    "state": {
+                                      "enum": [
+                                        "ready",
+                                        "pending",
+                                        "failed",
+                                        "unknown"
+                                      ],
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "state",
+                                    "addresses",
+                                    "reason"
+                                  ],
+                                  "type": "object"
                                 },
                                 "serviceId": {
                                   "type": "string"
@@ -61596,6 +62999,12 @@
                                     "protocol": {
                                       "type": "string"
                                     },
+                                    "publicAddress": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ]
+                                    },
                                     "publicEnabled": {
                                       "type": "boolean"
                                     },
@@ -61604,6 +63013,37 @@
                                         "number",
                                         "null"
                                       ]
+                                    },
+                                    "publicStatus": {
+                                      "properties": {
+                                        "addresses": {
+                                          "items": {
+                                            "type": "string"
+                                          },
+                                          "type": "array"
+                                        },
+                                        "reason": {
+                                          "type": [
+                                            "string",
+                                            "null"
+                                          ]
+                                        },
+                                        "state": {
+                                          "enum": [
+                                            "ready",
+                                            "pending",
+                                            "failed",
+                                            "unknown"
+                                          ],
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": [
+                                        "state",
+                                        "addresses",
+                                        "reason"
+                                      ],
+                                      "type": "object"
                                     },
                                     "serviceId": {
                                       "type": "string"
@@ -62224,6 +63664,12 @@
                                 "protocol": {
                                   "type": "string"
                                 },
+                                "publicAddress": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
                                 "publicEnabled": {
                                   "type": "boolean"
                                 },
@@ -62232,6 +63678,37 @@
                                     "number",
                                     "null"
                                   ]
+                                },
+                                "publicStatus": {
+                                  "properties": {
+                                    "addresses": {
+                                      "items": {
+                                        "type": "string"
+                                      },
+                                      "type": "array"
+                                    },
+                                    "reason": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ]
+                                    },
+                                    "state": {
+                                      "enum": [
+                                        "ready",
+                                        "pending",
+                                        "failed",
+                                        "unknown"
+                                      ],
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "state",
+                                    "addresses",
+                                    "reason"
+                                  ],
+                                  "type": "object"
                                 },
                                 "serviceId": {
                                   "type": "string"

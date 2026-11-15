@@ -1,4 +1,5 @@
 import { assertOrgCanExposePublicPort } from './public-exposure-quota';
+import { UNKNOWN_PUBLIC_ENDPOINT, type PublicEndpointStatus } from '../kubernetes/public-endpoint';
 import { INSTANCE_LIMITS, resolveLimit } from '../quotas/instance-limits';
 import { assertValidVolumeSize } from '../kubernetes/pvc-limits';
 import {
@@ -1139,6 +1140,7 @@ export class DatabasesService {
     );
 
     const keepsLocalBackups = await this.keepsLocalBackups(database);
+    const publicStatus = skipLive ? undefined : await this.publicStatusFor(database);
 
     const resolvedPublicHostname = this.publicHostnameFor(database);
     const publicHostname = resolvedPublicHostname ?? null;
@@ -1171,6 +1173,7 @@ export class DatabasesService {
       maxReplicas: this.maxReplicas,
       publicHostname,
       publicConnectionString,
+      ...(publicStatus !== undefined ? { publicStatus } : {}),
       liveStatus,
       backupsEnabled,
       keepsLocalBackups,
@@ -1206,7 +1209,9 @@ export class DatabasesService {
         statsAt: true,
         volumeUsedBytes: true,
         volumeCapacityBytes: true,
-        walPendingSegments: true
+        walPendingSegments: true,
+        publicEnabled: true,
+        publicPort: true
       }
     });
     if (!database) throw new NotFoundException('Database not found');
@@ -1275,7 +1280,33 @@ export class DatabasesService {
       liveStatus = await this.k8sCnpg.getPostgresDatabaseStatus(database.dbName);
     }
 
-    return { liveStatus, pods, status: databaseStatusFor(status, database.clusterStatus) };
+    return {
+      liveStatus,
+      pods,
+      status: databaseStatusFor(status, database.clusterStatus),
+      publicStatus: await this.publicStatusFor(database)
+    };
+  }
+
+  private async publicStatusFor(database: {
+    publicEnabled: boolean;
+    publicPort: number | null;
+    mode: string;
+    namespace: string | null;
+    clusterName: string | null;
+  }): Promise<PublicEndpointStatus | null> {
+    if (
+      !database.publicEnabled ||
+      !database.publicPort ||
+      database.mode !== 'cnpg' ||
+      !database.namespace ||
+      !database.clusterName
+    ) {
+      return null;
+    }
+    const name = this.k8sNetwork.publicServiceName(database.clusterName);
+    const statuses = await this.k8sNetwork.publicEndpointStatuses(database.namespace, [name]);
+    return statuses.get(name) ?? UNKNOWN_PUBLIC_ENDPOINT;
   }
 
   async getDatabaseProvisioning(databaseId: string, userId?: string) {

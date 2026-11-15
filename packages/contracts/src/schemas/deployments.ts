@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { RouteAttachment } from '../types';
+import { publicEndpointStatusSchema } from './common';
 
 // BigInt columns (memoryRequestBytes, githubInstallationId, githubDeploymentId)
 // serialize as strings on the wire.
@@ -66,7 +67,9 @@ const servicePortRecord = z
     protocol: z.string(),
     nodePort: z.number().nullable().optional(),
     publicEnabled: z.boolean().optional(),
-    publicPort: z.number().nullable().optional()
+    publicPort: z.number().nullable().optional(),
+    publicAddress: z.string().nullable().optional(),
+    publicStatus: publicEndpointStatusSchema.optional()
   })
   .passthrough();
 

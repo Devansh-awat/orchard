@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { RouteAttachment } from '../types';
+import { publicEndpointStatusSchema } from './common';
 
 const passthroughObject = z.object({}).passthrough();
 
@@ -83,6 +84,7 @@ const databaseDetailSchema = databaseSchema.extend({
   internalHost: z.string(),
   publicHostname: z.string().nullable(),
   publicConnectionString: z.string().nullable(),
+  publicStatus: publicEndpointStatusSchema.nullable().optional(),
   liveStatus: liveStatusSchema,
   backupsEnabled: z.boolean(),
   keepsLocalBackups: z.boolean().optional(),

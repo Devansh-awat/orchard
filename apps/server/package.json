@@ -82,7 +82,7 @@
     "test:sso-crypto": "tsx --test test/sso-crypto.test.ts",
     "test:identity": "tsx --test test/unverified-adoption.test.ts test/identity-mapping.test.ts test/oidc-callback.test.ts test/org-isolation.test.ts test/saml-hardening.test.ts test/saml-trust-config.test.ts test/sso-enforcement.test.ts test/instance-identity.test.ts test/sso-provider-trust.test.ts test/domain-ownership.test.ts test/org-identities.test.ts test/identity-lifecycle.test.ts test/instance-scim.test.ts test/guarded-fetch.test.ts test/scim.test.ts test/scim-groups.test.ts test/preauth-rate-limit.test.ts",
     "test:pvc-status": "tsx --test test/pvc-status.test.ts",
-    "test:instance-network": "tsx --test test/instance-network.test.ts test/public-ip-policy.test.ts",
+    "test:instance-network": "tsx --test test/instance-network.test.ts test/public-ip-policy.test.ts test/public-endpoint-status.test.ts",
     "test:deployment-drift": "tsx --test test/deployment-drift.test.ts",
     "test:build-queue-visibility": "tsx --test test/build-queue-visibility.test.ts",
     "test:auto-deploy-precondition": "tsx --test test/auto-deploy-precondition.test.ts",
