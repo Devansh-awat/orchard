@@ -10,7 +10,7 @@ import {
   statSync,
   writeFileSync
 } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { delimiter, dirname, join, resolve } from 'node:path';
 
 const root = resolve(import.meta.dirname, '../..');
 const vendored = join(import.meta.dirname, 'licenses');
@@ -245,10 +245,11 @@ function sourcemapPackages(mapRoots) {
   return dirs;
 }
 
-function build(cmd, args, cwd) {
+function build(cmd, args, cwd, env = process.env) {
   say(`  building ${cwd.slice(root.length + 1)} with sourcemaps`);
   const result = spawnSync(cmd, args, {
     cwd,
+    env,
     encoding: 'utf8',
     maxBuffer: 1 << 28,
     stdio: ['ignore', 'ignore', 'pipe']
@@ -269,7 +270,12 @@ function sveltekitPackages(dir) {
 function astroPackages(dir) {
   const outDir = join(dir, '.credits-dist');
   const script = `import { build } from 'astro'; await build({ root: '.', outDir: ${JSON.stringify(outDir)}, logLevel: 'error', vite: { build: { sourcemap: true } } });`;
-  build('node', ['--input-type=module', '-e', script], dir);
+  const hoisted = join(root, 'node_modules/.pnpm/node_modules');
+  const nodePath = [hoisted, process.env.NODE_PATH].filter(Boolean).join(delimiter);
+  build('node', ['--input-type=module', '-e', script], dir, {
+    ...process.env,
+    NODE_PATH: nodePath
+  });
   const dirs = sourcemapPackages([join(outDir, '_astro')]);
   rmSync(outDir, { recursive: true, force: true });
   return dirs;
