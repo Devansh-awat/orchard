@@ -20,6 +20,7 @@ type addon struct {
 	repo      string
 	crds      bool
 	values    []string
+	settings  []string
 	osv       []osvPackage
 }
 
@@ -30,6 +31,7 @@ var addons = []addon{
 		chart:     "traefik",
 		repo:      "https://traefik.github.io/charts",
 		crds:      true,
+		settings:  []string{"providers.kubernetesGateway.enabled=false"},
 		osv:       []osvPackage{{ecosystem: "Go", name: "github.com/traefik/traefik", majorSuffix: true}},
 	},
 	{
@@ -182,6 +184,25 @@ func chartName(chart string) func(candidate) string {
 	return func(r candidate) string { return chart + " " + r.tag.raw }
 }
 
+func addonUpgradeArgs(a addon, version string) []string {
+	args := []string{
+		"upgrade", a.release, a.chart,
+		"--repo", a.repo,
+		"--namespace", a.namespace,
+		"--version", version,
+		"--reuse-values",
+		"--wait",
+		"--timeout", "5m",
+	}
+	for _, value := range a.values {
+		args = append(args, "--set-string", value)
+	}
+	for _, setting := range a.settings {
+		args = append(args, "--set", setting)
+	}
+	return args
+}
+
 func upgradeAddon(c *cli.Context, gate *updateGate, a addon, rollback []string) error {
 	listing, err := c.Capture("helm", "list", "--namespace", a.namespace, "--filter", "^"+a.release+"$", "-o", "json")
 	if err != nil {
@@ -219,18 +240,7 @@ func upgradeAddon(c *cli.Context, gate *updateGate, a addon, rollback []string) 
 	latest := plan.decision.target.tag.raw
 
 	c.Printf("%s: %s to %s\n", a.release, installed.version, latest)
-	args := []string{
-		"upgrade", a.release, a.chart,
-		"--repo", a.repo,
-		"--namespace", a.namespace,
-		"--version", latest,
-		"--reuse-values",
-		"--wait",
-		"--timeout", "5m",
-	}
-	for _, value := range a.values {
-		args = append(args, "--set-string", value)
-	}
+	args := addonUpgradeArgs(a, latest)
 	args = append(args, rollback...)
 	args = append(args, clientSideApply(c)...)
 

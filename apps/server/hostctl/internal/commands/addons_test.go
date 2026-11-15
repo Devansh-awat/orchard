@@ -156,3 +156,17 @@ func TestEveryAddonNamesItsChart(t *testing.T) {
 		}
 	}
 }
+
+func TestTraefikUpgradeTurnsOffTheGatewayProvider(t *testing.T) {
+	args := strings.Join(addonUpgradeArgs(addons[0], "42.4.0"), " ")
+	if !strings.Contains(args, "--reuse-values") || !strings.Contains(args, "--set providers.kubernetesGateway.enabled=false") {
+		t.Errorf("got %s", args)
+	}
+	if strings.Contains(args, "--set-string providers.kubernetesGateway") {
+		t.Errorf("the switch has to stay a boolean: %s", args)
+	}
+	cnpg := strings.Join(addonUpgradeArgs(addons[1], "0.27.2"), " ")
+	if strings.Contains(cnpg, "kubernetesGateway") || !strings.Contains(cnpg, "--set-string config.data.ENABLE_INSTANCE_MANAGER_INPLACE_UPDATES=true") {
+		t.Errorf("got %s", cnpg)
+	}
+}
