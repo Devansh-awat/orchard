@@ -26,7 +26,7 @@ Orchard treats every organization and every project as mutually untrusted. Some 
 
 ## What you must do
 
-Orchard cannot do these for you. If one is missing, the matching guarantee does not hold. Run `orchard doctor` to check them, and `orchard doctor --selftest` to prove the network controls work. Refer to [Check isolation with orchard doctor](/operate/doctor/).
+Orchard cannot do these for you. If one is missing, the matching guarantee does not hold. Run `orchard doctor` to check them, and `orchard doctor --selftest` to prove the network controls work. Refer to [Check isolation with orchard doctor](/operate/doctor/). For the CNIs that Orchard supports and what changes without Cilium, refer to [Compatibility](/operate/compatibility/#supported-cnis).
 
 | Requirement                          | Setting                                                                                                                                                                                                   | Why                                                                                                                                |
 | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
