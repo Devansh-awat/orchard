@@ -985,6 +985,10 @@
 		}
 	}
 
+	function resetPublicSwitch() {
+		if (database) database = { ...database };
+	}
+
 	async function enablePublic() {
 		if (!database) return;
 		togglingPublic = true;
@@ -1005,7 +1009,14 @@
 				color: 'success'
 			});
 			await fetchDatabase(true);
+		} catch {
+			toasts.add({
+				title: "Couldn't turn on public access",
+				description: 'Try again.',
+				color: 'error'
+			});
 		} finally {
+			resetPublicSwitch();
 			togglingPublic = false;
 		}
 	}
@@ -1033,7 +1044,14 @@
 			}
 			toasts.add({ title: 'Public access off', color: 'success' });
 			await fetchDatabase(true);
+		} catch {
+			toasts.add({
+				title: "Couldn't turn off public access",
+				description: 'Try again.',
+				color: 'error'
+			});
 		} finally {
+			resetPublicSwitch();
 			togglingPublic = false;
 		}
 	}
@@ -1968,7 +1986,7 @@
 	description="Clients connecting over the public address are disconnected. Apps in this project keep working."
 	confirmLabel="Turn off"
 	onconfirm={disablePublic}
-	oncancel={() => {}}
+	oncancel={resetPublicSwitch}
 />
 
 <ConfirmModal

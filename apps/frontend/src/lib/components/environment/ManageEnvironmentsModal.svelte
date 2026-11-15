@@ -97,11 +97,20 @@
 	}
 
 	async function setDefault(env: Environment) {
-		const res = await apiFetch(`/apiv1/environments/${env.id}/set-default`, { method: 'POST' });
-		if (res.ok) {
-			toasts.add({ title: `${env.name} is now the default`, color: 'success' });
-			invalidate();
+		const res = await apiFetch(`/apiv1/environments/${env.id}/set-default`, {
+			method: 'POST'
+		}).catch(() => null);
+		if (!res?.ok) {
+			const d = await res?.json().catch(() => ({}));
+			toasts.add({
+				title: `Couldn't make ${env.name} the default`,
+				description: d?.message,
+				color: 'error'
+			});
+			return;
 		}
+		toasts.add({ title: `${env.name} is now the default`, color: 'success' });
+		invalidate();
 	}
 
 	let toDelete = $state<Environment | null>(null);

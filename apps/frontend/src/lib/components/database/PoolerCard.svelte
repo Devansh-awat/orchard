@@ -90,6 +90,7 @@
 			await put({ enabled: on });
 			toasts.add({ title: on ? 'Pooler turned on' : 'Pooler turned off', color: 'success' });
 		} catch (e) {
+			if (pooler) pooler = { ...pooler };
 			toasts.add({
 				title: "Couldn't change the pooler",
 				description: e instanceof Error ? e.message : undefined,

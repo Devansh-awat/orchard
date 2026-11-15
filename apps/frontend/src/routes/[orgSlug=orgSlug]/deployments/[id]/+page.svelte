@@ -3094,9 +3094,21 @@
 				applyError={deployment?.applyError ?? ''}
 				onRetryApply={async () => {
 					try {
-						await apiFetch(`/apiv1/deployments/${deploymentId}/retry-apply`, { method: 'POST' });
+						const res = await apiFetch(`/apiv1/deployments/${deploymentId}/retry-apply`, {
+							method: 'POST'
+						});
+						if (!res.ok) {
+							const d = await res.json().catch(() => ({}));
+							throw new Error(d.message || 'Try again.');
+						}
 						queryClient.invalidateQueries({ queryKey: ['deployment', deploymentId] });
-					} catch {}
+					} catch (e) {
+						toasts.add({
+							title: "Couldn't retry",
+							description: e instanceof Error ? e.message : undefined,
+							color: 'error'
+						});
+					}
 				}}
 				buildFailed={buildFailedActive}
 				buildLogs={deployment?.buildLogs ?? ''}

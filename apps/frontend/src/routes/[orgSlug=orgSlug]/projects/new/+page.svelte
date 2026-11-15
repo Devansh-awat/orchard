@@ -91,7 +91,11 @@
 	async function uploadAsset(projectId: string, file: File, path: 'icon' | 'background-image') {
 		const fd = new FormData();
 		fd.append('file', file);
-		await apiFetch(`/apiv1/projects/${projectId}/${path}`, { method: 'POST', body: fd });
+		const res = await apiFetch(`/apiv1/projects/${projectId}/${path}`, {
+			method: 'POST',
+			body: fd
+		});
+		if (!res.ok) throw new Error();
 	}
 
 	async function submit() {

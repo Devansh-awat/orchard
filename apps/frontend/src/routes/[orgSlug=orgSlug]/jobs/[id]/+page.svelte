@@ -161,10 +161,14 @@
 
 	let canceling = $state(false);
 	async function cancelActiveRun() {
-		if (!activeRun || canceling) return;
+		if (activeRun) await cancelRun(activeRun.id);
+	}
+
+	async function cancelRun(runId: string) {
+		if (canceling) return;
 		canceling = true;
 		try {
-			const res = await apiFetch(`/apiv1/job-runs/${activeRun.id}/cancel`, { method: 'POST' });
+			const res = await apiFetch(`/apiv1/job-runs/${runId}/cancel`, { method: 'POST' });
 			if (!res.ok) throw new Error("Couldn't cancel run");
 			toasts.add({ title: 'Run canceled', color: 'success' });
 			invalidateJob();
@@ -453,9 +457,7 @@
 												size="sm"
 												onclick={(e: MouseEvent) => {
 													e.stopPropagation();
-													apiFetch(`/apiv1/job-runs/${run.id}/cancel`, { method: 'POST' }).then(
-														invalidateJob
-													);
+													cancelRun(run.id);
 												}}
 											>
 												Cancel

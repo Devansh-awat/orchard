@@ -85,12 +85,16 @@
 			}
 			const ws = await wsRes.json();
 
-			// Also create a project with the same name inside
-			await apiFetch('/apiv1/projects', {
+			const projectRes = await apiFetch('/apiv1/projects', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ name, slug, workspaceId: ws.id })
 			});
+			if (!projectRes.ok) {
+				const d = await projectRes.json().catch(() => ({}));
+				fetchWorkspaces();
+				throw new Error(d.message || `Created the workspace, but couldn't create its project`);
+			}
 
 			toasts.add({ title: `Created "${name}"`, color: 'success' });
 			newName = '';
