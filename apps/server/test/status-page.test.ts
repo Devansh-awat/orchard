@@ -1,11 +1,15 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { BadRequestException } from '@nestjs/common';
+import { StatusPagesService } from '../src/status-pages/status-pages.service';
 import {
   databaseStatus,
   deploymentStatus,
   incidentsFromTransitions,
   normalizeComponents,
   overallStatus,
+  SLUG_PATTERN,
+  SUBDOMAIN_PATTERN,
   uptimeDays,
   uptimePercent
 } from '../src/status-pages/status-model';
@@ -160,4 +164,67 @@ test('components are validated, deduplicated and capped, never trusted from the 
     ).length,
     40
   );
+});
+
+test('slugs and hosts are 3 characters or more, matching the message', () => {
+  for (const short of ['a', '1', 'ab']) {
+    assert.equal(SLUG_PATTERN.test(short), false, short);
+    assert.equal(SUBDOMAIN_PATTERN.test(short), false, short);
+  }
+  for (const ok of ['abc', 'a-b', 'acme-status']) {
+    assert.equal(SLUG_PATTERN.test(ok), true, ok);
+    assert.equal(SUBDOMAIN_PATTERN.test(ok), true, ok);
+  }
+  assert.equal(SLUG_PATTERN.test('a'.repeat(64)), true);
+  assert.equal(SLUG_PATTERN.test('a'.repeat(65)), false);
+  assert.equal(SUBDOMAIN_PATTERN.test('a'.repeat(50)), true);
+  assert.equal(SUBDOMAIN_PATTERN.test('a'.repeat(51)), false);
+  assert.equal(SLUG_PATTERN.test('-abc'), false);
+});
+
+function statusPages(existing: { slug: string }) {
+  const page = {
+    id: 'p1',
+    organizationId: 'o1',
+    slug: existing.slug,
+    title: 'Acme status',
+    description: null,
+    subdomain: null,
+    isPublic: true,
+    components: [],
+    createdAt: NOW,
+    updatedAt: NOW
+  };
+  const db = {
+    statusPage: {
+      count: async () => 0,
+      findFirst: async () => page,
+      findUnique: async () => ({ id: page.id }),
+      findUniqueOrThrow: async () => page,
+      update: async ({ data }: { data: Record<string, unknown> }) => Object.assign(page, data)
+    },
+    organization: { findUnique: async () => ({ name: 'Acme', slug: 'a' }) }
+  };
+  const prisma = { ...db, $transaction: async (fn: (tx: unknown) => unknown) => fn(db) };
+  const audit = { log: async () => undefined, diff: () => ({}) };
+  const service = new StatusPagesService(prisma as any, {} as any, audit as any);
+  return { service, page };
+}
+
+const actor = { id: 'u1', email: 'owner@example.com' };
+const tooShort = (e: unknown) =>
+  e instanceof BadRequestException && /3-64 characters/.test(e.message);
+
+test('a one-character slug is refused on create and on rename', async () => {
+  const { service } = statusPages({ slug: 'acme' });
+  await assert.rejects(service.create('o1', { slug: 'a' }, actor as any), tooShort);
+  await assert.rejects(service.create('o1', {}, actor as any), tooShort);
+  await assert.rejects(service.update('o1', 'p1', { slug: 'b' }, actor as any), tooShort);
+});
+
+test('a page saved with a short slug can still be edited without renaming it', async () => {
+  const { service, page } = statusPages({ slug: 'a' });
+  const out = await service.update('o1', 'p1', { slug: 'a', title: 'New title' }, actor as any);
+  assert.equal(out.slug, 'a');
+  assert.equal(page.title, 'New title');
 });

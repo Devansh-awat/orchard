@@ -19,6 +19,7 @@ import { CERT_CLUSTER_ISSUER } from '../projects/projects.utils';
 import {
   MAX_COMPONENTS,
   SLUG_PATTERN,
+  SUBDOMAIN_PATTERN,
   databaseStatus,
   deploymentStatus,
   incidentsFromTransitions,
@@ -209,7 +210,7 @@ export class StatusPagesService {
     if (!existing) throw new NotFoundException('Status page not found');
     const data: Prisma.StatusPageUpdateInput = {};
     if (input.slug !== undefined) {
-      data.slug = this.validateSlug(input.slug);
+      data.slug = this.validateSlug(input.slug, existing.slug);
       await this.assertSlugFree(data.slug, existing.id);
     }
     if (input.title !== undefined) data.title = this.validateTitle(input.title);
@@ -226,7 +227,7 @@ export class StatusPagesService {
     let requestedSubdomain: string | null = null;
     const changingSubdomain = input.subdomain !== undefined;
     if (changingSubdomain) {
-      requestedSubdomain = this.checkSubdomainShape(input.subdomain ?? null);
+      requestedSubdomain = this.checkSubdomainShape(input.subdomain ?? null, existing.subdomain);
       nextSubdomain = requestedSubdomain;
       data.subdomain = nextSubdomain;
     }
@@ -505,11 +506,11 @@ export class StatusPagesService {
     };
   }
 
-  private validateSlug(raw: string): string {
+  private validateSlug(raw: string, current: string | null = null): string {
     const slug = String(raw ?? '')
       .trim()
       .toLowerCase();
-    if (!SLUG_PATTERN.test(slug) || RESERVED_SLUGS.has(slug)) {
+    if ((slug !== current && !SLUG_PATTERN.test(slug)) || RESERVED_SLUGS.has(slug)) {
       throw new BadRequestException(
         'Slug must be 3-64 characters, lowercase letters, digits and hyphens'
       );
@@ -541,7 +542,7 @@ export class StatusPagesService {
     return text || null;
   }
 
-  private checkSubdomainShape(raw: string | null): string | null {
+  private checkSubdomainShape(raw: string | null, current: string | null = null): string | null {
     const normalized = raw ? normalizeHost(raw) || raw.trim().toLowerCase() : null;
     if (!normalized) return null;
     if (!this.baseDomain) {
@@ -549,7 +550,7 @@ export class StatusPagesService {
         "This instance has no BASE_DOMAIN, so status page hosts aren't available"
       );
     }
-    if (!/^[a-z0-9]([a-z0-9-]{1,48}[a-z0-9])?$/.test(normalized)) {
+    if (normalized !== current && !SUBDOMAIN_PATTERN.test(normalized)) {
       throw new BadRequestException(
         "Subdomain must be 3 to 50 letters, digits or hyphens, and can't start or end with a hyphen"
       );

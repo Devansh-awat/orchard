@@ -26,7 +26,8 @@ export interface DatabaseFacts {
 }
 
 export const MAX_COMPONENTS = 40;
-export const SLUG_PATTERN = /^[a-z0-9]([a-z0-9-]{1,62}[a-z0-9])?$/;
+export const SLUG_PATTERN = /^[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$/;
+export const SUBDOMAIN_PATTERN = /^[a-z0-9][a-z0-9-]{1,48}[a-z0-9]$/;
 
 const SEVERITY: Record<ComponentStatus, number> = {
   operational: 0,
