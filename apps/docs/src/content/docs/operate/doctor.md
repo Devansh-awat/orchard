@@ -37,12 +37,25 @@ Each section names the setting and the exact fix. For why the setting matters, r
 
 ### `cni-enforcement`
 
-A NetworkPolicy only works when the CNI enforces it. The doctor looks for Cilium, Calico, Antrea, kube-router, Weave Net and Canal by their custom resources and daemonsets, and checks that the agent runs on every node.
+A NetworkPolicy only works when the CNI enforces it. The doctor has two sources for this check: the name of the CNI and the result of the last [isolation self-test](#the-isolation-self-test). The self-test result wins, because it shows what the cluster does, and the name match is only a hint.
 
+The name match looks for Cilium, Calico, Antrea, kube-router, Weave Net, Canal and Azure Network Policy Manager by their custom resources and daemonsets, and checks that the agent runs on every node. A CNI that is not on that list, or a managed CNI that does not run as a daemonset the server can see, such as GKE Dataplane V2, can enforce policy without matching. For the CNIs that Orchard supports, refer to [Compatibility](/operate/compatibility/#supported-cnis).
+
+When the server has a self-test result, it reads the `selftest-cross-tenant` check from that run, provided the temporary namespaces were created correctly (`selftest-namespace-shape` passed):
+
+- `pass`: a pod in one temporary tenant namespace could not connect to a pod in the other, and the positive controls connected. The check passes whatever the CNI is called, unless the name match found a problem with a detected agent (the `warn` cases below about unready agents or two enforcers). The self-test probe runs on one node, so it cannot clear those.
+- `fail`: a pod in one tenant namespace connected to a pod in the other. NetworkPolicy is not enforced, even if a known CNI is installed.
+- An inconclusive run falls back to the name match.
+
+Without a usable self-test result:
+
+- `pass`: a known CNI was found. This shows the CNI is installed, not that it enforces policy.
 - `warn`: the agent is not ready on every node, only Flannel was found, or kube-router runs next to another enforcer (another CNI from the list, or a k3s or RKE2 node).
-- `unknown`: nothing recognizable was found. k3s and RKE2 embed a policy controller that is invisible here, and managed clusters (EKS, GKE Dataplane V2, AKS) hide theirs. Run the self-test to settle it.
+- `unknown`: no known CNI was found by name. k3s and RKE2 embed a policy controller that is not visible as a daemonset, and managed clusters hide theirs.
 
-Fix: install Cilium or Calico, or enable your provider's network policy add-on. On Flannel, set `networkPolicy.enforcer.enabled=true`. For more information, refer to [Enforce network policies on Flannel](/operate/tenancy-and-isolation/#enforce-network-policies-on-flannel). With two enforcers, turn one off. Detection only shows the CNI is installed. The self-test proves enforcement.
+Fix: run `orchard doctor --selftest`, and then run `orchard doctor` again. The report that `--selftest` prints is read before the self-test starts, so its `cni-enforcement` row reflects the previous run. If a tenant reached another tenant, install Cilium or Calico, or enable your provider's network policy add-on. On Flannel, set `networkPolicy.enforcer.enabled=true`. For more information, refer to [Enforce network policies on Flannel](/operate/tenancy-and-isolation/#enforce-network-policies-on-flannel). With two enforcers, turn one off.
+
+Self-test results are kept in memory on the server that ran the test. After a restart, or when the request reaches another server replica, the check falls back to the name match.
 
 ### `default-deny-coverage`
 
