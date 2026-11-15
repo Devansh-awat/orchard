@@ -157,6 +157,30 @@ func TestEveryAddonNamesItsChart(t *testing.T) {
 	}
 }
 
+func TestAnOperatorDoesNotCrossAMinorForASecurityFix(t *testing.T) {
+	releases, err := parseChartIndex([]byte(cnpgIndex), "cloudnative-pg")
+	if err != nil {
+		t.Fatal(err)
+	}
+	osv := newFakeOSV(t, map[string][]string{
+		"github.com/cloudnative-pg/cloudnative-pg@1.29.1": {"GHSA-c"},
+		"github.com/cloudnative-pg/cloudnative-pg@1.29.2": {"GHSA-c"},
+		"github.com/cloudnative-pg/cloudnative-pg@1.29.3": {"GHSA-c"},
+	})
+	gate, _ := gateWithOSV(osv.server.URL)
+	plan, err := planAddon(gate, addons[1], installedChart{version: "0.27.1"}, releases)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plan.decision.target.tag.minor != 27 || plan.decision.early || len(plan.decision.fixed) != 0 {
+		t.Errorf("target %s early %v", plan.decision.target.tag.raw, plan.decision.early)
+	}
+	_, warns := plan.decision.messages(plan.current, chartName("cloudnative-pg"), gate.soak)
+	if len(warns) != 1 || !strings.Contains(warns[0], "cloudnative-pg 0.28.1 fixes GHSA-c and needs a person") {
+		t.Errorf("warnings %q", warns)
+	}
+}
+
 func TestTraefikUpgradeTurnsOffTheGatewayProvider(t *testing.T) {
 	args := strings.Join(addonUpgradeArgs(addons[0], "42.4.0"), " ")
 	if !strings.Contains(args, "--reuse-values") || !strings.Contains(args, "--set providers.kubernetesGateway.enabled=false") {

@@ -20,9 +20,11 @@ import (
 )
 
 type bundledImage struct {
-	path      string
-	patchOnly bool
-	osv       []osvPackage
+	path               string
+	patchOnly          bool
+	securityCrossMinor bool
+	why                string
+	osv                []osvPackage
 }
 
 var (
@@ -35,33 +37,53 @@ var (
 )
 
 var bundledImages = []bundledImage{
-	{path: "redis.image", patchOnly: true, osv: osvRedis},
-	{path: "postgres.pooler.image", patchOnly: true},
-	{path: "builders.buildkitImage", patchOnly: true, osv: osvBuildKit},
-	{path: "builders.buildkitRootlessImage", patchOnly: true, osv: osvBuildKit},
-	{path: "builderSandbox.pusherImage", osv: []osvPackage{{ecosystem: "Go", name: "github.com/containers/skopeo"}}},
-	{path: "metrics.victoriametrics.image", osv: osvVictoria},
-	{path: "metrics.vmagent.image", osv: osvVictoria},
-	{path: "metrics.kubeStateMetrics.image", osv: []osvPackage{{ecosystem: "Go", name: "k8s.io/kube-state-metrics", majorSuffix: true}}},
-	{path: "metrics.nodeExporter.image", osv: []osvPackage{{ecosystem: "Go", name: "github.com/prometheus/node_exporter"}}},
-	{path: "logs.victorialogs.image"},
-	{path: "logs.vector.image", osv: []osvPackage{{ecosystem: "GIT", name: "https://github.com/vectordotdev/vector"}}},
-	{path: "trivy.image", osv: []osvPackage{{ecosystem: "Go", name: "github.com/aquasecurity/trivy"}}},
-	{path: "objectStorage.local.image", osv: []osvPackage{{ecosystem: "Go", name: "github.com/versity/versitygw"}}},
-	{path: "objectStorage.local.bucketImage", osv: osvAWSCLI},
-	{path: "databaseDumps.uploaderImage", osv: osvAWSCLI},
+	{path: "redis.image", patchOnly: true, osv: osvRedis,
+		why: "holds data on a volume: the event streams and the cache"},
+	{path: "postgres.pooler.image", patchOnly: true,
+		why: "sits in front of every database connection"},
+	{path: "builders.buildkitImage", patchOnly: true, osv: osvBuildKit,
+		why: "a minor version can change the build cache format and the build API"},
+	{path: "builders.buildkitRootlessImage", patchOnly: true, osv: osvBuildKit,
+		why: "a minor version can change the build cache format and the build API"},
+	{path: "builderSandbox.pusherImage", securityCrossMinor: true, osv: []osvPackage{{ecosystem: "Go", name: "github.com/containers/skopeo"}},
+		why: "copies an image and exits, and keeps nothing"},
+	{path: "metrics.victoriametrics.image", osv: osvVictoria,
+		why: "holds data: the metrics store"},
+	{path: "metrics.vmagent.image", securityCrossMinor: true, osv: osvVictoria,
+		why: "scrapes and forwards metrics, and keeps nothing it can't rebuild"},
+	{path: "metrics.kubeStateMetrics.image", securityCrossMinor: true, osv: []osvPackage{{ecosystem: "Go", name: "k8s.io/kube-state-metrics", majorSuffix: true}},
+		why: "reads the cluster and serves metrics, and keeps nothing"},
+	{path: "metrics.nodeExporter.image", securityCrossMinor: true, osv: []osvPackage{{ecosystem: "Go", name: "github.com/prometheus/node_exporter"}},
+		why: "reads the host and serves metrics, and keeps nothing"},
+	{path: "logs.victorialogs.image",
+		why: "holds data: the log store"},
+	{path: "logs.vector.image", securityCrossMinor: true, osv: []osvPackage{{ecosystem: "GIT", name: "https://github.com/vectordotdev/vector"}},
+		why: "ships logs and keeps only its read positions, and a version that rejects its configuration does not come up and is rolled back"},
+	{path: "trivy.image", securityCrossMinor: true, osv: []osvPackage{{ecosystem: "Go", name: "github.com/aquasecurity/trivy"}},
+		why: "scans an image and exits, and downloads the database its version reads"},
+	{path: "objectStorage.local.image", osv: []osvPackage{{ecosystem: "Go", name: "github.com/versity/versitygw"}},
+		why: "holds data: the object store"},
+	{path: "objectStorage.local.bucketImage", securityCrossMinor: true, osv: osvAWSCLI,
+		why: "creates a bucket and exits"},
+	{path: "databaseDumps.uploaderImage", securityCrossMinor: true, osv: osvAWSCLI,
+		why: "uploads a dump and exits"},
 }
 
 type floatingWorkload struct {
-	namespace string
-	name      string
-	anyMajor  bool
-	osv       []osvPackage
+	namespace          string
+	name               string
+	repo               string
+	anyMajor           bool
+	securityCrossMinor bool
+	why                string
+	osv                []osvPackage
 }
 
 var floatingWorkloads = []floatingWorkload{
-	{namespace: "orchard", name: "zot", osv: osvZot},
-	{namespace: "cloudflared", name: "cloudflared", anyMajor: true, osv: osvCloudflared},
+	{namespace: "orchard", name: "zot", repo: "ghcr.io/project-zot/zot", osv: osvZot,
+		why: "holds data: every image Orchard builds"},
+	{namespace: "cloudflared", name: "cloudflared", repo: "cloudflare/cloudflared", anyMajor: true, securityCrossMinor: true, osv: osvCloudflared,
+		why: "forwards traffic and keeps nothing"},
 }
 
 const (
@@ -116,38 +138,42 @@ func pinnedRef(repo, tag, digest string) string {
 	return repo + ":" + tag + "@" + digest
 }
 
-func imageCandidates(current imageTag, tags []string, patchOnly, anyMajor bool, held map[string]bool, repo string) (candidates []imageTag, ahead *imageTag) {
+func imageCandidates(current imageTag, tags []string, patchOnly, anyMajor, securityCrossMinor bool, held map[string]bool, repo string) (candidates []candidate, ahead *imageTag) {
 	for _, raw := range tags {
 		tag, ok := parseImageTag(raw)
 		if !ok || tag.prefix != current.prefix || tag.suffix != current.suffix || !tag.newerThan(current) {
 			continue
 		}
-		if (!anyMajor && crossesMajor(current, tag)) || (patchOnly && tag.minor != current.minor) {
+		reachable, securityOnly := true, false
+		if !anyMajor {
+			reachable, securityOnly = reaches(current, tag, securityCrossMinor)
+		}
+		if patchOnly && tag.minor != current.minor {
+			reachable = false
+		}
+		if !reachable || securityOnly {
 			if ahead == nil || tag.newerThan(*ahead) {
 				ahead = &tag
 			}
+		}
+		if !reachable || held[repo+":"+raw] {
 			continue
 		}
-		if held[repo+":"+raw] {
-			continue
-		}
-		candidates = append(candidates, tag)
+		next := imageCandidate(tag)
+		next.securityOnly = securityOnly
+		candidates = append(candidates, next)
 	}
-	sort.Slice(candidates, func(i, j int) bool { return candidates[j].newerThan(candidates[i]) })
+	sort.Slice(candidates, func(i, j int) bool { return candidates[j].tag.newerThan(candidates[i].tag) })
 	return candidates, ahead
 }
 
-func planImage(gate *updateGate, pkgs []osvPackage, repo string, current imageTag, candidates []imageTag, ahead *imageTag, published func(repo, tag string) (time.Time, error)) decision {
-	releases := make([]candidate, len(candidates))
-	for i, tag := range candidates {
-		releases[i] = imageCandidate(tag)
-	}
+func planImage(gate *updateGate, pkgs []osvPackage, repo string, current imageTag, candidates []candidate, ahead *imageTag, published func(repo, tag string) (time.Time, error)) decision {
 	var beyond *candidate
 	if ahead != nil {
 		r := imageCandidate(*ahead)
 		beyond = &r
 	}
-	return gate.plan(pkgs, imageCandidate(current), releases, beyond, func(r candidate) (time.Time, error) {
+	return gate.plan(pkgs, imageCandidate(current), candidates, beyond, func(r candidate) (time.Time, error) {
 		return published(repo, r.tag.raw)
 	})
 }
@@ -584,7 +610,7 @@ func reportImage(entry bundledImage, chart, user, pinnedFile *cli.Values, lookup
 		report.err = err
 		return report
 	}
-	candidates, ahead := imageCandidates(current, tags, entry.patchOnly, false, held, repo)
+	candidates, ahead := imageCandidates(current, tags, entry.patchOnly, false, entry.securityCrossMinor, held, repo)
 	if ahead != nil {
 		report.ahead = repo + ":" + ahead.raw
 	}
@@ -904,7 +930,7 @@ func movePinnedWorkload(c *cli.Context, client *registryClient, gate *updateGate
 		c.Warnf("note: couldn't check %s: %s\n", repo, err)
 		return
 	}
-	candidates, ahead := imageCandidates(current, tags, false, workload.anyMajor, held, repo)
+	candidates, ahead := imageCandidates(current, tags, false, workload.anyMajor, workload.securityCrossMinor, held, repo)
 	plan := planImage(gate, workload.osv, repo, current, candidates, ahead, client.published)
 	notes, warnings := plan.messages(imageCandidate(current), imageName(repo), gate.soak)
 	for _, note := range notes {
@@ -1002,8 +1028,10 @@ from the image's creation date elsewhere. A version without a date waits.
 
 If OSV.dev lists a vulnerability in the running version, the update moves at
 once to the release that fixes it without adding another known vulnerability,
-and prints "security update". If OSV.dev can't be reached, only the wait
-applies.
+and prints "security update". For the tools that keep no data (Trivy, Vector,
+skopeo, vmagent, kube-state-metrics, node-exporter, aws-cli and cloudflared),
+that release can be a new minor version below 1.0 when no release in the
+running minor fixes it. If OSV.dev can't be reached, only the wait applies.
 
 Each version it picks is pinned to the digest the registry served for it. The
 installer's zot and cloudflared move the same way, cloudflared to any newer

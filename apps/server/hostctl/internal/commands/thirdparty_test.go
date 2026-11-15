@@ -354,3 +354,114 @@ func TestConfigCreatedReadsThePlatformImage(t *testing.T) {
 		t.Errorf("got %s %v", at, err)
 	}
 }
+
+func trivyEntry(t *testing.T) bundledImage {
+	t.Helper()
+	for _, entry := range bundledImages {
+		if entry.path == "trivy.image" {
+			return entry
+		}
+	}
+	t.Fatal("no trivy.image")
+	return bundledImage{}
+}
+
+var trivyTags = []string{"0.69.3", "0.69.4", "0.70.0", "0.71.0", "0.71.1", "0.76.2", "1.0.0"}
+
+func planTrivy(t *testing.T, gate *updateGate, dates map[string]time.Time) (decision, *imageTag) {
+	t.Helper()
+	entry := trivyEntry(t)
+	current := mustTag(t, "0.69.3")
+	candidates, ahead := imageCandidates(current, trivyTags, entry.patchOnly, false, entry.securityCrossMinor, nil, "trivy")
+	published := func(_, tag string) (time.Time, error) {
+		if at, ok := dates[tag]; ok {
+			return at, nil
+		}
+		return time.Time{}, fmt.Errorf("no date for %s", tag)
+	}
+	return planImage(gate, entry.osv, "trivy", current, candidates, ahead, published), ahead
+}
+
+var trivyDates = map[string]time.Time{
+	"0.69.4": fixedNow.Add(-30 * day),
+	"0.70.0": fixedNow.Add(-25 * day),
+	"0.71.0": fixedNow.Add(-20 * day),
+	"0.71.1": fixedNow.Add(-1 * day),
+	"0.76.2": fixedNow.Add(-10 * day),
+	"1.0.0":  fixedNow.Add(-10 * day),
+}
+
+func TestAStandaloneToolCrossesAMinorForASecurityFix(t *testing.T) {
+	osv := newFakeOSV(t, map[string][]string{
+		"github.com/aquasecurity/trivy@0.69.3": {"GHSA-a"},
+		"github.com/aquasecurity/trivy@0.69.4": {"GHSA-a"},
+		"github.com/aquasecurity/trivy@0.70.0": {"GHSA-a"},
+	})
+	gate, _ := gateWithOSV(osv.server.URL)
+	d, ahead := planTrivy(t, gate, trivyDates)
+	if d.target.tag.raw != "0.71.0" || !d.target.securityOnly || d.early || strings.Join(d.fixed, ",") != "GHSA-a" || len(d.unfixed) != 0 {
+		t.Fatalf("target %s early %v fixed %v unfixed %v", d.target.tag.raw, d.early, d.fixed, d.unfixed)
+	}
+	notes, _ := d.messages(imageCandidate(mustTag(t, "0.69.3")), imageName("trivy"), gate.soak)
+	if len(notes) == 0 || notes[0] != "security update: GHSA-a affects trivy:0.69.3, moving to trivy:0.71.0" {
+		t.Errorf("notes %q", notes)
+	}
+	if ahead == nil || ahead.raw != "1.0.0" {
+		t.Errorf("ahead %v", ahead)
+	}
+
+	d, _ = planTrivy(t, gate, map[string]time.Time{"0.69.4": trivyDates["0.69.4"]})
+	if d.target.tag.raw != "0.71.0" || !d.early {
+		t.Errorf("unsoaked: target %s early %v", d.target.tag.raw, d.early)
+	}
+}
+
+func TestAStandaloneToolStaysInItsMinorWithoutAnAdvisory(t *testing.T) {
+	osv := newFakeOSV(t, nil)
+	gate, _ := gateWithOSV(osv.server.URL)
+	d, _ := planTrivy(t, gate, trivyDates)
+	if d.target.tag.raw != "0.69.4" || d.early || d.target.securityOnly {
+		t.Errorf("target %s early %v", d.target.tag.raw, d.early)
+	}
+	if d.waiting != nil {
+		t.Errorf("a new minor version shouldn't wait to install on its own: %v", d.waiting)
+	}
+	notes, warns := d.messages(imageCandidate(mustTag(t, "0.69.3")), imageName("trivy"), gate.soak)
+	for _, line := range append(notes, warns...) {
+		if strings.Contains(line, "security update") {
+			t.Errorf("no fast track without an advisory: %q", line)
+		}
+	}
+}
+
+func TestAStandaloneToolPrefersAFixInItsOwnMinor(t *testing.T) {
+	osv := newFakeOSV(t, map[string][]string{
+		"github.com/aquasecurity/trivy@0.69.3": {"GHSA-a"},
+	})
+	gate, _ := gateWithOSV(osv.server.URL)
+	d, _ := planTrivy(t, gate, map[string]time.Time{})
+	if d.target.tag.raw != "0.69.4" || d.target.securityOnly || !d.early {
+		t.Errorf("target %s early %v", d.target.tag.raw, d.early)
+	}
+}
+
+func TestOnlyStandaloneComponentsCrossAMinor(t *testing.T) {
+	for _, a := range addons {
+		if a.securityCrossMinor || a.why == "" {
+			t.Errorf("%s: an operator needs a person for a new minor version, and says why", a.release)
+		}
+	}
+	for _, entry := range bundledImages {
+		if entry.why == "" {
+			t.Errorf("%s says nothing about its update class", entry.path)
+		}
+		if entry.patchOnly && entry.securityCrossMinor {
+			t.Errorf("%s takes patches only, so it can't cross a minor version", entry.path)
+		}
+	}
+	for _, w := range floatingWorkloads {
+		if w.why == "" || w.repo == "" {
+			t.Errorf("%s is incomplete", w.name)
+		}
+	}
+}

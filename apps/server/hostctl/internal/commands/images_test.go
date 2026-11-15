@@ -36,17 +36,17 @@ func TestParseImageTagKeepsPrefixAndSuffix(t *testing.T) {
 	}
 }
 
-func raws(tags []imageTag) []string {
-	out := make([]string, len(tags))
-	for i, tag := range tags {
-		out[i] = tag.raw
+func raws(candidates []candidate) []string {
+	out := make([]string, len(candidates))
+	for i, c := range candidates {
+		out[i] = c.tag.raw
 	}
 	return out
 }
 
 func TestCandidatesStayInTheSameMajorAndFlavour(t *testing.T) {
 	tags := []string{"v1.154.1", "v1.160.2", "v1.155.0", "v2.0.0", "1.999.0", "v1.200.0-rc1", "latest", "v1.150.0"}
-	candidates, ahead := imageCandidates(mustTag(t, "v1.154.1"), tags, false, false, nil, "repo")
+	candidates, ahead := imageCandidates(mustTag(t, "v1.154.1"), tags, false, false, false, nil, "repo")
 	if got := strings.Join(raws(candidates), " "); got != "v1.155.0 v1.160.2" {
 		t.Errorf("candidates %s", got)
 	}
@@ -57,14 +57,14 @@ func TestCandidatesStayInTheSameMajorAndFlavour(t *testing.T) {
 
 func TestCandidatesTreatAZeroMinorAsAMajor(t *testing.T) {
 	tags := []string{"0.61.0", "0.61.1", "0.61.4", "0.62.0", "0.63.1", "1.0.0"}
-	candidates, ahead := imageCandidates(mustTag(t, "0.61.0"), tags, false, false, nil, "vector")
+	candidates, ahead := imageCandidates(mustTag(t, "0.61.0"), tags, false, false, false, nil, "vector")
 	if got := strings.Join(raws(candidates), " "); got != "0.61.1 0.61.4" {
 		t.Errorf("candidates %s", got)
 	}
 	if ahead == nil || ahead.raw != "1.0.0" {
 		t.Errorf("ahead %v", ahead)
 	}
-	candidates, _ = imageCandidates(mustTag(t, "1.4.0"), []string{"1.4.1", "1.5.0", "2.0.0"}, false, false, nil, "x")
+	candidates, _ = imageCandidates(mustTag(t, "1.4.0"), []string{"1.4.1", "1.5.0", "2.0.0"}, false, false, false, nil, "x")
 	if got := strings.Join(raws(candidates), " "); got != "1.4.1 1.5.0" {
 		t.Errorf("a minor version above 1.0 should be eligible: %s", got)
 	}
@@ -72,7 +72,7 @@ func TestCandidatesTreatAZeroMinorAsAMajor(t *testing.T) {
 
 func TestCandidatesKeepTheAlpineFlavour(t *testing.T) {
 	tags := []string{"7.4.11-alpine", "7.4.12-alpine", "7.4.13", "7.4.14-bookworm", "7.6.0-alpine", "8.0.0-alpine"}
-	candidates, ahead := imageCandidates(mustTag(t, "7.4.11-alpine"), tags, true, false, nil, "redis")
+	candidates, ahead := imageCandidates(mustTag(t, "7.4.11-alpine"), tags, true, false, false, nil, "redis")
 	if got := strings.Join(raws(candidates), " "); got != "7.4.12-alpine" {
 		t.Errorf("patch-only candidates %s", got)
 	}
@@ -83,7 +83,7 @@ func TestCandidatesKeepTheAlpineFlavour(t *testing.T) {
 
 func TestCandidatesSkipAHeldVersion(t *testing.T) {
 	held := map[string]bool{"repo:v1.156.0": true}
-	candidates, _ := imageCandidates(mustTag(t, "v1.155.0"), []string{"v1.155.0", "v1.156.0", "v1.157.0"}, false, false, held, "repo")
+	candidates, _ := imageCandidates(mustTag(t, "v1.155.0"), []string{"v1.155.0", "v1.156.0", "v1.157.0"}, false, false, false, held, "repo")
 	if got := strings.Join(raws(candidates), " "); got != "v1.157.0" {
 		t.Errorf("candidates %s", got)
 	}
@@ -109,11 +109,11 @@ func TestSplitImage(t *testing.T) {
 func TestFloatingCandidatesCanCrossACalendarYear(t *testing.T) {
 	tags := []string{"2026.11.0", "2026.12.1", "2027.1.0", "2027.1.1", "latest"}
 	held := map[string]bool{"cf:2027.1.1": true}
-	candidates, ahead := imageCandidates(mustTag(t, "2026.11.0"), tags, false, true, held, "cf")
+	candidates, ahead := imageCandidates(mustTag(t, "2026.11.0"), tags, false, true, false, held, "cf")
 	if got := strings.Join(raws(candidates), " "); got != "2026.12.1 2027.1.0" || ahead != nil {
 		t.Errorf("calendar candidates %s, ahead %v", got, ahead)
 	}
-	candidates, ahead = imageCandidates(mustTag(t, "v2.1.20"), []string{"v2.1.23", "v3.0.0"}, false, false, nil, "zot")
+	candidates, ahead = imageCandidates(mustTag(t, "v2.1.20"), []string{"v2.1.23", "v3.0.0"}, false, false, false, nil, "zot")
 	if got := strings.Join(raws(candidates), " "); got != "v2.1.23" || ahead == nil || ahead.raw != "v3.0.0" {
 		t.Errorf("semver candidates %s ahead %v", got, ahead)
 	}

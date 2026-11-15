@@ -47,6 +47,16 @@ func crossesMajor(from, to imageTag) bool {
 	return from.major == 0 && from.minor != to.minor
 }
 
+func reaches(from, to imageTag, securityCrossMinor bool) (ok, securityOnly bool) {
+	if !crossesMajor(from, to) {
+		return true, false
+	}
+	if securityCrossMinor && from.major == 0 && to.major == 0 {
+		return true, true
+	}
+	return false, false
+}
+
 func soakDuration(raw string) time.Duration {
 	days := defaultSoakDays
 	if raw = strings.TrimSpace(raw); raw != "" {
@@ -58,9 +68,10 @@ func soakDuration(raw string) time.Duration {
 }
 
 type candidate struct {
-	tag    imageTag
-	app    imageTag
-	hasApp bool
+	tag          imageTag
+	app          imageTag
+	hasApp       bool
+	securityOnly bool
 }
 
 func imageCandidate(tag imageTag) candidate {
@@ -127,7 +138,7 @@ func decide(current candidate, candidates []candidate, soaked func(candidate) bo
 
 	for i := len(candidates) - 1; i >= 0; i-- {
 		r := candidates[i]
-		if adds(r) {
+		if r.securityOnly || adds(r) {
 			continue
 		}
 		if soaked(r) {
@@ -140,23 +151,18 @@ func decide(current candidate, candidates []candidate, soaked func(candidate) bo
 	}
 
 	if len(running) > 0 {
-		most := 0
-		for _, r := range candidates {
-			if n := len(fixes(r)); !adds(r) && n > most {
-				most = n
-			}
-		}
+		pool, most := fastTrackPool(candidates, adds, fixes)
 		if most > 0 && len(fixes(d.target)) < most {
 			found := false
-			for i := len(candidates) - 1; i >= 0 && !found; i-- {
-				r := candidates[i]
-				if !adds(r) && len(fixes(r)) == most && soaked(r) {
+			for i := len(pool) - 1; i >= 0 && !found; i-- {
+				r := pool[i]
+				if len(fixes(r)) == most && soaked(r) {
 					d.target, found = r, true
 				}
 			}
-			for i := 0; i < len(candidates) && !found; i++ {
-				r := candidates[i]
-				if !adds(r) && len(fixes(r)) == most {
+			for i := 0; i < len(pool) && !found; i++ {
+				r := pool[i]
+				if len(fixes(r)) == most {
 					d.target, d.early, found = r, true, true
 				}
 			}
@@ -195,6 +201,36 @@ func decide(current candidate, candidates []candidate, soaked func(candidate) bo
 	return d
 }
 
+func fastTrackPool(candidates []candidate, adds func(candidate) bool, fixes func(candidate) []string) ([]candidate, int) {
+	best := func(securityOnly bool) int {
+		most := 0
+		for _, r := range candidates {
+			if r.securityOnly == securityOnly && !adds(r) && len(fixes(r)) > most {
+				most = len(fixes(r))
+			}
+		}
+		return most
+	}
+	most, securityOnly := best(false), false
+	if crossing := best(true); crossing > most {
+		most, securityOnly = crossing, true
+	}
+	if most == 0 {
+		return nil, 0
+	}
+	var pool []candidate
+	for _, r := range candidates {
+		if r.securityOnly != securityOnly || adds(r) || len(fixes(r)) != most {
+			continue
+		}
+		if securityOnly && len(pool) > 0 && (r.tag.major != pool[0].tag.major || r.tag.minor != pool[0].tag.minor) {
+			break
+		}
+		pool = append(pool, r)
+	}
+	return pool, most
+}
+
 func advisoryList(ids []string) (string, string) {
 	verb := "affects"
 	if len(ids) > 1 {
@@ -209,7 +245,7 @@ func advisoryList(ids []string) (string, string) {
 func (d decision) messages(current candidate, name func(candidate) string, soak time.Duration) (notes, warnings []string) {
 	if d.moves(current) && len(d.fixed) > 0 {
 		ids, verb := advisoryList(d.fixed)
-		if d.early {
+		if d.early || d.target.securityOnly {
 			notes = append(notes, fmt.Sprintf("security update: %s %s %s, moving to %s", ids, verb, name(current), name(d.target)))
 		} else {
 			notes = append(notes, fmt.Sprintf("%s has been public for %d days and fixes %s in %s", name(d.target), int(soak.Hours()/24), ids, name(current)))

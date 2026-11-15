@@ -14,14 +14,16 @@ import (
 )
 
 type addon struct {
-	release   string
-	namespace string
-	chart     string
-	repo      string
-	crds      bool
-	values    []string
-	settings  []string
-	osv       []osvPackage
+	release            string
+	namespace          string
+	chart              string
+	repo               string
+	crds               bool
+	values             []string
+	settings           []string
+	securityCrossMinor bool
+	why                string
+	osv                []osvPackage
 }
 
 var addons = []addon{
@@ -33,6 +35,7 @@ var addons = []addon{
 		crds:      true,
 		settings:  []string{"providers.kubernetesGateway.enabled=false"},
 		osv:       []osvPackage{{ecosystem: "Go", name: "github.com/traefik/traefik", majorSuffix: true}},
+		why:       "an operator: routes every request, and a minor version can change its CRDs",
 	},
 	{
 		release:   "cnpg",
@@ -41,6 +44,7 @@ var addons = []addon{
 		repo:      "https://cloudnative-pg.github.io/charts",
 		values:    []string{"config.data.ENABLE_INSTANCE_MANAGER_INPLACE_UPDATES=true"},
 		osv:       []osvPackage{{ecosystem: "Go", name: "github.com/cloudnative-pg/cloudnative-pg"}},
+		why:       "an operator: runs every database, and a minor version can change its CRDs and the instances",
 	},
 	{
 		release:   "cert-manager",
@@ -48,6 +52,7 @@ var addons = []addon{
 		chart:     "cert-manager",
 		repo:      "https://charts.jetstack.io",
 		osv:       []osvPackage{{ecosystem: "Go", name: "github.com/cert-manager/cert-manager"}},
+		why:       "an operator: issues every certificate, and a minor version can change its CRDs",
 	},
 }
 
@@ -161,12 +166,21 @@ func planAddon(gate *updateGate, a addon, installed installedChart, releases []c
 		if !ok || next.tag.prefix != current.tag.prefix || next.tag.suffix != current.tag.suffix || !next.tag.newerThan(current.tag) {
 			continue
 		}
-		if crossesMajor(current.tag, next.tag) || (current.hasApp && next.hasApp && crossesMajor(current.app, next.app)) {
+		reachable, securityOnly := reaches(current.tag, next.tag, a.securityCrossMinor)
+		if current.hasApp && next.hasApp {
+			appReachable, appSecurityOnly := reaches(current.app, next.app, a.securityCrossMinor)
+			reachable, securityOnly = reachable && appReachable, securityOnly || appSecurityOnly
+		}
+		if !reachable || securityOnly {
 			if plan.ahead == nil || next.tag.newerThan(plan.ahead.tag) {
-				plan.ahead = &next
+				ahead := next
+				plan.ahead = &ahead
 			}
+		}
+		if !reachable {
 			continue
 		}
+		next.securityOnly = securityOnly
 		candidates = append(candidates, next)
 	}
 	sort.Slice(candidates, func(i, j int) bool { return candidates[j].tag.newerThan(candidates[i].tag) })
