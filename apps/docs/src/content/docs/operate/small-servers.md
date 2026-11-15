@@ -5,18 +5,18 @@ sidebar:
   order: 6
 ---
 
-Orchard runs on 2 GiB of RAM. 8 GB is recommended. On a small server, the installer gives Orchard its smallest footprint, so that most of the memory stays free for your apps. Below 3.5 GiB, it also starts with the MCP endpoint and image scanning turned off, because each one holds memory all the time.
+Orchard runs on 2 GiB of RAM. 8 GiB is recommended. On a small server, the installer gives Orchard its smallest footprint, so that most of the memory stays free for your apps. Below 3.5 GiB, it also starts with the MCP endpoint and image scanning turned off, because each one holds memory all the time.
 
 ## What the installer changes
 
 The installer reads the RAM of the server when it runs.
 
-| RAM            | Profile                                                                            |
-| -------------- | ---------------------------------------------------------------------------------- |
-| Under 2 GiB    | The installer warns that Orchard leaves little or no room for apps, and continues. |
-| 2 to 3.5 GiB   | The smallest profile. Refer to [The smallest profile](#the-smallest-profile).      |
-| 3.5 to 8 GiB   | Metrics, logs, and the scanner use lower requests, and 7 days of logs are kept.    |
-| 8 GiB and more | The defaults.                                                                      |
+| RAM            | Profile                                                                                                             |
+| -------------- | ------------------------------------------------------------------------------------------------------------------- |
+| Under 2 GiB    | The installer warns that Orchard leaves little or no room for apps, and continues.                                  |
+| 2 to 3.5 GiB   | The smallest profile. Refer to [The smallest profile](#the-smallest-profile).                                       |
+| 3.5 to 8 GiB   | Metrics, logs, and the scanner use lower requests and limits, 7 days of logs are kept, and one scan runs at a time. |
+| 8 GiB and more | The defaults.                                                                                                       |
 
 ### The smallest profile
 

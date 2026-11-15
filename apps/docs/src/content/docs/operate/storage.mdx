@@ -18,7 +18,7 @@ S3 storage is optional. Database backups work without it on an instance from the
 | `orchard up`                                        | Off.                                         | On, if builds can reach the endpoint. |
 
 :::caution
-Backups on the server share a disk with your databases. They undo a bad migration or a dropped table. If the server is lost, the backups are lost.
+Backups on the server share a disk with your databases, so they are lost with the server. Refer to [The store on the server](/data/backups/#the-store-on-the-server).
 :::
 
 On a [Helm install](#use-helm), these features need the store on the server or S3 storage. Neither is on by default.

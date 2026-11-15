@@ -52,19 +52,13 @@ Orchard runs the same way in both setups. What changes is how much of the cluste
 | [One-command installer](/start/install/#install-on-a-linux-machine) | A single-node k3s cluster on one Linux machine, with `local-path` disks, a zot registry, and an S3 store for backups on the same machine. The installer configures all of it. | A home lab, a side project, a small team, or a trial |
 | [Helm chart](/start/install/#install-on-an-existing-cluster)        | Orchard on a cluster that you build and operate. You choose the registry, the storage, the backup store, and the number of nodes.                                             | A production setup                                   |
 
-The installer's limit is its single-node layout, not k3s. Everything runs on one machine, so that machine is a single point of failure. Backups in the store on the server are lost with it, unless you send backups to [S3 storage](/operate/storage/) off the machine. Adding nodes to an installer host is not supported for now, and support is planned for a later release. For more than one node, use the Helm chart. For details, refer to [Add and remove nodes](/operate/nodes/#on-an-installer-host).
-
-For production, Orchard recommends the Helm chart on a multi-node cluster built for it, such as [Talos Linux](https://docs.siderolabs.com/talos). Hack Club runs Orchard this way, on six Talos Linux nodes. On that cluster, you can replace the bundled components with ones that you operate:
-
-- [Harbor](https://goharbor.io/docs/) or another OCI registry instead of zot. Refer to [Turn on image builds](/start/install/#turn-on-image-builds).
-- External S3-compatible storage instead of the store on the server. Refer to [Add S3 storage](/operate/storage/).
-- A replicated StorageClass instead of `local-path`, set with `tenant.storageClass` and the `storageClass` of each volume in the chart.
+The installer's limit is its single-node layout, not k3s: that one machine is a single point of failure. For production, Orchard recommends the Helm chart on a multi-node cluster built for it, such as [Talos Linux](https://docs.siderolabs.com/talos), with the bundled components replaced by ones that you operate. For the differences and the components you can replace, refer to [Choose a layout](/operate/production/#choose-a-layout).
 
 Before you go live on either setup, work through [Go to production](/operate/production/).
 
 ## Limitations
 
-- Orchard is not fully tenant-isolated by default. Apps cannot reach each other over the network, but they share the host kernel, and builds run on it too. Before you let people you do not trust deploy code, install gVisor and Kata and follow [Requirements for untrusted code](/operate/security/#requirements-for-untrusted-code).
+- Orchard is not fully tenant-isolated by default. Apps cannot reach each other over the network, but they share the host kernel. Before you let people you do not trust deploy code, follow [Requirements for untrusted code](/operate/security/#requirements-for-untrusted-code).
 - Orchard uses Kubernetes words where they matter. Pods, replicas, and namespaces appear in the dashboard under those names.
 - Managed databases are Postgres only. Other databases, such as MariaDB or MongoDB, run as apps from [templates](/run/templates/).
 

@@ -41,8 +41,8 @@ apps on it.
 detail.
 
 For the command alone, you need a Linux server with systemd, an IPv4 address and 20 GB of free disk.
-Orchard runs on 2 GiB of RAM, and 8 GiB is recommended. Under 3.5 GiB, the installer turns off the MCP
-endpoint and image scanning to leave memory for your apps.
+Orchard runs on 2 GiB of RAM, and 8 GiB is recommended. On a smaller server, the installer
+[trims Orchard](https://docs.orchard.hackclub.com/operate/small-servers/) to leave memory for your apps.
 
 ```bash
 curl -fsSL https://assets.orchard.my/install.sh -o orchard-install.sh && sudo bash orchard-install.sh
@@ -52,9 +52,10 @@ curl -fsSL https://assets.orchard.my/install.sh -o orchard-install.sh && sudo ba
 
 > [!IMPORTANT]
 > Deployments are network isolated from each other and from the platform by default (on the Helm chart,
-> your CNI must enforce NetworkPolicy), but they **share the host kernel** unless you install gVisor or
-> Kata and switch them on. Running untrusted code is not safe out of the box. Read [Security and isolation](https://docs.orchard.hackclub.com/operate/security/) before
-> letting strangers deploy things.
+> your [CNI must enforce NetworkPolicy](https://docs.orchard.hackclub.com/operate/compatibility/#supported-cnis)),
+> but they **share the host kernel** unless you install gVisor or Kata and switch them on. Running
+> untrusted code is not safe out of the box. Read [Security and isolation](https://docs.orchard.hackclub.com/operate/security/)
+> before letting strangers deploy things.
 
 > [!TIP]
 > A fresh install is not a production instance. Secrets, signup mode, TLS cookies, control-plane backups
@@ -63,9 +64,8 @@ curl -fsSL https://assets.orchard.my/install.sh -o orchard-install.sh && sudo ba
 
 ### Already running Kubernetes, or going to production?
 
-The installer builds its own single-node k3s cluster. Adding nodes to it is not supported for now, and
-support is planned for a later release. For more than one node, or on a cluster you operate, use the Helm
-chart instead (Kubernetes 1.30 or later):
+The installer builds its own single-node k3s cluster, which [cannot take more nodes yet](https://docs.orchard.hackclub.com/operate/nodes/#on-an-installer-host).
+For more than one node, or on a cluster you operate, use the Helm chart instead (Kubernetes 1.30 or later):
 
 ```bash
 helm install orchard oci://ghcr.io/hackclub/orchard/charts/orchard \
@@ -119,8 +119,7 @@ Install Orchard on my server following https://docs.orchard.hackclub.com/start/i
 
 ## Limitations
 
-An installer host is single-node and cannot take more nodes for now, Postgres is the only managed
-database, and control-plane backups are off by default. [Known limitations](https://docs.orchard.hackclub.com/start/limitations/)
+Postgres is the only managed database, and control-plane backups are off by default. [Known limitations](https://docs.orchard.hackclub.com/start/limitations/)
 lists the rest, grouped by area, with a workaround where one exists. Read it before you install.
 
 ## Contributing

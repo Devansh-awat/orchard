@@ -246,16 +246,11 @@ Build cache, registry and backups each get a fifth of the free disk, capped at
 60G, 50G and 50G; the log store gets a tenth, capped at 20G. The installer
 refuses less than 20G of free disk and warns under 60G.
 
-Orchard runs on 2 GiB of RAM. 8 GB is recommended. The installer never refuses
-on memory: under about 2Gi it warns that apps will have little or no room, and
-under 3.5Gi it warns again and uses its smallest profile.
-
-Under 8Gi, metrics, logs and the scanner run with smaller memory requests and
-limits, logs keep a week instead of two, and one scan runs at a time. Under
-3.5Gi, a new install also turns MCP and image scanning off (unless you passed
-`--mcp`, `--mcp-domain` or `--image-scanning`), and gives the server, frontend,
-Postgres, Redis and each build smaller memory requests. The exact numbers are in
-the generated values file, and `orchardctl config set` changes any of them.
+Orchard runs on 2 GiB of RAM, and 8 GiB is recommended. The installer never
+refuses on memory. Under 8Gi it trims metrics, logs and the scanner, and under
+3.5Gi it uses its smallest profile, with MCP and image scanning off.
+[Run on a small server](https://docs.orchard.hackclub.com/operate/small-servers/)
+has every threshold and value, and `orchardctl config set` changes any of them.
 
 ## What it deliberately leaves off
 
@@ -264,20 +259,8 @@ runtimes that vary by distro, so they are not installed. Without them, image
 builds run in rootless BuildKit and share this machine's kernel, which is fine
 when the person building the image owns the box. On Ubuntu 24.04 the installer
 sets `kernel.apparmor_restrict_unprivileged_userns=0`, because rootless builds
-need it. If strangers will push code here, install a runtime first.
-
-If you are running other people's code and want isolation, install the runtime
-yourself, then flip the matching flag in `/etc/orchard/values.yaml` and run
-`orchard-update`:
-
-```yaml
-tenantSandbox: # gVisor for tenant app pods
-  enabled: true
-  runtimeClassName: gvisor
-builderSandbox: # Kata VMs for build jobs
-  enabled: true
-  runtimeClassName: kata
-```
+need it. If strangers will push code here, install a runtime first and follow
+[Turn on kernel isolation](https://docs.orchard.hackclub.com/operate/security/#turn-on-kernel-isolation).
 
 **Off-box backups.** Database backups go to an S3 store on this same machine.
 That undoes a bad migration or a dropped table, but it is not disaster recovery:
@@ -287,7 +270,7 @@ for that; "Moving backups to real S3 or R2" in
 copying what is already there. `--object-storage false` installs without the
 local store, and then backups are off until you configure storage.
 
-**Multi-node.** One box only. For multiple nodes, use the Helm chart.
+**Multi-node.** One box only. For multiple nodes, use the Helm chart. [Add and remove nodes](https://docs.orchard.hackclub.com/operate/nodes/#on-an-installer-host) explains why.
 
 **Custom ports.** `--http-port` and `--https-port` move Traefik off 80 and 443,
 and only `lan` mode accepts them. `public` needs 80 for the ACME HTTP-01

@@ -11,7 +11,7 @@ You can install Orchard on a single Linux machine with one command, or on a Kube
 
 The one-command installer builds a single-node k3s cluster on one machine. It puts app data on `local-path` disks, runs a zot registry that only that machine can pull from, and keeps backups in an S3 store on the same disk. You answer a few questions and the installer configures the cluster and Orchard, which makes it the fastest way to a working instance. Some items, such as kernel sandboxing and off-server backups, stay with you. For the list, refer to [What the installer does not configure](#what-the-installer-does-not-configure). It suits a home lab, a side project, a small team, or a trial. Because everything runs on one machine, that machine is a single point of failure.
 
-For production, Orchard recommends the Helm chart on a multi-node cluster built for it, such as [Talos Linux](https://docs.siderolabs.com/talos). Hack Club runs Orchard this way, on six Talos Linux nodes. You operate the cluster, and you can replace bundled components with ones that you run yourself: [Harbor](https://goharbor.io/docs/) or another registry instead of zot, external S3 storage for backups, and a replicated StorageClass instead of `local-path`.
+For production, Orchard recommends the Helm chart on a multi-node cluster built for it, such as [Talos Linux](https://docs.siderolabs.com/talos). You operate the cluster and can replace the bundled components with ones that you run yourself. For the differences, refer to [Choose a layout](/operate/production/#choose-a-layout).
 
 | Environment                                                | Method                                               |
 | ---------------------------------------------------------- | ---------------------------------------------------- |
@@ -19,7 +19,7 @@ For production, Orchard recommends the Helm chart on a multi-node cluster built 
 | A Kubernetes cluster you operate, such as a production one | [Helm chart](#install-on-an-existing-cluster)        |
 | A laptop, for a local trial                                | [Quickstart script](#try-orchard-on-a-laptop)        |
 
-An installer host is single-node. Adding nodes to it is not supported for now, because Kubernetes nodes pull app images from the zot registry through an address that exists only on the install machine, and the host setup that Orchard needs runs only on that machine. Support is planned for a later release. To run on more than one machine, use the Helm chart. For more information, refer to [Add and remove nodes](/operate/nodes/#on-an-installer-host).
+An installer host cannot take more nodes yet. To run on more than one machine, use the Helm chart. Refer to [Add and remove nodes](/operate/nodes/#on-an-installer-host).
 
 After you install Orchard, [claim the instance](#claim-the-instance).
 
@@ -35,7 +35,7 @@ The installer creates a single-node k3s cluster. It then installs Traefik, Cloud
 - Root access.
 - OpenSSL 3 or newer, which the published installer uses to check release signatures. Without it, the installer stops, unless you set `ORCHARD_ALLOW_UNSIGNED_COMMANDS=true` to install without the check.
 - At least 20 GB of free disk on `/var/lib`. The installer refuses less, and it warns below 60 GB. For real use, plan for at least 40 GB of disk.
-- 2 GiB of RAM. 8 GiB is recommended. The installer does not refuse a smaller machine, but it warns below 2 GiB. Under 3.5 GiB, it uses its [smallest profile](/operate/small-servers/#the-smallest-profile), which keeps memory free for your apps and turns off the MCP endpoint and image scanning. With 8 GiB or more, Orchard runs more builds at once and keeps more logs.
+- 2 GiB of RAM. 8 GiB is recommended. The installer warns below 2 GiB but does not refuse, and it trims Orchard on smaller machines. Refer to [Run on a small server](/operate/small-servers/).
 - For `public` mode, ports 80 and 443 free and reachable from the internet. A domain is optional. To try Orchard without one, refer to [Try Orchard without a domain](#try-orchard-without-a-domain).
 - For `tunnel` mode, a domain and a Cloudflare Tunnel token.
 - Outbound internet access. For the hosts the installer contacts, refer to [Outbound connections](/operate/outbound-connections/).
@@ -271,7 +271,7 @@ To list every flag and variable, run the script with `--help`.
 | MCP                          | The endpoint agents connect to                             | `--mcp false`            | [Connect an MCP client](/mcp/)                    |
 
 :::caution
-Backups on the server sit on the same disk as your databases. If the server is lost, the backups are lost. To keep backups off the server, refer to [Add S3 storage](/operate/storage/).
+Backups on the server sit on the same disk as your databases, so they are lost with the server. Refer to [The store on the server](/data/backups/#the-store-on-the-server).
 :::
 
 A host installed before these defaults existed receives them on its next `sudo orchardctl update`. The MCP endpoint is the exception. To turn it on, run `sudo orchardctl mcp enable --apply`. For more information, refer to [New defaults on an existing host](/operate/host-commands/#new-defaults-on-an-existing-host).
@@ -295,7 +295,7 @@ The installer sizes build concurrency and volumes from the machine.
 | Backups     | One fifth of free disk, from 5 GB to 50 GB |
 | Log store   | One tenth of free disk, from 5 GB to 20 GB |
 
-Under 8 GiB of RAM, metrics, logs, and the scanner use lower memory requests and limits. Logs are kept for 7 days instead of 14, and one scan runs at a time. Under 3.5 GiB, the installer also uses its [smallest profile](/operate/small-servers/#the-smallest-profile). To change any of these values, use `sudo orchardctl config set`.
+Under 8 GiB of RAM, the installer also trims metrics, logs, and the scanner. For each memory profile, refer to [What the installer changes](/operate/small-servers/#what-the-installer-changes). To change any of these values, use `sudo orchardctl config set`.
 
 The build cache is pruned automatically when it grows past the size of its volume, and the node removes container images that it has not used for 72 hours. For more information, refer to [Free disk space](/operate/disk-space/).
 
@@ -334,25 +334,14 @@ To change an answer that you gave the installer:
 
 | Item                                                   | What to do                                                                                                                                                                                                                                                |
 | ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Sandboxed builds and tenant isolation                  | Install gVisor or Kata on the node, then set `tenantSandbox` and `builderSandbox` in `/etc/orchard/values.yaml`. Without them, image builds run rootless, and builds and apps share the host kernel.                                                      |
+| Sandboxed builds and tenant isolation                  | Install gVisor or Kata on the node, then turn on `tenantSandbox` and `builderSandbox`. Refer to [Turn on kernel isolation](/operate/security/#turn-on-kernel-isolation).                                                                                  |
 | DNS for your own domain                                | The installer prints the records and checks them, but you create them. To check them later, go to **Instance admin** > **Networking**. For more information, refer to [Point DNS at this instance](/operate/finishing-setup/#point-dns-at-this-instance). |
 | Off-server backups                                     | The installer asks for S3 storage, and you can add it later. Refer to [Add S3 storage](/operate/storage/).                                                                                                                                                |
-| Multiple nodes, and public TCP or UDP in `tunnel` mode | Use the [Helm chart](#install-on-an-existing-cluster). Adding nodes to an installer host is not supported for now.                                                                                                                                        |
+| Multiple nodes, and public TCP or UDP in `tunnel` mode | Use the [Helm chart](#install-on-an-existing-cluster).                                                                                                                                                                                                    |
 | One certificate for every app URL                      | Add a DNS-01 issuer. Refer to [Set up wildcard certificates](/operate/wildcard-certificates/).                                                                                                                                                            |
 
-The following values turn on the sandboxes:
-
-```yaml
-tenantSandbox:
-  enabled: true
-  runtimeClassName: gvisor
-builderSandbox:
-  enabled: true
-  runtimeClassName: kata
-```
-
 :::caution
-By default, apps are network-isolated from each other and from the control plane. They share the host kernel unless you install gVisor or Kata. Do not run code you do not trust without them. For more information, refer to [Security and isolation](/operate/security/).
+Apps share the host kernel unless you install gVisor or Kata, so do not run code you do not trust without them. Refer to [Security and isolation](/operate/security/).
 :::
 
 ### Use `lan` mode
@@ -680,7 +669,7 @@ objectStorage:
 These are the values that the installer writes.
 
 :::caution
-These backups sit on the same disk as your databases, so they do not protect you if you lose the disk. To use external storage, refer to [Backup storage for operators](/data/backups/#backup-storage-for-operators).
+These backups sit on the same disk as your databases. Refer to [The store on the server](/data/backups/#the-store-on-the-server).
 :::
 
 ### Turn on MCP

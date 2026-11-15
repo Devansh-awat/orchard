@@ -15,8 +15,8 @@ The installer builds a single-node [k3s](https://k3s.io/) cluster. k3s is a cert
 
 - **One machine is a single point of failure.** If the machine stops, every app, database, and the dashboard stop with it.
 - **Volumes use `local-path`.** Each volume is a directory on that machine's disk, with no replication.
-- **The registry is bound to loopback.** The bundled zot registry listens on `127.0.0.1` on the install host, and the node pulls tenant images through it. Another machine cannot pull from it, so adding nodes to an installer host is not supported for now. Support is planned for a later release. For details, refer to [Add and remove nodes](/operate/nodes/#on-an-installer-host).
-- **Backups stay on the same disk.** Database backups go to an object store inside the cluster, on the same disk as the databases. They undo a mistake. They do not survive the loss of the machine unless you [add S3 storage](/operate/storage/).
+- **The registry is bound to loopback.** The bundled zot registry listens on `127.0.0.1` on the install host, and the node pulls tenant images through it. Another machine cannot pull from it, so an installer host cannot take more nodes. Refer to [Add and remove nodes](/operate/nodes/#on-an-installer-host).
+- **Backups stay on the same disk.** Database backups go to [the store on the server](/data/backups/#the-store-on-the-server), which does not survive the loss of the machine unless you [add S3 storage](/operate/storage/).
 
 | Layout                             | Suits                                                                  | You operate                                                                    |
 | ---------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
@@ -27,7 +27,7 @@ For production, run the Helm chart on a multi-node cluster built for it, such as
 
 When you build the cluster, plan for the following:
 
-- **A CNI that enforces NetworkPolicy**, such as Cilium or Calico. Every tenant network boundary is a NetworkPolicy. Talos deploys Flannel unless you configure another CNI, and Flannel does not enforce NetworkPolicy. Orchard recommends Cilium, which Hack Club runs on its Talos nodes. Cilium enforces every tenant policy, and with `cilium.enabled: true` Orchard also adds per-tenant Cilium policies and enforces basic auth in Envoy. For Cilium on Talos, refer to [Deploying Cilium CNI](https://docs.siderolabs.com/kubernetes-guides/cni/deploying-cilium). To keep Flannel, set `networkPolicy.enforcer.enabled` to `true` in the chart, which runs kube-router in policy-only mode next to Flannel. Refer to [Enforce network policies on Flannel](/operate/security/#enforce-network-policies-on-flannel).
+- **A CNI that enforces NetworkPolicy.** Orchard recommends Cilium, which Hack Club runs on its Talos nodes. Talos deploys Flannel unless you configure another CNI, and Flannel does not enforce NetworkPolicy. For the supported CNIs, refer to [Supported CNIs](/operate/compatibility/#supported-cnis), and for Cilium on Talos, refer to [Deploying Cilium CNI](https://docs.siderolabs.com/kubernetes-guides/cni/deploying-cilium).
 - **Kubernetes 1.30 or later**, for the [admission guard](/operate/security/#admission-guard-for-tenant-namespaces). For the distributions, CNIs, ingress controllers, and storage that Orchard supports, refer to [Compatibility](/operate/compatibility/).
 - **The components below**, either the ones the chart expects or your replacements.
 
@@ -244,7 +244,7 @@ A restore test proves that the backup is readable. Bringing a whole instance bac
 
 ## 6. Configure object storage for tenant backups
 
-Managed databases need a backup bucket. An installer host uses a local object store by default. The store is on the same disk as the databases, so it does not protect you if the machine is lost.
+Managed databases need a backup bucket. An installer host uses [the store on the server](/data/backups/#the-store-on-the-server) by default, which shares a disk with the databases.
 
 To use S3 or R2, go to **Instance admin** > **Configuration** > **Object storage**. An organization can also set its own bucket at **Organization settings** > **Backups**. For more information, refer to [Add S3 storage](/operate/storage/).
 
