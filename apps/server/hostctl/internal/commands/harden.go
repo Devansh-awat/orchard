@@ -22,6 +22,8 @@ const (
 	podCIDR             = "10.42.0.0/16"
 	serviceCIDR         = "10.43.0.0/16"
 	tailscaleCIDR       = "100.64.0.0/10"
+	nodeExporterPort    = "9100"
+	flannelVXLANPort    = "8472"
 )
 
 func Harden() *cli.Command {
@@ -38,8 +40,10 @@ onto loopback, adds a password, and sets that password on the containerd mirror
 the kubelet pulls through and on the credentials the builders push with.
 
 It also opens an active ufw or firewalld for k3s. Without this, every pod times
-out against the API after a reboot. It also makes the k3s kubeconfig readable
-by root only.
+out against the API after a reboot. In the same firewall it closes 9100/tcp
+(node-exporter, which only the cluster scrapes) and 8472/udp (flannel, which
+only talks between nodes) to everything outside the pod and service networks.
+It also makes the k3s kubeconfig readable by root only.
 
 orchardctl update runs this first, so an upgrade fixes an old install. Run it by
 hand on a server you don't want to upgrade yet. You can run it more than once.
@@ -296,54 +300,70 @@ func ensureFirewall(c *cli.Context) error {
 
 	switch {
 	case ufwActive(c):
-		c.Printf("opening ufw for k3s and Orchard\n")
-		rules := [][]string{
-			{"allow", "from", podCIDR, "to", "any", "comment", "k3s pods"},
-			{"allow", "from", serviceCIDR, "to", "any", "comment", "k3s services"},
-		}
-		for _, cidr := range sources {
-			rules = append(rules, []string{"allow", "from", cidr, "to", "any", "port", "6443", "proto", "tcp", "comment", "kubernetes api"})
-		}
-		if !tunnel {
-			rules = append(rules,
-				[]string{"allow", httpPort + "/tcp", "comment", "orchard http"},
-				[]string{"allow", httpsPort + "/tcp", "comment", "orchard https"},
-				[]string{"allow", fmt.Sprintf("%d:%d/tcp", lo, hi), "comment", "orchard app ports"},
-				[]string{"allow", fmt.Sprintf("%d:%d/udp", lo, hi), "comment", "orchard app ports"},
-			)
-		}
-		for _, rule := range rules {
+		c.Printf("configuring ufw for k3s and Orchard\n")
+		for _, rule := range ufwRules(sources, httpPort, httpsPort, lo, hi, tunnel) {
 			if _, err := c.Capture("ufw", rule...); err != nil {
 				return fmt.Errorf("ufw %s: %w", strings.Join(rule, " "), err)
 			}
 		}
 	case firewalldActive(c):
-		c.Printf("opening firewalld for k3s and Orchard\n")
-		rules := [][]string{
-			{"--permanent", "--zone=trusted", "--add-source=" + podCIDR},
-			{"--permanent", "--zone=trusted", "--add-source=" + serviceCIDR},
-		}
-		for _, cidr := range sources {
-			rules = append(rules, []string{"--permanent", "--add-rich-rule=rule family=ipv4 source address=" + cidr + " port port=6443 protocol=tcp accept"})
-		}
-		if !tunnel {
-			rules = append(rules,
-				[]string{"--permanent", "--add-port=" + httpPort + "/tcp"},
-				[]string{"--permanent", "--add-port=" + httpsPort + "/tcp"},
-				[]string{"--permanent", fmt.Sprintf("--add-port=%d-%d/tcp", lo, hi)},
-				[]string{"--permanent", fmt.Sprintf("--add-port=%d-%d/udp", lo, hi)},
-			)
-		}
-		rules = append(rules, []string{"--reload"})
-		for _, rule := range rules {
+		c.Printf("configuring firewalld for k3s and Orchard\n")
+		for _, rule := range firewalldRules(sources, httpPort, httpsPort, lo, hi, tunnel) {
 			if _, err := c.Capture("firewall-cmd", rule...); err != nil {
 				return fmt.Errorf("firewall-cmd %s: %w", strings.Join(rule, " "), err)
 			}
 		}
 	default:
 		c.Printf("no host firewall active; install/README.md lists what this server listens on\n")
+		c.Printf("close 9100/tcp (node metrics) and 8472/udp (flannel) to the internet in your provider's firewall\n")
 	}
 	return nil
+}
+
+func ufwRules(sources []string, httpPort, httpsPort string, lo, hi int, tunnel bool) [][]string {
+	rules := [][]string{
+		{"allow", "from", podCIDR, "to", "any", "comment", "k3s pods"},
+		{"allow", "from", serviceCIDR, "to", "any", "comment", "k3s services"},
+	}
+	for _, cidr := range sources {
+		rules = append(rules, []string{"allow", "from", cidr, "to", "any", "port", "6443", "proto", "tcp", "comment", "kubernetes api"})
+	}
+	rules = append(rules,
+		[]string{"deny", nodeExporterPort + "/tcp", "comment", "node-exporter, cluster only"},
+		[]string{"deny", flannelVXLANPort + "/udp", "comment", "flannel vxlan, single node"},
+	)
+	if !tunnel {
+		rules = append(rules,
+			[]string{"allow", httpPort + "/tcp", "comment", "orchard http"},
+			[]string{"allow", httpsPort + "/tcp", "comment", "orchard https"},
+			[]string{"allow", fmt.Sprintf("%d:%d/tcp", lo, hi), "comment", "orchard app ports"},
+			[]string{"allow", fmt.Sprintf("%d:%d/udp", lo, hi), "comment", "orchard app ports"},
+		)
+	}
+	return rules
+}
+
+func firewalldRules(sources []string, httpPort, httpsPort string, lo, hi int, tunnel bool) [][]string {
+	rules := [][]string{
+		{"--permanent", "--zone=trusted", "--add-source=" + podCIDR},
+		{"--permanent", "--zone=trusted", "--add-source=" + serviceCIDR},
+	}
+	for _, cidr := range sources {
+		rules = append(rules, []string{"--permanent", "--add-rich-rule=rule family=ipv4 source address=" + cidr + " port port=6443 protocol=tcp accept"})
+	}
+	rules = append(rules,
+		[]string{"--permanent", "--add-rich-rule=rule port port=" + nodeExporterPort + " protocol=tcp drop"},
+		[]string{"--permanent", "--add-rich-rule=rule port port=" + flannelVXLANPort + " protocol=udp drop"},
+	)
+	if !tunnel {
+		rules = append(rules,
+			[]string{"--permanent", "--add-port=" + httpPort + "/tcp"},
+			[]string{"--permanent", "--add-port=" + httpsPort + "/tcp"},
+			[]string{"--permanent", fmt.Sprintf("--add-port=%d-%d/tcp", lo, hi)},
+			[]string{"--permanent", fmt.Sprintf("--add-port=%d-%d/udp", lo, hi)},
+		)
+	}
+	return append(rules, []string{"--reload"})
 }
 
 func ufwActive(c *cli.Context) bool {
