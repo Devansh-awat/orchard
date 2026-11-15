@@ -16,6 +16,10 @@ on:
       version:
         required: true
         type: string
+      latest:
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -90,12 +94,13 @@ jobs:
           IMAGE: ghcr.io/hackclub/orchard/${{ inputs.service }}
           VERSION: ${{ inputs.version }}
           SHA: ${{ github.sha }}
+          LATEST: ${{ inputs.latest }}
         run: |
-          docker buildx imagetools create \
-            -t "$IMAGE:$VERSION" \
-            -t "$IMAGE:latest" \
-            -t "$IMAGE:sha-$SHA" \
-            $(printf "$IMAGE@sha256:%s " *)
+          tags=(-t "$IMAGE:$VERSION" -t "$IMAGE:sha-$SHA")
+          if [ "$LATEST" = true ]; then tags+=(-t "$IMAGE:latest"); fi
+          sources=()
+          for digest in *; do sources+=("$IMAGE@sha256:$digest"); done
+          docker buildx imagetools create "${tags[@]}" "${sources[@]}"
           docker buildx imagetools inspect "$IMAGE:$VERSION"
           echo "digest=$(docker buildx imagetools inspect "$IMAGE:$VERSION" --format '{{json .Manifest}}' | jq -r .digest)" >> "$GITHUB_OUTPUT"
       - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
