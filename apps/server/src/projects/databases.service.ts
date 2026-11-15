@@ -1700,7 +1700,10 @@ export class DatabasesService {
 
     const { r2: destR2, r2ProxyAccessKey: destProxyKey, r2ProxySecret: destProxySecret } = built;
 
-    await this.k8sCnpg.enableCnpgBackup(db.namespace, db.clusterName, destR2);
+    const method = await this.k8sCnpg.enableCnpgBackup(db.namespace, db.clusterName, destR2);
+    if (method) {
+      await this.prisma.database.update({ where: { id: db.id }, data: { backupMethod: method } });
+    }
     if (destProxyKey) {
       await this.prisma.database.update({
         where: { id: db.id },
@@ -2293,8 +2296,9 @@ export class DatabasesService {
       );
     }
 
+    let method: string | undefined;
     try {
-      await this.k8sCnpg.enableCnpgBackup(database.namespace, database.clusterName, r2);
+      method = await this.k8sCnpg.enableCnpgBackup(database.namespace, database.clusterName, r2);
     } catch (e) {
       if (r2ProxyAccessKey) {
         await this.r2Proxy.removeBinding(r2ProxyAccessKey).catch(() => {});
@@ -2302,12 +2306,17 @@ export class DatabasesService {
       throw e;
     }
 
-    if (r2ProxyAccessKey) {
-      const previous = database.r2ProxyAccessKey;
+    if (r2ProxyAccessKey || method) {
       await this.prisma.database.update({
         where: { id: database.id },
-        data: { r2ProxyAccessKey, r2ProxySecret }
+        data: {
+          ...(method ? { backupMethod: method } : {}),
+          ...(r2ProxyAccessKey ? { r2ProxyAccessKey, r2ProxySecret } : {})
+        }
       });
+    }
+    if (r2ProxyAccessKey) {
+      const previous = database.r2ProxyAccessKey;
       if (previous && previous !== r2ProxyAccessKey) {
         await this.r2Proxy.removeBinding(previous).catch(() => {});
       }

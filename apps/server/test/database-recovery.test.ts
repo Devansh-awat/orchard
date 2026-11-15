@@ -21,8 +21,11 @@ import {
   postgresTimestamp,
   recoveryTargetSpec,
   walArchiverPlugin,
+  archivingOffPatch,
+  pluginsWithArchiver,
   BARMAN_PLUGIN
 } from '../src/kubernetes/cnpg-recovery';
+import { K8sCnpgService } from '../src/kubernetes/k8s-cnpg.service';
 import {
   createRestorePointSql,
   ddlGuardInstallSql,
@@ -733,4 +736,125 @@ test('a failed recovery says why', () => {
     'The recovery job failed: access denied'
   );
   assert.equal(recoveryFailureMessage(''), 'The recovery job failed.');
+});
+
+function cnpgWith(cluster: any, opts: { pluginOn: boolean }) {
+  const patches: any[] = [];
+  const stores: any[] = [];
+  const svc = Object.create(K8sCnpgService.prototype) as any;
+  const customApi = {
+    getNamespacedCustomObject: async () => ({ body: cluster }),
+    patchNamespacedCustomObject: async (
+      _g: string,
+      _v: string,
+      _ns: string,
+      _p: string,
+      _n: string,
+      body: any
+    ) => {
+      patches.push(body);
+      return {};
+    }
+  };
+  const kc = { makeApiClient: () => customApi };
+  Object.assign(svc, {
+    kubernetes: { kc, ensureKubeConfig() {} },
+    logger: { warn() {}, log() {} },
+    prisma: { database: { findFirst: async () => null } },
+    CNPG_GROUP: 'postgresql.cnpg.io',
+    CNPG_VERSION: 'v1',
+    CNPG_PLURAL: 'clusters',
+    upsertSecret: async () => {},
+    upsertObjectStore: async (_ns: string, body: any) => {
+      stores.push(body);
+    },
+    usePluginForNewClusters: async () => opts.pluginOn
+  });
+  return { svc, patches, stores };
+}
+
+const r2 = {
+  endpoint: 'https://acct.r2.cloudflarestorage.com',
+  bucket: 'orchard-backups',
+  accessKey: 'ak',
+  secretKey: 'sk'
+};
+
+test('turning on backups for a cluster with none archives with the plugin when the instance uses it', async () => {
+  const { svc, patches, stores } = cnpgWith({ spec: { instances: 1 } }, { pluginOn: true });
+  assert.equal(await svc.enableCnpgBackup('ns', 'pg-a', r2), 'plugin');
+  assert.equal(stores.length, 1);
+  assert.equal(stores[0].metadata.name, 'pg-a-store');
+  assert.equal(stores[0].spec.configuration.destinationPath, 's3://orchard-backups/ns/pg-a');
+  assert.deepEqual(patches, [{ spec: { plugins: [walArchiverPlugin('pg-a-store', 'pg-a')] } }]);
+});
+
+test('turning on backups keeps in-tree barman where the cluster or the instance still uses it', async () => {
+  const off = cnpgWith({ spec: { instances: 1 } }, { pluginOn: false });
+  assert.equal(await off.svc.enableCnpgBackup('ns', 'pg-a', r2), 'barman');
+  assert.equal(off.stores.length, 0);
+  assert.equal(
+    off.patches[0].spec.backup.barmanObjectStore.destinationPath,
+    's3://orchard-backups/ns/pg-a'
+  );
+
+  const inTree = cnpgWith(
+    { spec: { backup: { barmanObjectStore: { destinationPath: 's3://old/ns/pg-a' } } } },
+    { pluginOn: true }
+  );
+  assert.equal(await inTree.svc.enableCnpgBackup('ns', 'pg-a', r2), 'barman');
+  assert.equal(inTree.stores.length, 0);
+  assert.ok(inTree.patches[0].spec.backup.barmanObjectStore);
+});
+
+test('re-pointing a plugin cluster rewrites its object store and leaves the cluster alone', async () => {
+  const { svc, patches, stores } = cnpgWith(
+    { spec: { plugins: [walArchiverPlugin('custom-store', 'pg-a-1a2b3c')] } },
+    { pluginOn: false }
+  );
+  assert.equal(await svc.enableCnpgBackup('ns', 'pg-a', r2), 'plugin');
+  assert.equal(stores[0].metadata.name, 'custom-store');
+  assert.deepEqual(patches, []);
+});
+
+test('turning off backups stops the plugin archiver as well as in-tree barman', async () => {
+  assert.deepEqual(archivingOffPatch({ backup: { barmanObjectStore: {} } }), { backup: null });
+  assert.deepEqual(archivingOffPatch({ plugins: [walArchiverPlugin('s', 'pg')] }), {
+    backup: null,
+    plugins: null
+  });
+  const other = { name: 'other.example.com' };
+  assert.deepEqual(archivingOffPatch({ plugins: [other, walArchiverPlugin('s', 'pg')] }), {
+    backup: null,
+    plugins: [other]
+  });
+  assert.deepEqual(pluginsWithArchiver({ plugins: [other] }, 's', 'pg'), [
+    other,
+    walArchiverPlugin('s', 'pg')
+  ]);
+
+  const { svc, patches } = cnpgWith(
+    { spec: { plugins: [walArchiverPlugin('pg-a-store', 'pg-a')] } },
+    { pluginOn: true }
+  );
+  await svc.disableCnpgBackup('ns', 'pg-a');
+  assert.deepEqual(patches, [{ spec: { backup: null, plugins: null } }]);
+});
+
+test('retuning a plugin cluster never writes an in-tree backup block', async () => {
+  const tuning = { sharedBuffers: '128MB', dataCompression: null };
+  const plugin = cnpgWith(
+    { spec: { plugins: [walArchiverPlugin('pg-a-store', 'pg-a')] } },
+    { pluginOn: true }
+  );
+  await plugin.svc.applyCnpgDerivedTuning('ns', 'pg-a', tuning);
+  assert.equal(plugin.patches.length, 1);
+  assert.equal(plugin.patches[0].spec.backup, undefined);
+
+  const inTree = cnpgWith(
+    { spec: { backup: { barmanObjectStore: { data: { compression: 'gzip' } } } } },
+    { pluginOn: true }
+  );
+  await inTree.svc.applyCnpgDerivedTuning('ns', 'pg-a', tuning);
+  assert.deepEqual(inTree.patches[0].spec.backup, { barmanObjectStore: { data: null } });
 });

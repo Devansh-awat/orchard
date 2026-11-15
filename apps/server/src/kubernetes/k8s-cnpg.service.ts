@@ -78,6 +78,8 @@ import {
   OBJECT_STORE_PLURAL,
   objectStoreBody,
   objectStoreName,
+  archivingOffPatch,
+  pluginsWithArchiver,
   walArchiverPlugin,
   type BackupMethod,
   failedRecoveryJob,
@@ -2861,7 +2863,10 @@ export class K8sCnpgService implements OnApplicationBootstrap {
     // spec.backup.barmanObjectStore on a cluster provisioned before its org had
     // backup storage would leave a half-built object CNPG rejects. `null` is a
     // merge-patch delete, which is how compression gets turned back off.
-    if (await this.isCnpgBackupConfigured(namespace, clusterName).catch(() => false)) {
+    const live: any = await this.readClusterSpec(customApi, namespace, clusterName).catch(
+      () => null
+    );
+    if (live?.backup?.barmanObjectStore) {
       patch.spec.backup = {
         barmanObjectStore: {
           data: tuning.dataCompression ? { compression: tuning.dataCompression } : null
@@ -3323,7 +3328,7 @@ export class K8sCnpgService implements OnApplicationBootstrap {
     namespace: string,
     clusterName: string,
     r2: { endpoint: string; bucket: string; accessKey: string; secretKey: string }
-  ): Promise<void> {
+  ): Promise<BackupMethod> {
     this.ensureKubeConfig();
     const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
     const coreApi = this.kc.makeApiClient(k8s.CoreV1Api);
@@ -3343,13 +3348,20 @@ export class K8sCnpgService implements OnApplicationBootstrap {
       }
     );
     const clusterSpec = (await this.readClusterSpec(customApi, namespace, clusterName)) as any;
-    if (clusterArchivesWithPlugin(clusterSpec)) {
-      const archiver = clusterSpec.plugins.find((p: any) => p?.isWALArchiver);
+    const archivesWithPlugin = clusterArchivesWithPlugin(clusterSpec);
+    if (
+      archivesWithPlugin ||
+      (!clusterSpec?.backup?.barmanObjectStore && (await this.usePluginForNewClusters()))
+    ) {
+      const archiver = archivesWithPlugin
+        ? clusterSpec.plugins.find((p: any) => p?.isWALArchiver)
+        : null;
+      const store = archiver?.parameters?.barmanObjectName || objectStoreName(clusterName);
       await this.upsertObjectStore(
         namespace,
         objectStoreBody(
           namespace,
-          archiver.parameters?.barmanObjectName || objectStoreName(clusterName),
+          store,
           {
             destinationPath: `s3://${r2.bucket}/${namespace}/${clusterName}`,
             endpointURL: normalizeBackupEndpointURL(r2.endpoint),
@@ -3362,7 +3374,12 @@ export class K8sCnpgService implements OnApplicationBootstrap {
           }
         )
       );
-      return;
+      if (!archivesWithPlugin) {
+        await this.patchCluster(namespace, clusterName, {
+          spec: { plugins: pluginsWithArchiver(clusterSpec, store, clusterName) }
+        });
+      }
+      return 'plugin';
     }
     const dataCompression = await this.backupDataCompression(namespace, clusterName);
     await customApi.patchNamespacedCustomObject(
@@ -3381,6 +3398,7 @@ export class K8sCnpgService implements OnApplicationBootstrap {
       undefined,
       { headers: { 'Content-Type': 'application/merge-patch+json' } }
     );
+    return 'barman';
   }
 
   private async backupDataCompression(
@@ -3412,13 +3430,14 @@ export class K8sCnpgService implements OnApplicationBootstrap {
   async disableCnpgBackup(namespace: string, clusterName: string): Promise<void> {
     this.ensureKubeConfig();
     const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
+    const clusterSpec = await this.readClusterSpec(customApi, namespace, clusterName);
     await customApi.patchNamespacedCustomObject(
       this.CNPG_GROUP,
       this.CNPG_VERSION,
       namespace,
       this.CNPG_PLURAL,
       clusterName,
-      { spec: { backup: null } },
+      { spec: archivingOffPatch(clusterSpec) },
       undefined,
       undefined,
       undefined,

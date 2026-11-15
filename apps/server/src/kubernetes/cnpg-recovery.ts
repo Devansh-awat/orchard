@@ -108,6 +108,21 @@ export function walArchiverPlugin(objectStore: string, serverName: string) {
   };
 }
 
+export function pluginsWithArchiver(spec: any, objectStore: string, serverName: string) {
+  const plugins: any[] = Array.isArray(spec?.plugins) ? spec.plugins : [];
+  return [
+    ...plugins.filter((p) => p?.name !== BARMAN_PLUGIN),
+    walArchiverPlugin(objectStore, serverName)
+  ];
+}
+
+export function archivingOffPatch(spec: any): Record<string, unknown> {
+  const plugins: any[] = Array.isArray(spec?.plugins) ? spec.plugins : [];
+  if (!plugins.some((p) => p?.name === BARMAN_PLUGIN)) return { backup: null };
+  const rest = plugins.filter((p) => p?.name !== BARMAN_PLUGIN);
+  return { backup: null, plugins: rest.length > 0 ? rest : null };
+}
+
 export function inTreeExternalCluster(location: ArchiveLocation, walMaxParallel: number) {
   return {
     name: ORIGIN,
