@@ -142,6 +142,9 @@ func lockdownRegistry(c *cli.Context) error {
 		pullHost = "registry.orchard.local"
 	}
 	mirror := registriesYaml(pullHost, port, password)
+	if err := os.Chmod(registriesYamlPath, 0o600); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("couldn't restrict %s: %w", registriesYamlPath, err)
+	}
 	current, _ := os.ReadFile(registriesYamlPath)
 	if string(current) != mirror {
 		if err := os.WriteFile(registriesYamlPath, []byte(mirror), 0o600); err != nil {
