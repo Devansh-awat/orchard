@@ -224,21 +224,21 @@
 	async function finish(href = '/') {
 		if (finishing) return;
 		finishing = true;
-		sessionStorage.removeItem(RESUME_KEY);
 		try {
 			const response = await apiFetch('/apiv1/auth/me', {
 				method: 'PATCH',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ setupCompleted: true })
 			});
-			if (response.ok) {
-				const updated = await response.json();
-				user.set({ ...($user as any), ...updated });
-			}
+			if (!response.ok) throw new Error();
+			const updated = await response.json();
+			user.set({ ...($user as any), ...updated });
 		} catch {
-			await goto(href, { replaceState: true });
+			finishing = false;
+			toasts.add({ title: "Couldn't finish setup", description: 'Try again.', color: 'error' });
 			return;
 		}
+		sessionStorage.removeItem(RESUME_KEY);
 		await goto(href, { replaceState: true });
 	}
 
