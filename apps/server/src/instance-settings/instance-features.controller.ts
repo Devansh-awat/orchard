@@ -5,12 +5,14 @@ import { InstanceSettingsService } from './instance-settings.service';
 import { AnalyticsService } from '../analytics/analytics.service';
 import { FirecrackerClient } from '../docker/fc/fc-client';
 import { storageFeatures } from '../instance-config/object-storage';
+import { EmailService } from '../email/email.service';
 
 @Controller('instance')
 export class InstanceFeaturesController {
   constructor(
     private readonly settings: InstanceSettingsService,
-    @Inject(AnalyticsService) private readonly analytics: AnalyticsService
+    @Inject(AnalyticsService) private readonly analytics: AnalyticsService,
+    @Inject(EmailService) private readonly emailService: EmailService
   ) {}
 
   @Auth()
@@ -23,6 +25,7 @@ export class InstanceFeaturesController {
       sandboxes: grafts.includes('greenhouse'),
       earlyAccessOpen: !this.analytics.configured,
       fastBuilder: new FirecrackerClient().enabled,
+      email: this.emailService.isConfigured(),
       storage: storageFeatures(),
       resourceLimits: (await this.settings.getResourceLimitsState()).value
     };

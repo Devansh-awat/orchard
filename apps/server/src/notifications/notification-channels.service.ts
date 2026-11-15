@@ -2,7 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
-import { NotificationTransport } from './notification-transport';
+import { EMAIL_UNAVAILABLE, NotificationTransport } from './notification-transport';
 import { NotificationDeliveryService } from './notification-delivery.service';
 import { assertSafeWebhookUrl } from './webhook-guard';
 import { NOTIFICATION_CHANNEL_TYPES, NotificationMessage } from './notification-events';
@@ -444,6 +444,13 @@ export class NotificationChannelsService {
       );
     }
     if (isCreate) out.type = type;
+    if (
+      type === 'email' &&
+      (isCreate || input.enabled === true) &&
+      !this.transport.canSendEmail()
+    ) {
+      throw new BadRequestException(EMAIL_UNAVAILABLE);
+    }
 
     if (isCreate || input.config !== undefined) {
       const config = input.config ?? {};

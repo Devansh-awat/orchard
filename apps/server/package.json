@@ -65,7 +65,7 @@
     "test:security-hardening": "tsx --test test/security-hardening.test.ts test/sign-in-location.test.ts",
     "test:compose": "tsx --test test/compose-build.test.ts test/compose-default-branch.test.ts test/compose-network.test.ts test/compose-redeploy.test.ts test/compose-volume-name.test.ts",
     "test:invite-link": "tsx --test test/invite-link.test.ts",
-    "test:notifications": "tsx --test test/notification-routing.test.ts test/notification-url-guard.test.ts test/notification-scope-visibility.test.ts",
+    "test:notifications": "tsx --test test/notification-email-unavailable.test.ts test/notification-routing.test.ts test/notification-url-guard.test.ts test/notification-scope-visibility.test.ts",
     "mcp": "tsx src/mcp/index.ts",
     "mcp:remote": "ts-node --swc src/mcp/main.ts",
     "test:protection": "tsx --test test/protection-password.test.ts test/protection-proxy.test.ts test/protection-auth.test.ts test/protection-redirect.test.ts test/protection-password-throttle.test.ts",

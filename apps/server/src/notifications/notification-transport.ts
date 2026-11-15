@@ -39,6 +39,9 @@ export interface SendOutcome {
   error?: string;
 }
 
+export const EMAIL_UNAVAILABLE =
+  "This instance can't send email. An instance admin can set it up under Instance admin.";
+
 @Injectable()
 export class NotificationTransport {
   private readonly logger = new Logger(NotificationTransport.name);
@@ -46,6 +49,10 @@ export class NotificationTransport {
   private readonly frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
 
   constructor(private readonly email: EmailService) {}
+
+  canSendEmail(): boolean {
+    return this.email.isConfigured();
+  }
 
   // One entry point for both lanes. A single message renders normally; several
   // render as a digest, which is how coalescing avoids dropping anything.

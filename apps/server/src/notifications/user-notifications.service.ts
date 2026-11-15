@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthorizationService } from '../auth/authorization.service';
-import { NotificationTransport } from './notification-transport';
+import { EMAIL_UNAVAILABLE, NotificationTransport } from './notification-transport';
 import { NotificationRulesService } from './notification-rules.service';
 import { assertSafeWebhookUrl } from './webhook-guard';
 import {
@@ -282,6 +282,7 @@ export class UserNotificationsService {
     // Posting here is a deliberate act, unlike the GET above, so this is the one
     // path allowed to switch mail on.
     if (type === 'email') {
+      if (!this.transport.canSendEmail()) throw new BadRequestException(EMAIL_UNAVAILABLE);
       const id = await this.ensureEmailDestination(userId, true);
       return { id, type: 'email', enabled: true };
     }
@@ -307,9 +308,12 @@ export class UserNotificationsService {
   async setDestinationEnabled(userId: string, destinationId: string, enabled: boolean) {
     const dest = await this.prisma.userNotificationDestination.findFirst({
       where: { id: destinationId, userId },
-      select: { id: true }
+      select: { id: true, type: true }
     });
     if (!dest) throw new NotFoundException('Destination not found');
+    if (enabled && dest.type === 'email' && !this.transport.canSendEmail()) {
+      throw new BadRequestException(EMAIL_UNAVAILABLE);
+    }
     await this.prisma.userNotificationDestination.update({
       where: { id: destinationId },
       data: enabled
