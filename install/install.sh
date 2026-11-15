@@ -19,6 +19,11 @@ IMAGE_GC_FILE=${ORCHARD_IMAGE_GC_FILE:-/var/lib/rancher/k3s/agent/etc/kubelet.co
 K3S_VERSION=${K3S_VERSION:-}
 K3S_CHANNEL=${K3S_CHANNEL:-v1.36}
 HELM_VERSION=${HELM_VERSION:-v4.3.1}
+CNPG_CHART_VERSION=${CNPG_CHART_VERSION:-0.29.1}
+BARMAN_PLUGIN_PINNED=0.9.0
+BARMAN_PLUGIN_CHART_VERSION=${BARMAN_PLUGIN_CHART_VERSION:-$BARMAN_PLUGIN_PINNED}
+BARMAN_PLUGIN=''
+IN_TREE_BACKUPS=0
 NODE_PORT_RANGE=${ORCHARD_NODE_PORT_RANGE:-30000-30100}
 HTTP_PORT=${ORCHARD_HTTP_PORT:-80}
 HTTPS_PORT=${ORCHARD_HTTPS_PORT:-443}
@@ -3178,24 +3183,132 @@ install_operators() {
     --set resources.requests.memory=48Mi \
     --wait --timeout 10m
 
-  run_step "CloudNativePG" 1m helm upgrade --install cnpg cnpg/cloudnative-pg \
+  local cnpg_installed cnpg_target step_version
+  cnpg_installed=$(helm_chart_version cnpg cnpg-system cloudnative-pg)
+  cnpg_target=$(newer_version "$cnpg_installed" "$CNPG_CHART_VERSION")
+  if [ "$cnpg_target" != "$CNPG_CHART_VERSION" ]; then
+    info "keeping CloudNativePG chart $cnpg_target, newer than $CNPG_CHART_VERSION"
+  fi
+  for step_version in $(cnpg_chart_versions | cnpg_upgrade_steps "$cnpg_installed" "$cnpg_target"); do
+    run_step "CloudNativePG $step_version" 1m install_cnpg "$step_version"
+  done
+  run_step "CloudNativePG" 1m install_cnpg "$cnpg_target"
+
+  run_step "cert-manager" 1m30s helm upgrade --install cert-manager jetstack/cert-manager \
+    --namespace cert-manager --create-namespace \
+    --set crds.enabled=true \
+    --set resources.requests.memory=32Mi \
+    --set webhook.resources.requests.memory=16Mi \
+    --set cainjector.resources.requests.memory=32Mi \
+    --wait --timeout 10m
+  if [ -n "$CERT_ISSUER" ]; then install_cluster_issuer; fi
+
+  local plugin_installed
+  plugin_installed=$(helm_chart_version plugin-barman-cloud cnpg-system plugin-barman-cloud)
+  if [ "$(newer_version "$plugin_installed" "$BARMAN_PLUGIN_CHART_VERSION")" != "$BARMAN_PLUGIN_CHART_VERSION" ]; then
+    info "keeping Barman Cloud plugin chart $plugin_installed, newer than $BARMAN_PLUGIN_CHART_VERSION"
+  else
+    run_step "Barman Cloud plugin" 1m install_barman_plugin
+  fi
+
+  settle_backup_method
+}
+
+newer_version() {
+  if [ -z "$1" ]; then printf '%s' "$2"; return; fi
+  if [ -z "$2" ]; then printf '%s' "$1"; return; fi
+  printf '%s\n%s\n' "$1" "$2" | sort -V | tail -1
+}
+
+helm_chart_version() {
+  local release=$1 namespace=$2 chart=$3 listing
+  listing=$(helm list --namespace "$namespace" --filter "^$release\$" -o json 2>/dev/null) || return 0
+  listing=$(printf '%s' "$listing" | yq -p json -r '.[0].chart // ""' 2>/dev/null) || return 0
+  case "$listing" in
+    "$chart"-*) printf '%s' "${listing#"$chart"-}" ;;
+  esac
+}
+
+cnpg_chart_versions() {
+  helm search repo cnpg/cloudnative-pg --versions -o json 2>/dev/null \
+    | yq -p json -r '.[].version' 2>/dev/null || true
+}
+
+cnpg_upgrade_steps() {
+  local installed=$1 target=$2
+  [ -n "$installed" ] || return 0
+  grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | awk -F. -v from="$installed" -v to="$target" '
+    BEGIN { split(from, f, "."); split(to, t, ".") }
+    $1 == f[1] && $1 == t[1] && $2 + 0 > f[2] + 0 && $2 + 0 < t[2] + 0 { best[$2 + 0] = $0 }
+    END { for (m = f[2] + 1; m < t[2] + 0; m++) if (m in best) print best[m] }
+  '
+}
+
+install_cnpg() {
+  helm upgrade --install cnpg cnpg/cloudnative-pg \
+    --version "$1" \
     --set-string config.data.ENABLE_INSTANCE_MANAGER_INPLACE_UPDATES=true \
     --set resources.requests.cpu=20m \
     --set resources.requests.memory=48Mi \
     --namespace cnpg-system --create-namespace \
     --wait --timeout 10m
+}
 
-  if [ -n "$CERT_ISSUER" ]; then
-    run_step "cert-manager" 1m30s helm upgrade --install cert-manager jetstack/cert-manager \
-      --namespace cert-manager --create-namespace \
-      --set crds.enabled=true \
-      --set resources.requests.memory=32Mi \
-      --set webhook.resources.requests.memory=16Mi \
-      --set cainjector.resources.requests.memory=32Mi \
-      --wait --timeout 10m
-    install_cluster_issuer
+barman_plugin_sha256() {
+  if [ -n "${BARMAN_PLUGIN_CHART_SHA256:-}" ]; then
+    printf '%s' "$BARMAN_PLUGIN_CHART_SHA256"
+    return
+  fi
+  [ "$BARMAN_PLUGIN_CHART_VERSION" = "$BARMAN_PLUGIN_PINNED" ] || return 1
+  printf '%s' 7fb78e89f25c18737e5649ae3c5e840065052f89757d541eaf310a1706ebd7dd
+}
+
+install_barman_plugin() {
+  local sum dir chart rc=0
+  if ! sum=$(barman_plugin_sha256); then
+    echo "plugin-barman-cloud $BARMAN_PLUGIN_CHART_VERSION has no known checksum; set BARMAN_PLUGIN_CHART_SHA256 to the sha256 of its chart archive" >&2
+    return 1
+  fi
+  dir=$(mktemp -d)
+  chart="$dir/plugin-barman-cloud-$BARMAN_PLUGIN_CHART_VERSION.tgz"
+  if ! helm pull cnpg/plugin-barman-cloud --version "$BARMAN_PLUGIN_CHART_VERSION" -d "$dir" \
+    || [ ! -f "$chart" ]; then
+    rm -rf "$dir"
+    return 1
+  fi
+  if [ "$(sha256sum "$chart" | cut -d' ' -f1)" != "$sum" ]; then
+    rm -rf "$dir"
+    echo "plugin-barman-cloud-$BARMAN_PLUGIN_CHART_VERSION.tgz doesn't match its sha256" >&2
+    return 1
+  fi
+  helm upgrade --install plugin-barman-cloud "$chart" \
+    --namespace cnpg-system \
+    --set resources.requests.cpu=10m \
+    --set resources.requests.memory=32Mi \
+    --wait --timeout 10m || rc=$?
+  rm -rf "$dir"
+  [ "$rc" -eq 0 ] || return "$rc"
+  kubectl -n cnpg-system rollout status deploy/plugin-barman-cloud --timeout=5m
+}
+
+in_tree_backup_count() {
+  local count
+  count=$(kubectl get clusters.postgresql.cnpg.io --all-namespaces -o json 2>/dev/null \
+    | yq -p json '[.items[] | select(.spec.backup.barmanObjectStore)] | length' 2>/dev/null)
+  case "$count" in
+    ''|*[!0-9]*) printf 0 ;;
+    *) printf '%s' "$count" ;;
+  esac
+}
+
+settle_backup_method() {
+  IN_TREE_BACKUPS=$(in_tree_backup_count)
+  if [ "$PREVIOUS_INSTALL" = true ]; then
+    if [ "$(reuse_secret CNPG_BARMAN_PLUGIN)" = on ]; then BARMAN_PLUGIN=on; else BARMAN_PLUGIN=off; fi
+  elif [ "$IN_TREE_BACKUPS" -gt 0 ]; then
+    BARMAN_PLUGIN=off
   else
-    info "cert-manager skipped, TLS terminates at the tunnel"
+    BARMAN_PLUGIN=on
   fi
 }
 
@@ -3777,6 +3890,12 @@ clientIp:
     - { name: INSTANCE_RESOURCE_LIMITS_CHOICE, value: \"$ORCHARD_LIMITS\" }"
   fi
 
+  local backup_method_env=
+  if [ "$BARMAN_PLUGIN" = on ]; then
+    backup_method_env="
+    - { name: CNPG_BARMAN_PLUGIN, value: \"on\" }"
+  fi
+
   local pull_policy_line=""
   if [ -n "$IMAGE_PULL_POLICY" ]; then
     pull_policy_line="
@@ -3829,7 +3948,7 @@ $image_block
     - { name: MCP_SERVICE_TOKEN, value: "$MCP_TOKEN" }
     - { name: APP_DOMAIN, value: $ORCHARD_APP_DOMAIN }$cname_env
     - { name: INSTALL_INGRESS_MODE, value: $INGRESS_MODE }
-    - { name: CNPG_OPERATOR_NAMESPACE, value: cnpg-system }
+    - { name: CNPG_OPERATOR_NAMESPACE, value: cnpg-system }$backup_method_env
     - { name: PUBLIC_HTTP_PORT, value: "$HTTP_PORT" }
     - { name: PUBLIC_HTTPS_PORT, value: "$HTTPS_PORT" }
     - { name: FRONTEND_URL, value: $scheme://$ORCHARD_DOMAIN$url_suffix }
@@ -4351,6 +4470,25 @@ sandboxes_on() {
   [ "$(yq -r '.tenantSandbox.enabled == true and .builderSandbox.enabled == true' "$VALUES_FILE" 2>/dev/null)" = true ]
 }
 
+backup_method_notice() {
+  if [ "$BARMAN_PLUGIN" = on ]; then
+    note "Database backups: Barman Cloud plugin"
+    return 0
+  fi
+  printf '\n  %sBefore CloudNativePG 1.31%s\n' "$C_BOLD" "$C_RESET"
+  if [ "$IN_TREE_BACKUPS" -gt 0 ]; then
+    note "$IN_TREE_BACKUPS database(s) back up with CloudNativePG's built-in Barman Cloud"
+  else
+    note "New databases back up with CloudNativePG's built-in Barman Cloud"
+  fi
+  note "support, which CloudNativePG 1.31 removes. This run did not change that."
+  note "To move them to the Barman Cloud plugin, run:"
+  note "sudo orchardctl env set CNPG_BARMAN_PLUGIN on --apply"
+  note "Then turn on Instance admin > Configuration > Databases >"
+  note "Move backups to the Barman Cloud plugin."
+  note "https://docs.orchard.hackclub.com/operate/upgrades/#move-database-backups-to-the-barman-cloud-plugin"
+}
+
 sandbox_notice() {
   sandboxes_on && return 0
   printf '\n  %sBefore anyone else deploys here%s\n' "$C_BOLD" "$C_RESET"
@@ -4401,6 +4539,7 @@ summary() {
   elif [ "$ORCHARD_OBJECT_STORAGE" = true ]; then
     note "Storage: on this server. If you lose the server, you lose the backups."
   fi
+  backup_method_notice
 
   if [ -n "$DNS_PENDING" ] || [ "$cert_pending" = true ] || [ -n "$tunnel_tls_failed" ]; then
     printf '\n  %sStill pending%s\n' "$C_BOLD" "$C_RESET"

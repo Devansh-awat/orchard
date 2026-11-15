@@ -2790,3 +2790,169 @@ test('the registry mirror and its password stay readable by root only', () => {
     box.cleanup();
   }
 });
+
+const IN_TREE_CLUSTERS = JSON.stringify({
+  items: [
+    { spec: { backup: { barmanObjectStore: { destinationPath: 's3://b/ns/pg-a' } } } },
+    { spec: { plugins: [{ name: 'barman-cloud.cloudnative-pg.io', isWALArchiver: true }] } },
+    { spec: {} }
+  ]
+});
+
+test(
+  'a fresh install backs up with the barman plugin, a re-run keeps in-tree backups',
+  { skip: !has('yq', '--version') },
+  () => {
+    const box = sandbox();
+    try {
+      const values = join(box.state, 'values.yaml');
+      const clusters = join(box.dir, 'clusters.json');
+      writeFileSync(clusters, IN_TREE_CLUSTERS);
+      const settled = (setup: string) =>
+        box
+          .run(
+            `${setup}; settle_backup_method; echo "plugin=$BARMAN_PLUGIN in-tree=$IN_TREE_BACKUPS"`
+          )
+          .trim()
+          .split('\n')
+          .pop();
+
+      assert.equal(settled('PREVIOUS_INSTALL=false'), 'plugin=on in-tree=0');
+      assert.equal(
+        settled(`PREVIOUS_INSTALL=false; kubectl() { cat "${clusters}"; }`),
+        'plugin=off in-tree=1'
+      );
+
+      box.run(`mkdir -p "${box.state}"; BARMAN_PLUGIN=on; write_values`);
+      assert.match(readFileSync(values, 'utf8'), /name: CNPG_BARMAN_PLUGIN, value: "on"/);
+      assert.equal(settled('PREVIOUS_INSTALL=true'), 'plugin=on in-tree=0');
+      box.run('PREVIOUS_INSTALL=true; settle_backup_method; write_values');
+      assert.equal(
+        readFileSync(values, 'utf8').match(/CNPG_BARMAN_PLUGIN/g)?.length,
+        1,
+        'a re-run keeps the plugin on, once'
+      );
+
+      rmSync(values);
+      box.run(`mkdir -p "${box.state}"; BARMAN_PLUGIN=off; write_values`);
+      assert.doesNotMatch(readFileSync(values, 'utf8'), /CNPG_BARMAN_PLUGIN/);
+      assert.equal(
+        settled(`PREVIOUS_INSTALL=true; kubectl() { cat "${clusters}"; }`),
+        'plugin=off in-tree=1'
+      );
+      assert.equal(settled('PREVIOUS_INSTALL=true'), 'plugin=off in-tree=0');
+      const rerun = box.run(
+        `PREVIOUS_INSTALL=true; kubectl() { cat "${clusters}"; }; settle_backup_method; write_values; backup_method_notice`
+      );
+      assert.doesNotMatch(readFileSync(values, 'utf8'), /CNPG_BARMAN_PLUGIN/);
+      assert.match(rerun, /1 database\(s\) back up with CloudNativePG's built-in Barman Cloud/);
+      assert.match(rerun, /This run did not change that/);
+      assert.match(rerun, /orchardctl env set CNPG_BARMAN_PLUGIN on --apply/);
+      assert.match(rerun, /Move backups to the Barman Cloud plugin/);
+    } finally {
+      box.cleanup();
+    }
+  }
+);
+
+test('CloudNativePG upgrades one minor at a time and never moves backwards', () => {
+  const box = sandbox();
+  try {
+    const versions = '0.29.1 0.29.0 0.28.3 0.28.10 0.28.1 0.27.1 0.27.0 0.26.0 0.30.0-rc1';
+    const steps = (from: string, to: string) =>
+      box
+        .run(`printf '%s\\n' ${versions} | cnpg_upgrade_steps "${from}" "${to}" | tr '\\n' ' '`)
+        .trim();
+    assert.equal(steps('0.26.0', '0.29.1'), '0.27.1 0.28.10');
+    assert.equal(steps('0.28.3', '0.29.1'), '');
+    assert.equal(steps('0.29.0', '0.29.1'), '');
+    assert.equal(steps('', '0.29.1'), '');
+    assert.equal(box.run('newer_version 0.30.0 0.29.1').trim(), '0.30.0');
+    assert.equal(box.run('newer_version 0.28.3 0.29.1').trim(), '0.29.1');
+    assert.equal(box.run('newer_version "" 0.29.1').trim(), '0.29.1');
+  } finally {
+    box.cleanup();
+  }
+});
+
+test(
+  'the operators install pinned, the plugin chart is checked, and a newer chart is kept',
+  { skip: !has('yq', '--version') },
+  () => {
+    const box = sandbox();
+    try {
+      const calls = join(box.dir, 'helm-calls');
+      const operators = (cnpg: string, plugin: string, extra = '') => {
+        rmSync(calls, { force: true });
+        const out = box.run(`
+          run_step() { shift 2; "$@"; }
+          info() { echo "INFO $*"; }
+          install_cluster_issuer() { echo ISSUER; }
+          settle_backup_method() { :; }
+          cnpg=${cnpg} plugin=${plugin}
+          helm() {
+            echo "helm $*" >> "${calls}"
+            case "$1" in
+              list)
+                case "$*" in
+                  *'^cnpg$'*) [ -z "$cnpg" ] && echo '[]' || echo "[{\\"name\\":\\"cnpg\\",\\"chart\\":\\"cloudnative-pg-$cnpg\\"}]" ;;
+                  *plugin-barman-cloud*) [ -z "$plugin" ] && echo '[]' || echo "[{\\"name\\":\\"plugin-barman-cloud\\",\\"chart\\":\\"plugin-barman-cloud-$plugin\\"}]" ;;
+                esac ;;
+              search) echo '[{"version":"0.29.1"},{"version":"0.28.3"},{"version":"0.27.1"}]' ;;
+              pull) printf chart > "$6/plugin-barman-cloud-$4.tgz" ;;
+            esac
+            return 0
+          }
+          BARMAN_PLUGIN_CHART_SHA256=$(printf chart | sha256sum | cut -d' ' -f1)
+          ${extra}
+          install_operators
+        `);
+        return { out, helm: readFileSync(calls, 'utf8') };
+      };
+
+      const fresh = operators('', '');
+      assert.match(fresh.helm, /upgrade --install cnpg cnpg\/cloudnative-pg --version 0\.29\.1 /);
+      assert.equal(fresh.helm.match(/install cnpg /g)?.length, 1);
+      assert.match(fresh.helm, /upgrade --install cert-manager /);
+      assert.match(
+        fresh.helm,
+        /upgrade --install plugin-barman-cloud \S+\/plugin-barman-cloud-0\.9\.0\.tgz --namespace cnpg-system/
+      );
+      assert.match(fresh.out, /ISSUER/);
+
+      const tunnel = operators('', '', 'CERT_ISSUER=');
+      assert.match(tunnel.helm, /upgrade --install cert-manager /);
+      assert.match(tunnel.helm, /upgrade --install plugin-barman-cloud /);
+      assert.doesNotMatch(tunnel.out, /ISSUER/);
+
+      const old = operators('0.27.1', '');
+      assert.deepEqual(
+        [...old.helm.matchAll(/install cnpg cnpg\/cloudnative-pg --version (\S+)/g)].map(
+          (m) => m[1]
+        ),
+        ['0.28.3', '0.29.1']
+      );
+
+      const newer = operators('0.30.0', '0.10.0');
+      assert.match(newer.helm, /install cnpg cnpg\/cloudnative-pg --version 0\.30\.0 /);
+      assert.doesNotMatch(newer.helm, /--version 0\.29\.1/);
+      assert.doesNotMatch(newer.helm, /plugin-barman-cloud-0\.9\.0\.tgz/);
+      assert.match(newer.out, /keeping CloudNativePG chart 0\.30\.0/);
+      assert.match(newer.out, /keeping Barman Cloud plugin chart 0\.10\.0/);
+
+      const tampered = box.attempt(`
+        helm() { [ "$1" != pull ] || printf other > "$6/plugin-barman-cloud-$4.tgz"; return 0; }
+        BARMAN_PLUGIN_CHART_SHA256=$(printf chart | sha256sum | cut -d' ' -f1)
+        install_barman_plugin
+      `);
+      assert.notEqual(tampered.status, 0);
+      assert.match(tampered.stderr, /doesn't match its sha256/);
+
+      const unknown = box.attempt('BARMAN_PLUGIN_CHART_VERSION=0.10.0 install_barman_plugin');
+      assert.notEqual(unknown.status, 0);
+      assert.match(unknown.stderr, /no known checksum/);
+    } finally {
+      box.cleanup();
+    }
+  }
+);
