@@ -141,9 +141,10 @@ tenant:
   maxPublicPortsPerOrg: ""
   # Caps each tenant pod's outbound bandwidth through the standard
   # kubernetes.io/egress-bandwidth annotation, as TENANT_EGRESS_BANDWIDTH (for
-  # example "50M"). Empty sets nothing. It only takes effect where the CNI runs a
-  # bandwidth manager, such as Cilium with bandwidthManager.enabled=true; other
-  # CNIs ignore the annotation. Pods pick it up on their next rollout.
+  # example "50M"). Empty sets nothing. It only takes effect where the CNI
+  # shapes traffic: Cilium with bandwidthManager.enabled=true, or the bandwidth
+  # CNI plugin, which k3s chains after its default Flannel. Other CNIs ignore
+  # the annotation. Pods pick it up on their next rollout.
   egressBandwidth: ""
   # Seed for the caps of NEW organizations, as NEW_ORG_CPU and NEW_ORG_MEMORY.
   # Empty means new organizations are uncapped; "0" or "unlimited" also mean no
