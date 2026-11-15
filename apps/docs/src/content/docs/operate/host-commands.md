@@ -63,7 +63,7 @@ Runs the following steps in order:
 
 To turn off the image and add-on updates in steps 4, 6, and 9, add `ORCHARD_ADDON_UPDATES=off` to `/etc/orchard/env`. To turn off step 8, add `ORCHARD_K3S_UPDATES=off`.
 
-The command restarts a deployment if its image tag is empty or `latest`. Otherwise, Helm sees an identical pod template and the old image keeps running.
+The command restarts a deployment if its image has no tag or the tag `latest`, because Helm sees an identical pod template and the old image keeps running. A deployment on a release version rolls out when the new chart changes that version.
 
 Any extra arguments go to `helm upgrade`.
 
@@ -78,6 +78,7 @@ On its next `update`, a host installed earlier gets the same defaults as a new i
 | Storage classes   | Gives the log store, metrics, and scanner volumes the class that Postgres uses.                                                                    |
 | Log disk limit    | Sets `logs.maxDiskSpaceUsage` from free disk.                                                                                                      |
 | Small machines    | Under 8 GB of memory, reduces requests and limits for metrics, logs, and the scanner, keeps 7 days of logs, and runs one scan at a time.           |
+| Image tags        | Removes `server.image.tag` and `frontend.image.tag` when they are `latest`, so the server and frontend run the versions of the installed chart.    |
 | Backups           | Sets `objectStorage.local.enabled: true` and `r2Proxy.enabled: true`, sized from free disk.                                                        |
 | Database operator | Sets `CNPG_OPERATOR_NAMESPACE` to `cnpg-system`, if it is not set.                                                                                 |
 | Image cleanup     | Writes Orchard's [image garbage collection](/operate/disk-space/#old-container-images) settings if the file does not exist, and restarts k3s once. |
@@ -86,7 +87,7 @@ On its next `update`, a host installed earlier gets the same defaults as a new i
 
 Orchard turns on the local backup store only when no object storage is configured. It checks for `R2_ENDPOINT`, `R2_ACCOUNT_ID`, or `R2_BACKUP_BUCKET` in `server.env`, `server.envFrom`, `r2Proxy.upstream.endpoint`, and values at **Instance admin** > **Configuration** > **Object storage**. If it cannot read the database, it leaves the store off and prints the commands that turn it on.
 
-Except for `metrics.enabled` and `r2Proxy.enabled`, which older installers wrote as `false`, Orchard only fills in keys that are missing. It does not change a value you set.
+Except for `metrics.enabled` and `r2Proxy.enabled`, which older installers wrote as `false`, and the `latest` image tags that they wrote, Orchard only fills in keys that are missing. It does not change a value you set.
 
 These changes happen once. The top-level `hostDefaults` key records which defaults a values file has. If you turn something off afterward, it stays off:
 

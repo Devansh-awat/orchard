@@ -23,7 +23,7 @@ If you chose automatic updates during installation (`--updates automatic`), a ni
 
 ## Pin a version on an installer host
 
-By default, an installer host runs the `latest` server and frontend images, and `orchardctl update` installs the newest chart. To stay on one release until you choose to move:
+An installer host runs the server, frontend, and MCP images of the chart it installed. A pod restart does not change their version. `orchardctl update` installs the newest chart, which moves them together. To stay on one release until you choose to move:
 
 1. Turn off nightly updates, because the timer always installs the newest chart:
 
@@ -31,7 +31,7 @@ By default, an installer host runs the `latest` server and frontend images, and 
    sudo systemctl disable --now orchard-update.timer
    ```
 
-2. Run the installer with `--chart-version`. On an existing host, the re-run keeps your answers and settings. It also removes the `latest` image tags from the values file, so the server and frontend run the images of that chart version.
+2. Run the installer with `--chart-version`. On an existing host, the re-run keeps your answers and settings. If the values file sets `latest` image tags, the re-run removes them, so the server and frontend run the images of that chart version.
 
    ```bash
    sudo ./install.sh --chart-version <VERSION>
