@@ -9,7 +9,8 @@ export default defineConfig({
   site: 'https://docs.orchard.hackclub.com',
   redirects: {
     '/run/sandboxes': '/greenhouse/',
-    '/operate/node-pools': '/operate/nodes/'
+    '/operate/node-pools': '/operate/nodes/',
+    '/operate/tenancy-and-isolation': '/operate/security/'
   },
   markdown: { processor: unified({ rehypePlugins: [rehypeWrapTables] }) },
   scopedStyleStrategy: 'where',

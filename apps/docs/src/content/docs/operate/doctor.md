@@ -33,7 +33,7 @@ The server needs read access to a few cluster objects. The chart grants it. If y
 
 ## Checks
 
-Each section names the setting and the exact fix. For why the setting matters, refer to [Tenancy and isolation](/operate/tenancy-and-isolation/#what-you-must-do).
+Each section names the setting and the exact fix. For why the setting matters, refer to [What you must do](/operate/security/#what-you-must-do).
 
 ### `cni-enforcement`
 
@@ -53,7 +53,7 @@ Without a usable self-test result:
 - `warn`: the agent is not ready on every node, only Flannel was found, or kube-router runs next to another enforcer (another CNI from the list, or a k3s or RKE2 node).
 - `unknown`: no known CNI was found by name. k3s and RKE2 embed a policy controller that is not visible as a daemonset, and managed clusters hide theirs.
 
-Fix: run `orchard doctor --selftest`, and then run `orchard doctor` again. The report that `--selftest` prints is read before the self-test starts, so its `cni-enforcement` row reflects the previous run. If a tenant reached another tenant, install Cilium or Calico, or enable your provider's network policy add-on. On Flannel, set `networkPolicy.enforcer.enabled=true`. For more information, refer to [Enforce network policies on Flannel](/operate/tenancy-and-isolation/#enforce-network-policies-on-flannel). With two enforcers, turn one off.
+Fix: run `orchard doctor --selftest`, and then run `orchard doctor` again. The report that `--selftest` prints is read before the self-test starts, so its `cni-enforcement` row reflects the previous run. If a tenant reached another tenant, install Cilium or Calico, or enable your provider's network policy add-on. On Flannel, set `networkPolicy.enforcer.enabled=true`. For more information, refer to [Enforce network policies on Flannel](/operate/security/#enforce-network-policies-on-flannel). With two enforcers, turn one off.
 
 Self-test results are kept in memory on the server that ran the test. After a restart, or when the request reaches another server replica, the check falls back to the name match.
 

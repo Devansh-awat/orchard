@@ -27,7 +27,7 @@ For production, run the Helm chart on a multi-node cluster built for it, such as
 
 When you build the cluster, plan for the following:
 
-- **A CNI that enforces NetworkPolicy**, such as Cilium or Calico. Every tenant network boundary is a NetworkPolicy. Talos deploys Flannel unless you configure another CNI, and Flannel does not enforce NetworkPolicy. Orchard recommends Cilium, which Hack Club runs on its Talos nodes. Cilium enforces every tenant policy, and with `cilium.enabled: true` Orchard also adds per-tenant Cilium policies and enforces basic auth in Envoy. For Cilium on Talos, refer to [Deploying Cilium CNI](https://docs.siderolabs.com/kubernetes-guides/cni/deploying-cilium). To keep Flannel, set `networkPolicy.enforcer.enabled` to `true` in the chart, which runs kube-router in policy-only mode next to Flannel. Refer to [Enforce network policies on Flannel](/operate/tenancy-and-isolation/#enforce-network-policies-on-flannel).
+- **A CNI that enforces NetworkPolicy**, such as Cilium or Calico. Every tenant network boundary is a NetworkPolicy. Talos deploys Flannel unless you configure another CNI, and Flannel does not enforce NetworkPolicy. Orchard recommends Cilium, which Hack Club runs on its Talos nodes. Cilium enforces every tenant policy, and with `cilium.enabled: true` Orchard also adds per-tenant Cilium policies and enforces basic auth in Envoy. For Cilium on Talos, refer to [Deploying Cilium CNI](https://docs.siderolabs.com/kubernetes-guides/cni/deploying-cilium). To keep Flannel, set `networkPolicy.enforcer.enabled` to `true` in the chart, which runs kube-router in policy-only mode next to Flannel. Refer to [Enforce network policies on Flannel](/operate/security/#enforce-network-policies-on-flannel).
 - **Kubernetes 1.30 or later**, for the [admission guard](/operate/security/#admission-guard-for-tenant-namespaces). For the distributions, CNIs, ingress controllers, and storage that Orchard supports, refer to [Compatibility](/operate/compatibility/).
 - **The components below**, either the ones the chart expects or your replacements.
 
@@ -305,5 +305,4 @@ You now have an instance that you can hand to other people. To turn on the optio
 
 - [Upgrade Orchard](/operate/upgrades/) - Upgrade an installer host or a Helm install, and pin a version.
 - [Back up and restore an instance](/operate/backup-and-restore/) - Learn what to back up and how to bring back the control plane.
-- [Tenancy and isolation](/operate/tenancy-and-isolation/) - Review what Orchard isolates and what you must configure.
 - [Manage nodes and pools](/operate/nodes/) - Add nodes to a cluster and control where workloads run.

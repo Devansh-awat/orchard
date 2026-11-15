@@ -20,7 +20,7 @@ This page lists what Orchard does not support, what works only when you configur
 - **Shared host kernel by default.** Apps, builds, and Postgres pods run on the node's kernel unless you install gVisor or Kata and turn on `tenantSandbox`, `builderSandbox`, and `databases.runtimeClassName`. The installer installs neither runtime, so a container escape reaches every tenant on the node. Refer to [Kernel isolation](/operate/security/#kernel-isolation).
 - **Not safe for untrusted code out of the box.** Before people you do not trust deploy code, set up the sandbox runtimes, quotas, node pools, and closed signups. Without them, a single-machine instance gives those people about the same access as Docker on that machine. Refer to [Requirements for untrusted code](/operate/security/#requirements-for-untrusted-code).
 - **Builds without a sandbox share the node kernel.** Without `builderSandbox`, builds run in rootless BuildKit on the node kernel, with seccomp and AppArmor set to `Unconfined`. Refer to [Builds without a sandbox runtime](/operate/security/#builds-without-a-sandbox-runtime).
-- **The server controls the cluster.** The server's service account can create pods in any namespace and remove the isolation policies, so a compromise of the server is a compromise of the cluster. Refer to [What Orchard does not guarantee](/operate/tenancy-and-isolation/#what-orchard-does-not-guarantee).
+- **The server controls the cluster.** The server's service account can create pods in any namespace and remove the isolation policies, so a compromise of the server is a compromise of the cluster. Refer to [What Orchard does not guarantee](/operate/security/#what-orchard-does-not-guarantee).
 - **Shared keys across tenants.** One key encrypts secrets for every organization, and all builds share one registry login, which stays in a container that does not run tenant code.
 - **No row-level security.** Authorization runs in the API services, so the database does not catch a missing check in a route.
 - **Edit access includes secrets.** Anyone with edit access to a project can open a shell in its app pods and read their environment variables.
@@ -28,7 +28,7 @@ This page lists what Orchard does not support, what works only when you configur
 
 ## Networking
 
-- **Isolation depends on the CNI.** Every network control is a Kubernetes NetworkPolicy. Orchard creates the policies but cannot tell whether your Container Network Interface (CNI) plugin enforces them, and plain Flannel does not. On a Flannel cluster, turn on `networkPolicy.enforcer.enabled` in the chart, which runs kube-router to enforce the policies. Run `orchard doctor --selftest` to check. Refer to [Enforce network policies on Flannel](/operate/tenancy-and-isolation/#enforce-network-policies-on-flannel).
+- **Isolation depends on the CNI.** Every network control is a Kubernetes NetworkPolicy. Orchard creates the policies but cannot tell whether your Container Network Interface (CNI) plugin enforces them, and plain Flannel does not. On a Flannel cluster, turn on `networkPolicy.enforcer.enabled` in the chart, which runs kube-router to enforce the policies. Run `orchard doctor --selftest` to check. Refer to [Enforce network policies on Flannel](/operate/security/#enforce-network-policies-on-flannel).
 - **Node blocking is approximate without Cilium.** With Cilium, Orchard denies the `host`, `remote-node`, and `kube-apiserver` entities in each tenant namespace. With any other CNI, only address exceptions computed from the node list keep tenant pods away from host-network services. Orchard cannot find a public load balancer address on its own, so add it to `PLATFORM_EXTRA_DENY_CIDRS`. Refer to [Network isolation](/operate/security/#network-isolation).
 - **Outbound IPv4 only.** The tenant egress policy allows the public IPv4 internet. Apps cannot open outbound IPv6 connections.
 - **No raw ports in tunnel mode.** Cloudflare Tunnel carries HTTP only, so public TCP and UDP ports and public database access are not available on a `tunnel` install. Refer to [Publish a TCP or UDP port](/deploy/networking/#publish-a-tcp-or-udp-port).
@@ -80,7 +80,7 @@ This page lists what Orchard does not support, what works only when you configur
 
 - **Request metrics need Traefik or HAProxy.** Request, error, and latency charts come from the ingress controller's metrics, and Orchard reads them from Traefik and HAProxy only. With another controller, apps run, but these charts stay empty. Refer to [Point app metrics at your ingress controller](/operate/finishing-setup/#point-app-metrics-at-your-ingress-controller).
 - **Request logs and attack signals need Traefik or HAProxy.** The **Requests** view and the attack card read access logs, which Vector parses only for Traefik and the haproxytech HAProxy controller. Refer to [Access logs](/operate/logs/#access-logs).
-- **The metrics and log stores have no authentication.** Do not expose VictoriaMetrics or VictoriaLogs outside the cluster. Refer to [What you must do](/operate/tenancy-and-isolation/#what-you-must-do).
+- **The metrics and log stores have no authentication.** Do not expose VictoriaMetrics or VictoriaLogs outside the cluster. Refer to [What you must do](/operate/security/#what-you-must-do).
 
 ## Extensions (grafts)
 
@@ -98,5 +98,5 @@ This page lists what Orchard does not support, what works only when you configur
 
 ## Related resources
 
-- [Tenancy and isolation](/operate/tenancy-and-isolation/) - Review every isolation guarantee, what you must configure for it, and what Orchard does not guarantee.
+- [Security and isolation](/operate/security/) - Review every isolation guarantee, what you must configure for it, and what Orchard does not guarantee.
 - [Go to production](/operate/production/) - Work through the settings to check before other people depend on your instance.
