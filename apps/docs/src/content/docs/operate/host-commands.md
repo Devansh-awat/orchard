@@ -5,7 +5,7 @@ sidebar:
   order: 4
 ---
 
-`orchardctl` operates an Orchard instance from the machine that runs it. The installer adds it to the host. The [`orchard` CLI](/cli/) is a different tool, which deploys apps to any instance over its API.
+`orchardctl` operates an Orchard instance from the machine that runs it. Use it to upgrade the instance, change settings that the dashboard cannot edit, and sign in when nothing else works. The installer adds it to the host, so it exists only on an installer host, not on a Helm install. The [`orchard` CLI](/cli/) is a different tool, which deploys apps to any instance over its API.
 
 | Command                        | Purpose                                                                                                              |
 | ------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
@@ -51,15 +51,17 @@ sudo orchardctl update
 
 Runs the following steps in order:
 
-1. Runs `orchardctl harden`.
-2. Turns on, once, what newer releases run by default.
-3. Repairs log and metrics volumes that never bound.
-4. Runs `helm upgrade --install` with your values file, and waits for each deployment to roll out.
-5. Checks that Traefik writes the JSON access log.
-6. Refreshes the host commands.
-7. Applies the latest k3s patch. For more information, refer to [k3s](#k3s).
-8. Upgrades Traefik, CloudNativePG, and cert-manager within their major versions, from their own charts.
-9. Installs newer versions of the images the chart runs. For more information, refer to [images](#images).
+1. Runs `orchardctl harden`, and writes Orchard's [image cleanup](/operate/disk-space/#old-container-images) settings if the server has none.
+2. On kernels that need them, sets the kernel setting for rootless builds and the AppArmor profile that lets container processes signal each other.
+3. Turns on, once, what newer releases run by default, and repairs log and metrics volumes that never bound.
+4. Picks newer versions of the [images the chart runs](#images).
+5. Runs `helm upgrade --install` with your values file, and waits for each deployment to roll out. If a new image does not come up, it goes back to the previous version.
+6. Updates zot and cloudflared, and checks that Traefik writes the JSON access log.
+7. Refreshes the host commands.
+8. Applies the latest [k3s patch](#k3s).
+9. Upgrades Traefik, CloudNativePG, and cert-manager within their major versions, from their own charts.
+
+To turn off the image and add-on updates in steps 4, 6, and 9, add `ORCHARD_ADDON_UPDATES=off` to `/etc/orchard/env`. To turn off step 8, add `ORCHARD_K3S_UPDATES=off`.
 
 The command restarts a deployment if its image tag is empty or `latest`. Otherwise, Helm sees an identical pod template and the old image keeps running.
 
@@ -80,6 +82,7 @@ On its next `update`, a host installed earlier gets the same defaults as a new i
 | Database operator | Sets `CNPG_OPERATOR_NAMESPACE` to `cnpg-system`, if it is not set.                                                                                 |
 | Image cleanup     | Writes Orchard's [image garbage collection](/operate/disk-space/#old-container-images) settings if the file does not exist, and restarts k3s once. |
 | Install mode      | Sets `INSTALL_INGRESS_MODE` from your values, if it is not set. The dashboard uses it to show these commands instead of Helm values.               |
+| Registry egress   | Adds a `builders.registryEgress` entry for the bundled zot registry, if there is none, so that builds can push to it.                              |
 
 Orchard turns on the local backup store only when no object storage is configured. It checks for `R2_ENDPOINT`, `R2_ACCOUNT_ID`, or `R2_BACKUP_BUCKET` in `server.env`, `server.envFrom`, `r2Proxy.upstream.endpoint`, and values at **Instance admin** > **Configuration** > **Object storage**. If it cannot read the database, it leaves the store off and prints the commands that turn it on.
 
@@ -95,7 +98,7 @@ sudo orchardctl config set trivy.enabled false --apply
 
 A StatefulSet cannot change its StorageClass in place. For the log store and VictoriaMetrics, `update` checks the live volume. If it is bound, the values file is pinned to its class. If it never bound, `update` deletes the StatefulSet and its empty claim and recreates them on the class in the values file.
 
-If the `traefik` release is missing any access log setting, `update` upgrades that release with `--reuse-values` on the deployed chart version. If that fails, it prints the `helm upgrade` command to run. For more information, refer to [Logs and request data](/operate/logs/#traefik).
+If the `traefik` release is missing any access log setting, `update` upgrades that release with `--reuse-values` on the deployed chart version. If that fails, it prints the `helm upgrade` command to run. For the settings it checks, refer to [Traefik access logs](/operate/logs/#traefik).
 
 ## harden
 
@@ -179,7 +182,7 @@ sudo orchardctl registry allow my-registry --label app=registry --port 5000
 sudo orchardctl registry remove my-registry
 ```
 
-Sets the registries that builds can reach. A build to an unlisted registry fails at the push. `allow` replaces any entry for the same namespace. For more information, refer to [Use your own registry](/operate/finishing-setup/#use-your-own-registry).
+Sets the registries that builds can reach. A build to an unlisted registry fails at the push. `allow` replaces any entry for the same namespace. To build to a registry other than zot, refer to [Use your own registry](/operate/finishing-setup/#use-your-own-registry).
 
 ## policies
 
@@ -189,7 +192,7 @@ sudo orchardctl policies set traefik,orchard --apply
 sudo orchardctl policies reapply
 ```
 
-Sets the namespaces that can reach tenant apps. `reapply` restarts the server, which rewrites the policy in every managed namespace. For more information, refer to [Let the ingress controller reach apps](/operate/finishing-setup/#let-the-ingress-controller-reach-apps).
+Sets the namespaces that can [reach tenant apps](/operate/finishing-setup/#let-the-ingress-controller-reach-apps). `reapply` restarts the server, which rewrites the policy in every managed namespace.
 
 ## mcp
 
@@ -217,7 +220,7 @@ sudo orchardctl graft list
 sudo orchardctl graft remove greenhouse --purge
 ```
 
-Installs and manages grafts, the Orchard extensions. For more information, refer to [Install grafts](/grafts/install/), or run `orchardctl graft --help`.
+Installs and manages grafts, the Orchard extensions. For every subcommand, refer to [Install grafts](/grafts/install/), or run `orchardctl graft --help`.
 
 ## public-ip
 
@@ -244,7 +247,7 @@ The list reads the values file. A name shows in the list as soon as you add it, 
 
 These names are matched, not certified. On an instance that terminates TLS, a name with no certificate causes a browser warning.
 
-The primary hostname is not in this list. To change it, use `set`. The command changes `ingress.host`, which is the name that Traefik matches, and `FRONTEND_URL`, which is the name in generated links. It keeps the scheme and port that the instance serves on, and it prints what the change affects. Outside `lan` mode, the name must be a domain, such as `orchard.example.com`. For more information, refer to [Dashboard domain](/operate/configuration/#dashboard-domain).
+The primary hostname is not in this list. To change it, use `set`. The command changes `ingress.host`, which is the name that Traefik matches, and `FRONTEND_URL`, which is the name in generated links. It keeps the scheme and port that the instance serves on, and it prints what the change affects. Outside `lan` mode, the name must be a domain, such as `orchard.example.com`. Before you change it, read [Dashboard domain](/operate/configuration/#dashboard-domain), because everyone must sign in again.
 
 To see what Traefik matches, run the following command:
 
@@ -260,7 +263,7 @@ sudo orchardctl apps-domain
 sudo orchardctl apps-domain set apps.example.com --apply
 ```
 
-Shows or changes the domain that app addresses end in. The command changes `gateway.http.appDomain` and `APP_DOMAIN` together, and removes a pinned `PUBLIC_APP_DOMAIN` from `frontend.env`. If `tenant.wildcardDomains` or `PLATFORM_WILDCARD_DOMAINS` is set, the command warns you, because these take precedence. For more information, refer to [Apps domain](/operate/configuration/#apps-domain).
+Shows or changes the domain that app addresses end in. The command changes `gateway.http.appDomain` and `APP_DOMAIN` together, and removes a pinned `PUBLIC_APP_DOMAIN` from `frontend.env`. If `tenant.wildcardDomains` or `PLATFORM_WILDCARD_DOMAINS` is set, the command warns you, because these take precedence. Only new apps use the new domain. For details, refer to [Apps domain](/operate/configuration/#apps-domain).
 
 ## letsencrypt-email
 
@@ -306,7 +309,7 @@ sudo orchardctl login --url mango
 
 Prints a link that signs you in as the superadmin, or as the account in `--email`. The link is valid for 10 minutes and works once. A new link replaces any earlier one. It works with or without email configured.
 
-`--url` builds the link with another address. The address must be one that Traefik answers on. For more information, refer to [hostname](#hostname).
+`--url` builds the link with another address. The address must be one that Traefik answers on, which you can add with [`hostname add`](#hostname).
 
 ## password
 
@@ -338,7 +341,7 @@ sudo orchardctl backups s3 clear
 
 `clear` removes the saved settings. Backups then go back to the store on the server, if the instance has one.
 
-A change applies to new databases. For more information, refer to [Add S3 storage](/operate/storage/#what-happens-when-you-change-storage).
+A change applies to new databases. For what happens to existing ones, refer to [What happens when you change storage](/operate/storage/#what-happens-when-you-change-storage).
 
 ## stop, start, and restart
 
@@ -410,15 +413,15 @@ sudo orchardctl images
 
 Shows the images Orchard bundles, and what each can move to. `orchardctl update` installs newer versions from their own registries, so a fix does not wait on an Orchard release.
 
-| Images                                                                                                       | What installs on its own                                             |
-| ------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------- |
-| Redis, pgbouncer, BuildKit                                                                                   | Patch versions                                                       |
-| VictoriaMetrics, vmagent, VictoriaLogs, kube-state-metrics, node-exporter, Vector, Trivy, versitygw, aws-cli | Any version in the same major version                                |
-| zot, cloudflared                                                                                             | The `latest` tag. The workload restarts only when the image changed. |
+| Images                                                                                                            | What installs on its own              |
+| ----------------------------------------------------------------------------------------------------------------- | ------------------------------------- |
+| Redis, pgbouncer, BuildKit                                                                                        | Patch versions                        |
+| VictoriaMetrics, vmagent, VictoriaLogs, kube-state-metrics, node-exporter, Vector, Trivy, versitygw, aws-cli, zot | Any version in the same major version |
+| cloudflared                                                                                                       | Any newer version                     |
 
-A new major version needs a person. If a new version does not come up within three minutes, the update goes back and does not try that version again. To try it again, remove its line from `/etc/orchard/images-held`.
+Each version that `update` picks is pinned to the digest that the registry served for it. Apart from cloudflared, a new major version needs a person. If a new version does not come up within three minutes, the update goes back and does not try that version again. To try it again, remove its line from `/etc/orchard/images-held`.
 
-The versions go in `/etc/orchard/images.yaml`. An image that you set in `/etc/orchard/values.yaml` stays as you set it.
+The versions go in `/etc/orchard/images.yaml`. An image that you set in `/etc/orchard/values.yaml` stays as you set it. To turn these updates off, add `ORCHARD_ADDON_UPDATES=off` to `/etc/orchard/env`.
 
 ## sync
 
@@ -465,7 +468,7 @@ The command does not remove database backups stored off this machine, your DNS r
 
 ## Upgrade from the shell version
 
-Earlier releases shipped these commands as shell scripts. On a host with the shell version, run `sync` twice:
+On a host that has the shell-script version of these commands, run `sync` twice:
 
 ```bash
 sudo orchardctl sync    # installs the new bootstrap script
@@ -486,8 +489,6 @@ ORCHARD_ALLOW_UNSIGNED_COMMANDS=true
 
 ## Related resources
 
-- [Configuration](/operate/configuration/)
-- [Upgrade Orchard](/operate/upgrades/)
-- [Use the CLI](/cli/)
-- [Install](/start/install/)
-- [Finish instance setup](/operate/finishing-setup/)
+- [Configuration](/operate/configuration/) - Learn where each instance setting is stored and which value takes precedence.
+- [Upgrade Orchard](/operate/upgrades/) - Plan and run an upgrade on an installer host or a Helm install.
+- [Install](/start/install/) - Run the installer again to change answers such as the ingress mode.

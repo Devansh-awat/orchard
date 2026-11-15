@@ -5,7 +5,7 @@ sidebar:
   order: 7
 ---
 
-To let apps and databases use all of a server's resources, turn resource limits off. To hold each app and database to a set amount of CPU and memory, turn resource limits on.
+Resource limits decide whether each app and database gets a fixed amount of CPU and memory, or can use whatever the server has free. With limits on, one busy app cannot starve the others, which matters when several people or organizations share an instance. With limits off, a single-user server gets the most out of its hardware.
 
 This setting applies to the whole instance. Only a superadmin can change it. Limits are on unless someone chooses otherwise, so an instance that you upgrade keeps its limits. A new instance asks during setup.
 
@@ -122,10 +122,10 @@ The installer sets `DEFAULT_APP_MEMORY_MB` on a new install, based on the memory
 | Up to 16 GB    | `512`                   |
 | Over 16 GB     | `1024`                  |
 
+It also sets `DATABASE_DEFAULT_MEMORY_MB` to `512` on a machine with less than about 9 GB of memory, and to `1024` otherwise.
+
 ## Related resources
 
-- [Set quotas](/teams/quotas/)
-- [Scale an app and set resources](/deploy/scaling/)
-- [Manage organizations](/operate/manage-organizations/)
-- [Host commands](/operate/host-commands/)
-- [Size older workloads](/operate/backfill/)
+- [Scale an app and set resources](/deploy/scaling/) - Give one app its own CPU and memory.
+- [Manage organizations](/operate/manage-organizations/) - Set organization quotas and default sizes.
+- [Size older workloads](/operate/backfill/) - Set resource requests on apps and databases created before limits existed.

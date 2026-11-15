@@ -7,7 +7,7 @@ sidebar:
 
 import { Tabs, TabItem } from '@astrojs/starlight/components';
 
-The **Observe** tab of a database shows metrics and query statistics. Use the tab to find slow queries and to check whether the database needs more resources.
+The **Observe** tab of a database shows metrics and query statistics, so you can find slow queries and decide whether the database needs more resources before users notice.
 
 Metrics and query statistics are available only for dedicated databases.
 
@@ -39,7 +39,7 @@ The **Metrics** view has the following panels:
 | **Resources**             | **CPU**, **Memory**, **Network in**, **Network out**                       |
 | **Health**                | **Deadlocks**. This panel appears only when the range contains a deadlock. |
 
-The **Disk used** panel marks 80% full and 92% full. Writes pause at 92%. For more information, refer to [Grow database storage](/data/storage/).
+The **Disk used** panel marks 80% full and 92% full. Writes pause at 92%, so [grow the storage](/data/storage/) before the line reaches that mark.
 
 ## Turn on query statistics
 
@@ -81,7 +81,6 @@ orchard db diagnose <dbId>
 
 ## Related resources
 
-- [Change Postgres parameters](/data/parameters/)
-- [Grow database storage](/data/storage/)
-- [Read logs and open a shell](/run/logs/)
-- [`orchard db` reference](/reference/cli/#db)
+- [Change Postgres parameters](/data/parameters/) - Tune timeouts, memory, and slow query logging.
+- [Read logs and open a shell](/run/logs/) - Use the database console from the dashboard.
+- [`orchard db` reference](/reference/cli/#db) - Review the `metrics`, `logs`, `killed`, and `diagnose` commands.

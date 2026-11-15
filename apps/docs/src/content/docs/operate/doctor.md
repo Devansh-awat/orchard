@@ -5,7 +5,7 @@ sidebar:
   order: 8
 ---
 
-Orchard keeps tenants apart only when your cluster is configured correctly. The doctor reads your instance's own configuration and cluster state, reports every setting that weakens isolation, and can prove enforcement with an active test. Only superadmins can run it.
+Orchard keeps tenants apart only when your cluster is configured correctly, and many of the settings that matter live outside Orchard, in your CNI, runtime classes, and Helm values. The doctor reads your instance's own configuration and cluster state, and reports every setting that weakens isolation, so you can find a gap before a tenant does. An optional self-test then proves enforcement by sending real traffic from a temporary tenant. Only superadmins can run it.
 
 Each result has an `id`, a `status`, the `evidence` Orchard found, a `fix`, and a link to the matching section on this page.
 
@@ -102,7 +102,7 @@ Fix: set `TRUST_PROXY` to the number of proxies in front of the server, or a com
 
 Open signup means anyone can create an organization. With it, custom-domain verification must be on, or a tenant can claim hostnames they do not own (`fail`).
 
-Fix: turn on custom-domain verification in Admin, Instance settings, or set `CUSTOM_DOMAIN_VERIFICATION=true`. Or set `SIGNUP_MODE=invite_only`.
+Fix: turn on **Require proof of domain ownership** in **Instance admin** > **Networking**, or set `CUSTOM_DOMAIN_VERIFICATION=true`. Or set `SIGNUP_MODE=invite_only`.
 
 ### `registry-image-policy`
 
@@ -177,7 +177,7 @@ The result checks are `selftest-namespace-shape`, `selftest-controls`, `selftest
 
 ### `selftest-namespace-shape`
 
-The temporary namespace must carry the managed label, `default-deny-all`, both quotas and a Pod Security enforce label. Fix: see `default-deny-coverage` and `namespace-quotas`, and read the server log for namespace creation errors.
+The temporary namespace must carry the managed label, `default-deny-all`, both quotas and a Pod Security enforce label. Fix: refer to [`default-deny-coverage`](#default-deny-coverage) and [`namespace-quotas`](#namespace-quotas), and read the server log for namespace creation errors.
 
 ### `selftest-controls`
 
@@ -215,6 +215,6 @@ Run it on a staging cluster the first time you enable it on a new CNI or sandbox
 
 ## Related resources
 
-- [Tenancy and isolation](/operate/tenancy-and-isolation/)
-- [Security and isolation](/operate/security/)
-- [Going to production](/operate/production/)
+- [Cluster settings to review](/operate/cluster-settings/) - Turn on the protections that the doctor reports, with what to check first and how to undo each one.
+- [Security and isolation](/operate/security/) - Learn how Orchard isolates tenants, builds, and databases.
+- [Go to production](/operate/production/) - Prepare an instance for real users.

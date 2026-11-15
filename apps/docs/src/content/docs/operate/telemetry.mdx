@@ -7,7 +7,7 @@ sidebar:
 
 import { Tabs, TabItem } from '@astrojs/starlight/components';
 
-An Orchard instance can send anonymous reports to the Orchard team. Reports are off until a superadmin turns them on, or until an operator sets `ORCHARD_TELEMETRY` to `true`.
+An Orchard instance can send anonymous usage reports to the Orchard team. The reports show which versions are in use, how large instances get, and which server errors happen in the field, so the team can find bugs that no one reports. Reports are off until a superadmin turns them on, or until an operator sets `ORCHARD_TELEMETRY` to `true`. This page lists every field that a report contains, so you can decide with the full picture.
 
 The setting is separate from [`POSTHOG_API_KEY`](/reference/configuration/), which sends analytics to your own PostHog project.
 
@@ -49,9 +49,7 @@ Orchard sends an error report for a response with a 5xx status, for an exception
 
 ## What Orchard collects
 
-Orchard collects nothing from users unless statistics are enabled. The usage reports on this page are those statistics.
-
-Each report carries a random ID that Orchard creates for the instance.
+The reports on this page are the only statistics that Orchard sends to the Orchard team, and Orchard sends them only while reports are on. Each report carries a random ID that Orchard creates for the instance.
 
 ## Read the exact report
 
@@ -103,7 +101,5 @@ server:
 
 ## Related resources
 
-- [Outbound connections](/operate/outbound-connections/)
-- [Environment variables](/reference/configuration/)
-- [Host commands](/operate/host-commands/)
-- [Instance admin](/operate/instance-admin/)
+- [Outbound connections](/operate/outbound-connections/) - Review every host that an instance connects to.
+- [Environment variables](/reference/configuration/) - Read the reference for `ORCHARD_TELEMETRY` and every other server variable.

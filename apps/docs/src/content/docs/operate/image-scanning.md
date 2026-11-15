@@ -5,7 +5,9 @@ sidebar:
   order: 7
 ---
 
-To show known vulnerabilities in an app's container image on its [**Security** tab](/deploy/security-tab/), set up a scanner. The tab also has configuration checks, such as secrets stored as plain variables, moving image tags, and domains without TLS. Those checks always run.
+An image scanner lists the known vulnerabilities in each app's container image on the app's [**Security** tab](/deploy/security-tab/), so that people can see which packages to update before someone exploits them. Orchard works with two scanners: Harbor's built-in scanner, or a Trivy server that Orchard deploys for you. This page helps you choose one, set it up, and understand what a scan does on your cluster.
+
+The tab also has configuration checks, such as secrets stored as plain variables, moving image tags, and domains without TLS. Those checks always run, with or without a scanner.
 
 ## Choose a scanner
 
@@ -28,7 +30,7 @@ Until a superadmin chooses a scanner, Orchard uses the first match:
 2. **Harbor**, if the registry is Harbor. Orchard checks `/api/v2.0/systeminfo` on the Harbor API. It caches the answer for 10 minutes, or one minute after a network error.
 3. **Off**.
 
-The one-command installer sets `trivy.enabled: true`. `orchardctl update` turns it on for a host installed before this default existed.
+The one-command installer sets `trivy.enabled: true`, except on a new install with less than 3.5 GB of memory, where it leaves the scanner off. `orchardctl update` sets `trivy.enabled: true` only when the values file has no `trivy.enabled` setting yet.
 
 To choose a scanner, go to **Instance admin** > **Configuration** > **Image scanning**. The stored choice replaces the default, including a choice of **Off**. A scanner with missing requirements is unavailable, and the page shows the reason.
 
@@ -110,7 +112,6 @@ Anyone who can view an app can see its scan result. Members who can edit the app
 
 ## Related resources
 
-- [Configure logs and request data](/operate/logs/)
-- [Environment variables](/reference/configuration/)
-- [Review app security](/deploy/security-tab/)
-- [Host commands](/operate/host-commands/)
+- [Environment variables](/reference/configuration/) - Read the reference for `IMAGE_SCANNER`, `TRIVY_SERVER_URL`, and the Harbor variables.
+- [Host commands](/operate/host-commands/) - Change chart values and environment variables on an installer host.
+- [Run on a small server](/operate/small-servers/) - Turn off optional parts such as the scanner to save memory.

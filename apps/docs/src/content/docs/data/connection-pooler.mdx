@@ -7,15 +7,13 @@ sidebar:
 
 import { Tabs, TabItem } from '@astrojs/starlight/components';
 
-A connection pooler accepts many client connections and shares a small set of Postgres server connections between them. Use a pooler when an app opens more connections than the database can serve.
-
-Orchard runs the pooler with PgBouncer.
+Each Postgres connection uses memory on the database server, so a database can serve only a limited number of them. A connection pooler accepts many client connections and shares a small set of Postgres server connections between them. Use a pooler when an app opens more connections than the database can serve. Orchard runs the pooler with PgBouncer.
 
 New databases with 1 GB of memory or less start with a pooler. A superadmin can change this default in **Instance admin** > **Configuration** > **Connection pooler for new small databases**.
 
 ## Prerequisites
 
-- Edit access to the project.
+- Edit access to the project: the Admin or Member [project role](/teams/organizations/#project-roles).
 - A dedicated database.
 
 ## Turn on the pooler
@@ -106,7 +104,5 @@ Orchard deletes the pooler. Connections that use its address fail, so point all 
 
 ## Related resources
 
-- [Create and manage a database](/data/databases/)
-- [Configure high availability](/data/high-availability/)
-- [`orchard db pooler` reference](/reference/cli/#db)
-- [Change Postgres parameters](/data/parameters/)
+- [Change Postgres parameters](/data/parameters/) - Raise `max_connections` when a pooler is not an option.
+- [`orchard db pooler` reference](/reference/cli/#db) - Review the pooler commands and their flags.

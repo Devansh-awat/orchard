@@ -7,23 +7,26 @@ sidebar:
 
 import Diagram from '../../../components/Diagram.astro';
 
-An Orchard instance is a control plane that runs in a Kubernetes cluster and manages tenant workloads in the same cluster. Kubernetes is the source of truth for every resource that Orchard manages.
+An Orchard instance is a control plane that runs in a Kubernetes cluster and manages tenant workloads in the same cluster. Kubernetes is the source of truth for every resource that Orchard manages, so Orchard keeps a copy of cluster state for fast reads but always defers to the cluster when the two disagree.
 
 ## Components
 
-| Component                 | Purpose                                                                     |
-| ------------------------- | --------------------------------------------------------------------------- |
-| Frontend                  | The SvelteKit dashboard.                                                    |
-| Server                    | The NestJS API and control plane.                                           |
-| MCP server                | The [Model Context Protocol](/mcp/) endpoint for agents.                    |
-| Builders                  | [BuildKit jobs](/deploy/builds/) that build images for tenant apps.         |
-| Control-plane Postgres    | Orchard's own database, run by CloudNativePG.                               |
-| Redis                     | The event bus between server replicas, and a cache.                         |
-| Registry                  | Stores the images that builders push. The installer deploys zot.            |
-| Backup proxy (`r2-proxy`) | Gives each database credentials for [its own backups](/data/backups/) only. |
-| Metrics and logs          | VictoriaMetrics, [VictoriaLogs, and Vector](/operate/logs/#components).     |
+| Component                 | Purpose                                                                                          |
+| ------------------------- | ------------------------------------------------------------------------------------------------ |
+| Frontend                  | The SvelteKit dashboard.                                                                         |
+| Server                    | The NestJS API and control plane.                                                                |
+| MCP server                | The [Model Context Protocol](/mcp/) endpoint for agents.                                         |
+| Builders                  | [BuildKit jobs](/deploy/builds/) that build images for tenant apps.                              |
+| Control-plane Postgres    | Orchard's own database, run by CloudNativePG.                                                    |
+| Redis                     | The event bus between server replicas, and a cache.                                              |
+| Registry                  | Stores the images that builders push. The installer deploys zot.                                 |
+| Object storage            | Holds database backups and uploads. The installer deploys an S3-compatible store in the cluster. |
+| Backup proxy (`r2-proxy`) | Gives each database credentials for [its own backups](/data/backups/) only.                      |
+| Metrics and logs          | VictoriaMetrics, [VictoriaLogs, and Vector](/operate/logs/#components).                          |
 
 Tenant apps and databases run in their own namespaces, separate from the control plane.
+
+The one-command installer runs every component on one machine. With the Helm chart on a multi-node cluster, you can replace the registry, object storage, Redis, and storage with ones you operate. For the options, refer to [Replace bundled components](/operate/production/#replace-bundled-components).
 
 <Diagram
   caption="The server reads from Postgres and writes through a queue. The Orchard Engine copies cluster state into Postgres."
@@ -58,7 +61,7 @@ Orchard sends state changes to the dashboard as server-sent events over Redis St
 
 ## Replicas and leases
 
-Background work that must not run twice, such as watching the cluster, uses a Kubernetes lease. This lets the server run more than one replica.
+Background work that must not run twice, such as watching the cluster, uses a Kubernetes lease. Only the replica that holds the lease does that work, so the server can run more than one replica.
 
 By default, each server pod serves the API and runs the queues. To run builds, notifications, and the apply queue in separate pods, set `server.workers.enabled` to `true` in the chart.
 
@@ -68,8 +71,7 @@ Apps, databases, and routes are ordinary Kubernetes objects, so they do not depe
 
 ## Related resources
 
-- [Security and isolation](/operate/security/)
-- [Configuration](/operate/configuration/)
-- [Configure logs and request data](/operate/logs/)
-- [Concepts](/start/concepts/)
-- [What is Orchard](/start/what-is-orchard/)
+- [Security and isolation](/operate/security/) - Review what Orchard isolates between tenants and what they share.
+- [Scale the control plane](/operate/scale-control-plane/) - Run more replicas, autoscale, and move builds to worker pods.
+- [Configure logs and request data](/operate/logs/) - Learn how the log store collects app and access logs.
+- [Concepts](/start/concepts/) - Learn the terms that Orchard uses, such as organizations, projects, and apps.

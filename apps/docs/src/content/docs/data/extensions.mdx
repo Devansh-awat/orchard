@@ -7,7 +7,7 @@ sidebar:
 
 import { Tabs, TabItem } from '@astrojs/starlight/components';
 
-To add a Postgres extension to a database, install it from the extensions list. Orchard runs `CREATE EXTENSION` against that database.
+Extensions add features to Postgres, such as vector search with `pgvector` or geospatial types with PostGIS. When you install one, Orchard runs `CREATE EXTENSION` against the database for you. Only extensions on an allowlist are available, because some extensions can run code or reach the network from the database pod.
 
 ## Install an extension
 
@@ -42,7 +42,7 @@ For an extension that loads at startup, add `--preload`. This option restarts th
 1. Open the database.
 2. Go to **Settings** > **Extensions**.
 3. Turn off the extension's switch.
-4. Confirm the change.
+4. Select **Drop extension**, or **Drop and restart** for an extension that loads at startup.
 
 </TabItem>
 <TabItem label="CLI">
@@ -51,10 +51,14 @@ For an extension that loads at startup, add `--preload`. This option restarts th
 orchard db extension uninstall <id> vector
 ```
 
+For an extension that loads at startup, add `--remove-preload`. This option restarts the database.
+
 </TabItem>
 </Tabs>
 
-Orchard runs `DROP EXTENSION`. The command fails if objects still depend on the extension. Drop those objects first.
+:::caution
+Orchard runs `DROP EXTENSION ... CASCADE`, so columns, indexes, and functions that use the extension are dropped with it. When backup storage is set, Orchard tries to take a [checkpoint](/data/backups/#take-a-checkpoint) first. Restore that checkpoint to bring the dropped objects back.
+:::
 
 ## Allowed extensions
 
@@ -75,6 +79,5 @@ An extension must also exist in the Postgres image. If you need one that is miss
 
 ## Related resources
 
-- [Create and manage a database](/data/databases/)
-- [Change Postgres parameters](/data/parameters/)
-- [Monitor a database](/data/monitoring/)
+- [Monitor a database](/data/monitoring/) - Turn on `pg_stat_statements` from the **Queries** view to find slow queries.
+- [`orchard db extension` reference](/reference/cli/#db) - Review the extension commands and their flags.

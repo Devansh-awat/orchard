@@ -320,8 +320,13 @@ function generateConfig() {
     }
     if (trimmed.startsWith('#')) {
       const text = trimmed.replace(/^#+\s?/, '');
-      // A banner line (===, ---, or ALL CAPS heading) starts a new section.
-      if (/^[-=]{3,}$/.test(text)) continue;
+      if (/^[-=─]{3,}$/.test(text)) continue;
+      const banner = /^─+\s*(.+?)\s*─+$/.exec(text);
+      if (banner) {
+        section = banner[1];
+        notes = [];
+        continue;
+      }
       if (/^[A-Z0-9 ,&/()'-]{4,}$/.test(text) && !text.includes('=')) {
         section = text
           .toLowerCase()
@@ -354,15 +359,21 @@ sidebar:
 
 ${BANNER.trim()}
 
-Orchard reads its configuration from the environment. ${entries.length} variables are
-recognised. Anything without a default is optional unless the description says otherwise.
+Orchard reads its configuration from the environment. The server recognises ${entries.length} variables,
+grouped below as they appear in \`.env.example\`. Only \`DATABASE_URL\` and \`JWT_SECRET\` are required to
+start the server. The other variables are optional, unless their description says otherwise.
+
+The **Example** column shows the value from \`.env.example\`, which configures a local development
+server. It is not always the default. For example, \`.env.example\` sets \`SIGNUP_MODE=open\` for local
+development, but the server defaults to \`invite_only\`. The Helm chart and the installer set production
+values for you.
 
 `;
 
   for (const s of sections) {
     const rows = entries.filter((e) => e.section === s);
     if (!rows.length) continue;
-    body += `## ${s}\n\n| Variable | Default | Description |\n| --- | --- | --- |\n`;
+    body += `## ${s}\n\n| Variable | Example | Description |\n| --- | --- | --- |\n`;
     for (const e of rows) {
       const def = e.value ? `\`${esc(e.value)}\`` : '';
       const desc = prose(e.notes.join(' '));

@@ -5,9 +5,9 @@ sidebar:
   order: 6
 ---
 
-To cover every generated app URL with one certificate, set up a wildcard certificate. By default, each generated URL gets its own certificate from `tenant.certClusterIssuer`. Each new app then waits for an ACME request. Let's Encrypt allows 50 certificates for each registered domain per week.
+A wildcard certificate covers every generated app URL with one certificate, so a new app does not wait for a certificate of its own before it serves HTTPS. It also keeps a busy instance under Let's Encrypt's rate limits. By default, each generated URL gets its own certificate from `tenant.certClusterIssuer`, and Let's Encrypt allows 50 certificates for each registered domain per week.
 
-Let's Encrypt only issues wildcards over a DNS-01 challenge. This guide uses `apps.example.com` as the app domain.
+Let's Encrypt only issues wildcards over a DNS-01 challenge, so you need API access to your DNS provider. This guide uses `apps.example.com` as the app domain.
 
 You do not need this guide in these cases:
 
@@ -252,6 +252,6 @@ Check that `copyToTenants` is on, or that your replicator covers that namespace.
 
 ## Related resources
 
-- [Use a wildcard certificate](/operate/finishing-setup/#use-a-wildcard-certificate)
-- [Manage domains and HTTPS](/deploy/domains/)
-- [Go to production](/operate/production/)
+- [Use a wildcard certificate](/operate/finishing-setup/#use-a-wildcard-certificate) - Set the wildcard from the dashboard during instance setup.
+- [Manage domains and HTTPS](/deploy/domains/) - Add custom domains, which keep their own certificates.
+- [Go to production](/operate/production/) - Prepare an instance for real users.

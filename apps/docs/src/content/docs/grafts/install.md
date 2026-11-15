@@ -69,6 +69,7 @@ After you confirm, Orchard rehearses the migrations inside a transaction and rol
 | `--dry-run`           | Runs every check and changes nothing.                    |
 | `--apply`             | Rolls Orchard out afterward.                             |
 | `--allow-third-party` | With `--yes`, accepts a graft that Orchard did not make. |
+| `--allow-chart`       | With `--yes`, accepts a graft's Helm chart.              |
 
 If a graft includes a cluster chart for CRDs or RBAC, `add` installs it as the Helm release `orchard-graft-<id>`. `remove` leaves that release in place and prints the `helm uninstall` command.
 
@@ -136,7 +137,7 @@ A tap is a catalog of grafts in a folder on an `https` host.
 1. Add the tap. The command shows the tap's signing key and asks you to confirm it.
 
    ```sh
-   sudo orchardctl graft tap add acme https://acme.dev/orchard
+   sudo orchardctl graft tap add acme https://grafts.example.com/orchard
    ```
 
 2. Allow taps in your trust policy:
@@ -160,7 +161,7 @@ graftSettings:
   trust: taps
   taps:
     - name: acme
-      url: https://acme.dev/orchard
+      url: https://grafts.example.com/orchard
       key: <the key that tap add showed>
 grafts:
   - id: notes
@@ -211,8 +212,6 @@ When the database runs out of connections, new requests fail until connections f
 
 ## Related resources
 
-- [Upgrade and roll back grafts](/grafts/upgrades/)
-- [Graft API versions](/reference/graft-api/)
-- [Run Greenhouse](/operate/greenhouse/)
-- [Grafts](/grafts/overview/)
-- [Troubleshooting grafts](/grafts/troubleshooting/)
+- [Upgrade and roll back grafts](/grafts/upgrades/) - Move between versions and keep the graft's data.
+- [Troubleshooting grafts](/grafts/troubleshooting/) - Find out why a graft did not load.
+- [Run Greenhouse](/operate/greenhouse/) - Install and configure the largest first-party graft.

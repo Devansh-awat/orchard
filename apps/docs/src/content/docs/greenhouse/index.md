@@ -6,11 +6,11 @@ sidebar:
   label: Overview
 ---
 
-Greenhouse runs coding agents on cloud machines that your Orchard instance manages. It is a first-party [graft](/grafts/overview/) that gives you an isolated Linux machine with your repositories on it. Each agent session works on its own branch in its own git worktree, so several sessions can run on one machine at the same time. You review the changes in a browser workspace, or in a desktop editor over SSH.
+Greenhouse runs coding agents on cloud machines that your Orchard instance manages, so agents work away from your laptop and keep working after you close it. It is a first-party [graft](/grafts/overview/), an extension that an operator installs on the instance. Greenhouse gives you an isolated Linux machine with your repositories on it. Each agent session works on its own branch in its own git worktree, which means several sessions can run on one machine at the same time without touching each other's files. You review the changes in a browser workspace, or in a desktop editor over SSH.
 
 Greenhouse is for writing code. To serve traffic, [deploy the code to Orchard as an app](/start/first-deploy/).
 
-Greenhouse is available when an operator installs the `greenhouse` graft on your instance. If the instance has PostHog configured, your account also needs the `greenhouse` feature flag. For more information, refer to [Run Greenhouse](/operate/greenhouse/).
+Greenhouse is available when an operator [installs the `greenhouse` graft](/operate/greenhouse/) on your instance. If the instance has PostHog configured, your account also needs the `greenhouse` feature flag.
 
 ## Get started
 
@@ -49,11 +49,11 @@ An instance offers one or both runners.
 | Kubernetes | A pod on the cluster, in a Kata VM if the operator configured Kata | Its home volume                     | Private, through the Orchard server            |
 | Vercel     | A Vercel Sandbox on the operator's Vercel account                  | Its drive and a filesystem snapshot | Public URLs that anyone with the link can open |
 
-For more information, refer to [Machines](/greenhouse/machines/).
+[Machines](/greenhouse/machines/) describes what each runner keeps and which limits apply.
 
 ## Security
 
-A machine holds the credentials of its host, including agent tokens and GitHub access. Share a machine only with people you trust with those credentials. For more information, refer to [Share a machine](/greenhouse/sharing/).
+A machine holds the credentials of its host, including agent tokens and GitHub access. [Share a machine](/greenhouse/sharing/) only with people you trust with those credentials.
 
 On the Kubernetes runner, a machine has internet egress only. It cannot reach cluster services, other machines, or cloud metadata. Nothing outside the cluster can connect to it directly. SSH, terminals, and previews go through the Orchard server.
 
@@ -72,7 +72,5 @@ On the Kubernetes runner, a machine has internet egress only. It cannot reach cl
 
 ## Related resources
 
-- [Run Greenhouse](/operate/greenhouse/)
-- [Grafts](/grafts/overview/)
-- [Manage SSH identities](/account/ssh-identities/)
-- [Connect an MCP client](/mcp/)
+- [Manage SSH identities](/account/ssh-identities/) - Add the SSH keys that editors and `ssh` use to connect to a machine.
+- [Connect an MCP client](/mcp/) - Connect an agent to Orchard's MCP server to drive Greenhouse from outside the workspace.

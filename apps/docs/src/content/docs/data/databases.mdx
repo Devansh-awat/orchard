@@ -7,7 +7,7 @@ sidebar:
 
 import { Tabs, TabItem } from '@astrojs/starlight/components';
 
-A database in Orchard is a managed Postgres instance in a [project](/teams/projects/). Orchard runs it as a CloudNativePG cluster. CloudNativePG is the Kubernetes operator that handles failover, storage, and backups.
+Orchard runs managed Postgres databases in your cluster, next to the apps that use them. Each database belongs to a [project](/teams/projects/) and runs as a CloudNativePG cluster. CloudNativePG is the Kubernetes operator that handles failover, storage, and backups, so you do not run Postgres by hand.
 
 ## Create a database
 
@@ -74,7 +74,7 @@ To print the connection details from the CLI, run `orchard db connection <id>`. 
 
 ## Set CPU and memory
 
-Set CPU and memory under **Settings** > **Resources**, or with `orchard db resources set <id>`.
+Set CPU and memory under **Settings** > **Resources**, or with `orchard db resources set <id>`. Changing them restarts the database.
 
 Orchard sizes `shared_buffers` and backup compression from the memory limit, and recalculates them when the memory changes. To set `shared_buffers` yourself, refer to [Change Postgres parameters](/data/parameters/#shared-buffers).
 
@@ -92,7 +92,7 @@ Postgres reserves `shared_buffers` when it starts. If this value is close to the
 | Rename, stop, or delete the database | **Settings** > **General** and **Danger zone** | [Delete a database](#delete-a-database)                 |
 | Grow storage                         | **Settings** > **Resources**                   | [Grow database storage](/data/storage/)                 |
 | Change protection settings           | **Settings** > **Protection**                  | [Protect a database](/data/protection/)                 |
-| Upgrade Postgres                     | **Settings** > **Version and security**        | [Upgrade Postgres](/data/upgrades/)                     |
+| Upgrade Postgres                     | **Security**                                   | [Upgrade Postgres](/data/upgrades/)                     |
 | Add standbys                         | **Settings** > **High availability**           | [Configure high availability](/data/high-availability/) |
 | Turn on the pooler                   | **Settings** > **Connection pooler**           | [Use a connection pooler](/data/connection-pooler/)     |
 | Add users                            | **Settings** > **Users**                       | [Add database users](/data/users/)                      |
@@ -161,8 +161,6 @@ Orchard cannot delete a database while an app still references it. Remove the re
 
 ## Related resources
 
-- [Back up and restore a database](/data/backups/)
-- [Read replicas](/data/replicas/)
-- [Connect an app to a database or app](/deploy/connect-resources/)
-- [Configure high availability](/data/high-availability/)
-- [`orchard db` reference](/reference/cli/#db)
+- [Read replicas](/data/replicas/) - Send read-only traffic to standbys through a separate endpoint.
+- [Connect an app to a database or app](/deploy/connect-resources/) - Learn how references keep connection strings current.
+- [`orchard db` reference](/reference/cli/#db) - Review every database command and flag.

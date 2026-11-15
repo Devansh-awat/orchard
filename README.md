@@ -4,7 +4,6 @@
 
 ### A project made by [Leafd](https://github.com/LeafdTK)
 
-[![Made by Leafd](https://img.shields.io/badge/made%20by-Leafd-c93a4f?style=for-the-badge&logo=github&logoColor=white&labelColor=1a0f11)](https://github.com/LeafdTK)
 [![Kubernetes](https://img.shields.io/badge/Kubernetes-c93a4f?style=for-the-badge&logo=kubernetes&logoColor=white)](https://docs.orchard.hackclub.com/start/what-is-orchard/)
 [![Self-hosted](https://img.shields.io/badge/self--hosted-1a0f11?style=for-the-badge)](https://docs.orchard.hackclub.com/start/install/)
 [![License](https://img.shields.io/badge/license-AGPL--3.0-c93a4f?style=for-the-badge&labelColor=1a0f11)](LICENSE)
@@ -12,23 +11,38 @@
 
 Turn any Linux box into a private hosting platform.
 
-Orchard is an open-source, self-hosted platform as a service (PaaS) from Hack Club. One command installs
-it on your own server. It runs on Kubernetes, but it sets up k3s for you, so you never have to touch
-Kubernetes. Connect a repo from GitHub, GitLab or Gitea and your app is live with HTTPS, a Postgres
-database with point-in-time restore, logs and rollbacks. Use the dashboard, the CLI, or your AI agent
-through the MCP server.
+Orchard is an open-source, self-hosted platform as a service (PaaS) from Hack Club. Connect a repository
+from GitHub, GitLab, Gitea or another Git host, and Orchard builds it and runs it behind HTTPS, with a
+Postgres database that has point-in-time restore, logs, metrics and rollbacks. Use the dashboard, the
+CLI, or your AI agent through the MCP server.
 
-Orchard is free and licensed under AGPL-3.0 (the graft SDK is MIT). Hack Club runs its own apps on it.
+Orchard runs on Kubernetes, but you do not have to touch Kubernetes. One command turns a single Linux
+server into a k3s cluster with everything Orchard needs, which suits a home lab, a side project, a small
+team, or a trial. For production, run the Helm chart on a multi-node cluster such as
+[Talos Linux](https://docs.siderolabs.com/talos), with components you operate, such as Harbor for the
+registry. [Choose how to run Orchard](https://docs.orchard.hackclub.com/start/install/#choose-how-to-run-orchard)
+explains the difference.
+
+Orchard is free and licensed under AGPL-3.0 (the graft SDK for extensions is MIT). Hack Club runs its own
+apps on it.
 [What is Orchard](https://docs.orchard.hackclub.com/start/what-is-orchard/) ·
 [Features](https://docs.orchard.hackclub.com/start/features/) ·
+[FAQ](https://docs.orchard.hackclub.com/start/faq/) ·
 [Compare](https://orchard.hackclub.com/compare)
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/screenshots/project-dark.png">
+  <img src=".github/assets/screenshots/project-light.png" alt="An Orchard project with its apps, databases and recent builds" width="100%">
+</picture>
 
 ## Installation
 
 **Please follow the [install guide](https://docs.orchard.hackclub.com/start/install/).** It covers every step in
 detail.
 
-If you just want the command, you need a Linux server with an IPv4 address and 20 GB of free disk. 8 GB of RAM is recommended; with less, the installer warns and carries on, but Orchard may behave unexpectedly:
+For the command alone, you need a Linux server with systemd, an IPv4 address and 20 GB of free disk.
+Orchard runs on 2 GiB of RAM, and 8 GiB is recommended. Under 3.5 GiB, the installer turns off the MCP
+endpoint and image scanning to leave memory for your apps.
 
 ```bash
 curl -fsSL https://assets.orchard.my/install.sh -o orchard-install.sh && sudo bash orchard-install.sh
@@ -47,9 +61,10 @@ curl -fsSL https://assets.orchard.my/install.sh -o orchard-install.sh && sudo ba
 > and isolation all need a decision from you.
 > [Going to production](https://docs.orchard.hackclub.com/operate/production/) walks through the list.
 
-### Already running Kubernetes?
+### Already running Kubernetes, or going to production?
 
-The installer would put k3s underneath you, so use the Helm chart instead:
+The installer builds its own single-node k3s cluster and cannot take more nodes yet. On a cluster you
+operate, use the Helm chart instead (Kubernetes 1.30 or later):
 
 ```bash
 helm install orchard oci://ghcr.io/hackclub/orchard/charts/orchard \
@@ -59,10 +74,16 @@ helm install orchard oci://ghcr.io/hackclub/orchard/charts/orchard \
 The [install guide](https://docs.orchard.hackclub.com/start/install/) has a minimal values file, DNS and every
 flag.
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/screenshots/project-dark.png">
-  <img src=".github/assets/screenshots/project-light.png" alt="An Orchard project with its apps, databases and recent builds" width="100%">
-</picture>
+## How Orchard compares
+
+Coolify, Dokploy and CapRover run apps as Docker containers and manage them from a web dashboard. Dokku
+gives you git-push deploys on a Docker host, and Kamal deploys containers to servers you manage over SSH.
+Orchard runs on Kubernetes instead, with k3s set up for you by the installer. Because of that, apps get
+default-deny network isolation from each other, managed Postgres runs on CloudNativePG with
+point-in-time restore, builds run in rootless BuildKit, and the Helm chart can run Orchard on a
+multi-node cluster. The cost is weight: the cluster, the operators and the metrics and logs stack use
+memory before your first app runs. The [comparison table](https://orchard.hackclub.com/compare) has the
+details, with sources.
 
 ## Works with your agent
 
@@ -83,7 +104,8 @@ Install Orchard on my server following https://docs.orchard.hackclub.com/start/i
 
 ## Features
 
-- **Deploy from GitHub.** Connect a repo, and every push builds and deploys your app.
+- **Deploy from anywhere.** Deploy from GitHub, GitLab, Gitea or another Git host, from a container
+  image, or from a folder on your computer. With a connected repo, every push builds and deploys your app.
 - **HTTPS and domains.** Every app gets an HTTPS URL, and you can add [your own domains](https://docs.orchard.hackclub.com/deploy/domains/) or use a [wildcard certificate](https://docs.orchard.hackclub.com/operate/wildcard-certificates/).
 - **Tailscale.** Put an app on your [tailnet](https://docs.orchard.hackclub.com/deploy/tailscale/) instead of the public internet.
 - **Managed Postgres.** Add a database with backups and point-in-time restore.
@@ -95,18 +117,21 @@ Install Orchard on my server following https://docs.orchard.hackclub.com/start/i
 ## Contributing
 
 Issues and pull requests are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) covers running it locally and
-how commits drive releases, and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) explains how the pieces fit
-together. Report security issues privately: see [SECURITY.md](SECURITY.md).
+how commits drive releases. [DEVELOPERS.md](DEVELOPERS.md) explains how Orchard works for people changing it, and
+[Architecture](https://docs.orchard.hackclub.com/operate/architecture/) explains how the pieces fit
+together on a cluster. Report security issues privately, as [SECURITY.md](SECURITY.md) describes.
 
 ## Help
 
-Browse the [Directory](https://docs.orchard.hackclub.com/directory/) or [Troubleshooting](https://docs.orchard.hackclub.com/operate/troubleshooting/). Otherwise, open an [issue](https://github.com/hackclub/orchard/issues), or find **@lfd** on the
-[Hack Club Slack](https://slack.hackclub.com).
+Browse the [Directory](https://docs.orchard.hackclub.com/directory/), the
+[FAQ](https://docs.orchard.hackclub.com/start/faq/) or
+[Troubleshooting](https://docs.orchard.hackclub.com/operate/troubleshooting/). For a bug or a question
+the docs do not answer, open an [issue](https://github.com/hackclub/orchard/issues).
 
 ## License
 
-[AGPL-3.0](LICENSE). The license covers the code, not the Orchard and Hack Club names and logos: see
-[TRADEMARK.md](TRADEMARK.md).
+[AGPL-3.0](LICENSE). The license covers the code, not the Orchard and Hack Club names and logos. For
+those, refer to [TRADEMARK.md](TRADEMARK.md).
 
 ---
 

@@ -1188,7 +1188,7 @@ graftSettings:
   # public key. A graft entry with `tap: <name>` downloads from that tap and
   # must be signed with its key. Taps only load when trust is taps or any.
   #   - name: acme
-  #     url: https://acme.dev/orchard
+  #     url: https://grafts.example.com/orchard
   #     key: <base64 ed25519 public key>
   taps: []
   marketplaceUrl: ""

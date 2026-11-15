@@ -7,7 +7,7 @@ sidebar:
 
 import { Tabs, TabItem } from '@astrojs/starlight/components';
 
-To restrict who can open an app, add protection to its domain. Requests to a protected domain go through Orchard's proxy first. Your app needs no changes.
+Protection puts a sign-in, a password, or HTTP basic authentication in front of an app, so a staging site or an internal tool is not open to the whole internet. You add it to a domain, and requests to that domain go through Orchard's proxy before they reach the app. Your app needs no changes.
 
 ## Protection types
 
@@ -61,10 +61,10 @@ Each path on a domain has its own protection, so you can protect `/` and leave `
 A path you add to a domain that already has protection starts with the same protection. To make it public, open its **Protection** dialog and select **None**.
 
 :::caution
-A public path skips the sign-in check before the request reaches your app. If a public path and a protected path point to the same app, use **Public paths** instead, which checks each request first.
+A path on the domain with its protection set to **None** skips the sign-in check before the request reaches your app. If that path and a protected path point to the same app, list the route in **Public paths** instead, which checks each request first.
 :::
 
-Orchard never treats a path as public when it is ambiguous: any path containing `;`, a backslash, `//`, a `.` or `..` segment, or a percent-encoded `.`, `/`, `\`, `;` or `%` falls through to the normal sign-in. This holds whatever your ingress controller does with those paths, but it is worth confirming against your own HAProxy or Traefik. With `/public` as a public path, each of these should return the sign-in redirect (or 401 for basic auth), never your app:
+Orchard never treats a path as public when it is ambiguous: any path containing `;`, a backslash, `//`, a `.` or `..` segment, or a percent-encoded `.`, `/`, `\`, `;` or `%` falls through to the normal sign-in. This holds whatever your ingress controller does with those paths. Orchard recommends that you confirm it against your own HAProxy or Traefik. With `/public` as a public path, each of these requests must return the sign-in redirect, or `401` for basic authentication, and never your app:
 
 ```bash
 for p in '/public/..;/private' '/public/%2e%2e/private' '/public/..%2fprivate' \
@@ -75,7 +75,7 @@ done
 curl -s -o /dev/null -w "%{http_code} /public/ok\n" https://app.example.com/public/ok
 ```
 
-Only the last request should reach the app. Run it again after changing ingress controller or its path-handling settings.
+Only the last request reaches the app. Run the test again after you change the ingress controller or its path-handling settings.
 
 ## Skip protection from scripts
 
@@ -104,6 +104,5 @@ Protection covers HTTP. Raw TCP and UDP ports do not pass through the proxy, so 
 
 ## Related resources
 
-- [Manage domains and HTTPS](/deploy/domains/)
-- [Configure app networking](/deploy/networking/)
-- [Turn on bot protection](/operate/bot-protection/)
+- [Manage domains and HTTPS](/deploy/domains/) - Add the custom domains that protection applies to.
+- [Turn on bot protection](/operate/bot-protection/) - Add a Cloudflare Turnstile challenge to sign-in pages and password-protected apps.

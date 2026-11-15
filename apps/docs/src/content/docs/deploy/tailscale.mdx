@@ -7,7 +7,7 @@ sidebar:
 
 import { Tabs, TabItem } from '@astrojs/starlight/components';
 
-You can put an app on your [Tailscale](https://tailscale.com/) network. Devices on your tailnet reach the app at a private address, and the app needs no public URL or open port.
+Put an app on your [Tailscale](https://tailscale.com/) network when only your own devices should reach it, such as an internal tool or an admin panel. Devices on your tailnet reach the app at a private address, so the app needs no public URL or open port.
 
 Orchard runs a Tailscale proxy pod next to the app, in the same namespace. The proxy joins your tailnet with your auth key and forwards traffic to the app's Service. The app's own pods do not change or restart.
 
@@ -29,7 +29,7 @@ An auth key connects your Orchard account to your tailnet. Each person links the
 <Tabs syncKey="interface">
 <TabItem label="Dashboard">
 
-1. Go to **Account settings** > **GitHub and Tailscale**.
+1. Go to **Account settings** > **Connections**.
 2. In **Tailscale**, select **Connect**.
 3. Paste the auth key and select **Connect**.
 
@@ -98,7 +98,7 @@ Orchard deletes the proxy pod and its copy of the auth key. Orchard also removes
 
 ## Unlink your tailnet
 
-Go to **Account settings** > **GitHub and Tailscale**, and in **Tailscale**, select **Disconnect**. In the CLI, run `orchard tailscale unlink`.
+Go to **Account settings** > **Connections**, and in **Tailscale**, select **Disconnect**. In the CLI, run `orchard tailscale unlink`.
 
 :::caution
 Unlinking removes every app you put on your tailnet from it. Apps that other people put on their tailnets stay connected.
@@ -115,6 +115,6 @@ To replace the key:
 
 ## Related resources
 
-- [Configure app networking](/deploy/networking/)
-- [Protect an app](/deploy/protection/)
-- [`orchard tailscale` reference](/reference/cli/#tailscale)
+- [Configure app networking](/deploy/networking/) - Set up ports, reach, and how traffic gets to an app.
+- [Protect an app](/deploy/protection/) - Require a sign-in or a password before a public URL opens.
+- [`orchard tailscale` reference](/reference/cli/#tailscale) - Every flag of the `orchard tailscale` commands.

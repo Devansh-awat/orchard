@@ -5,7 +5,7 @@ sidebar:
   order: 12
 ---
 
-To control machines and sessions from an agent or a script, use the [MCP server](/mcp/), the [CLI](/cli/), or the [API](/api/). Each one acts as you, with the same roles as the dashboard. For example, a guest can prompt an agent over MCP, and a read-only guest cannot.
+You can control machines and sessions from an agent or a script, for example to have one agent hand work to a session on a machine. Use the [MCP server](/mcp/), the [CLI](/cli/), or the [API](/api/). Each one acts as you, with the same roles as the dashboard. For example, a guest can prompt an agent over MCP, and a read-only guest cannot.
 
 ## Use MCP tools
 
@@ -42,7 +42,7 @@ To orchestrate a session, follow this sequence:
 
 ### The agent on a machine
 
-If the instance publishes its MCP server over HTTPS, the opencode agent on each machine connects to it as the host. The agent can look up the host's apps, logs, and databases. A guest who prompts the agent reaches Orchard as the host. For more information, refer to [What sharing gives your guests](/greenhouse/sharing/#what-sharing-gives-your-guests).
+If the instance publishes its MCP server over HTTPS, the opencode agent on each machine connects to it as the host. The agent can look up the host's apps, logs, and databases. A guest who prompts the agent therefore [reaches Orchard as the host](/greenhouse/sharing/#what-sharing-gives-your-guests).
 
 ## Use the CLI
 
@@ -88,8 +88,6 @@ Live features use three WebSocket endpoints on the same host. They authenticate 
 
 ## Related resources
 
-- [Connect an MCP client](/mcp/)
-- [Manage API tokens](/account/tokens/)
-- [Code mode for agents](/agents-code-mode/)
-- [Run Greenhouse](/operate/greenhouse/)
-- [Start sessions from GitHub, Linear, and Slack](/greenhouse/integrations/)
+- [Manage API tokens](/account/tokens/) - Create a token with the `exec` scope for scripts and the CLI.
+- [Code mode for agents](/agents-code-mode/) - Let an agent call Orchard tools from code.
+- [Start sessions from GitHub, Linear, and Slack](/greenhouse/integrations/) - Start a session from an issue or a chat message.

@@ -5,19 +5,19 @@ sidebar:
   order: 5
 ---
 
-Use this page to fix common failures on an Orchard instance. Each entry lists the symptom, the cause, and the fix.
+This page lists common failures on an Orchard instance by symptom, so you can match the error you see and go straight to the fix. Each entry gives the symptom, the cause, and the fix. If nothing here matches, [collect logs](#still-stuck) and open an issue.
 
 ## Builds
 
 ### Image builds need a container registry
 
 ```txt
-Image builds need a container registry, but DOCKER_REGISTRY_PUSH and DOCKER_REGISTRY_PULL are not set
+Image builds need a container registry, but DOCKER_REGISTRY_PUSH and DOCKER_REGISTRY_PULL are not set on the server. Point them at your registry and restart the server.
 ```
 
 **Cause:** The instance has no registry configured. This occurs on a Helm install without registry values.
 
-**Fix:** Set `DOCKER_REGISTRY_PUSH` and `DOCKER_REGISTRY_PULL` on the server. For more information, refer to [Use your own registry](/operate/finishing-setup/#use-your-own-registry).
+**Fix:** Set `DOCKER_REGISTRY_PUSH` and `DOCKER_REGISTRY_PULL` on the server to [your own registry](/operate/finishing-setup/#use-your-own-registry), and restart the server.
 
 ### A build succeeds and then the push fails
 
@@ -27,7 +27,7 @@ dial tcp 203.0.113.10:443: connect: connection refused
 
 **Cause:** A network policy blocks the builder from reaching the registry. Builders can only reach DNS, public IP addresses on ports 80 and 443, and the destinations in `builders.registryEgress`.
 
-**Fix:** Add the registry to `builders.registryEgress`. For more information, refer to [Use your own registry](/operate/finishing-setup/#use-your-own-registry).
+**Fix:** Add the registry to `builders.registryEgress`, as described in [Use your own registry](/operate/finishing-setup/#use-your-own-registry).
 
 ### `orchard up` fails at `context-fetch` with `Connection refused`
 
@@ -35,9 +35,9 @@ dial tcp 203.0.113.10:443: connect: connection refused
 wget: can't connect to remote host (203.0.113.10): Connection refused
 ```
 
-**Cause:** Your S3 storage runs on the same server or cluster, behind its own ingress. A build fetches its files from that address, and a hostname that resolves to a node loops back to the ingress controller, which a network policy blocks. Backups still work because they don't run in the builder.
+**Cause:** Your S3 storage runs on the same server or cluster, behind its own ingress. A build fetches its files from that address, and a hostname that resolves to a node loops back to the ingress controller, which a network policy blocks. Backups still work because they do not run in the builder.
 
-**Fix:** [Re-run the installer](/start/install/#run-the-installer-again), which allows Traefik on a current version. With Helm, add the ingress controller's pods to `builders.registryEgress`. Don't add the storage pods themselves, because a build should only reach storage the way the internet does.
+**Fix:** On an installer host, [run the installer again](/start/install/#run-the-installer-again). It adds the Traefik pods to `builders.registryEgress`, except in `tunnel` mode. With Helm, add the ingress controller's pods to `builders.registryEgress`. Do not add the storage pods themselves, because a build should only reach storage the way the internet does.
 
 ### Build fails with a missing module or command
 
@@ -69,7 +69,7 @@ Build failed: could not schedule build pod after 300s - 0/1 nodes are available:
 
 **Cause:** No node has enough unreserved memory. The scheduler uses memory requests, not actual usage.
 
-**Fix:** Reduce the memory that apps and databases request, or add a node. For more information, refer to [Manage nodes and pools](/operate/nodes/).
+**Fix:** Reduce the memory that apps and databases request, or [add a node](/operate/nodes/#add-and-remove-nodes).
 
 ## Apps
 
@@ -89,7 +89,7 @@ Build failed: could not schedule build pod after 300s - 0/1 nodes are available:
 
 **Cause:** The pod runs, but nothing listens on the port Orchard routes to. Without a health check, a running container counts as ready. `orchard up` and other commands that wait for a deploy warn you with `Nothing is listening on port`.
 
-**Fix:** Go to the app's **Network** tab and set the port your process listens on. To catch this in a rollout, add a health check. For more information, refer to [Scaling](/deploy/scaling/).
+**Fix:** Go to the app's **Network** tab and set the port your process listens on. To catch this in a rollout, add a [health check](/deploy/scaling/#set-health-checks).
 
 ### Running but never ready
 
@@ -184,7 +184,7 @@ kubectl get challenges -A
 
 **Cause:** The app is protected and the webhook path is not a public path.
 
-**Fix:** Add the path to the public paths list. For more information, refer to [Protect an app](/deploy/protection/).
+**Fix:** Add the path to the public paths list of the [protected app](/deploy/protection/).
 
 ## Sign-in
 
@@ -205,7 +205,7 @@ kubectl -n orchard exec deploy/server -- node dist/scripts/mint-login-link.js
 ### The installer stops on an IPv6-only server
 
 ```txt
-IPv6-only servers are not supported yet. This server has no IPv4 address.
+IPv6-only servers aren't supported yet. This server has no IPv4 address.
 ```
 
 **Cause:** The server has no IPv4 address. GitHub and `ghcr.io` have no IPv6 addresses, so the server cannot download k3s or the Orchard images, and Orchard cannot clone or build from GitHub. k3s runs with IPv4 inside the cluster, and Orchard listens on IPv4 only, so traffic to the IPv6 address does not reach it.
@@ -310,8 +310,6 @@ On an installer host, also include the output of `orchardctl status`. To report 
 
 ## Related resources
 
-- [Finish instance setup](/operate/finishing-setup/)
-- [Builds](/deploy/builds/)
-- [Host commands](/operate/host-commands/)
-- [Troubleshooting Greenhouse](/greenhouse/troubleshooting/)
-- [Troubleshooting grafts](/grafts/troubleshooting/)
+- [Troubleshooting Greenhouse](/greenhouse/troubleshooting/) - Fix Greenhouse machines, sessions, and pull requests by symptom.
+- [Troubleshooting grafts](/grafts/troubleshooting/) - Fix failed downloads, signature errors, version conflicts, and failed migrations, and recover with safe mode.
+- [Host commands](/operate/host-commands/) - Review the `orchardctl` commands that this page uses on an installer host.

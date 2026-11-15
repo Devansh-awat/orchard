@@ -72,10 +72,9 @@ The pool holds 3 connections per pod by default. To ask for more, up to 50, set 
 "database": { "pool": 10 }
 ```
 
-Operators can override the size with `orchardctl graft pool`. Orchard checks the pools of all pods against the database's limit. For more information, refer to [Database connections](/grafts/install/#database-connections).
+Operators can override the size with `orchardctl graft pool`. Orchard checks the pools of all pods against the database's [connection limit](/grafts/install/#database-connections).
 
 ## Related resources
 
-- [graft.json](/grafts/build/manifest/)
-- [Upgrade and roll back grafts](/grafts/upgrades/)
-- [Write server code](/grafts/build/server/)
+- [Upgrade and roll back grafts](/grafts/upgrades/) - How migrations run during upgrades, and how rollback restores data.
+- [Write server code](/grafts/build/server/) - Inject the `db` door into a controller.

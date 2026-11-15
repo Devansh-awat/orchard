@@ -5,7 +5,7 @@ sidebar:
   order: 10
 ---
 
-The Grove is a forum for the people on an Orchard instance. It holds bug reports and feature requests, with votes, replies, and image attachments. It ships as the `forum` [graft](/grafts/overview/).
+The Grove gives the people on your Orchard instance one place to report bugs and request features. People vote on threads, reply, and attach images, and superadmins set the status and priority of each thread. The Grove ships as the `forum` [graft](/grafts/overview/), so you install it only if you want it.
 
 ## Turn on the Grove
 
@@ -24,7 +24,7 @@ grafts:
     digest: sha256:...
 ```
 
-`GROVE_ENABLED` and `PUBLIC_GROVE_ENABLED` no longer exist. Orchard ignores them if they are set.
+Orchard does not read an environment variable for the Grove. The graft is the only switch.
 
 Image attachments need [object storage](/operate/storage/). To set it up, go to **Instance admin** > **Configuration** > **Object storage**.
 
@@ -48,6 +48,5 @@ Superadmins can manage threads with these actions:
 
 ## Related resources
 
-- [Install grafts](/grafts/install/)
-- [Grafts](/grafts/overview/)
-- [Post announcements](/grafts/announcements/)
+- [Install grafts](/grafts/install/) - Install grafts with `orchardctl` or Helm values, and add taps.
+- [Post announcements](/grafts/announcements/) - Post notices on project and app overview pages with the `announcements` graft.

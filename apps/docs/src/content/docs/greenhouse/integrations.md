@@ -5,7 +5,7 @@ sidebar:
   order: 11
 ---
 
-To start a Greenhouse session without opening the workspace, comment on an issue or send a chat message. Greenhouse creates the session on a machine you host, sends your request to the agent, and replies with a link.
+You can hand work to an agent from where the work is reported, without opening the workspace. Comment on a GitHub or Linear issue, or send a Slack message, and Greenhouse creates the session on a machine you host, sends your request to the agent, and replies with a link.
 
 ## Prerequisites
 
@@ -17,7 +17,7 @@ To start a Greenhouse session without opening the workspace, comment on an issue
 
 | Service | How to link it                                                                                                                                                                                                                                                                 |
 | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| GitHub  | In **Account settings** > **GitHub and Tailscale**, sign in with GitHub.                                                                                                                                                                                                       |
+| GitHub  | In **Account settings** > **Connections**, sign in with GitHub.                                                                                                                                                                                                                |
 | Linear  | In **Account settings** > **Greenhouse** > **Connected accounts**, select **Connect** next to **Linear** and paste a personal API key. In Linear, create the key under **Settings** > **Security and access** > **Personal API keys**. Read access is enough to select issues. |
 | Slack   | In Slack, run `/greenhouse link`. Open the link that Slack shows you while signed in to Orchard, and confirm. The link works once and expires after 10 minutes.                                                                                                                |
 
@@ -110,6 +110,4 @@ You can start up to five sessions per minute from these integrations. Greenhouse
 
 ## Related resources
 
-- [Automate Greenhouse](/greenhouse/automation/)
-- [Share a machine](/greenhouse/sharing/)
-- [Machines](/greenhouse/machines/)
+- [Automate Greenhouse](/greenhouse/automation/) - Start and prompt sessions from MCP tools, the CLI, or the API.

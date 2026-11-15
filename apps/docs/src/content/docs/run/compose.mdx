@@ -7,12 +7,12 @@ sidebar:
 
 import { Tabs, TabItem } from '@astrojs/starlight/components';
 
-A compose stack deploys the services in a `docker-compose.yml` file as apps in a project. Each service becomes its own app, which you can scale, redeploy, and roll back on its own. Orchard reads the file from a GitHub repository.
+A compose stack lets you bring an existing `docker-compose.yml` file to Orchard instead of creating each app by hand. Orchard reads the file from a GitHub repository and turns each service into its own app in the project, so you can scale, redeploy, and roll back each service on its own.
 
 ## Prerequisites
 
-- A GitHub account linked to Orchard. Go to **Account settings** > **GitHub and Tailscale**.
-- Access to the repository through your GitHub account or the GitHub App.
+- A GitHub repository that contains the compose file.
+- For a private repository, a GitHub account linked to Orchard that can read the repository. To link one, go to **Account settings** > **Connections**. A public repository works without a linked account: paste `owner/repo` into **Repository**.
 
 ## Deploy a stack
 
@@ -22,7 +22,7 @@ A compose stack deploys the services in a `docker-compose.yml` file as apps in a
 1. Open the project.
 2. Go to **Compose**.
 3. Select **Deploy compose file**. If the project already has a stack, select **New stack**.
-4. Enter a name for the stack.
+4. Enter a name for the stack. To deploy into another environment, select it next to the project name.
 5. In **Repository**, select the repository.
 6. In **Branch**, select the branch.
 7. In **Path to docker-compose.yml**, confirm the path.
@@ -43,21 +43,21 @@ To rebuild on each push, add `--auto-deploy`.
 </TabItem>
 </Tabs>
 
-Orchard names each app `<stack>-<service>`. Services reach each other by their compose names, as they do in Docker Compose: `db:3306` works, on the container's port. Each name must be free in the project's environment, so two stacks with a service named `db` need separate environments or projects. A name with an underscore or another character that DNS doesn't allow has no such address. To find the full internal address, open the app and go to **Network** > **Ports**.
+Orchard names each app `<stack>-<service>`. Services reach each other by their compose names, as they do in Docker Compose: `db:3306` works, on the container's port. Each name must be free in the project's environment, so two stacks with a service named `db` need separate environments or projects. A name with an underscore or another character that DNS does not allow has no such address. To find the full internal address, open the app and go to **Network** > **Ports**.
 
 ## How Orchard reads the file
 
-| Compose key                   | Orchard result                                                                                                                                                     |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `image`                       | An app that runs the image.                                                                                                                                        |
-| `build`                       | An app that Orchard builds from the repository, with `context` and `dockerfile`.                                                                                   |
-| `ports`                       | The app's ports. The first one that isn't a known database port gets a URL, which only your organization can open until you [make it public](/deploy/protection/). |
-| `expose`                      | More ports on the app, for other services. No URL.                                                                                                                 |
-| `environment`                 | The app's [variables](/run/environments/).                                                                                                                         |
-| `volumes` with a named volume | A persistent volume, 1 GiB unless `driver_opts.size` sets another size. Orchard reads only the short string form.                                                  |
-| `deploy.replicas`             | The [replica count](/deploy/scaling/#change-replicas).                                                                                                             |
-| `deploy.resources`            | The CPU and memory sizes.                                                                                                                                          |
-| `command`                     | The start command.                                                                                                                                                 |
+| Compose key                   | Orchard result                                                                                                                                                                             |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `image`                       | An app that runs the image.                                                                                                                                                                |
+| `build`                       | An app that Orchard builds from the repository, with `context` and `dockerfile`.                                                                                                           |
+| `ports`                       | The app's ports. The first TCP port that is not a known database or other non-HTTP port gets a URL, which only your organization can open until you [make it public](/deploy/protection/). |
+| `expose`                      | More ports on the app, for other services. No URL.                                                                                                                                         |
+| `environment`                 | The app's [variables](/run/environments/).                                                                                                                                                 |
+| `volumes` with a named volume | A persistent volume, 1 GiB unless `driver_opts.size` sets another size. Orchard reads only the short string form. Two services cannot share a volume.                                      |
+| `deploy.replicas`             | The [replica count](/deploy/scaling/#change-replicas).                                                                                                                                     |
+| `deploy.resources`            | The CPU and memory sizes.                                                                                                                                                                  |
+| `command`                     | The start command.                                                                                                                                                                         |
 
 Each service must have `image` or `build`.
 
@@ -80,7 +80,7 @@ Redeploying reads the compose file from GitHub again. A service that still exist
 1. Open the stack from the project's **Compose** tab.
 2. Select **Redeploy**.
 
-To turn auto-deploy on or off, use **Deploy on push** on the stack page.
+To turn auto-deploy on or off, use **Deploy on push to `<branch>`** on the stack page.
 
 </TabItem>
 <TabItem label="CLI">
@@ -88,6 +88,8 @@ To turn auto-deploy on or off, use **Deploy on push** on the stack page.
 ```sh
 orchard compose redeploy <id>
 ```
+
+To turn auto-deploy on or off, run `orchard compose auto-deploy enable <id>` or `orchard compose auto-deploy disable <id>`.
 
 </TabItem>
 </Tabs>
@@ -115,19 +117,19 @@ orchard compose delete <id>
 
 ## Troubleshooting
 
-### No GitHub access for this repo
+### No access to the repository
 
 ```text
-No GitHub access for this repo. Connect your GitHub account or install the GitHub App.
+You don't have access to this repository on GitHub. Connect your GitHub account or request access.
 ```
 
-**Cause:** Orchard has no token that can read the repository. A compose stack needs one, even for a public repository.
+**Cause:** The repository is private, and your linked GitHub account cannot read it, or you have no linked GitHub account.
 
-**Fix:** Connect your GitHub account, and install the [GitHub App](/deploy/github/#prerequisites) on the repository's account.
+**Fix:** Link your GitHub account in **Account settings** > **Connections**, and make sure that account can read the repository. To deploy on push, also install the [GitHub App](/deploy/github/#prerequisites) on the repository's account.
 
 ## Related resources
 
-- [Deploy from GitHub](/deploy/github/)
-- [Configure app networking](/deploy/networking/)
-- [Deploy and write templates](/run/templates/)
-- [`orchard compose` reference](/reference/cli/#compose)
+- [Deploy from GitHub](/deploy/github/) - Link GitHub, install the GitHub App, and deploy a single app from a repository.
+- [Configure app networking](/deploy/networking/) - Change ports, internal addresses, and URLs for each app in the stack.
+- [Deploy and write templates](/run/templates/) - Deploy a set of apps and databases from a template instead of a compose file.
+- [`orchard compose` reference](/reference/cli/#compose) - Every `orchard compose` command and flag.

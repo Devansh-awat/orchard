@@ -5,14 +5,14 @@ sidebar:
   order: 1
 ---
 
-Scaffold a graft, run it against your local Orchard, and pack it into a signed file.
+Build a graft when Orchard is missing something your team needs. In this guide, you scaffold a graft, run it against your local Orchard, and pack it into a signed file that any instance can install.
 
 A graft is a folder with a [`graft.json`](/grafts/build/manifest/). It can also have a NestJS module for the API, a Svelte island for the UI, SQL migrations, and MCP tools. The `graft` command in `@orchardlabs/graft-sdk` builds, packs, and signs it.
 
 ## Prerequisites
 
 - Node.js and pnpm.
-- A local Orchard dev stack. For more information, refer to the repository's README.
+- A local Orchard dev stack. To set one up, follow [Getting set up](https://github.com/hackclub/orchard/blob/main/CONTRIBUTING.md#getting-set-up) in the repository's contributing guide.
 
 ## 1. Scaffold a graft
 
@@ -96,7 +96,6 @@ For an example, read the [announcements graft](https://github.com/hackclub/orcha
 
 ## Related resources
 
-- [Grafts](/grafts/overview/)
-- [Install grafts](/grafts/install/)
-- [Graft UI slots](/reference/graft-slots/)
-- [Troubleshooting grafts](/grafts/troubleshooting/)
+- [Graft UI slots](/reference/graft-slots/) - Every place in the dashboard a graft can add to.
+- [Graft API versions](/reference/graft-api/) - Doors, their members, and the capability each needs.
+- [Troubleshooting grafts](/grafts/troubleshooting/) - Find out why a graft did not load.

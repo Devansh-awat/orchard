@@ -5,7 +5,7 @@ sidebar:
   order: 10
 ---
 
-This page lists the hosts that Orchard contacts on its own. If you restrict outbound traffic, use it as your allowlist.
+This page lists the hosts that Orchard contacts on its own, and how to turn each one off. If you restrict outbound traffic, use it as your allowlist.
 
 It does not list connections to services you configure yourself, such as S3 storage, SMTP, notification webhooks, identity providers, and Git providers. Builds also download whatever your Dockerfile or package manager asks for.
 
@@ -43,7 +43,7 @@ It does not list connections to services you configure yourself, such as S3 stor
 | ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
 | `us.i.posthog.com`                                | Only after a superadmin opts in to [usage reports](/operate/telemetry/).                                                                                                                     | Leave reports off, or set `ORCHARD_TELEMETRY=false`.                                      |
 | `assets.orchard.my/registry`                      | Every 6 hours, for templates.                                                                                                                                                                | Set `TEMPLATE_REGISTRY_URL` to an empty value, or to your own registry.                   |
-| `assets.orchard.my/updates/ui`                    | For the What's new feed.                                                                                                                                                                     | Set `UPDATES_URL=off`, or run `sudo orchardctl config set updates.url off --apply`.       |
+| `assets.orchard.my/updates/ui`                    | For the release notes that the dashboard shows after a dashboard release.                                                                                                                    | Set `UPDATES_URL=off`, or run `sudo orchardctl config set updates.url off --apply`.       |
 | `assets.orchard.my`                               | When the dashboard loads a template or graft icon through its image proxy.                                                                                                                   | Set `ASSET_PROXY_HOSTS` on the frontend to your own host.                                 |
 | `raw.githubusercontent.com`                       | To read the CloudNativePG image catalog, which lists the Postgres versions on offer.                                                                                                         | Set `POSTGRES_IMAGE_CATALOG_URL` to your own copy.                                        |
 | `www.postgresql.org`                              | Every hour, to read Postgres versions and security advisories.                                                                                                                               | No setting.                                                                               |
@@ -59,13 +59,20 @@ It does not list connections to services you configure yourself, such as S3 stor
 | `challenges.cloudflare.com`                       | When [bot protection](/operate/bot-protection/) is on.                                                                                                                                       | Turn off bot protection.                                                                  |
 | `depot.dev`                                       | When a build uses Orchard's super builds.                                                                                                                                                    | Do not turn on super builds.                                                              |
 
-If you set `POSTHOG_API_KEY`, the server also sends analytics to `POSTHOG_HOST`, which defaults to `us.i.posthog.com`. It is off when the key is unset.
+## Your own analytics
+
+Orchard can send product analytics to a PostHog project that you own. Both settings are empty in the chart, the installer, and the published images, so nothing is sent until you set a key.
+
+| Setting                                     | Where            | What it sends                                                                                                                                                                                                                                                                                                                                                                                                                |
+| ------------------------------------------- | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POSTHOG_API_KEY`, `POSTHOG_HOST`           | Server           | Server-side analytics to `POSTHOG_HOST`, which defaults to `us.i.posthog.com`.                                                                                                                                                                                                                                                                                                                                               |
+| `PUBLIC_POSTHOG_KEY`, `PUBLIC_POSTHOG_HOST` | Frontend runtime | The dashboard loads PostHog in each person's browser and sends page views, web vitals, network timing, and errors to `PUBLIC_POSTHOG_HOST`, which defaults to `us.i.posthog.com`. If your PostHog project records sessions, the dashboard sends session recordings too. Orchard removes request and response bodies and secrets in URLs before it sends network data. The frontend server also reports its own errors there. |
+
+These are separate from [anonymous usage reports](/operate/telemetry/), which go to the Orchard team only after a superadmin opts in. To set a frontend variable with the chart, use `frontend.env`.
 
 Installed [grafts](/grafts/overview/) can make connections of their own.
 
 ## Related resources
 
-- [Manage anonymous usage reports](/operate/telemetry/)
-- [Install](/start/install/)
-- [Environment variables](/reference/configuration/)
-- [Host commands](/operate/host-commands/)
+- [Manage anonymous usage reports](/operate/telemetry/) - Review what usage reports contain and how to turn them off.
+- [Environment variables](/reference/configuration/) - Look up every server variable named on this page.

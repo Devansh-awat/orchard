@@ -80,8 +80,9 @@ chore: update readme
 ```
 
 The scope picks the service that gets released, and the allowed scopes are in
-`commitlint.config.cjs`. An unscoped `feat:` or `fix:` bumps every service. Breaking changes need a
-`!` (`feat!:`) and a `BREAKING CHANGE:` footer.
+`commitlint.config.cjs`. An unscoped `feat:` or `fix:` bumps every service. Mark a breaking change with
+a `!` after the type or scope (`feat!:` or `feat(server)!:`). release-please reads the `!`, so the
+subject line still carries everything and no footer is needed.
 
 ## Sign your commits
 
@@ -142,7 +143,7 @@ pnpm credits                                                 # after adding or u
   used.
 - Don't add code comments; write code that reads on its own.
 - Frontend work must follow `apps/frontend/DESIGN.md`: semantic tokens only, no raw hex colors, `ui/`
-  components over legacy classes. `pnpm check:design` enforces the basics.
+  components over legacy classes. `pnpm lint` runs the design check that enforces the basics.
 - Database changes go through Prisma migrations (`pnpm --filter server prisma:migrate`), one migration
   per PR.
 

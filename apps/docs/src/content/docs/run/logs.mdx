@@ -7,7 +7,7 @@ sidebar:
 
 import { Tabs, TabItem } from '@astrojs/starlight/components';
 
-To read what an app is doing, use the console on its **Overview** tab. To search older logs, use **Observe** > **Logs**. For more information about the **Observe** tab, refer to [Monitor an app](/run/monitor-an-app/).
+When an app misbehaves, its logs and a shell inside its container are usually the fastest way to find out why. Use the console on the app's **Overview** tab to follow what the app is doing now, read the output of a container that crashed, or run commands in a container. To search older logs, use **Observe** > **Logs**, described in [Monitor an app](/run/monitor-an-app/).
 
 ## Stream live logs
 
@@ -120,8 +120,6 @@ The alert banner above an app's tabs shows only problems that exist now. Kuberne
 
 ## Related resources
 
-- [Monitor an app](/run/monitor-an-app/)
-- [Metrics and alerts](/run/observability/)
-- [Configure logs and request data](/operate/logs/)
-- [Builds](/deploy/builds/)
-- [`orchard logs` reference](/reference/cli/#logs)
+- [Metrics and alerts](/run/observability/) - Find where Orchard shows metrics, current problems, and alerts.
+- [Builds](/deploy/builds/) - Read build logs and fix a build that fails.
+- [`orchard logs` reference](/reference/cli/#logs) - Every `orchard logs` flag.

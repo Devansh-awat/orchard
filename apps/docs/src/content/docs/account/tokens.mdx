@@ -7,7 +7,7 @@ sidebar:
 
 import { Tabs, TabItem } from '@astrojs/starlight/components';
 
-To authenticate a script, CI job, or MCP client without a browser, create a personal API token. A token acts as your account. It can only do what your account can do.
+A personal API token lets a script, a CI job, or an MCP client call Orchard without a browser. The token acts as your account, so it can never do more than you can, and you can limit it further with an access level, a lifetime, and a list of projects.
 
 :::note
 Interactive use of the [CLI](/cli/) does not need a token. `orchard auth login` creates and stores one for you.
@@ -25,11 +25,11 @@ Each token has one access level. Each level includes the level before it.
 
 At any access level, a token cannot register a passkey, set a password, or call instance setup and admin routes.
 
-Tokens cannot manage an organization's SSO or SCIM, or change passkeys. A token restricted to projects can also not use account routes, such as sessions, tokens, GitHub, or invitations, apart from reading its own user.
+Tokens cannot manage an organization's SSO or SCIM, or change passkeys. A token restricted to projects also cannot use account routes, such as sessions, tokens, GitHub, or invitations, apart from reading its own user.
 
 ## Tokens and single sign-on
 
-An organization that [requires single sign-on](/teams/sso/#require-single-sign-on) only accepts tokens created after signing in through its provider. Such a token works in that organization and nowhere else, and its row in the list says so. It also can't create more tokens.
+An organization that [requires single sign-on](/teams/sso/#require-single-sign-on) only accepts tokens created after signing in through its provider. Such a token works in that organization and nowhere else, and its row in the list says so. It also cannot create more tokens.
 
 A token created any other way gets a `403` with the error `org_sso_required` in that organization, and keeps working in your other organizations. To fix this, sign in through the organization's provider and create a new token at **Account settings** > **API tokens**.
 
@@ -126,7 +126,7 @@ Requests that use a revoked token fail immediately.
 </Tabs>
 
 :::caution
-Signing out all other devices also deletes every API token on your account. For more information, refer to [Sign out of a device](/account/security/#sign-out-of-a-device).
+[Signing out all other devices](/account/security/#sign-out-of-a-device) also deletes every API token on your account.
 :::
 
 ## Rotate a token
@@ -137,8 +137,6 @@ Signing out all other devices also deletes every API token on your account. For 
 
 ## Related resources
 
-- [Manage sign-in and sessions](/account/security/)
-- [Update an app with a webhook](/run/webhooks/)
-- [Set up SCIM provisioning](/teams/scim/)
-- [Connect an MCP client](/mcp/)
-- [`orchard auth` reference](/reference/cli/#auth)
+- [Update an app with a webhook](/run/webhooks/) - Redeploy an app from CI with a deploy webhook token instead of a personal token.
+- [Set up SCIM provisioning](/teams/scim/) - Sync people from your identity provider with an organization token.
+- [`orchard auth` reference](/reference/cli/#auth) - Every flag of the sign-in, session, and token commands.

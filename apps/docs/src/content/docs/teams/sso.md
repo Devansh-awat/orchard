@@ -34,7 +34,7 @@ Sessions created through an organization's SSO connection can only reach that or
 
 ### SAML requirements
 
-SAML sign-in is always started from Orchard. Orchard rejects responses that your provider starts on its own (IdP-initiated sign-in), responses that are not signed on both the response and the assertion, SHA-1 signatures, and responses whose issuer is not the **IdP entity ID** you saved. The entity ID is required. A connection saved before it was required gets it filled in automatically from its stored metadata URL, as long as that metadata lists the saved signing certificate. Without a metadata URL, sign-in is refused until an admin enters the entity ID. Orchard verifies signatures only against the signing certificate saved on the connection, so after your provider rotates its certificate, paste the new one into the connection. Your provider must sign with RSA or ECDSA and SHA-256 or stronger, and set the assertion's `Recipient` and the response's `Destination` to the **Redirect URL** shown on the connection.
+SAML sign-in is always started from Orchard. Orchard rejects responses that your provider starts on its own (IdP-initiated sign-in), responses that are not signed on both the response and the assertion, SHA-1 signatures, and responses whose issuer is not the **IdP entity ID** you saved. The entity ID is required. If you enter an **IdP metadata URL**, Orchard reads the entity ID, sign-in URL, and signing certificate from the metadata when you leave them blank. Orchard verifies signatures only against the signing certificate saved on the connection, so after your provider rotates its certificate, paste the new one into the connection. Your provider must sign with RSA or ECDSA and SHA-256 or stronger, and set the assertion's `Recipient` and the response's `Destination` to the **Redirect URL** shown on the connection.
 
 ## Test the connection
 
@@ -72,7 +72,7 @@ Requiring single sign-on applies at two levels, depending on who owns the member
 | Email on one of your [verified domains](#verify-an-email-domain) | Orchard blocks email codes, passkeys, passwords, and instance providers for the whole account, and signs out sessions that used them.       |
 | Any other email                                                  | The person keeps their Orchard account and their other organizations. They need your provider to open this organization. Owners are exempt. |
 
-Requiring single sign-on also applies to API tokens and [MCP connections](/mcp/). One made without your provider can't reach this organization and gets a `403` with the error `org_sso_required`. It keeps working in the person's other organizations. Owners and superadmins are exempt.
+Requiring single sign-on also applies to API tokens and [MCP connections](/mcp/). One made without your provider cannot reach this organization and gets a `403` with the error `org_sso_required`. It keeps working in the person's other organizations. Owners and superadmins are exempt.
 
 To regain access, members sign in through your provider, then create a new [API token](/account/tokens/#tokens-and-single-sign-on) or reconnect their MCP client. Scripts and CI jobs that use an older token stop working in this organization until someone replaces it.
 
@@ -80,7 +80,7 @@ To regain access, members sign in through your provider, then create a new [API 
 
 Your provider can only sign in as an existing account that is already a member of the organization, and only if its email is on a verified domain, or the person started the sign-in from their own Orchard session and Orchard has verified that email. An account with an unverified email is never linked from a session, so it needs a verified domain. Otherwise Orchard asks them to sign in to Orchard first. A provider can create a brand-new account only inside a verified domain.
 
-A session opened through an organization's provider is confined to that organization. It can't browse the person's personal GitHub repositories or installations, link accounts, or manage their account.
+A session opened through an organization's provider is confined to that organization. It cannot browse the person's personal GitHub repositories or installations, link accounts, or manage their account.
 
 :::caution
 Test a connection before you turn this on. A provider that fails blocks members on your verified domains from Orchard, and every other member except owners from this organization. Superadmins are never blocked. Replace the API tokens your scripts and CI jobs use before you turn this on.
@@ -169,7 +169,7 @@ Orchard stores your provider's stable subject for each person on first sign-in. 
 | --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `sso_link_required`                                 | The account exists but is not linked. Verify the email domain, or have the person sign in to Orchard first and start from there.                                                       |
 | Email not verified, or domain not allowed           | The provider did not assert `email_verified`, or the address is outside **Email domains**.                                                                                             |
-| "None of your groups give access"                   | Group rules exist and none matched. Check the `groupClaim` name and the exact group names. The `sso.login.denied` audit entry says whether no rule matched or the groups were unknown. |
+| "none of your groups give access"                   | Group rules exist and none matched. Check the `groupClaim` name and the exact group names. The `sso.login.denied` audit entry says whether no rule matched or the groups were unknown. |
 | SAML fails after a certificate rotation, or by time | Paste the new signing certificate into the connection. Keep provider and server clocks within one minute.                                                                              |
 | Group rules lock people out                         | Owners are exempt from group rules. An owner who signs in through the connection they created can replace the rules.                                                                   |
 
@@ -182,7 +182,7 @@ Orchard stores your provider's stable subject for each person on first sign-in. 
 
 ## Set a vanity address
 
-A vanity address sends visitors at `<subdomain>.<base domain>` to your sign-in page. The **Vanity address** section appears for owners when the instance has `BASE_DOMAIN` set.
+A vanity address sends visitors at `<subdomain>.<base domain>` to your sign-in page. The **Vanity address** section appears for owners when the instance has [`BASE_DOMAIN`](/operate/configuration/#base-domain) set.
 
 1. In **Vanity address**, enter a **Subdomain**.
 2. Select **Save**.
@@ -208,7 +208,5 @@ Orchard records `admin.sso.auto_create_orgs_toggled`, `sso.auto_create_rules.upd
 
 ## Related resources
 
-- [Set up SCIM provisioning](/teams/scim/)
-- [Manage organizations and roles](/teams/organizations/)
-- [Configuration](/operate/configuration/#base-domain)
-- [Manage sign-in and sessions](/account/security/)
+- [Set up SCIM provisioning](/teams/scim/) - Add and remove members from your directory automatically.
+- [Manage sign-in and sessions](/account/security/) - Passkeys, email codes, and sessions for each person.

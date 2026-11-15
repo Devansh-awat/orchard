@@ -7,7 +7,7 @@ sidebar:
 
 import { Tabs, TabItem } from '@astrojs/starlight/components';
 
-Orchard reads instance settings from environment variables, chart values, and the database. An environment variable always takes precedence over a value stored in the database.
+Orchard reads instance settings from three places: environment variables on the server, chart values, and the database. Most settings that superadmins change day to day live in the database, so you can edit them in the dashboard without a restart. Environment variables and chart values suit settings that you manage as code or that the cluster depends on. When an environment variable and the database both set a value, the environment variable takes precedence.
 
 ## Environment variables
 
@@ -33,7 +33,7 @@ sudo orchardctl config set logs.retention 30d --apply
 
 On a Helm install, change your values file and run `helm upgrade`.
 
-Re-running the installer keeps the values in this file, including a value such as `signupMode`. A value changes only when you change an answer that it depends on. For more information, refer to [Run the installer again](/start/install/#run-the-installer-again). To change one setting, use the commands in [Change settings that Instance admin cannot edit](#change-settings-that-instance-admin-cannot-edit).
+When you [run the installer again](/start/install/#run-the-installer-again), it keeps the values in this file, including a value such as `signupMode`. A value changes only when you change an answer that it depends on. To change one setting, use the commands in [Change settings that Instance admin cannot edit](#change-settings-that-instance-admin-cannot-edit).
 
 Set cluster-specific values, such as storage class, ingress class, and registry, in the values file. These values differ for each cluster.
 
@@ -49,6 +49,7 @@ To change settings without a restart, go to **Instance admin** > **Configuration
 - [**Resource limits**](/operate/resource-limits/)
 - [**GitLab sign-in** and **Bitbucket sign-in**](/deploy/git-providers/)
 - [**Bot protection**](/operate/bot-protection/)
+- [**New organization limits**](#organization-limits)
 - [**Image scanning**](/operate/image-scanning/)
 - [**Model Context Protocol**](/mcp/)
 - **Databases**
@@ -243,7 +244,7 @@ A change to the public IP does not move ports and databases that are already pub
 | Updates                             | `curl -fsSL https://assets.orchard.my/install.sh \| sudo bash -s -- --yes --updates automatic` |
 | Ingress mode                        | `curl -fsSL https://assets.orchard.my/install.sh \| sudo bash -s -- --yes --mode public`       |
 
-Updates and ingress mode have no separate command, so these commands run the installer again. For more information, refer to [Run the installer again](/start/install/#run-the-installer-again).
+Updates and ingress mode have no separate command, so these commands [run the installer again](/start/install/#run-the-installer-again).
 
 </TabItem>
 <TabItem label="Helm">
@@ -300,11 +301,11 @@ With the chart, set `RESERVED_HOSTS` and `RESERVED_HOST_SUFFIXES` in `server.env
 
 Every certificate that a public CA issues is published in Certificate Transparency logs, and anyone can read those logs. If hosts are named after the app and project, the logs list every app on your instance, including apps that are protected. Orchard therefore generates opaque hostnames by default, such as `3f9a1c07d2-a1b2c3.apps.example.com`. The label is derived from a server secret and the deployment ID, stays the same for that app, and cannot be turned back into an organization, project or namespace. The same applies to the hostname of a public database in `perDatabase` TLS mode.
 
-The trade-off is that the URLs are harder to read and to recognise in logs and DNS tooling. On an instance that one company runs and where names are not sensitive, set `HOSTNAME_STYLE=readable` to get `<app>-<project>-<hash>` again. With the chart, set it in `server.env`. The setting applies to new hosts only. Existing hosts, custom domains and vanity addresses are never renamed. A wildcard certificate keeps individual hostnames out of the logs altogether, see [Wildcard certificates](/operate/wildcard-certificates/).
+The trade-off is that the URLs are harder to read and to recognize in logs and DNS tooling. On an instance that one company runs and where names are not sensitive, set `HOSTNAME_STYLE=readable` to get hostnames in the form `<app>-<project>-<hash>`. With the chart, set it in `server.env`. The setting applies to new hosts only. Existing hosts, custom domains and vanity addresses are never renamed. A [wildcard certificate](/operate/wildcard-certificates/) keeps individual hostnames out of the logs altogether.
 
 ## Resource limits
 
-`INSTANCE_RESOURCE_LIMITS` turns resource limits `on` or `off` for the whole instance, and locks the setting in **Instance admin**. Unset, the choice in **Instance admin** applies. If nobody has chosen, limits are on. If you unset the variable, Orchard keeps the value that it locked. For more information, refer to [Turn resource limits on or off](/operate/resource-limits/).
+`INSTANCE_RESOURCE_LIMITS` turns [resource limits](/operate/resource-limits/) `on` or `off` for the whole instance, and locks the setting in **Instance admin**. Unset, the choice in **Instance admin** applies. If nobody has chosen, limits are on. If you unset the variable, Orchard keeps the value that it locked.
 
 ## Database memory
 
@@ -326,15 +327,15 @@ A new organization is created uncapped: no CPU cap, no memory cap, and no limit 
 
 A superadmin sets the limits that new organizations start with under **Instance admin** > **Configuration** > **New organization limits**: CPU, memory, projects, environments and deployments, each blank for no limit. The values are copied into the organization when it is created. Changing them later never touches an organization that already exists. A superadmin changes one organization from the **Resource quotas** icon in **Instance admin** > **Organizations**, where blank again means no limit; every change is recorded in the audit log (`admin.new_org_defaults_updated` and `admin.org.quota_updated`). Organizations created by an administrator, by an SSO auto-create rule or through sign-up all get the instance default. The first organization that the setup flow creates is never capped.
 
-`NEW_ORG_CPU` and `NEW_ORG_MEMORY` (`tenant.newOrgCpu` and `tenant.newOrgMemory` in the chart) seed the compute caps for new organizations when no instance default has been saved in the admin panel; `0` or `unlimited` means no cap. `MAX_PROJECTS_PER_ORG`, `MAX_ENVIRONMENTS_PER_ORG` and `MAX_DEPLOYMENTS_PER_ORG` (`tenant.maxProjectsPerOrg`, `tenant.maxEnvironmentsPerOrg` and `tenant.maxDeploymentsPerOrg`) are optional hard ceilings that apply to every organization on top of its own limit; unset or `0` means no ceiling. An organization that is already above a limit keeps everything it has and cannot create more.
+`NEW_ORG_CPU` and `NEW_ORG_MEMORY` (`tenant.newOrgCpu` and `tenant.newOrgMemory` in the chart) seed the compute caps for new organizations when no instance default has been saved in the admin panel; `0` or `unlimited` means no cap. `MAX_PROJECTS_PER_ORG`, `MAX_ENVIRONMENTS_PER_ORG` and `MAX_DEPLOYMENTS_PER_ORG` (`tenant.maxProjectsPerOrg`, `tenant.maxEnvironmentsPerOrg` and `tenant.maxDeploymentsPerOrg`) are optional hard ceilings that apply to every organization on top of its own limit; unset or `0` means no ceiling. Superadmins can also set these ceilings in **Instance admin** > **Limits** > **Organization size**. An organization that is already above a limit keeps everything it has and cannot create more.
 
 ## Custom domains
 
-When `SIGNUP_MODE` is `open`, adding a custom domain needs a TXT record that proves ownership, unless the admin switch or `CUSTOM_DOMAIN_VERIFICATION` says otherwise. Domains that a project already serves are never checked again. An organization can hold 250 custom hostnames and add 30 new ones an hour (`MAX_CUSTOM_DOMAINS_PER_ORG` and `MAX_CUSTOM_DOMAIN_CREATES_PER_HOUR`; `0` is unlimited). After five failed proofs, the organization has to wait a minute before it can add another domain, and the wait doubles with each further failure, up to a day. This keeps one tenant from using up the certificate authority's limits for everyone.
+When `SIGNUP_MODE` is `open`, adding a custom domain needs a TXT record that proves ownership, unless **Require proof of domain ownership** in **Instance admin** > **Networking** or `CUSTOM_DOMAIN_VERIFICATION` says otherwise. Domains that a project already serves are never checked again. An organization can hold 250 custom hostnames and add 30 new ones an hour (`MAX_CUSTOM_DOMAINS_PER_ORG` and `MAX_CUSTOM_DOMAIN_CREATES_PER_HOUR`; `0` is unlimited). Superadmins can also change both in **Instance admin** > **Limits** > **Custom domains**. After five failed proofs, the organization has to wait a minute before it can add another domain, and the wait doubles with each further failure, up to a day. This keeps one tenant from using up the certificate authority's limits for everyone.
 
 ## Platform priority
 
-The chart creates a `PriorityClass` named `orchard-platform` (value 100000) and sets it on the platform pods: the server, worker, frontend, MCP, Redis, the platform Postgres and its pooler, the logs and metrics stores, Vector, and the other monitoring pods. Tenant workloads keep the default priority, so on a busy cluster the scheduler places the platform first and the kubelet evicts it last. Tenants cannot choose a class. Orchard sets none on tenant pods, and the tenant admission policy refuses names that start with `system-` or `orchard-`. Set `priorityClasses.enabled: false` to turn this off. The first upgrade that enables it restarts the platform pods once.
+The chart creates a `PriorityClass` named `orchard-platform` (value 100000) and sets it on the platform pods: the server, worker, frontend, MCP, Redis, the platform Postgres and its pooler, the logs and metrics stores, Vector, and the other monitoring pods. Tenant workloads keep the default priority, so on a busy cluster the scheduler places the platform first and the kubelet evicts it last. Tenants cannot choose a class. Orchard sets none on tenant pods, and the tenant admission policy refuses names that start with `system-` or `orchard-`. Set `priorityClasses.enabled: false` to turn this off. Turning it on or off changes the platform pod templates, so the platform pods restart once.
 
 ## Egress bandwidth
 
@@ -365,8 +366,5 @@ To publish your own notes, point the setting at your own folder. `latest.json` n
 
 ## Related resources
 
-- [Finish instance setup](/operate/finishing-setup/)
-- [Turn resource limits on or off](/operate/resource-limits/)
-- [Host commands](/operate/host-commands/)
-- [Environment variables](/reference/configuration/)
-- [Instance admin](/operate/instance-admin/)
+- [Finish instance setup](/operate/finishing-setup/) - Set up email, DNS, backups, and the other settings a new instance needs.
+- [Instance admin](/operate/instance-admin/) - Find each page of the superadmin dashboard.

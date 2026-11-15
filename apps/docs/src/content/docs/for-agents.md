@@ -3,7 +3,7 @@ title: Docs for agents
 description: Read Orchard documentation as Markdown with .md URLs and llms.txt, and find the entry points that agents use to call the Orchard API.
 ---
 
-To give an agent access to this documentation, use the Markdown sources. To let an agent operate an Orchard instance, use MCP or the API.
+Every page of this documentation is also available as plain Markdown, so an agent can read it without parsing HTML or running a browser. This page lists those Markdown sources, and the separate entry points an agent uses to operate an Orchard instance through MCP or the API.
 
 ## Get a page as Markdown
 
@@ -39,9 +39,9 @@ Use `llms.txt` to decide what to read. Use `llms-full.txt` to load everything in
 
 ## Operate an instance
 
-This documentation has no MCP server. The Orchard MCP server operates your instance and does not serve these pages. It runs at `mcp.<your domain>`. For setup, refer to [Connect an MCP client](/mcp/).
+This documentation has no MCP server. The Orchard MCP server runs at `mcp.<your domain>` and operates your instance instead of serving these pages. To set it up, refer to [Connect an MCP client](/mcp/).
 
-An agent can also use the following entry points. For more information, refer to [Code mode for agents](/agents-code-mode/).
+An agent can also use the following entry points, which [code mode for agents](/agents-code-mode/) describes in detail.
 
 | Entry point                         | Purpose                                                  |
 | ----------------------------------- | -------------------------------------------------------- |
@@ -64,13 +64,11 @@ To [roll back](/deploy/rollbacks/) to the previous image, send `POST /apiv1/depl
 
 ## Retry requests safely
 
-To retry a request without doing the work twice, send an `Idempotency-Key` header. Orchard supports this header on create, deploy, rebuild, restart, rollback, database create, and job run requests.
+To retry a request without doing the work twice, send an `Idempotency-Key` header. Orchard supports this header on requests that create a project, app, or database, rebuild, restart, or roll back an app, run a job, restart a database, and upgrade, fork, checkpoint, or restore a database.
 
 A retry with the same key and body replays the first response for 24 hours. The same key with a different body returns a `422` status. A key that is still in progress returns a `409` status.
 
 ## Related resources
 
-- [Connect an MCP client](/mcp/)
-- [Code mode for agents](/agents-code-mode/)
-- [Use the CLI](/cli/)
-- [MCP tools](/reference/mcp-tools/)
+- [Use the CLI](/cli/) - Install the `orchard` CLI and script it with JSON output and stable exit codes.
+- [MCP tools](/reference/mcp-tools/) - Every tool that the Orchard MCP server exposes.

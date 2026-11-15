@@ -5,7 +5,7 @@ sidebar:
   order: 4
 ---
 
-Orchard runs a game server the same way it runs a website. A game server is an app with a public TCP or UDP port and a volume for its world. It runs next to your other apps and databases, with the same logs, metrics, alerts, and quotas.
+You do not need a separate machine or a game hosting service to run a game server for your friends or your community. To Orchard, a game server is an app with a public TCP or UDP port and a volume for its world, so it runs next to your websites and databases with the same logs, metrics, alerts, and quotas.
 
 ## Game templates
 
@@ -23,7 +23,7 @@ To browse every template, go to [orchard.hackclub.com/templates](https://orchard
 
 ## Prerequisites
 
-- A public IP address for your organization, or an instance default. For more information, refer to [Publish a TCP or UDP port](/deploy/networking/#publish-a-tcp-or-udp-port).
+- A public IP address for your organization, or an instance default. To check, refer to [Publish a TCP or UDP port](/deploy/networking/#publish-a-tcp-or-udp-port).
 - A layer 4 (L4) load balancer in the cluster.
 - Enough free memory for the game. Each template shows its size before you deploy.
 
@@ -49,21 +49,21 @@ orchard template deploy <template-id> --param appName=minecraft
 
 - The world is on a volume, so it survives restarts and redeploys.
 - Orchard does not back up app volumes. Copy the world somewhere else from a [shell](/run/logs/#open-a-shell) in the container, or use the game's own backups, such as the Valheim template's.
-- An app with a volume stops before it updates, so players disconnect for a moment during an update. For more information, refer to [Choose an update strategy](/deploy/update-strategies/).
+- An app with a volume must use the **Recreate** [update strategy](/deploy/update-strategies/), which stops the app before it updates. Players disconnect for a moment during an update.
 
 ## Share the server with your apps
 
-- **Size:** Set the CPU and memory of the game server so that it cannot use the memory your apps need. For more information, refer to [Scale an app](/deploy/scaling/).
-- **Quotas:** Cap what each organization and member can use. For more information, refer to [Quotas](/teams/quotas/).
+- **Size:** [Set the CPU and memory](/deploy/scaling/#set-cpu-and-memory) of the game server so that it cannot use the memory your apps need.
+- **Quotas:** Cap what each organization and member can use with [quotas](/teams/quotas/).
 - **Placement:** On a cluster with more than one node, put the game server on its own node with a [node pool](/operate/nodes/).
-- **Idle time:** Stop the app when nobody plays. Stopping an app scales it to zero and keeps its world. For more information, refer to [Stop and start an app](/deploy/scaling/#stop-and-start-an-app).
-- **Crashes:** Get a message in Discord, Slack, or email when the server crashes. For more information, refer to [Set up notifications](/run/notifications/).
-- **Console:** Read the server log and open a shell in the container from the app's page. For more information, refer to [Read logs and open a shell](/run/logs/).
+- **Idle time:** [Stop the app](/deploy/scaling/#stop-and-start-an-app) when nobody plays. Stopping an app scales it to zero and keeps its world.
+- **Crashes:** Get a message in Discord, Slack, or email when the server crashes. Subscribe a channel to `pod.crashing` in [notifications](/run/notifications/).
+- **Console:** [Read the server log and open a shell](/run/logs/) in the container from the app's page.
 
 Public TCP and UDP traffic skips the HTTP layer, so [app protection](/deploy/protection/) does not apply. Use the game's own allowlist or password to control who joins.
 
 ## Related resources
 
-- [Deploy and write templates](/run/templates/)
-- [Configure app networking](/deploy/networking/)
-- [Attach storage to an app](/deploy/storage/)
+- [Deploy and write templates](/run/templates/) - Write a template for a game that is not in the gallery.
+- [Configure app networking](/deploy/networking/) - Add ports and publish them over TCP or UDP.
+- [Attach storage to an app](/deploy/storage/) - Add a volume, or grow one when a world outgrows it.

@@ -5,7 +5,7 @@ sidebar:
   order: 4
 ---
 
-A template is a YAML file that describes a set of resources and the parameters that fill them in. Deploying a template creates the resources together, such as an app, a database, and a domain.
+A template deploys a whole stack in one step, such as an app, the database it needs, and a domain in front of it, already wired together. You answer a few questions, and Orchard creates each resource and passes values such as the database password from one resource to the next. A template is a YAML file, so you can also write your own and share it in the community registry.
 
 ## Deploy a template
 
@@ -206,11 +206,11 @@ Deploy a template end to end before you publish it. A template can deploy withou
 
 ## The community registry
 
-Orchard publishes its built-in templates and community templates to `https://assets.orchard.my/registry`. The gallery is at [orchard.my/templates](https://orchard.hackclub.com/templates).
+Orchard publishes its built-in templates and community templates to `https://assets.orchard.my/registry`. The gallery is at [orchard.hackclub.com/templates](https://orchard.hackclub.com/templates).
 
 Each instance reads the catalog when it starts and every six hours. To use another registry, set `TEMPLATE_REGISTRY_URL`. On an air-gapped instance, set the variable to an empty value. The built-in templates still load from the server image.
 
-The registry signs the catalog and the graft revocation list with the Orchard key. Each instance verifies the signature, refuses an older catalog than the last one it accepted, and refuses an expired one. When a catalog is refused the instance keeps the templates it already has and logs a warning. `ORCHARD_REGISTRY_SIGNATURE` controls this. `required` (the default) never accepts an unsigned catalog. If `TEMPLATE_REGISTRY_URL` or `ORCHARD_GRAFT_MARKETPLACE_URL` points at a registry you run yourself, set it to `auto`, which accepts an unsigned catalog with a warning until a signed one has been seen (Helm: `graftSettings.registrySignature`). Signed catalogs are checked against the Orchard key in both modes, so a registry signed with your own key won't verify.
+The registry signs the catalog and the graft revocation list with the Orchard key. Each instance verifies the signature, refuses an older catalog than the last one it accepted, and refuses an expired one. When a catalog is refused the instance keeps the templates it already has and logs a warning. `ORCHARD_REGISTRY_SIGNATURE` controls this. `required` (the default) never accepts an unsigned catalog. If `TEMPLATE_REGISTRY_URL` or `ORCHARD_GRAFT_MARKETPLACE_URL` points at a registry you run yourself, set it to `auto`, which accepts an unsigned catalog with a warning until a signed one has been seen (Helm: `graftSettings.registrySignature`). Signed catalogs are checked against the Orchard key in both modes, so a registry signed with your own key does not verify.
 
 You cannot edit or delete imported templates from the instance. An import does not overwrite a custom template with the same name.
 
@@ -238,7 +238,5 @@ https://assets.orchard.my/registry/templates/<name>/latest/template.yaml
 
 ## Related resources
 
-- [Deploy a compose stack](/run/compose/)
-- [Create and manage a database](/data/databases/)
-- [`orchard template` reference](/reference/cli/#template)
-- [Configure app networking](/deploy/networking/)
+- [Deploy a compose stack](/run/compose/) - Deploy the services in a `docker-compose.yml` file instead of a template.
+- [`orchard template` reference](/reference/cli/#template) - Every `orchard template` command and flag.

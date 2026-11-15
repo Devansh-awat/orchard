@@ -5,7 +5,7 @@ sidebar:
   order: 7
 ---
 
-Every deploy adds to the disk of the server. A build writes layers to the build cache, the registry stores the new image, and the node pulls a copy of it to run. Orchard removes old data automatically. This page explains what it removes, when, and how to free space now.
+Every deploy adds to the disk of the server: a build writes layers to the build cache, the registry stores the new image, and the node pulls a copy of it to run. Orchard removes old data automatically, so a server usually stays within its disk without help. When it does not, this page shows you what uses the space, what Orchard removes and when, and how to free space now.
 
 ## Find what uses the disk
 
@@ -20,14 +20,14 @@ sudo orchardctl image-gc
 
 `/var/lib/rancher/k3s/storage` holds the volumes of Orchard and your apps. The names end in the namespace and the volume name.
 
-| Volume                                | What it holds                                                                   | What frees it                                                                                                     |
-| ------------------------------------- | ------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `orchard-builders_buildkit-cache`     | Layers from earlier builds, so that builds can skip unchanged steps.            | [The build cache](#the-build-cache)                                                                               |
-| `orchard_zot-data`                    | Your app images. Orchard keeps the 10 newest images of each app, for rollbacks. | Each deploy deletes older images. The registry frees their space once a day.                                      |
-| `orchard-metrics_data-victorialogs-0` | Logs.                                                                           | `logs.retention` and `logs.maxDiskSpaceUsage`. For more information, refer to [Logs](/operate/logs/).             |
-| `orchard-object-storage_*`            | Database backups and dumps.                                                     | The retention of each backup. For more information, refer to [Back up and restore](/operate/backup-and-restore/). |
+| Volume                                | What it holds                                                                   | What frees it                                                                                      |
+| ------------------------------------- | ------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `orchard-builders_buildkit-cache`     | Layers from earlier builds, so that builds can skip unchanged steps.            | [The build cache](#the-build-cache)                                                                |
+| `orchard_zot-data`                    | Your app images. Orchard keeps the 10 newest images of each app, for rollbacks. | Each deploy deletes older images. The registry frees their space once a day.                       |
+| `orchard-metrics_data-victorialogs-0` | Logs.                                                                           | `logs.retention` and `logs.maxDiskSpaceUsage`. Refer to [Logs](/operate/logs/#retention-and-disk). |
+| `orchard-object-storage_*`            | Database backups and dumps.                                                     | The retention of each backup. Refer to [Back up and restore](/operate/backup-and-restore/).        |
 
-`/var/lib/rancher/k3s/agent/containerd` holds the images that the node pulled to run containers. For more information, refer to [Old container images](#old-container-images).
+`/var/lib/rancher/k3s/agent/containerd` holds the images that the node pulled to run containers. To free that space, refer to [Old container images](#old-container-images).
 
 :::note
 The installer gives each volume a size, but the `local-path` storage of k3s does not enforce it. A volume can grow until the disk is full. Orchard enforces the size of the build cache itself.
@@ -123,7 +123,7 @@ sudo orchardctl image-gc prune
 
 This removes every image that no running container uses, and prints how much space it freed. That includes the images of stopped apps, and of jobs such as builds and backups. The node pulls them again when it needs them.
 
-### Existing servers
+### Upgrade from an earlier version
 
 A new install starts with Orchard's settings. On an existing server, `sudo orchardctl update` writes them when the file does not exist yet. It never changes the file after that. An update runs the `orchardctl` that is already on the server, so a server may need two updates before it gets the settings. To get them now, run `sudo orchardctl image-gc reset`.
 

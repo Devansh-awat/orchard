@@ -7,9 +7,7 @@ sidebar:
 
 import { Tabs, TabItem } from '@astrojs/starlight/components';
 
-A status page shows visitors whether your apps and databases are available. Visitors do not need an Orchard account.
-
-Orchard sets each component's status from the state of the cluster. You cannot set a status or post an incident message by hand.
+A status page tells your users whether your apps and databases are up, without giving them an Orchard account. Orchard sets each component's status from the state of the cluster, so the page stays current without anyone updating it. Because of this, you cannot set a status or post an incident message by hand.
 
 ## Prerequisites
 
@@ -100,7 +98,7 @@ The page lists up to 20 incidents. Replica shortages and firing alerts change a 
 
 A host serves the page at `<host>.<your instance domain>`. When you save a host, Orchard creates an Ingress and requests a certificate through cert-manager.
 
-DNS for the host must point to your cluster. If you use a wildcard DNS record for your instance domain, no other DNS change is needed. For more information, refer to [Set up wildcard certificates](/operate/wildcard-certificates/).
+DNS for the host must point to your cluster. If you use a wildcard DNS record for your instance domain, no other DNS change is needed. The issuer and Service that these hosts use are set in [Base domain](/operate/configuration/#base-domain).
 
 To remove a host from the CLI, run the following command:
 
@@ -145,6 +143,5 @@ orchard status-page delete <pageId>
 
 ## Related resources
 
-- [Create alert rules](/run/alerts/)
-- [Manage domains and HTTPS](/deploy/domains/)
-- [`orchard status-page` reference](/reference/cli/#status-page)
+- [Create alert rules](/run/alerts/) - Fire alerts that mark a component **Degraded** on the status page.
+- [`orchard status-page` reference](/reference/cli/#status-page) - Every `orchard status-page` command and flag.

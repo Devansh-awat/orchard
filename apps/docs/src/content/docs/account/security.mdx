@@ -7,7 +7,7 @@ sidebar:
 
 import { Tabs, TabItem } from '@astrojs/starlight/components';
 
-To control access to your Orchard account, add sign-in methods and review the devices that are signed in.
+Your account is the key to every organization you belong to, so it is worth controlling how you sign in and where you stay signed in. This page covers the sign-in methods an instance offers, how to add a passkey, and how to sign out a device that you no longer use or trust.
 
 ## Sign-in methods
 
@@ -29,7 +29,7 @@ A passkey lets you sign in with Touch ID, Face ID, Windows Hello, or a hardware 
 
 1. Go to **Account settings** > **Passkeys and devices**.
 2. Select **Add passkey**.
-3. Enter a name for the passkey, such as `MacBook`.
+3. (Optional) Enter a name for the passkey, such as `MacBook`.
 4. Follow the prompts from your browser.
 
 Add more than one passkey if passkeys are your only sign-in method. If you lose your only passkey and your instance has no email, a superadmin must help you sign in.
@@ -45,7 +45,7 @@ sudo orchardctl login           # print a one-time sign-in link
 sudo orchardctl password set    # set a password on the superadmin account
 ```
 
-For more information, refer to [`orchardctl login`](/operate/host-commands/#login) and [`orchardctl password`](/operate/host-commands/#password).
+For the options of each command, refer to [`orchardctl login`](/operate/host-commands/#login) and [`orchardctl password`](/operate/host-commands/#password).
 
 ## Review your devices
 
@@ -92,8 +92,6 @@ Use this option if you lose a device or think that someone else has access to yo
 
 ## Related resources
 
-- [Manage API tokens](/account/tokens/)
-- [Set up SSO](/teams/sso/)
-- [Connect an MCP client](/mcp/)
-- [Update your profile](/account/profile/)
-- [Manage SSH identities](/account/ssh-identities/)
+- [Manage API tokens](/account/tokens/) - Create and revoke the tokens that scripts, CI jobs, and MCP clients use.
+- [Set up SSO](/teams/sso/) - Let people in your organization sign in through your identity provider.
+- [Manage SSH identities](/account/ssh-identities/) - Add the public keys that reach your Greenhouse machines.

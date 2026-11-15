@@ -5,7 +5,7 @@ sidebar:
   order: 10
 ---
 
-A [Score](https://score.dev) file describes a workload in your repository. Name the file `score.yaml` or `score.yml`. Orchard reads it when you create the app, and again on each push that [auto-deploys](/deploy/github/#auto-deploy).
+A [Score](https://score.dev) file lets you keep an app's ports, variables, and databases in the repository next to the code, instead of setting them by hand in the dashboard. Score is an open specification, so the same file can describe the workload to other platforms. Name the file `score.yaml` or `score.yml`. Orchard reads it when you create the app, and again on each push that [auto-deploys](/deploy/github/#auto-deploy).
 
 The Score file describes the workload. `orchard.json` describes the build.
 
@@ -74,7 +74,5 @@ When Orchard finds a Score file, the new app form shows the databases, ports, an
 
 ## Related resources
 
-- [Deploy from GitHub](/deploy/github/)
-- [Create and manage a database](/data/databases/)
-- [Connect an app to a database or app](/deploy/connect-resources/)
-- [Manage domains and HTTPS](/deploy/domains/)
+- [Deploy from GitHub](/deploy/github/) - Create the app that reads the Score file, and turn on auto-deploy.
+- [Score specification](https://docs.score.dev/) - Read the full Score file format.

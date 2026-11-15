@@ -96,8 +96,7 @@ For an `apiAliases` claim, a core route that handles the same path and method ta
 
 ## Related resources
 
-- [Get started](/grafts/build/quickstart/)
-- [Write server code](/grafts/build/server/)
-- [Add UI](/grafts/build/ui/)
-- [Use the database](/grafts/build/database/)
-- [Publish a graft](/grafts/build/publishing/)
+- [Write server code](/grafts/build/server/) - Add API routes and reach Orchard through doors.
+- [Add UI](/grafts/build/ui/) - Add pages, navigation, tabs, and cards.
+- [Use the database](/grafts/build/database/) - Add migrations and read Orchard's tables.
+- [Publish a graft](/grafts/build/publishing/) - Sign a graft and share it.

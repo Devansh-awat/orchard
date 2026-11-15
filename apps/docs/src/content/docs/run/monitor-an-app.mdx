@@ -5,7 +5,7 @@ sidebar:
   order: 6
 ---
 
-The **Observe** tab of an app shows metrics, logs, requests, errors, and cluster events. Use the tab to find out what changed and when.
+When an app slows down or starts to fail, the **Observe** tab is where you find out what changed and when. It puts the app's metrics, logs, requests, errors, and cluster events in one place, and it marks deploys and other changes on the same timeline, so you can connect a symptom to its cause.
 
 | View         | What it shows                                                | Requirements                                                           |
 | ------------ | ------------------------------------------------------------ | ---------------------------------------------------------------------- |
@@ -63,7 +63,7 @@ Each finding has these actions:
 
 To download logs, select the download icon. You can download the lines on screen, export every matching line, or export as NDJSON.
 
-For more information about live logs and container crashes, refer to [Read logs and open a shell](/run/logs/).
+To follow live logs or read why a container crashed, refer to [Read logs and open a shell](/run/logs/).
 
 ## Inspect requests
 
@@ -106,7 +106,7 @@ A result counts as worse when any of these conditions is true:
 
 A memory change of at least 30% and 64 MiB appears on the result, but it does not count as worse.
 
-To receive a notification when a result is worse, subscribe a channel to the **Got worse** event. For more information, refer to [Set up notifications](/run/notifications/).
+To receive a notification when a result is worse, [subscribe a channel](/run/notifications/) to the **Got worse** event (`deploy.regressed`).
 
 ## Use the CLI
 
@@ -122,7 +122,6 @@ To receive a notification when a result is worse, subscribe a channel to the **G
 
 ## Related resources
 
-- [Create alert rules](/run/alerts/)
-- [Configure logs and request data](/operate/logs/)
-- [Metrics and alerts](/run/observability/)
-- [`orchard observe` reference](/reference/cli/#observe)
+- [Create alert rules](/run/alerts/) - Get notified when a metric crosses a threshold for a set period.
+- [Configure logs and request data](/operate/logs/) - Turn on the log store and access logs that the **Logs**, **Requests**, and **Errors** views read.
+- [`orchard observe` reference](/reference/cli/#observe) - Every `orchard observe` command and flag.

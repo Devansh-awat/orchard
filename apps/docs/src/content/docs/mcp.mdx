@@ -5,14 +5,14 @@ description: Connect Claude, Cursor, VS Code, or another Model Context Protocol 
 
 import { Tabs, TabItem } from '@astrojs/starlight/components';
 
-To let an agent deploy apps, manage databases, and read logs, connect it to the Orchard Model Context Protocol (MCP) server. The agent acts as your account. It can only see and change what you can.
+The Orchard Model Context Protocol (MCP) server lets an agent such as Claude, Cursor, or VS Code deploy apps, manage databases, and read logs through the same API as the dashboard. The agent acts as your account, so it can only see and change what you can, and you choose how much of that it gets: read only, changes, or changes plus shell access.
 
 The server has two endpoints on its own hostname:
 
-| Path       | Provides                                                                                                         |
-| ---------- | ---------------------------------------------------------------------------------------------------------------- |
-| `/`        | The full tool set, grouped into toolsets. For the list, refer to [MCP tools](/reference/mcp-tools/).             |
-| `/compact` | Three tools that reach the whole API. For more information, refer to [Code mode for agents](/agents-code-mode/). |
+| Path       | Provides                                                                                              |
+| ---------- | ----------------------------------------------------------------------------------------------------- |
+| `/`        | The full tool set, grouped into toolsets. Every tool is listed in [MCP tools](/reference/mcp-tools/). |
+| `/compact` | Three tools that reach the whole API, described in [Code mode for agents](/agents-code-mode/).        |
 
 ## Prerequisites
 
@@ -20,7 +20,7 @@ The server has two endpoints on its own hostname:
 
 ## Find your server URL
 
-The endpoint is at the root of a hostname that your operator chooses. On an instance from the one-command installer, the installer asks for it, and the default is `mcp.<parent of your domain>`, such as `https://mcp.example.com/`. A request to `/mcp` on that host returns a `404` status.
+The endpoint is at the root of a hostname that your operator chooses. On an instance from the one-command installer, the installer asks for it, and the default is `mcp.<parent of your domain>`, such as `https://mcp.example.com/`. On a machine with less than about 3.5 GB of memory, the installer does not serve an MCP endpoint by default. To serve one anyway, pass `--mcp true`. A request to `/mcp` on that host returns a `404` status.
 
 To get the URL for your instance:
 
@@ -222,7 +222,7 @@ The server also publishes two read-only resources:
 
 ## Revoke access
 
-An OAuth connection is a session on your account. To end it, sign out of the session at **Account settings** > **Passkeys and devices**. For more information, refer to [Sign out of a device](/account/security/#sign-out-of-a-device).
+An OAuth connection is a session on your account. To end it, [sign out of the session](/account/security/#sign-out-of-a-device) at **Account settings** > **Passkeys and devices**.
 
 To end a token connection, revoke the token at **Account settings** > **API tokens**, or run `orchard auth token revoke <TOKEN_ID>`.
 
@@ -237,7 +237,5 @@ Orchard then refuses every request to the MCP server and hides the setup page in
 
 ## Related resources
 
-- [MCP tools](/reference/mcp-tools/)
-- [Code mode for agents](/agents-code-mode/)
-- [Turn the MCP endpoint on or off](/operate/finishing-setup/#turn-the-mcp-endpoint-on-or-off)
-- [Docs for agents](/for-agents/)
+- [Turn the MCP endpoint on or off](/operate/finishing-setup/#turn-the-mcp-endpoint-on-or-off) - Deploy or remove the MCP server on your instance and set its hostname.
+- [Docs for agents](/for-agents/) - Give an agent this documentation as Markdown or `llms.txt`.

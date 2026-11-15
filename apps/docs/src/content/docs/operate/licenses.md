@@ -13,7 +13,7 @@ The AGPL adds no further requirement if you run an unmodified version.
 
 ## Names and logos
 
-The AGPL covers Orchard's code, not the Orchard and Hack Club names and logos. If you distribute a modified version, rebrand it first. Running unmodified copies and saying factually what your software works with is fine. See [TRADEMARK.md](https://github.com/hackclub/orchard/blob/main/TRADEMARK.md).
+The AGPL covers Orchard's code, not the Orchard and Hack Club names and logos. If you distribute a modified version, rebrand it first. You can run unmodified copies, and you can state factually what your software works with. For the full policy, refer to [TRADEMARK.md](https://github.com/hackclub/orchard/blob/main/TRADEMARK.md).
 
 ## Third-party notices
 
@@ -29,10 +29,8 @@ Each part of Orchard includes the copyright notices and license texts of the ope
 | [Host commands](/operate/host-commands/) | `orchardctl licenses`                                                                         |
 | This documentation                       | [third-party-notices.txt](/third-party-notices.txt)                                           |
 
-For all notices in one place, refer to [orchard.my/credits](https://orchard.hackclub.com/credits).
+For all notices in one place, refer to [orchard.hackclub.com/credits](https://orchard.hackclub.com/credits).
 
 ## Related resources
 
-- [What is Orchard](/start/what-is-orchard/)
-- [Use the CLI](/cli/)
-- [Host commands](/operate/host-commands/)
+- [What is Orchard](/start/what-is-orchard/) - Learn what Orchard is and what it runs.

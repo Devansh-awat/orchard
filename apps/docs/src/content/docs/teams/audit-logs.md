@@ -5,7 +5,7 @@ sidebar:
   order: 4
 ---
 
-Orchard audit logs record actions taken through Orchard, such as deploys, deletions, member and role changes, settings changes, and database operations. Each entry has the actor, the action, the target, and the time.
+When something changes and you need to know who did it, read the audit log. Orchard records actions taken through Orchard, such as deploys, deletions, member and role changes, settings changes, and database operations. Each entry has the actor, the action, the target, and the time.
 
 Orchard keeps audit log entries for 180 days and then deletes them. You cannot edit entries from the dashboard.
 
@@ -23,7 +23,7 @@ To read an organization's audit log from a terminal, run the following command:
 orchard audit list
 ```
 
-For flags and pagination, refer to the [CLI reference](/reference/cli/).
+For flags and pagination, refer to the [`orchard audit` reference](/reference/cli/#audit).
 
 ## Limitations
 
@@ -31,6 +31,5 @@ Audit logs do not record actions taken outside Orchard. A person who uses `kubec
 
 ## Related resources
 
-- [Manage organizations and roles](/teams/organizations/)
-- [Security and isolation](/operate/security/)
-- [`orchard audit` reference](/reference/cli/#audit)
+- [Manage organizations and roles](/teams/organizations/) - Decide who can take the actions the log records.
+- [Security and isolation](/operate/security/) - Learn what Orchard protects and what it leaves to the cluster.

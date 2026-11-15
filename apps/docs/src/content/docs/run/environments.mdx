@@ -7,7 +7,7 @@ sidebar:
 
 import { Tabs, TabItem } from '@astrojs/starlight/components';
 
-To configure an app, set variables on it. To reuse a value across apps, store it as a shared variable and reference it. Each [environment](/start/concepts/#environment) has its own shared variables.
+Variables let you configure an app without rebuilding its image, so the same image can run with different settings in each [environment](/start/concepts/#environment). Set a variable on an app to configure that app. To reuse a value across apps, store it once as a shared variable in the environment and reference it from each app.
 
 ## Set app variables
 
@@ -79,7 +79,7 @@ Orchard passes a secret to the container through the app's Kubernetes Secret. Th
 
 ## Reference a database or another app
 
-To read a value from a resource, use a reference such as `${{resource.appdb.connection_string}}`. Select **Use a resource** in the value field to add one. For more information, refer to [Connect an app](/data/databases/#connect-an-app).
+To read a value from a database or another app, use a reference such as `${{resource.appdb.connection_string}}`. To add one, select **Use a resource** in the value field. The available fields are listed in [Connect an app to a database or app](/deploy/connect-resources/#available-fields).
 
 ## Create an environment
 
@@ -121,7 +121,6 @@ Secret values are write-only, so the file contains commented placeholders for th
 
 ## Related resources
 
-- [CLI reference](/reference/cli/)
-- [Connect an app to a database or app](/deploy/connect-resources/)
-- [Attach an Orchard project](/greenhouse/projects/)
-- [Manage a project](/teams/projects/)
+- [`orchard env` reference](/reference/cli/#env) - Every `orchard env` command and flag, including `orchard env pull`.
+- [Attach an Orchard project](/greenhouse/projects/) - Load an environment's variables into a Greenhouse machine.
+- [Manage a project](/teams/projects/) - Create, share, transfer, move, and delete projects.

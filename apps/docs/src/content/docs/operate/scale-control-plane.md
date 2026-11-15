@@ -41,7 +41,7 @@ Autoscaling reacts to a burst after 60 seconds and removes capacity after 5 minu
 
 ## Run more than one server replica
 
-Set `REDIS_URL` before you run more than one replica. For what depends on it, refer to [Rate limits and client addresses](/operate/client-addresses/) and [Replicas and leases](/operate/architecture/#replicas-and-leases).
+More than one replica needs Redis. The chart runs Redis and sets `REDIS_URL` by default, and runs two server replicas. If you turn off the chart's Redis, set `REDIS_URL` to your own. For what depends on it, refer to [Rate limits and client addresses](/operate/client-addresses/) and [Replicas and leases](/operate/architecture/#replicas-and-leases).
 
 ### Pod shells across replicas
 
@@ -53,6 +53,6 @@ Sessions do not survive the replacement of the server pod during an upgrade.
 
 ## Related resources
 
-- [Architecture](/operate/architecture/)
-- [Resource limits](/operate/resource-limits/)
-- [Environment variables](/reference/configuration/)
+- [Architecture](/operate/architecture/) - Review the components of an instance and how replicas share work.
+- [Turn resource limits on or off](/operate/resource-limits/) - Choose whether apps and databases are held to CPU and memory limits.
+- [Run on a small server](/operate/small-servers/) - Learn what the installer trims on a machine with little memory.

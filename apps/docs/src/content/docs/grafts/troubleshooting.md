@@ -107,7 +107,5 @@ Collect the phase and reason from **Instance admin** > **Grafts**, and the outpu
 
 ## Related resources
 
-- [Install grafts](/grafts/install/)
-- [Upgrade and roll back grafts](/grafts/upgrades/)
-- [Grafts](/grafts/overview/)
-- [Troubleshooting Orchard](/operate/troubleshooting/)
+- [Upgrade and roll back grafts](/grafts/upgrades/) - Return to a version that worked.
+- [Troubleshooting Orchard](/operate/troubleshooting/) - Fix problems with Orchard itself.

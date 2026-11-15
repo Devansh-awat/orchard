@@ -5,7 +5,7 @@ sidebar:
   order: 8
 ---
 
-Orchard keeps a copy of each app's logs, and of the ingress controller's access log, in a log store inside the cluster. Live logs do not use the store, because they stream from the pods. Features that look back in time need it.
+Orchard keeps a copy of each app's logs, and of the ingress controller's access log, in a log store inside the cluster. Live logs stream straight from the pods and do not need the store, but every feature that looks back in time does: log search, per-route request data, attack signals, and error grouping. This page explains how to size the store, how to point it at your ingress controller's access log, and how to turn it off on a small machine.
 
 | Feature                                        | Location                                                                            | Needs                         |
 | ---------------------------------------------- | ----------------------------------------------------------------------------------- | ----------------------------- |
@@ -54,19 +54,20 @@ To move a store that holds data to another class, set the value explicitly. The 
 
 ## Chart values
 
-| Value                                    | Chart default                                          | Installer, less than 8 GB of memory      |
-| ---------------------------------------- | ------------------------------------------------------ | ---------------------------------------- |
-| `logs.enabled`                           | `true`                                                 | `true`                                   |
-| `logs.retention`                         | `14d`                                                  | `7d`                                     |
-| `logs.maxDiskSpaceUsage`                 | `16GiB`                                                | From free disk                           |
-| `logs.victorialogs.image`                | `victoriametrics/victoria-logs:v1.54.0`                |                                          |
-| `logs.victorialogs.storage.size`         | `20Gi`                                                 | From free disk                           |
-| `logs.victorialogs.storage.storageClass` | Empty, the cluster default                             | `local-path`                             |
-| `logs.victorialogs.resources`            | Requests `100m/256Mi`, limits `1/1Gi`                  | Requests `50m/96Mi`, limits `1/384Mi`    |
-| `logs.vector.image`                      | `timberio/vector:0.61.0-distroless-libc`               |                                          |
-| `logs.vector.dataDir`                    | `/var/lib/vector-orchard`, a host path for checkpoints |                                          |
-| `logs.vector.bufferEvents`               | `20000`                                                | `5000`                                   |
-| `logs.vector.resources`                  | Requests `50m/128Mi`, limits `500m/512Mi`              | Requests `20m/64Mi`, limits `500m/256Mi` |
+| Value                                    | Chart default                                                                      | Installer, less than 8 GB of memory      |
+| ---------------------------------------- | ---------------------------------------------------------------------------------- | ---------------------------------------- |
+| `logs.enabled`                           | `true`                                                                             | `true`                                   |
+| `logs.retention`                         | `14d`                                                                              | `7d`                                     |
+| `logs.maxDiskSpaceUsage`                 | `16GiB`                                                                            | From free disk                           |
+| `logs.victorialogs.image`                | `victoriametrics/victoria-logs:v1.54.0`                                            |                                          |
+| `logs.victorialogs.storage.size`         | `20Gi`                                                                             | From free disk                           |
+| `logs.victorialogs.storage.storageClass` | Empty, the cluster default                                                         | `local-path`                             |
+| `logs.victorialogs.resources`            | Requests `100m/256Mi`, limits `1/1Gi`                                              | Requests `50m/96Mi`, limits `1/384Mi`    |
+| `logs.vector.image`                      | `timberio/vector:0.61.0-distroless-libc`                                           |                                          |
+| `logs.vector.dataDir`                    | `/var/lib/vector-orchard`, a host path for checkpoints                             |                                          |
+| `logs.vector.bufferEvents`               | `20000`                                                                            | `5000`                                   |
+| `logs.vector.throttle.eventsPerSecond`   | `2000`, the [log rate limit](/operate/configuration/#log-rate-limit) per namespace |                                          |
+| `logs.vector.resources`                  | Requests `50m/128Mi`, limits `500m/512Mi`                                          | Requests `20m/64Mi`, limits `500m/256Mi` |
 
 On a small machine, reduce these values instead of turning off the store.
 
@@ -92,7 +93,7 @@ Orchard removes query strings before it stores a line. It also replaces IDs in p
 
 Traefik needs access logging on, JSON format, and the `User-Agent` header kept. Do not drop the `ServiceName` field, because Orchard uses it to match a line to an app.
 
-On an installer host, this setup is automatic. The installer sets these values. `orchardctl update` sets them on a host installed earlier, with `--reuse-values` on the deployed chart version, so Traefik itself does not change version.
+On an installer host, this setup is automatic. The installer sets these values, and `orchardctl update` sets any that are missing, with `--reuse-values` on the deployed chart version, so Traefik itself does not change version.
 
 On your own cluster, the keys depend on the Traefik chart version:
 
@@ -186,7 +187,5 @@ Behind a proxy or CDN, the client address is in a header. HAProxy can read one w
 
 ## Related resources
 
-- [Read logs and open a shell](/run/logs/)
-- [Metrics and alerts](/run/observability/)
-- [Host commands](/operate/host-commands/)
-- [Monitor an app](/run/monitor-an-app/)
+- [Read logs and open a shell](/run/logs/) - Stream an app's live logs and run commands in its containers.
+- [Metrics and alerts](/run/observability/) - Read CPU, memory, and traffic metrics, and find current problems with apps and databases.

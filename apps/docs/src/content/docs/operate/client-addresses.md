@@ -5,7 +5,7 @@ sidebar:
   order: 3
 ---
 
-Orchard's sign-in limits are keyed on the client address. For the limits to work, the counters must be shared between server pods, and the address must be the visitor's and not a proxy's.
+Orchard limits sign-in attempts per client address, which slows down scripts that request or guess sign-in codes. The limits only work when two things are true: every server pod shares the same counters, and the address Orchard sees belongs to the visitor, not to a proxy in front of it. This page shows how to get both right for your setup.
 
 ## Share the counters
 
@@ -47,6 +47,6 @@ If your load balancer uses source NAT, every visitor arrives with the balancer's
 
 ## Related resources
 
-- [Go to production](/operate/production/)
-- [Bot protection](/operate/bot-protection/)
-- [Scale the control plane](/operate/scale-control-plane/)
+- [Go to production](/operate/production/) - Prepare an instance for real users.
+- [Turn on bot protection](/operate/bot-protection/) - Add a Turnstile challenge to the sign-in pages.
+- [Scale the control plane](/operate/scale-control-plane/) - Run more than one server pod.

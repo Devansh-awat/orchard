@@ -144,7 +144,7 @@ Build pods download the directory, and their network policy only lets them reach
 
 To turn it off, set `LOCAL_DEPLOYS_ENABLED` to `false`. For more information, refer to [Deploy from your terminal](/deploy/deploy-from-terminal/).
 
-Builds fetch the uploaded files from your storage endpoint. If that endpoint is on the same server behind its own ingress, the installer already allows it. With Helm, add your ingress controller's pods to `builders.registryEgress`. For more information, refer to [Troubleshooting](/operate/troubleshooting/#orchard-up-fails-at-context-fetch-with-connection-refused).
+Builds fetch the uploaded files from your storage endpoint. If that endpoint is on the same server behind its own ingress, the installer allows builds to reach Traefik, except in tunnel mode, where builds reach the endpoint through Cloudflare instead. With Helm, add your ingress controller's pods to `builders.registryEgress`. For more information, refer to [Troubleshooting](/operate/troubleshooting/#orchard-up-fails-at-context-fetch-with-connection-refused).
 
 ## Serve uploads from a public URL
 
@@ -204,7 +204,6 @@ These variables take priority over saved settings, and they lock the matching fi
 
 ## Related resources
 
-- [Back up and restore a database](/data/backups/)
-- [Schedule database dumps](/operate/database-dumps/)
-- [Host commands](/operate/host-commands/)
-- [Finish instance setup](/operate/finishing-setup/)
+- [Back up and restore a database](/data/backups/) - Take backups, restore them, and run restore tests.
+- [Back up and restore an instance](/operate/backup-and-restore/) - Learn what else to keep so that you can recover from the loss of a machine.
+- [Host commands](/operate/host-commands/) - Review `orchardctl backups s3` and the other host commands.

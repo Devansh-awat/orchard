@@ -5,7 +5,7 @@ sidebar:
   order: 3
 ---
 
-Orchard runs each build as a Kubernetes job on your cluster. The job clones the repository, builds the image with BuildKit, and pushes it to the [registry configured on the instance](/operate/finishing-setup/#use-your-own-registry).
+Orchard builds images on your own cluster, so your source code and build secrets stay on machines you control. Each build runs as a Kubernetes job that clones the repository, builds the image with BuildKit, and pushes it to the [registry configured on the instance](/operate/finishing-setup/#use-your-own-registry). This page explains how builds move through the queue and how to fix the most common failures.
 
 Orchard reads build status from the job. If a builder stops unexpectedly, the build shows as failed.
 
@@ -98,7 +98,7 @@ Orchard uses these keys only for `FROM` and `COPY --from` pulls. It does not pas
 
 **Cause:** Memory requests on the node leave no room for the builder pod. Kubernetes counts requests, not actual usage.
 
-**Fix:** Remove or shrink other workloads, or [add a node](/operate/nodes/).
+**Fix:** Remove or shrink other workloads. On a cluster installed with the Helm chart, you can also [add a node](/operate/nodes/).
 
 ### The build also fails on your machine
 
@@ -108,7 +108,6 @@ Orchard uses these keys only for `FROM` and `COPY --from` pulls. It does not pas
 
 ## Related resources
 
-- [Roll back an app](/deploy/rollbacks/)
-- [Deploy from GitHub](/deploy/github/)
-- [Troubleshooting Orchard](/operate/troubleshooting/)
-- [Deploy from an image](/deploy/image/)
+- [Roll back an app](/deploy/rollbacks/) - Return an app to an earlier release when a new build misbehaves.
+- [Troubleshooting Orchard](/operate/troubleshooting/) - Diagnose problems with the instance itself.
+- [Deploy from an image](/deploy/image/) - Run a prebuilt image and skip the build.

@@ -5,7 +5,7 @@ sidebar:
   order: 3
 ---
 
-To turn on the optional parts of a new Orchard instance, complete the checklist at **Instance admin** > **Overview**. You can deploy apps before you finish the checklist. The backups item and the DNS item show a warning until you resolve them.
+The optional parts of an Orchard instance, such as private repositories, email, and off-server backups, each need a setting. The checklist at **Instance admin** > **Overview** tracks which ones are done, and you can deploy apps before you finish it. The backups item and the DNS item show a warning until you resolve them.
 
 You can change most settings at **Instance admin** > **Configuration**, without a restart.
 
@@ -109,11 +109,11 @@ For per-organization providers, refer to [Set up SSO](/teams/sso/).
 
 ## Set the custom domains target
 
-The ingress CNAME is the hostname that people point [their own domains](/deploy/domains/#add-a-custom-domain) at. The installer asks for it and saves it, so you can change it at **Instance admin** > **Configuration** > **Custom domains**. The default depends on the [mode](/start/install/#choose-an-ingress-mode). In `public` mode, it uses the dashboard domain. In `tunnel` mode, it uses `<tunnel-id>.cfargotunnel.com`. In `lan` mode, it uses an `sslip.io` name for the machine's address. On other installs, set it in **Instance admin** > **Configuration** > **Custom domains**.
+The ingress CNAME is the hostname that people point [their own domains](/deploy/domains/#add-a-custom-domain) at. Set or change it at **Instance admin** > **Configuration** > **Custom domains**. The installer asks for it and saves it there. Its default depends on the [mode](/start/install/#choose-an-ingress-mode): in `public` mode, it uses the dashboard domain. In `tunnel` mode, it uses `<tunnel-id>.cfargotunnel.com`. In `lan` mode, it uses an `sslip.io` name for the machine's address.
 
 In `tunnel` mode, each custom domain also needs a route in the tunnel. Cloudflare hides proxied records, so Orchard can confirm only that the hostname resolves.
 
-Without it, custom domains still work, but Orchard does not check DNS before it requests a certificate. A wrong record then appears as a failed certificate.
+Without a target, custom domains still work, but Orchard does not check DNS before it requests a certificate. A wrong record then appears as a failed certificate.
 
 ## Use a wildcard certificate
 
@@ -208,7 +208,7 @@ To change the registry that Orchard pushes to, or to install Orchard in a cluste
 
 A network policy limits builders to DNS and public IP addresses on ports 80 and 443. A build runs code from a repository, so it must not reach the Orchard API or database. Add a registry inside the cluster or on a private address explicitly.
 
-The chart defaults assume Harbor in a `harbor` namespace and an HAProxy load balancer. Replace them with your own values.
+The chart defaults describe the Orchard project's own cluster: Harbor in a `harbor` namespace and the HAProxy ingress controller in `network`. Replace them with your own values. To replace the registry entirely, refer to [Replace bundled components](/operate/production/#registry).
 
 ```yaml
 builders:
@@ -311,8 +311,6 @@ Do not patch the policy with `kubectl`. It has the label `orchard.my/managed=tru
 
 ## Related resources
 
-- [Go to production](/operate/production/)
-- [Configuration](/operate/configuration/)
-- [Host commands](/operate/host-commands/)
-- [Instance admin](/operate/instance-admin/)
-- [Install](/start/install/)
+- [Go to production](/operate/production/) - Check secrets, backups, isolation, and version pinning before other people depend on the instance.
+- [Configuration](/operate/configuration/) - Review the settings at **Instance admin** > **Configuration** and their variables.
+- [Host commands](/operate/host-commands/) - Change settings on an installer host with `orchardctl`.

@@ -7,7 +7,7 @@ sidebar:
 
 import { Tabs, TabItem } from '@astrojs/starlight/components';
 
-To give a machine the configuration that your deployed app uses, attach a project. Orchard writes one of its [environments](/run/environments/) into the machine as an env file that shells load.
+An agent that runs your app needs the same configuration as your deployed app. Instead of copying variables by hand, attach a project to the machine. Orchard writes one of the project's [environments](/run/environments/) into the machine as an env file that shells load, and keeps the file up to date when the variables change.
 
 ## Prerequisites
 
@@ -102,6 +102,5 @@ Orchard removes the env file on the next sync.
 
 ## Related resources
 
-- [Configure setup and run scripts](/greenhouse/scripts/)
-- [Share a machine](/greenhouse/sharing/)
-- [Manage variables and environments](/run/environments/)
+- [Configure setup and run scripts](/greenhouse/scripts/) - Use the attached variables in setup and run scripts.
+- [Share a machine](/greenhouse/sharing/#what-sharing-gives-your-guests) - Review what guests can read on a machine, including env files.

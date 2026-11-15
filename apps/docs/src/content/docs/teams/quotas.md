@@ -5,9 +5,9 @@ sidebar:
   order: 5
 ---
 
-To stop one person or project from using all of a cluster's capacity, set quotas.
+A cluster has a fixed amount of CPU and memory, and every organization on the instance shares it. Quotas stop one person or project from using all of it, so a runaway deploy fails with a clear message instead of starving everyone else.
 
-Quotas apply only when resource limits are on. If a superadmin turns limits off, Orchard does not check caps or allowances, and the **Usage** page shows `Limits are off`. For more information, refer to [Turn resource limits on or off](/operate/resource-limits/).
+Quotas apply only when [resource limits](/operate/resource-limits/) are on. If a superadmin turns limits off, Orchard does not check caps or allowances, and the **Usage** page shows **Resource limits are off**.
 
 ## How limits apply
 
@@ -32,9 +32,9 @@ A cap or allowance must be greater than 0. To remove one, leave it blank.
 You must be a superadmin.
 
 1. Go to **Instance admin** > **Organizations**.
-2. Select **Resource quotas** on the organization row.
-3. Enter **CPU (millicores)**, **Memory (MiB)**, **Max pods**, and **Max services**.
-4. Save the quotas.
+2. On the organization row, open the **More** menu and select **Resource quotas**.
+3. Set any of **CPU** (millicores), **Memory** (MiB), **Max pods**, **Max services**, **Max projects**, **Max environments**, and **Max deployments**. Leave a limit at **Unlimited** to remove it.
+4. Select **Save quotas**.
 
 Orchard applies the quotas to the cluster when you save.
 
@@ -91,8 +91,6 @@ When the recipient accepts, they become a project admin. The previous owner keep
 
 ## Related resources
 
-- [Scale an app and set resources](/deploy/scaling/)
-- [Manage nodes and pools](/operate/nodes/)
-- [Review usage](/teams/usage/)
-- [Manage a project](/teams/projects/)
-- [Manage organizations](/operate/manage-organizations/)
+- [Scale an app and set resources](/deploy/scaling/) - Choose the CPU and memory that count against a quota.
+- [Review usage](/teams/usage/) - Read where an organization's capacity goes.
+- [Manage nodes and pools](/operate/nodes/) - Add capacity to the cluster itself.

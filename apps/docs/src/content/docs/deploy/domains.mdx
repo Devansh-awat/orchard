@@ -7,11 +7,11 @@ sidebar:
 
 import { Tabs, TabItem } from '@astrojs/starlight/components';
 
-Each app can have a generated URL on the instance's app domain, one or more custom domains, and redirects. You manage all of them on the app's **Network** tab.
+Every app with a web port can get an HTTPS URL on the instance's app domain as soon as it deploys, with no DNS work. When you are ready to serve it on your own name, add a custom domain, and Orchard issues and renews its certificate for you. You manage generated URLs, custom domains, and redirects on the app's **Network** tab.
 
 ## Generated URLs
 
-When you create an app and set a port's reach to **Private link** or **Public link**, Orchard generates a URL on the app domain. **Private link** requires people to sign in. **Public link** is open to anyone. Reach options **Public port** and **Internal** do not generate a URL. For more information, refer to [Reach](/deploy/networking/#reach).
+When you create an app and set a port's reach to **Private link** or **Public link**, Orchard generates a URL on the app domain. **Private link** requires people to sign in. **Public link** is open to anyone. The [reach](/deploy/networking/#reach) options **Public port** and **Internal** do not generate a URL.
 
 ## Add a custom domain
 
@@ -73,7 +73,7 @@ When it is on, add one more record at your DNS provider. The DNS setup shows the
 
 The value is different for each project and domain. Until Orchard finds the record, adding the domain fails with the error `domain_proof_required`, and the message gives the record to add. You can remove the record after the domain is added.
 
-You don't need the record in these cases:
+You do not need the record in these cases:
 
 - The domain is under a generated URL on this instance.
 - The project already uses the domain.
@@ -111,17 +111,16 @@ orchard domain update <domain-id> --host new.example.com
 
 ## Certificates
 
-| Setup                           | Certificates                                                                                                            |
-| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| Installer, `public` mode        | One certificate for each hostname, over HTTP-01                                                                         |
-| Installer, `lan` mode           | Self-signed certificates                                                                                                |
-| Installer, `tunnel` mode        | Cloudflare terminates TLS. Orchard does not use cert-manager.                                                           |
-| Helm chart with a DNS-01 issuer | A wildcard certificate. For more information, refer to [Set up wildcard certificates](/operate/wildcard-certificates/). |
+| Setup                           | Certificates                                                  |
+| ------------------------------- | ------------------------------------------------------------- |
+| Installer, `public` mode        | One certificate for each hostname, over HTTP-01               |
+| Installer, `lan` mode           | Self-signed certificates                                      |
+| Installer, `tunnel` mode        | Cloudflare terminates TLS. Orchard does not use cert-manager. |
+| Helm chart with a DNS-01 issuer | A [wildcard certificate](/operate/wildcard-certificates/).    |
 
 ## Related resources
 
-- [Protect an app](/deploy/protection/)
-- [Configure app networking](/deploy/networking/)
-- [Reach apps over Tailscale](/deploy/tailscale/)
-- [Troubleshooting Orchard](/operate/troubleshooting/#a-certificate-never-issues)
-- [`orchard domain` reference](/reference/cli/#domain)
+- [Protect an app](/deploy/protection/) - Require a sign-in or a password before a domain opens.
+- [Reach apps over Tailscale](/deploy/tailscale/) - Give an app a private address instead of a public domain.
+- [A certificate never issues](/operate/troubleshooting/#a-certificate-never-issues) - Find out why a domain stays on **Securing**.
+- [`orchard domain` reference](/reference/cli/#domain) - Every flag of the `orchard domain` commands.

@@ -1,6 +1,6 @@
 ---
 title: Read replicas
-description: Orchard database standbys serve read-only queries through a separate endpoint. Learn which endpoint to use and how replication lag affects reads.
+description: Send read-only queries to the standbys of an Orchard managed database through a separate endpoint, and account for replication lag.
 sidebar:
   order: 3
 ---
@@ -47,8 +47,6 @@ Each standby is a full copy of the database, with the same storage, CPU, and mem
 
 ## Related resources
 
-- [Create and manage a database](/data/databases/)
-- [Configure high availability](/data/high-availability/)
-- [Monitor a database](/data/monitoring/)
-- [Add database users](/data/users/)
-- [Troubleshooting Orchard](/operate/troubleshooting/#reads-return-old-data)
+- [Add database users](/data/users/) - Create a read-only login for a reporting tool.
+- [Monitor a database](/data/monitoring/) - Watch the **Replication lag** panel.
+- [Troubleshooting Orchard](/operate/troubleshooting/#reads-return-old-data) - Fix reads that return old data.

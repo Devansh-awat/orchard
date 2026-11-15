@@ -6,6 +6,6 @@
 
 ## Checklist
 - [ ] Commit title uses `feat:`, `fix:` or `chore:` (the scope routes the release)
-- [ ] Commits are signed off with `git commit -s` ([DCO](../DCO))
+- [ ] Commits are signed off with `git commit -s` ([DCO](https://github.com/hackclub/orchard/blob/main/DCO))
 - [ ] Tests and checks pass
 - [ ] Docs updated if behavior changed

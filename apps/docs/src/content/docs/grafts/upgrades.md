@@ -5,7 +5,7 @@ sidebar:
   order: 3
 ---
 
-You can move a graft to a new version or return to the previous one. An upgrade or rollback changes only the graft's own schema, `ext_<graft_id>`. It does not change Orchard's data or the data of other grafts.
+Upgrading a graft can change its database schema, so `orchardctl` rehearses each upgrade and keeps a snapshot that lets you return to the previous version with its data. An upgrade or rollback changes only the graft's own schema, `ext_<graft_id>`. It does not change Orchard's data or the data of other grafts.
 
 ## Upgrade a graft
 
@@ -90,7 +90,5 @@ Run the command when a graft is published and when your Orchard version changes,
 
 ## Related resources
 
-- [Install grafts](/grafts/install/)
-- [Troubleshooting grafts](/grafts/troubleshooting/)
-- [Grafts](/grafts/overview/)
-- [Upgrade Orchard](/operate/upgrades/)
+- [Troubleshooting grafts](/grafts/troubleshooting/) - Fix a graft that fails after an upgrade.
+- [Upgrade Orchard](/operate/upgrades/) - Upgrade the instance that grafts run on.

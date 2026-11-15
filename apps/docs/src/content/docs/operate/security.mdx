@@ -1,17 +1,34 @@
 ---
 title: Security and isolation
-description: Review what Orchard isolates by default at the network and kernel layers, and what to turn on before you run untrusted code.
+description: Review what Orchard isolates by default at the network and kernel layers, what tenants share, and what to turn on before you run untrusted code.
 sidebar:
   order: 6
 ---
 
 import Diagram from '../../../components/Diagram.astro';
 
-By default, Orchard separates tenants at the network layer. It does not separate them at the kernel layer unless you install a sandbox runtime and turn it on.
+Orchard treats every organization and project as a separate tenant. By default, it separates tenants at the network layer: each tenant namespace starts closed, and Orchard opens only the paths an app needs. It does not separate tenants at the kernel layer unless you install a sandbox runtime and turn it on. You could think of a default instance as a set of locked rooms in one building. The doors are locked, but the walls are the shared host kernel.
+
+If only you and people you trust deploy to your instance, the defaults suit you. If anyone can deploy code that you did not write, turn on the settings in [Requirements for untrusted code](#requirements-for-untrusted-code).
+
+## At a glance
+
+| Area                    | Default                                                                                              | To go further                                                      |
+| ----------------------- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| Network between tenants | Isolated. Every tenant namespace denies traffic by default.                                          | Nothing. Check that your CNI enforces NetworkPolicy.               |
+| Tenants to the platform | Isolated. Tenant pods cannot reach the API server, nodes, cloud metadata, or control-plane services. | Add public load balancer addresses to `PLATFORM_EXTRA_DENY_CIDRS`. |
+| Images                  | Isolated. A pod can only use its own project's images from Orchard's registry.                       | Keep `REGISTRY_IMAGE_POLICY` at `auto` or `enforce`.               |
+| Host kernel             | **Shared.** Tenant pods and builds run on the node's kernel, like ordinary containers.               | Turn on `tenantSandbox` (gVisor) and `builderSandbox` (Kata).      |
+| Builds                  | Rootless BuildKit, not privileged, with the registry login kept out of tenant code.                  | Turn on `builderSandbox` (Kata).                                   |
+| Nodes                   | **Shared.** Any organization can run on any node.                                                    | Use [node pools and assignments](/operate/nodes/).                 |
+| Admission guard         | On. The API server refuses object shapes that Orchard never creates.                                 | Switch the hardening rules from warn to refuse.                    |
+| Databases               | Postgres pods run on the host kernel. Shell access to them is refused.                               | Set `databases.runtimeClassName`.                                  |
+
+For the full list of guarantees and what you must configure for each one, refer to [Tenancy and isolation](/operate/tenancy-and-isolation/).
 
 ## Network isolation
 
-Network isolation is on by default. Every tenant namespace has a `default-deny-all` NetworkPolicy for ingress and egress. A tenant pod has the following allowed paths:
+Network isolation is on by default. Every tenant namespace has a `default-deny-all` NetworkPolicy for ingress and egress, so a tenant pod can only use the following paths:
 
 | Direction | Allowed                                                                                                                                          |
 | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -47,11 +64,17 @@ The policy blocks the following:
 - The ranges `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, and `100.64.0.0/10`, where control-plane services run.
 - Unpublished services of other tenants.
 
-Orchard restores this policy if someone changes it with `kubectl`. With Cilium it also adds a `deny-platform-egress` policy to each tenant namespace that denies the `host`, `remote-node` and `kube-apiserver` entities, which holds even when an allow rule would match. A new namespace is deleted again if its default-deny policy cannot be applied. A deleted default-deny is recreated at once, and a sweep every five minutes catches one that a watch event missed.
+Orchard restores this policy if someone changes it with `kubectl`. With Cilium, it also adds a `deny-platform-egress` policy to each tenant namespace that denies the `host`, `remote-node` and `kube-apiserver` entities, which holds even when an allow rule would match. If Orchard cannot apply the default-deny policy to a new namespace, it deletes the namespace. A deleted default-deny policy is recreated at once, and a sweep every five minutes catches one that a watch event missed.
 
 ### Control-plane namespaces
 
-The chart also closes the other direction. With `networkPolicy.platform.enabled` (the default), pods in the release namespace and the metrics namespace accept connections only from their own namespace and from namespaces that are not tenants. A tenant namespace, the builders, sandbox, fc-builder and image-scan namespaces cannot connect to the server, Postgres, VictoriaMetrics or VictoriaLogs, whatever their own policy allows. Image scan jobs get one exception, TCP 3001 on the server, to post their report. Redis accepts only the server, and requires a password that the chart generates. The r2-proxy accepts only tenant namespaces, the server and the CNPG operator.
+The chart also closes the other direction. With `networkPolicy.platform.enabled` (the default), pods in the release namespace and the metrics namespace accept connections only from their own namespace and from namespaces that are not tenants. A tenant namespace, the builders, sandbox, fc-builder and image-scan namespaces cannot connect to the server, Postgres, VictoriaMetrics or VictoriaLogs, whatever their own policy allows.
+
+There are a few exact exceptions:
+
+- Image scan jobs can reach TCP 3001 on the server, to post their report.
+- Redis accepts only the server, and requires a password that the chart generates.
+- The backup proxy (`r2-proxy`) accepts only tenant namespaces, the server, and the CloudNativePG operator.
 
 ### Images from other projects
 
@@ -66,9 +89,24 @@ The `REGISTRY_IMAGE_POLICY` variable sets what the rule does:
 | `warn`          | The pod runs, and Kubernetes reports a warning.                                                                                                                                                      |
 | `off`           | Orchard removes the rule.                                                                                                                                                                            |
 
-Any other value enforces the rule, so a typo cannot weaken it.
+Any other value enforces the rule, so a typo cannot weaken it. Orchard labels namespaces and restores the rule every five minutes.
 
-Orchard labels namespaces and restores the rule every five minutes.
+### Public TCP and UDP ports
+
+A tenant can publish a raw TCP or UDP port in two ways. The two have different exposure, so Orchard treats them differently.
+
+**Public ports on the organization IP.** A person with edit access turns on a public port for an app or database. Orchard picks the port from 30000 to 32767, so a tenant never chooses it, and it creates a `LoadBalancer` Service on the organization's public IP (or `tenant.publicIp`). On a cluster that uses Cilium LB-IPAM, all organizations share that IP, and Orchard checks the database and the live Services so two tenants do not get the same port. Tenants cannot create Services themselves, so they cannot take a platform port such as 80 or 443. Each port gets its own `-allow-public` NetworkPolicy that opens only that port on that app's pods. The Service uses `externalTrafficPolicy: Cluster`, so the app sees a node address as the client address, not the real one. Treat these ports as untrusted internet-facing endpoints, and rate-limit or authenticate inside the app.
+
+**NodePort (`exposePublic`).** A NodePort is reachable on every node address, including control-plane and builder nodes, on a port from the cluster's node-port range. This suits a single-node install, where the node is the public address. The installer narrows the range to `30000-30100` and opens only that range in `ufw`. On a shared multi-node cluster that already publishes ports on a load-balancer IP, NodePorts open a second path that skips the shared edge and any cloud firewall rules you rely on, so turn them off:
+
+```yaml
+tenant:
+  nodePortExposure: false
+```
+
+A tenant cannot ask for a specific node port. The cluster assigns one, and an update keeps the one the Service already has. The address Orchard shows for a NodePort is `PUBLIC_EXPOSURE_IP` (`tenant.publicIp`) when you set it, and the first node's address otherwise.
+
+One organization can hold at most 20 public ports in total, counting NodePorts, app public ports and public databases. Change the limit with `tenant.maxPublicPortsPerOrg` (`MAX_PUBLIC_PORTS_PER_ORG`; `0` is unlimited). On a self-hosted install, a firewall rule for the node-port range is your responsibility on anything other than `ufw`.
 
 ### Host firewalls
 
@@ -86,13 +124,13 @@ acl in-addr.arpa ip6.arpa {
 }
 ```
 
-On k3s without the installer, put the block in a `coredns-custom` ConfigMap under a key that ends in `.override`. Check the result from a tenant pod. `dig -x <any Service ClusterIP>` must return `REFUSED`.
+On k3s without the installer, put the block in a `coredns-custom` ConfigMap under a key that ends in `.override`. Check the result from a tenant pod: `dig -x <any Service ClusterIP>` must return `REFUSED`.
 
-The block also stops pods from reverse-resolving public addresses through cluster DNS. This rarely matters, because few programs need it. Forward lookups such as `service.namespace.svc.cluster.local` keep working, and a name that has never been published stays unguessable because namespace names end in a random suffix.
+The block also stops pods from reverse-resolving public addresses through cluster DNS, which few programs need. Forward lookups such as `service.namespace.svc.cluster.local` keep working, and a name that has never been published stays hard to guess, because namespace names end in a random suffix.
 
 ## Kernel isolation
 
-Kernel isolation is off by default. Tenant pods and build jobs share the host kernel, like ordinary containers. A container escape compromises the host.
+Kernel isolation is off by default. Tenant pods and build jobs share the host kernel, like ordinary containers, so a container escape compromises the host.
 
 Two optional runtimes change this. The one-command installer does not install either of them.
 
@@ -103,29 +141,9 @@ Two optional runtimes change this. The one-command installer does not install ei
 
 BuildKit needs `privileged: true`, which gVisor does not allow. Builds therefore use Kata, where a privileged container stays inside the virtual machine.
 
-### Builds without a sandbox runtime
-
-Without `builderSandbox`, Orchard runs builds in rootless BuildKit (`moby/buildkit:<version>-rootless`). The container is not privileged, runs as uid 1000, and gets its root inside a user namespace. It uses `--oci-worker-no-process-sandbox`, with the seccomp and AppArmor profiles set to `Unconfined`, which is what rootless BuildKit needs on Kubernetes. A Dockerfile `RUN` step is not root on the node, but it still shares the node kernel and has a larger kernel attack surface than the default profile. Use `builderSandbox` when you can.
-
-Rootless builds need nodes that allow unprivileged user namespaces. On Ubuntu 24.04 that means `kernel.apparmor_restrict_unprivileged_userns=0`. When a node does not allow them, the build fails with a message that says so. They always push from the separate `pusher` container, whatever `BUILDER_SIDECAR_PUSH` says, and the persistent daemon keeps no registry login. `RUN --security=insecure` and `RUN --network=host` are refused with a clear error in every mode.
-
-:::caution
-`builders.allowPrivilegedOnHost=true` restores the old behaviour: a privileged BuildKit container on the node's runtime, where a Dockerfile `RUN` step is root on the node. Orchard logs a warning at startup. Do not set it on an instance that builds code from users you do not trust. It has no effect when `builderSandbox` is enabled.
-:::
-
-At startup the server logs `build posture: vm-sandbox`, `rootless` or `privileged-host`.
-
-### Build credential isolation
-
-With the default `BUILDER_SIDECAR_PUSH` (anything but `false`), no container that runs or serves a tenant's Dockerfile holds the registry login:
-
-- **Super Builds (Depot):** the build session gets only the app's own base-image pull credentials. The image comes back as an OCI tarball and a separate `pusher` container, which never runs tenant code, pushes it. With `BUILDER_SIDECAR_PUSH=false` the shared registry login is still placed in the Depot session, so a Dockerfile can pull any image in that registry. Harbor robot accounts cannot narrow this, because their permissions apply to a whole Harbor project, not a single repository, and Orchard keeps every tenant's images in one project.
-- **Persistent BuildKit daemons:** each daemon pod is reachable only from build pods that carry the same `orchard.my/tenant-key` label, and the chart's `buildkit-daemon-network-policy` limits daemon egress to the same allow-list as build pods. Daemons no longer mount the registry login; the build pod pushes. Re-apply the chart so the new policies exist, and keep `builders.registryEgress` correct, since daemons pull and build pods push through it.
-- **S3 build cache:** cache credentials are passed to BuildKit as cache attributes under `ORCHARD_S3_CACHE_*` instead of `AWS_*` environment variables, so a Dockerfile `# syntax=` frontend cannot make the daemon import another tenant's cache with ambient credentials. When the r2-proxy is enabled and serves the cache bucket, each build also gets its own key, valid for two hours, that can only read and write `_build-cache/<project>/` in that bucket. The proxy holds the real credentials. The cache bucket is the instance backup bucket unless `BUILDKIT_S3_BUCKET` names another one. For another bucket, add it to `r2Proxy.allowedBuckets` and set `BUILDKIT_S3_VIA_PROXY=true`. Without the proxy, builds use the instance-wide key and the server logs a warning at startup. Scoped keys cannot copy objects, so BuildKit's `touch_refresh` is set far in the future and the cache never refreshes timestamps.
-
 Greenhouse machines run as Kata virtual machines on the Kubernetes runner when the cluster has Kata. For more information, refer to [Run Greenhouse](/operate/greenhouse/#security-model).
 
-## Turn on kernel isolation
+### Turn on kernel isolation
 
 The runtimes are node-level and vary by distribution, so Orchard does not install them.
 
@@ -156,51 +174,6 @@ Complete step 1 before step 4. If the runtime does not exist, new tenant pods fa
 no runtime for "runsc" is configured
 ```
 
-## Database and platform pods
-
-Project editors can open a shell in, or run commands in, their own app pods. They cannot do so in database pods, connection-pooler pods, Tailscale proxy pods, job pods or build pods. The request fails with a 403 that points to the database connection string. Pod logs stay readable. To work in a dedicated Postgres database, run `orchard db psql <id>` or open the database console in the dashboard. Either one starts a short-lived `psql` client pod in your project's namespace, under the tenant RuntimeClass, with a read-only root filesystem, no capabilities, no service account token and resource limits. It connects as the database's app role, never the Postgres superuser, and is deleted when the session ends or after `PSQL_SESSION_TTL_SECONDS` (default one hour). `PSQL_SESSIONS_PER_DATABASE` (default 3) caps concurrent sessions. The pod and the credentials secret live only in your namespace, and creating them needs edit access to the project.
-
-Dedicated databases are created with the Postgres `postgres` superuser login disabled (`enableSuperuserAccess: false`). Orchard never used that login. Databases created before this change keep it until you run the migration script, because the script patches clusters one at a time and stops if any instance pod restarts:
-
-```bash
-apps/server/scripts/cnpg-disable-superuser.sh                  # dry run, lists clusters
-apps/server/scripts/cnpg-disable-superuser.sh --apply --limit 1 # canary one cluster first
-apps/server/scripts/cnpg-disable-superuser.sh --apply
-```
-
-### Admission guard for tenant namespaces
-
-The chart installs native `ValidatingAdmissionPolicy` objects for namespaces that carry the `orchard.my/managed` label. They are a second wall behind Orchard's own checks: if a bug ever makes the server build a bad object, the API server refuses it. They refuse host-backed volumes, privileged pods, `externalIPs` and `ExternalName` Services, LoadBalancer or load-balancer-IP pinning by anyone but the server, Ingress annotations outside the allow-list, a cert-manager issuer that is not configured, PVC volume hijacking, open NetworkPolicy egress, and unsafe CloudNativePG cluster settings. They need Kubernetes 1.30 or later.
-
-The policies are safe to install. Every policy fails open (`failurePolicy: Ignore`), every parameter is optional, and cert-manager, CloudNativePG and the Kubernetes controllers are recognised by the labels on what they create, not by a username that differs on every install.
-
-The guard refuses by default. The hardening rules (drop ALL capabilities, tenant RuntimeClass) only warn, because pods and Tailscale proxies created before them can fail and a refusal would stop them restarting. Watch `kubectl get events` and the API server audit log, then switch those to refusing too:
-
-```yaml
-admissionPolicies:
-  hardeningActions: [Deny]
-  extraIssuers: [letsencrypt-dns01-wildcard]
-```
-
-Set `extraIssuers` to every other `ClusterIssuer` you use for tenant hosts, or the issuer rule refuses them. Set `validationActions: [Warn, Audit]` to report without refusing. Set `admissionPolicies.enabled: false` to remove the guard. The parameter reference, the CEL tests and the fixtures for a live dry run are in `infra/charts/orchard/policies/README.md`.
-
-### Public TCP and UDP ports
-
-A tenant can publish a raw TCP or UDP port in two ways. The two have different exposure, so Orchard treats them differently.
-
-**Public ports on the organization IP.** An editor turns on a public port for an app or database. Orchard picks the port from 30000 to 32767, so a tenant never chooses it, and it creates a `LoadBalancer` Service on the organization's public IP (or `tenant.publicIp`). On a cluster that uses Cilium LB-IPAM, all organizations share that IP, and Orchard checks the database and the live Services so two tenants do not get the same port. Tenants cannot create Services themselves, so they cannot take a platform port such as 80 or 443. Each port gets its own `-allow-public` NetworkPolicy that opens only that port on that app's pods. The Service uses `externalTrafficPolicy: Cluster`, so the app sees a node address as the client address, not the real one. Treat these ports as untrusted internet-facing endpoints and rate-limit or authenticate inside the app.
-
-**NodePort (`exposePublic`).** A NodePort is reachable on every node address, including control-plane and builder nodes, on a port from the cluster's node-port range. This is the right mechanism for a single-node install, where the node is the public address. The installer narrows the range to `30000-30100` and opens only that range in `ufw`. On a shared multi-node cluster that already publishes ports on a load-balancer IP, NodePorts open a second path that skips the shared edge and any cloud firewall rules you rely on, so turn them off:
-
-```yaml
-tenant:
-  nodePortExposure: false
-```
-
-Orchard no longer lets a tenant ask for a specific node port. The cluster assigns one, and an update keeps the one the Service already has. The address Orchard shows for a NodePort is `PUBLIC_EXPOSURE_IP` (`tenant.publicIp`) when you set it, and the first node's address otherwise.
-
-One organization can hold at most 20 public ports in total, counting NodePorts, app public ports and public databases. Change the limit with `tenant.maxPublicPortsPerOrg` (`MAX_PUBLIC_PORTS_PER_ORG`; `0` is unlimited). On a self-hosted install, a firewall rule for the node-port range is still your job on anything other than `ufw`.
-
 ### Sandbox database pods
 
 CloudNativePG pods (Postgres instances and PgBouncer poolers) run on the host kernel, because the CloudNativePG `Cluster` resource has no `runtimeClassName` field. To run them under gVisor or Kata, set the following value:
@@ -212,9 +185,75 @@ databases:
 
 The chart then installs a `MutatingAdmissionPolicy` that sets the runtime class on pods that carry a `cnpg.io/cluster`, `cnpg.io/poolerName` or `orchard.my/tailscale` label in namespaces labelled `orchard.my/managed`. It needs a Kubernetes version that serves `MutatingAdmissionPolicy`, and the RuntimeClass must exist on every node that can run databases.
 
-This setting is optional, and the default is empty, which changes nothing. Sandboxed Postgres has higher IO and latency overhead. The policy applies only to pods created after you install it. To move an existing cluster, do a switchover and then delete the old pods one at a time, so you control when each database restarts. Set `databases.runtimeClassFailurePolicy: Fail` to guarantee that no unsandboxed database pod is admitted. The default `Ignore` keeps a policy fault from blocking pod creation.
+This setting is optional. The default is empty, which changes nothing. Sandboxed Postgres has higher IO and latency overhead. The policy applies only to pods created after you install it. To move an existing cluster, do a switchover and then delete the old pods one at a time, so you control when each database restarts. Set `databases.runtimeClassFailurePolicy: Fail` to guarantee that no unsandboxed database pod is admitted. The default `Ignore` keeps a policy fault from blocking pod creation.
 
-The Tailscale proxy pod is created by Orchard. It uses the tenant runtime class (`TENANT_RUNTIME_CLASS`), drops all capabilities, and runs in userspace mode, so it needs neither `NET_ADMIN` nor `NET_RAW`. Its image defaults to a `ghcr.io/tailscale/tailscale` release pinned by digest. Set `TAILSCALE_IMAGE` to use another. Existing proxy pods pick up these settings when you next re-enable Tailscale on the app.
+The Tailscale proxy pod is created by Orchard. It uses the tenant runtime class (`TENANT_RUNTIME_CLASS`), drops all capabilities, and runs in userspace mode, so it needs neither `NET_ADMIN` nor `NET_RAW`. Its image defaults to a `ghcr.io/tailscale/tailscale` release pinned by digest. Set `TAILSCALE_IMAGE` to use another. A running proxy pod keeps its settings until you turn Tailscale off and on again for the app.
+
+## Builds
+
+A build runs a Dockerfile from a repository, which makes it the most exposed thing Orchard runs. Orchard limits what a build can reach and what it can hold.
+
+### Builds without a sandbox runtime
+
+Without `builderSandbox`, Orchard runs builds in rootless BuildKit (`moby/buildkit:<version>-rootless`). The container is not privileged, runs as uid 1000, and gets its root inside a user namespace. It uses `--oci-worker-no-process-sandbox`, with the seccomp and AppArmor profiles set to `Unconfined`, which is what rootless BuildKit needs on Kubernetes. A Dockerfile `RUN` step is not root on the node, but it still shares the node kernel and has a larger kernel attack surface than the default profile. Use `builderSandbox` when you can.
+
+Rootless builds need nodes that allow unprivileged user namespaces. On Ubuntu 24.04, that means `kernel.apparmor_restrict_unprivileged_userns=0`. When a node does not allow them, the build fails with a message that says so. Rootless builds always push from the separate `pusher` container, whatever `BUILDER_SIDECAR_PUSH` says, and the persistent daemon keeps no registry login. `RUN --security=insecure` and `RUN --network=host` are refused with a clear error in every mode.
+
+:::caution
+`builders.allowPrivilegedOnHost=true` runs a privileged BuildKit container on the node's runtime, where a Dockerfile `RUN` step is root on the node. Orchard logs a warning at startup. Do not set it on an instance that builds code from users you do not trust. It has no effect when `builderSandbox` is enabled.
+:::
+
+At startup, the server logs `build posture: vm-sandbox`, `rootless` or `privileged-host`.
+
+### Build credential isolation
+
+With the default `BUILDER_SIDECAR_PUSH` (anything but `false`), no container that runs or serves a tenant's Dockerfile holds the registry login:
+
+- **Super Builds (Depot):** The build session gets only the app's own base-image pull credentials. The image comes back as an OCI tarball, and a separate `pusher` container, which never runs tenant code, pushes it. With `BUILDER_SIDECAR_PUSH=false`, the shared registry login is placed in the Depot session, so a Dockerfile can pull any image in that registry. Harbor robot accounts cannot narrow this, because their permissions apply to a whole Harbor project, not a single repository, and Orchard keeps every tenant's images in one project.
+- **Persistent BuildKit daemons:** Each daemon pod is reachable only from build pods that carry the same `orchard.my/tenant-key` label, and the chart's `buildkit-daemon-network-policy` limits daemon egress to the same allowlist as build pods. Daemons do not mount the registry login. The build pod pushes. Keep `builders.registryEgress` correct, because daemons pull and build pods push through it.
+- **S3 build cache:** Cache credentials are passed to BuildKit as cache attributes under `ORCHARD_S3_CACHE_*` instead of `AWS_*` environment variables, so a Dockerfile `# syntax=` frontend cannot make the daemon import another tenant's cache with ambient credentials. When the backup proxy is enabled and serves the cache bucket, each build also gets its own key, valid for two hours, that can only read and write `_build-cache/<project>/` in that bucket. The proxy holds the real credentials.
+
+The cache bucket is the instance backup bucket unless `BUILDKIT_S3_BUCKET` names another one. For another bucket, add it to `r2Proxy.allowedBuckets` and set `BUILDKIT_S3_VIA_PROXY=true`. Without the proxy, builds use the instance-wide key and the server logs a warning at startup. Scoped keys cannot copy objects, so BuildKit's `touch_refresh` is set far in the future and the cache never refreshes timestamps.
+
+## Shell access and databases
+
+People with edit access to a project can open a shell in, or run commands in, that project's app pods. Edit access means the project **Admin** or **Member** role, or the owner or admin role in the organization. Viewers cannot.
+
+Orchard refuses a shell in database pods, connection-pooler pods, Tailscale proxy pods, job pods and build pods. The request fails with a 403 that points to the database connection string. Pod logs stay readable.
+
+To work in a dedicated Postgres database, run `orchard db psql <id>` or open the database console in the dashboard. Either one starts a short-lived `psql` client pod in your project's namespace, which has the following limits:
+
+- It runs under the tenant RuntimeClass, with a read-only root filesystem, no capabilities, no service account token, and resource limits.
+- It connects as the database's app role, never the Postgres superuser.
+- It is deleted when the session ends, or after `PSQL_SESSION_TTL_SECONDS` (default one hour). `PSQL_SESSIONS_PER_DATABASE` (default 3) caps concurrent sessions.
+- The pod and the credentials secret live only in your namespace, and creating them needs edit access to the project.
+
+Orchard creates dedicated databases with the Postgres `postgres` superuser login turned off (`enableSuperuserAccess: false`), because Orchard never uses that login. Databases created by earlier versions of Orchard keep the login until you turn it off. For the steps, refer to [Turn off the Postgres superuser on older databases](/operate/upgrades/#turn-off-the-postgres-superuser-on-older-databases).
+
+## Admission guard for tenant namespaces
+
+The chart installs native `ValidatingAdmissionPolicy` objects for namespaces that carry the `orchard.my/managed` label. They are a second wall behind Orchard's own checks: if a bug ever makes the server build a bad object, the API server refuses it. They need Kubernetes 1.30 or later.
+
+The guard refuses the following:
+
+- Host-backed volumes, and privileged pods.
+- `externalIPs` and `ExternalName` Services.
+- LoadBalancer Services, or load-balancer IP pinning, from anyone but the server.
+- Ingress annotations outside the allowlist, and a cert-manager issuer that is not configured.
+- PersistentVolumeClaim hijacking, and NetworkPolicy egress that is open.
+- Unsafe CloudNativePG cluster settings.
+
+The policies are safe to install. Every policy fails open (`failurePolicy: Ignore`), every parameter is optional, and cert-manager, CloudNativePG and the Kubernetes controllers are recognised by the labels on what they create, not by a username that differs on every install.
+
+The guard refuses by default. The hardening rules (drop ALL capabilities, and use the tenant RuntimeClass) only warn, because pods that earlier versions of Orchard created, and Tailscale proxy pods, can fail them, and a refusal would stop those pods from restarting. Watch `kubectl get events` and the API server audit log, then switch those rules to refuse too:
+
+```yaml
+admissionPolicies:
+  hardeningActions: [Deny]
+  extraIssuers: [letsencrypt-dns01-wildcard]
+```
+
+Set `extraIssuers` to every other `ClusterIssuer` you use for tenant hosts, or the issuer rule refuses them. Set `validationActions: [Warn, Audit]` to report without refusing. Set `admissionPolicies.enabled: false` to remove the guard. The parameter reference, the CEL tests and the fixtures for a live dry run are in [`infra/charts/orchard/policies/README.md`](https://github.com/hackclub/orchard/blob/main/infra/charts/orchard/policies/README.md).
 
 ## Control-plane permissions
 
@@ -224,7 +263,7 @@ Orchard creates tenant namespaces at runtime, so its write permissions are clust
 
 Secrets and ConfigMaps are not in that ClusterRole. A second ClusterRole, `<release>-tenant-secrets`, covers only those two. The server's role can `bind` that one ClusterRole by name and no other. When the server creates a tenant namespace, it adds a RoleBinding there, so it gets access to Secrets only in the namespaces it creates. The chart passes the name in `TENANT_SECRETS_CLUSTER_ROLE`. Without that variable, the server creates a Role in each namespace instead.
 
-If you set `KUBECONFIG_PATH` or `KUBECONFIG_BASE64`, the server uses the identity in that file and ignores the ServiceAccount, so the ClusterRole no longer limits it. Use the in-cluster ServiceAccount unless the control plane runs outside the cluster it manages.
+If you set `KUBECONFIG_PATH` or `KUBECONFIG_BASE64`, the server uses the identity in that file and ignores the ServiceAccount, so the ClusterRole does not limit it. Use the in-cluster ServiceAccount unless the control plane runs outside the cluster it manages.
 
 If Cilium is your CNI, set `cilium.enabled: true` to add the permissions for `CiliumNetworkPolicy` and `CiliumEnvoyConfig`.
 
@@ -242,11 +281,11 @@ Without these settings, a single-machine Orchard that runs other people's code h
 
 ## Limitations
 
-Orchard has no per-tenant kernel and no hardware isolation by default. Orchard does not guarantee that an attacker who escapes a container cannot reach the node.
+Orchard has no per-tenant kernel and no hardware isolation by default. Orchard does not guarantee that an attacker who escapes a container cannot reach the node. For the full list of what Orchard does not guarantee, refer to [Tenancy and isolation](/operate/tenancy-and-isolation/#what-orchard-does-not-guarantee).
 
 ## Related resources
 
-- [Go to production](/operate/production/)
-- [Set up image scanning](/operate/image-scanning/)
-- [Run Greenhouse](/operate/greenhouse/)
-- [Architecture](/operate/architecture/)
+- [Go to production](/operate/production/) - Prepare an instance for other people, including isolation and signups.
+- [Set up image scanning](/operate/image-scanning/) - Scan the images that Orchard builds for known vulnerabilities.
+- [Check isolation with orchard doctor](/operate/doctor/) - Test that the network controls work on your cluster.
+- [Architecture](/operate/architecture/) - Review the components of an instance and how they fit together.

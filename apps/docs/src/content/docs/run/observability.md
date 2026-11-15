@@ -5,13 +5,13 @@ sidebar:
   order: 6
 ---
 
-Orchard reports app and database health in three places: metrics over time, a list of current problems, and alert rules that notify you.
+Orchard tells you how your apps and databases are doing in three ways. Metrics show how a resource behaved over time, the list of current problems shows what is wrong now, and alert rules notify you when you are not looking at the dashboard.
 
 ## Metrics
 
-Each app shows CPU and memory as a current value and over time on its **Observe** tab. Databases add size, connections, and activity. For the panels on each tab, refer to [Monitor an app](/run/monitor-an-app/) and [Monitor a database](/data/monitoring/).
+Each app shows CPU and memory as a current value and over time on its **Observe** tab. Databases add size, connections, and activity. The panels on each tab are listed in [Monitor an app](/run/monitor-an-app/) and [Monitor a database](/data/monitoring/).
 
-When you size an app, read the range. `kubectl top` reports one instant, which can mislead you on a workload with spikes. For suggestions based on recent use, refer to [Apply resource suggestions](/deploy/resource-suggestions/).
+When you size an app, read the range. `kubectl top` reports one instant, which can mislead you on a workload with spikes. To size from recent use instead, [apply resource suggestions](/deploy/resource-suggestions/).
 
 ## Current problems
 
@@ -48,7 +48,5 @@ Organization-wide usage, by project and by person, is on the [Usage page](/teams
 
 ## Related resources
 
-- [Monitor an app](/run/monitor-an-app/)
-- [Monitor a database](/data/monitoring/)
-- [Configure logs and request data](/operate/logs/)
-- [Read logs and open a shell](/run/logs/)
+- [Configure logs and request data](/operate/logs/) - Set up the log store and access logs behind past logs, requests, and error grouping.
+- [Read logs and open a shell](/run/logs/) - Stream live logs, read crash output, and diagnose a crash loop.

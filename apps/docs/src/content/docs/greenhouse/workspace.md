@@ -5,7 +5,7 @@ sidebar:
   order: 4
 ---
 
-The workspace opens when you open a machine. It has a title bar, a sidebar, a center area, a right panel, and a terminal dock.
+The workspace is where you prompt agents, review their changes, and run your app, all in the browser. It opens when you open a machine. This page is a reference for each part of it: the title bar, the sidebar, the center area, the right panel, and the terminal dock.
 
 ## Layout
 
@@ -33,7 +33,7 @@ Select the session title to open the session menu:
 | Copy link for guests | Copies a link to the session for people on the machine.                                        |
 | Fork session         | Creates a session branched from this session's branch.                                         |
 | Deploy preview       | Refer to [Preview a session](/greenhouse/previews/#deploy-a-session-as-a-preview-environment). |
-| Archive              | Removes the worktree and keeps the branch.                                                     |
+| Archive              | Removes the worktree. Keeps the branch, unless **Delete branch on archive** is on.             |
 | Delete               | Removes the session, with or without its branch.                                               |
 
 The right side of the title bar has the avatars of other people on the machine, the [editor button](/greenhouse/editors/), the [pull request button](/greenhouse/pull-requests/), **Share**, and the right panel toggle. Guests see **People** instead of **Share**. Select an avatar to follow that person.
@@ -222,7 +222,5 @@ The **Send messages with** preference changes the send and new-line keys. **Sett
 
 ## Related resources
 
-- [Get started](/greenhouse/getting-started/)
-- [Machines](/greenhouse/machines/)
-- [Share a machine](/greenhouse/sharing/)
-- [Keyboard shortcuts and search](/account/command-palette/)
+- [Share a machine](/greenhouse/sharing/) - Invite people into the workspace and review what each role can do.
+- [Keyboard shortcuts and search](/account/command-palette/) - Use the shortcuts and search of the Orchard dashboard.

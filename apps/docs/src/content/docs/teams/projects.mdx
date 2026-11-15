@@ -7,7 +7,7 @@ sidebar:
 
 import { Tabs, TabItem } from '@astrojs/starlight/components';
 
-A project groups apps, databases, and jobs in an organization. Project membership controls who can access those resources. For more information about roles, refer to [Manage organizations and roles](/teams/organizations/).
+A project groups apps, databases, and jobs in an organization. Project membership controls who can access those resources, so two people in the same organization can see different projects. Each member has a [project role](/teams/organizations/#project-roles) of admin, member, or viewer.
 
 ## Create a project
 
@@ -69,9 +69,7 @@ To turn off the animated background in your browser, refer to [Set your preferen
 
 ## Transfer ownership
 
-The project owner's resource allowance pays for everything in the project. A transfer moves that allowance to another member. The new owner must accept the transfer.
-
-For the rules and CLI commands, refer to [Set quotas](/teams/quotas/).
+The project owner's resource allowance pays for everything in the project. A transfer moves that cost to another member's allowance, and the new owner must accept it. For the rules and CLI commands, refer to [Transfer project ownership](/teams/quotas/#transfer-project-ownership).
 
 1. Open the project.
 2. Go to **Settings** > **Danger zone**.
@@ -116,7 +114,5 @@ The preview can show these messages:
 
 ## Related resources
 
-- [Manage organizations and roles](/teams/organizations/)
-- [Set quotas](/teams/quotas/)
-- [Manage variables and environments](/run/environments/)
-- [`orchard project` reference](/reference/cli/#project)
+- [Manage variables and environments](/run/environments/) - Configure the apps inside a project.
+- [`orchard project` reference](/reference/cli/#project) - Every project command and flag.

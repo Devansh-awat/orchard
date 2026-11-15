@@ -7,13 +7,13 @@ sidebar:
 
 import { Tabs, TabItem } from '@astrojs/starlight/components';
 
-Create a Greenhouse machine and start a coding agent on one of your repositories.
+In this guide, you create a Greenhouse machine, give it a credential for a coding agent, and start a first session on one of your repositories. When you finish, an agent works on its own branch on the machine, and you can review its changes in the workspace.
 
 ## Prerequisites
 
 - An Orchard instance with the [`greenhouse` graft installed](/operate/greenhouse/#install-the-graft). If **Greenhouse** is not in the dashboard sidebar, refer to [Troubleshooting Greenhouse](/greenhouse/troubleshooting/#greenhouse-is-not-in-the-sidebar).
 - Membership in an [organization](/teams/organizations/). Organization guests cannot create machines.
-- A GitHub account linked to Orchard, to clone private repositories and open pull requests. Link it in **Account settings** > **GitHub and Tailscale**.
+- A GitHub account linked to Orchard, to clone private repositories and open pull requests. Link it in **Account settings** > **Connections**.
 - The [Orchard CLI](/cli/), if you use the CLI steps.
 
 ## 1. Add an SSH key
@@ -143,7 +143,6 @@ To run another agent at the same time, start another session. Each session has i
 
 ## Related resources
 
-- [Greenhouse](/greenhouse/)
-- [Machines](/greenhouse/machines/)
-- [Connect an editor over SSH](/greenhouse/editors/)
-- [Share a machine](/greenhouse/sharing/)
+- [Machines](/greenhouse/machines/) - Learn what each runner provides, what persists across a stop, and which limits apply.
+- [Connect an editor over SSH](/greenhouse/editors/) - Open a session in VS Code, Cursor, or Zed.
+- [Share a machine](/greenhouse/sharing/) - Invite people from your organization to work on the machine with you.

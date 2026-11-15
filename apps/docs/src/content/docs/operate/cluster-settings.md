@@ -5,7 +5,7 @@ sidebar:
   order: 8
 ---
 
-Orchard hardens tenants by default. A few protections depend on your cluster, so they are off or advisory until you set them. Each entry says what to check first, how to set it, and how to undo it. Run `orchard doctor` first: it flags the ones that apply to your install. See [Doctor](/operate/doctor/).
+Orchard hardens tenants by default, but a few protections depend on how your cluster is built, so they stay off or only warn until you turn them on. Turning one on without checking first can refuse a tenant's existing workload, which is why each entry below says what to check first, how to set it, and how to undo it. Start with [`orchard doctor`](/operate/doctor/), which flags the settings that apply to your install.
 
 ## Block tenant NodePorts
 
@@ -40,20 +40,20 @@ The rest of the guard refuses by default (`admissionPolicies.validationActions: 
 
 ## Sandbox databases and disable the superuser login
 
-Value: `databases.runtimeClassName` (for example `gvisor`), plus `apps/server/scripts/cnpg-disable-superuser.sh`.
+Value: `databases.runtimeClassName` (for example `gvisor`), plus the [`cnpg-disable-superuser.sh`](https://github.com/hackclub/orchard/blob/main/apps/server/scripts/cnpg-disable-superuser.sh) script in the Orchard repository.
 
 Tenant databases are reachable only over the Postgres protocol: there is no shell in the pod, `exec` is refused, the network policy isolates them, and new clusters are created with the `postgres` superuser login off. Without a runtime class, database pods run on the node's kernel, so a Postgres or extension vulnerability would reach the host. gVisor closes that, at a cost in IO and latency.
 
 - **Check first.** The runtime must exist on every node (`kubectl get runtimeclass`). Test with a database you can afford to lose. The setting affects only pods created afterwards, so roll each cluster yourself: switch over, then delete the old primary.
 - **Failure policy.** `databases.runtimeClassFailurePolicy: Ignore` (default) never blocks pod creation. `Fail` guarantees that no unsandboxed database pod is admitted, and blocks creation if the policy is broken.
-- **Superuser login.** Clusters created before the change still have it. Run the script as a dry run, which lists them, then without the flag. It patches clusters one at a time and stops if any instance pod restarts.
+- **Superuser login.** A database cluster created by an Orchard version that left the login on keeps it until you run the script. With no flags, the script is a dry run that lists the clusters it would change. With `--apply`, it patches clusters one at a time and stops if any instance pod restarts. Start with `--limit 1` on a database that is not critical.
 - **Undo.** Clear the value. Existing pods stay sandboxed until recreated.
 
 ## Sandbox tenant pods and builds
 
 Values: `tenantSandbox.enabled` (gVisor), `builderSandbox.enabled` (Kata).
 
-These are the strongest isolation Orchard offers and they depend on your nodes. Install the runtime on every node first. A tenant pod that names a missing runtime does not schedule. See [Security and isolation](/operate/security/).
+These are the strongest isolation Orchard offers and they depend on your nodes. Install the runtime on every node first. A tenant pod that names a missing runtime does not schedule. For what each sandbox protects against, refer to [Security and isolation](/operate/security/).
 
 ## Per-database certificates
 
@@ -77,4 +77,4 @@ The chart's own `IngressRoute` is a Traefik resource for the Orchard dashboard. 
 
 ## Defaults for new organizations
 
-New organizations start with no CPU, memory or count caps. On an instance open to public sign-up, set instance defaults for new organizations in the admin panel, or set a limit on an organization afterwards. See [Resource limits](/operate/resource-limits/).
+New organizations start with no CPU, memory or count caps. On an instance open to public sign-up, set defaults in **Instance admin** > **Configuration** > **New organization limits**, or set a limit on an organization afterwards. For the values and the matching environment variables, refer to [Organization limits](/operate/configuration/#organization-limits).

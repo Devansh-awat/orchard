@@ -1,11 +1,13 @@
 ---
 title: Upgrade Orchard
-description: Upgrade an Orchard instance installed with the one-command installer or the Helm chart, and understand what an upgrade changes.
+description: Upgrade an Orchard instance installed with the one-command installer or the Helm chart, pin a version, find release notes, and understand what an upgrade changes.
 sidebar:
   order: 4
 ---
 
-To upgrade Orchard, use the command that matches how you installed it. Take a [backup of the control-plane database](/operate/production/#5-back-up-the-control-plane-database) before a major upgrade. This database holds every organization, project, and app definition on the instance.
+To upgrade Orchard, use the command that matches how you installed it. An upgrade rolls out new control-plane pods and runs database migrations. It does not restart your apps.
+
+Before a major upgrade, take a [backup of the control-plane database](/operate/production/#5-back-up-the-control-plane-database). This database holds every organization, project, and app definition on the instance. Its continuous backups are off by default, so check that you turned them on.
 
 ## Upgrade an installer host
 
@@ -15,9 +17,54 @@ Run the following command on the host:
 sudo orchardctl update
 ```
 
-`orchard-update` is the same command. It upgrades the chart with `/etc/orchard/values.yaml`, restarts deployments that use a moving image tag, and refreshes the host commands. For the full sequence, refer to [`orchardctl update`](/operate/host-commands/#update).
+`orchard-update` is the same command. It upgrades the chart to the newest release with `/etc/orchard/values.yaml`, restarts deployments that use a moving image tag, and refreshes the host commands. For the full sequence, refer to [`orchardctl update`](/operate/host-commands/#update).
 
-If you chose automatic updates during installation, a nightly systemd timer runs the same command.
+If you chose automatic updates during installation (`--updates automatic`), a nightly systemd timer runs the same command. To stop it, run `sudo systemctl disable --now orchard-update.timer`.
+
+## Pin a version on an installer host
+
+By default, an installer host runs the `latest` server and frontend images, and `orchardctl update` installs the newest chart. To stay on one release until you choose to move:
+
+1. Turn off nightly updates, because the timer always installs the newest chart:
+
+   ```bash
+   sudo systemctl disable --now orchard-update.timer
+   ```
+
+2. Run the installer with `--chart-version`. On an existing host, the re-run keeps your answers and settings. It also removes the `latest` image tags from the values file, so the server and frontend run the images of that chart version.
+
+   ```bash
+   sudo ./install.sh --chart-version <VERSION>
+   ```
+
+3. To move to another release later, pass the version to `orchardctl update`. Any extra arguments go to `helm upgrade`.
+
+   ```bash
+   sudo orchardctl update --version <VERSION>
+   ```
+
+   Without `--version`, `orchardctl update` installs the newest chart.
+
+`orchardctl update` also applies k3s patches and newer third-party images, independent of the Orchard version. To hold those too, add these lines to `/etc/orchard/env`:
+
+```bash
+ORCHARD_K3S_UPDATES=off
+ORCHARD_ADDON_UPDATES=off
+```
+
+If you turn them off, apply their security fixes yourself. For what each one covers, refer to [Security updates](#security-updates).
+
+## Find release notes
+
+Release notes are on [GitHub Releases](https://github.com/hackclub/orchard/releases). Each service has its own release, tagged `<service>/v<version>`, such as `server/v2.95.4` or `frontend/v1.87.0`. Each release lists its changes, with a link to each commit.
+
+The chart has no release page of its own. Its version is the highest version among the services it ships, so the release with that number is the newest change in that chart. To see the chart version you run, use the following command:
+
+```bash
+helm list -n orchard
+```
+
+After a dashboard release, the dashboard shows its release notes to each person once. The notes come from `assets.orchard.my`. To turn them off, set `UPDATES_URL=off`.
 
 ## Upgrade k3s
 
@@ -44,7 +91,7 @@ Most parts of an instance get security fixes without an Orchard release:
 | Railpack                                                   | A new Orchard chart, because a version mismatch breaks builds. `orchardctl images` tells you when one is out.             |
 | Orchard                                                    | A new Orchard chart. `orchardctl update` installs it.                                                                     |
 
-A new major version needs a person, because it can change behavior. `orchardctl update` tells you when one is out. To turn off these updates, add `ORCHARD_ADDON_UPDATES=off` to `/etc/orchard/env`.
+A new major version of a third-party component needs a person, because it can change behavior. `orchardctl update` tells you when one is out. To turn off these updates, add `ORCHARD_ADDON_UPDATES=off` to `/etc/orchard/env`.
 
 Upgrading CloudNativePG does not restart your databases, because the installer turns on in-place updates of the instance manager.
 
@@ -61,7 +108,7 @@ You can also re-run the installer on an existing host. A re-run:
 - Saves a copy of the values file before it changes the file.
 - Does not restart k3s unless the registry mirror configuration changed.
 
-For more information, refer to [Run the installer again](/start/install/#run-the-installer-again).
+Without `--chart-version`, a re-run installs the newest chart. For more information, refer to [Run the installer again](/start/install/#run-the-installer-again).
 
 ## Upgrade a Helm install
 
@@ -69,12 +116,12 @@ Run the following command:
 
 ```bash
 helm upgrade orchard oci://ghcr.io/hackclub/orchard/charts/orchard \
-  --namespace orchard -f my-values.yaml --server-side=false
+  --version <VERSION> --namespace orchard -f my-values.yaml --server-side=false
 ```
 
 On Helm 3, leave out `--server-side=false`, because Helm 3 does not have this flag. For the reason Helm 4 needs it, refer to [Upgrade the chart](/start/install/#upgrade-the-chart).
 
-In automated pipelines, add `--version` to pin a chart version.
+Pass `--version` on every upgrade. Without it, Helm installs the newest chart. A published chart sets the server, frontend, MCP, and backup proxy images to the versions in that release, so the chart version pins them too.
 
 ## Database migrations
 
@@ -88,10 +135,26 @@ Upgrading the control plane does not restart tenant apps. The server, frontend, 
 
 You can roll back the release with `helm rollback`. If the new version migrated the schema, the old version may not run against it. If downtime matters, test upgrades on a non-production instance first.
 
+## Upgrade from an earlier version
+
+### Turn off the Postgres superuser on older databases
+
+Orchard creates dedicated databases with the CloudNativePG `postgres` superuser login turned off (`enableSuperuserAccess: false`). Orchard never uses that login. Databases created by earlier versions keep it until you run the script in `apps/server/scripts/cnpg-disable-superuser.sh` from a checkout of the repository, with `kubectl` access to the cluster.
+
+The script patches one cluster at a time, and stops if any instance pod restarts:
+
+```bash
+apps/server/scripts/cnpg-disable-superuser.sh                   # dry run, lists clusters
+apps/server/scripts/cnpg-disable-superuser.sh --apply --limit 1 # one cluster first
+apps/server/scripts/cnpg-disable-superuser.sh --apply
+```
+
+### Refresh BuildKit daemon policies
+
+Persistent BuildKit daemons do not hold the registry login, and the chart's `buildkit-daemon-network-policy` limits their egress. If your instance ran persistent daemons before the chart included that policy, upgrade the chart so that the policy exists, and check that `builders.registryEgress` lists your registry.
+
 ## Related resources
 
-- [Back up and restore an instance](/operate/backup-and-restore/)
-- [Host commands](/operate/host-commands/)
-- [Go to production](/operate/production/)
-- [Install](/start/install/)
-- [Upgrade and roll back grafts](/grafts/upgrades/)
+- [Back up and restore an instance](/operate/backup-and-restore/) - Learn what to back up before an upgrade and how to bring back the control plane.
+- [Host commands](/operate/host-commands/) - Review every `orchardctl` command, including `update` and `k3s`.
+- [Upgrade and roll back grafts](/grafts/upgrades/) - Upgrade extensions separately from Orchard.

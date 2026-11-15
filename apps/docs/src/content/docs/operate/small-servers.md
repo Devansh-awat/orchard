@@ -5,7 +5,7 @@ sidebar:
   order: 6
 ---
 
-Orchard runs on a server with 2 GiB of RAM. On a small server, the installer uses the smallest footprint, so that most of the memory stays free for your apps.
+Orchard runs on 2 GiB of RAM. 8 GB is recommended. On a small server, the installer gives Orchard its smallest footprint, so that most of the memory stays free for your apps. Below 3.5 GiB, it also starts with the MCP endpoint and image scanning turned off, because each one holds memory all the time.
 
 ## What the installer changes
 
@@ -33,7 +33,7 @@ Under 3.5 GiB of RAM, a new install:
 
 - Limits the Node.js heap of the server to 512 MiB and of the dashboard to 192 MiB, with `NODE_OPTIONS`.
 - Requests 512 MiB for each build, instead of 2 GiB, with `BUILDER_MEMORY_REQUEST`. A build can still use more memory up to its limit. A large build can run out of memory on a small server. To build somewhere else, refer to [Build outside the server](#build-outside-the-server).
-- Turns off the MCP endpoint and image scanning, unless you pass `--mcp true` or `--image-scanning true`. To turn them on later, run `sudo orchardctl mcp enable --apply`, or `sudo orchardctl config set trivy.enabled true --apply`.
+- Turns off the MCP endpoint and image scanning, unless you pass `--mcp true`, `--mcp-domain`, or `--image-scanning true`. To turn them on later, run `sudo orchardctl mcp enable --apply`, or `sudo orchardctl config set trivy.enabled true --apply`.
 
 The installer applies this profile to a new install only. A re-run of the installer keeps the values that are already in `/etc/orchard/values.yaml`. To use a value from the profile on an existing install, set it with `sudo orchardctl config set` or `sudo orchardctl env set`.
 
@@ -58,11 +58,15 @@ To turn it on, run a Datadog agent in the cluster and set `datadog.enabled` to `
 
 ## Build outside the server
 
-A build uses the most memory of anything that Orchard does. On a server with 2 GiB of RAM, a large build can fail with an out-of-memory error. To keep builds off the server, do one of these:
+A build uses the most memory of anything that Orchard does. On a server with 2 GiB of RAM, a large build can fail with an out-of-memory error. To keep builds off the server, build the image in CI, push it to a registry, and deploy the image. For more information, refer to [Deploy an image](/deploy/image/).
 
-- Build the image in CI, push it to a registry, and deploy the image. For more information, refer to [Deploy an image](/deploy/image/).
-- Add a second node for builds. For more information, refer to [Nodes](/operate/nodes/).
+An installer host cannot take a second node for builds. If you outgrow one machine, run the Helm chart on a multi-node cluster and [reserve a node for builds](/operate/nodes/#control-where-builds-run). For the reasons, refer to [Add and remove nodes](/operate/nodes/#add-and-remove-nodes).
 
 ## Free disk space
 
 A small server usually has a small disk too. To keep the build cache and old images from filling it, refer to [Free disk space](/operate/disk-space/).
+
+## Related resources
+
+- [Install](/start/install/) - Install Orchard on a Linux machine with the one-command installer.
+- [Scale the control plane](/operate/scale-control-plane/) - Resize the metrics stack and the control-plane pods with chart values.

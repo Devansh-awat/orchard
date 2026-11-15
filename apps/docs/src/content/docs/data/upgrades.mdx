@@ -7,13 +7,13 @@ sidebar:
 
 import { Tabs, TabItem } from '@astrojs/starlight/components';
 
-You can upgrade a managed database to a newer Postgres major version from the dashboard or the CLI. The database is offline during the upgrade step.
+The Postgres project supports each major version for a fixed period, so a long-lived database eventually needs a major upgrade. Orchard runs the upgrade for you: it can rehearse on a copy first, takes a checkpoint, and puts the database back on the previous version if the upgrade fails. The database is offline during the upgrade step.
 
-Orchard applies minor updates automatically and restarts instances one at a time.
+Minor releases contain bug and security fixes only. To apply one, select **Update to `<version>`** on the database's **Security** tab, or run `orchard db update <dbId>`. Instances restart one at a time, standbys first. To have Orchard apply minor releases for you, an organization admin turns on **Apply minor updates automatically** under **Organization settings** > **Database defaults**. Orchard then updates a few databases each morning (UTC). An operator can turn automatic updates off for the whole instance.
 
 ## Prerequisites
 
-- Edit access to the project.
+- Edit access to the project: the Admin or Member [project role](/teams/organizations/#project-roles).
 - A dedicated database that is running and healthy.
 - No other restore or upgrade running on the database.
 
@@ -23,9 +23,9 @@ Orchard applies minor updates automatically and restarts instances one at a time
 <TabItem label="Dashboard">
 
 1. Open the database.
-2. Go to **Settings** > **Version and security**.
+2. Go to **Security**.
 
-The page shows the running version and its support date. It also lists known vulnerabilities from postgresql.org.
+The **Version and security** card shows the running version and its support date. It also lists known vulnerabilities from postgresql.org.
 
 </TabItem>
 <TabItem label="CLI">
@@ -51,7 +51,7 @@ orchard db versions
 <TabItem label="Dashboard">
 
 1. Open the database.
-2. Go to **Settings** > **Version and security**.
+2. Go to **Security**.
 3. Select **Upgrade to Postgres `<version>`**. The button shows the newest version.
 4. In **To**, select the target version.
 5. Keep **Rehearse on a copy first** turned on. This adds a few minutes before the upgrade.
@@ -77,7 +77,7 @@ To skip the rehearsal, add `--no-rehearse`. To change how long `--wait` blocks, 
 2. Orchard takes a [checkpoint](/data/backups/).
 3. Orchard upgrades the database. The database is offline during this step.
 4. Orchard runs `ANALYZE`.
-5. If the organization has backup storage, Orchard starts a new backup.
+5. If backup storage is set, Orchard starts a new backup.
 
 If the upgrade fails, Orchard returns the database to the previous version.
 
@@ -85,12 +85,11 @@ If a previous rehearsal measured the upgrade time, the upgrade dialog shows that
 
 ## Respond to a support warning
 
-**Version and security** shows a warning when support for the running major version ends soon. The page shows an error after support ends. After that date, the major version no longer receives security fixes.
+**Version and security** shows a warning when support for the running major version ends soon, and an error after support ends. After that date, the major version receives no more security fixes.
 
 To resolve the warning or the error, upgrade to a newer major version.
 
 ## Related resources
 
-- [Back up and restore a database](/data/backups/)
-- [Create and manage a database](/data/databases/)
-- [`orchard db upgrade` reference](/reference/cli/#db)
+- [Back up and restore a database](/data/backups/) - Restore to a checkpoint if you need to undo an upgrade later.
+- [`orchard db upgrade` reference](/reference/cli/#db) - Review the upgrade flags, including `--no-rehearse` and `--timeout`.

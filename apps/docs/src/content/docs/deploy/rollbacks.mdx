@@ -7,7 +7,7 @@ sidebar:
 
 import { Tabs, TabItem } from '@astrojs/starlight/components';
 
-To return an app to an earlier version, roll back to a previous image. A rollback is a deploy of the older image, so it uses the same [rolling update](/deploy/update-strategies/) and [health checks](/deploy/scaling/#set-health-checks) as any other deploy.
+When a deploy goes wrong, a rollback puts the app back on an earlier image in the time it takes to start new pods, with no rebuild. A rollback is a deploy of the older image, so it uses the same [rolling update](/deploy/update-strategies/) and [health checks](/deploy/scaling/#set-health-checks) as any other deploy.
 
 A rollback does not revert your repository. It also leaves the database schema as it is, unless you restore bound databases.
 
@@ -19,7 +19,7 @@ A rollback does not revert your repository. It also leaves the database schema a
 1. Open the app.
 2. Go to **Activity**.
 3. In **History**, find the release.
-4. Select **Roll back**. To return to the previous release, select **Roll back** on the release marked **Live**.
+4. Select **Roll back**. To return to the previous release, select **Roll back** on the **Live** release at the top of the page.
 5. (Optional) Select **Also restore bound databases to before this deploy**. Each database returns to its [checkpoint](/data/backups/#take-a-checkpoint) from before the deploy.
 6. Select **Promote**.
 
@@ -74,7 +74,6 @@ orchard deploy restart <id>
 
 ## Related resources
 
-- [Builds](/deploy/builds/)
-- [Back up and restore a database](/data/backups/)
-- [Choose an update strategy](/deploy/update-strategies/)
-- [`orchard deploy` reference](/reference/cli/#deploy)
+- [Builds](/deploy/builds/) - Find out why a build failed before you push a fix.
+- [Back up and restore a database](/data/backups/) - Restore a database on its own, outside a rollback.
+- [`orchard deploy` reference](/reference/cli/#deploy) - Every flag of the `orchard deploy` commands.

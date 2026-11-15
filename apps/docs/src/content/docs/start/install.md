@@ -5,13 +5,21 @@ sidebar:
   order: 2
 ---
 
-To install Orchard, select the method that matches your environment.
+You can install Orchard on a single Linux machine with one command, or on a Kubernetes cluster that you operate with the Helm chart. Both give you the same Orchard. They differ in what runs underneath it and who looks after that part.
 
-| Environment                              | Method                                               |
-| ---------------------------------------- | ---------------------------------------------------- |
-| A Linux machine with no cluster on it    | [One-command installer](#install-on-a-linux-machine) |
-| A Kubernetes cluster you already operate | [Helm chart](#install-on-an-existing-cluster)        |
-| A laptop, for a local trial              | [Quickstart script](#try-orchard-on-a-laptop)        |
+## Choose how to run Orchard
+
+The one-command installer builds a single-node k3s cluster on one machine. It puts app data on `local-path` disks, runs a zot registry that only that machine can pull from, and keeps backups in an S3 store on the same disk. You answer a few questions and the installer configures everything else, which makes it the fastest way to a working instance. It suits a home lab, a side project, a small team, or a trial. Because everything runs on one machine, that machine is a single point of failure.
+
+For production, Orchard recommends the Helm chart on a multi-node cluster built for it, such as [Talos Linux](https://docs.siderolabs.com/talos). You operate the cluster, and you can replace bundled components with ones that you run yourself: [Harbor](https://goharbor.io/docs/) or another registry instead of zot, external S3 storage for backups, and a replicated StorageClass instead of `local-path`.
+
+| Environment                                                | Method                                               |
+| ---------------------------------------------------------- | ---------------------------------------------------- |
+| A Linux machine with no cluster on it                      | [One-command installer](#install-on-a-linux-machine) |
+| A Kubernetes cluster you operate, such as a production one | [Helm chart](#install-on-an-existing-cluster)        |
+| A laptop, for a local trial                                | [Quickstart script](#try-orchard-on-a-laptop)        |
+
+You cannot add nodes to an installer host yet. Kubernetes nodes pull app images from the zot registry through an address that exists only on the install machine, and the host setup that Orchard needs runs only on that machine. To run on more than one machine, use the Helm chart. For more information, refer to [Add and remove nodes](/operate/nodes/#add-and-remove-nodes).
 
 After you install Orchard, [claim the instance](#claim-the-instance).
 
@@ -22,11 +30,12 @@ The installer creates a single-node k3s cluster. It then installs Traefik, Cloud
 ### Prerequisites
 
 - A physical machine or a virtual machine (VM) with an amd64 or arm64 CPU. The installer refuses other architectures.
+- A Linux distribution that uses systemd. Continuous integration (CI) tests the installer on Ubuntu 24.04 (amd64 and arm64) and Ubuntu 26.04 (amd64). Other distributions with systemd can work, but they are not tested.
 - An IPv4 address. IPv6-only servers are not supported yet. For more information, refer to [The installer stops on an IPv6-only server](/operate/troubleshooting/#the-installer-stops-on-an-ipv6-only-server).
 - Root access.
 - OpenSSL 3 or newer, which the published installer uses to check release signatures. Without it, the installer stops, unless you set `ORCHARD_ALLOW_UNSIGNED_COMMANDS=true` to install without the check.
 - At least 20 GB of free disk on `/var/lib`. The installer refuses less, and it warns below 60 GB. For real use, plan for at least 40 GB of disk.
-- At least 2 GiB of RAM. Under 3.5 GiB, the installer uses its smallest profile, so that most of the memory stays free for your apps. For more information, refer to [Run on a small server](/operate/small-servers/). With 8 GiB or more, Orchard runs more builds at once and keeps more logs.
+- 2 GiB of RAM. 8 GiB is recommended. The installer does not refuse a smaller machine, but it warns below 2 GiB. Under 3.5 GiB, it uses its [smallest profile](/operate/small-servers/#the-smallest-profile), which keeps memory free for your apps and turns off the MCP endpoint and image scanning. With 8 GiB or more, Orchard runs more builds at once and keeps more logs.
 - For `public` mode, ports 80 and 443 free and reachable from the internet. A domain is optional. To try Orchard without one, refer to [Try Orchard without a domain](#try-orchard-without-a-domain).
 - For `tunnel` mode, a domain and a Cloudflare Tunnel token.
 - Outbound internet access. For the hosts the installer contacts, refer to [Outbound connections](/operate/outbound-connections/).
@@ -326,7 +335,7 @@ To change an answer that you gave the installer:
 | Sandboxed builds and tenant isolation                  | Install gVisor or Kata on the node, then set `tenantSandbox` and `builderSandbox` in `/etc/orchard/values.yaml`. Without them, image builds run rootless, and builds and apps share the host kernel.                                                      |
 | DNS for your own domain                                | The installer prints the records and checks them, but you create them. To check them later, go to **Instance admin** > **Networking**. For more information, refer to [Point DNS at this instance](/operate/finishing-setup/#point-dns-at-this-instance). |
 | Off-server backups                                     | The installer asks for S3 storage, and you can add it later. Refer to [Add S3 storage](/operate/storage/).                                                                                                                                                |
-| Multiple nodes, and public TCP or UDP in `tunnel` mode | Use the [Helm chart](#install-on-an-existing-cluster).                                                                                                                                                                                                    |
+| Multiple nodes, and public TCP or UDP in `tunnel` mode | Use the [Helm chart](#install-on-an-existing-cluster). You cannot add nodes to an installer host yet.                                                                                                                                                     |
 | One certificate for every app URL                      | Add a DNS-01 issuer. Refer to [Set up wildcard certificates](/operate/wildcard-certificates/).                                                                                                                                                            |
 
 The following values turn on the sandboxes:
@@ -419,17 +428,19 @@ Open the claim link yourself. The link signs you in as the superadmin, so treat 
 
 ## Install on an existing cluster
 
-To install Orchard on a Kubernetes cluster that you operate, install the prerequisites, write a values file, and install the Helm chart. The chart installs Orchard's own components. It does not install cluster operators, so you provide them.
+To install Orchard on a Kubernetes cluster that you operate, install the prerequisites, write a values file, and install the Helm chart. The chart installs Orchard's own components. It does not install cluster operators, so you provide them. This is also the path for a production setup on a multi-node cluster. For what to decide before you go live, refer to [Go to production](/operate/production/).
 
 :::note
 These steps were run end to end on one node: k3s v1.36.5 with its bundled Traefik, Helm 4.3.1, Let's Encrypt over HTTP-01, and a registry behind an ingress on the same node. The run reached a working sign-in, an app built from a repository and served over HTTPS, and two healthy databases.
 
 That run set `CNPG_OPERATOR_NAMESPACE` in `server.env`. The `tenant.cnpgOperatorNamespace` value used below sets the same variable. Its rendered output is checked in CI, but it has not been run on a cluster.
 
-These were not tested on this path: MCP, public database exposure, more than one node, and other ingress controllers.
+These were not tested on this path: backups with the `objectStorage` values, MCP, public database exposure, more than one node, and other ingress controllers.
 :::
 
 ### Prerequisites
+
+You need Kubernetes 1.30 or later, because the chart installs `ValidatingAdmissionPolicy` objects for tenant namespaces. You also need cluster-admin access to install the chart, and Helm 3 or Helm 4. The cluster must have these components:
 
 | Component                     | Needed for                                                                                      |
 | ----------------------------- | ----------------------------------------------------------------------------------------------- |
@@ -782,29 +793,43 @@ Backups stored off this machine, your DNS records, and the rules that the instal
 
 To uninstall from an existing cluster:
 
-```bash
-helm uninstall orchard -n orchard
-```
+1. [Back up the Orchard database](/operate/backup-and-restore/). `helm uninstall` deletes the CloudNativePG `Cluster` of the control plane, and its volumes go with it.
 
-The release does not include the namespaces that Orchard created for apps and databases. List them, check the list, and then delete them:
+2. Uninstall the release:
 
-```bash
-kubectl get namespaces -l orchard.my/managed=true
-kubectl delete namespaces -l orchard.my/managed=true
-```
+   ```bash
+   helm uninstall orchard -n orchard
+   ```
+
+   The metrics and logs volumes and the store on the server for backups (`helm.sh/resource-policy: keep`) remain after this step.
+
+3. Delete the namespaces that the chart uses. This step also deletes the volumes in them, including backups in the store on the server. To keep those backups, stop before this step.
+
+   ```bash
+   kubectl delete ns --ignore-not-found orchard orchard-builders orchard-metrics \
+     orchard-scans orchard-r2-proxy orchard-object-storage
+   ```
+
+   If you turned on Firecracker builds or Greenhouse machines, also delete `orchard-fc-builders` and `orchard-sandboxes`.
+
+4. Delete the namespaces that Orchard created for apps and databases. They are not part of the release. List them, check the list, and then delete them:
+
+   ```bash
+   kubectl get namespaces -l orchard.my/managed=true
+   kubectl delete namespaces -l orchard.my/managed=true
+   ```
+
+   Namespaces that an earlier version of Orchard created can carry the `orchard.dev/managed=true` label instead. Repeat the commands with that label.
 
 A `network` namespace that the chart created also remains. The operators that you installed, such as CloudNativePG, cert-manager, and Traefik, stay in place. Remove them only if nothing else uses them.
 
 ## Next steps
 
-- [Deploy your first app](/start/first-deploy/)
-- [Finish instance setup](/operate/finishing-setup/)
-- [Go to production](/operate/production/)
+At this point, you have a running Orchard instance and a superadmin account. To put an app on it, [deploy your first app](/start/first-deploy/). Before other people rely on the instance, [finish instance setup](/operate/finishing-setup/) and work through [Go to production](/operate/production/).
 
 ## Related resources
 
-- [What is Orchard](/start/what-is-orchard/)
-- [Upgrade Orchard](/operate/upgrades/)
-- [Host commands](/operate/host-commands/)
-- [Configuration](/operate/configuration/)
-- [Troubleshooting Orchard](/operate/troubleshooting/)
+- [Upgrade Orchard](/operate/upgrades/) - Update an installer host or a Helm release to a new version.
+- [Host commands](/operate/host-commands/) - Change settings, create claim links, and update an installer host with `orchardctl`.
+- [Configuration](/operate/configuration/) - Change instance settings in **Instance admin** and in the chart values.
+- [Troubleshooting Orchard](/operate/troubleshooting/) - Fix common problems with builds, apps, databases, and the installer.

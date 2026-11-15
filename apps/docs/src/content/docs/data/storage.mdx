@@ -7,11 +7,13 @@ sidebar:
 
 import { Tabs, TabItem } from '@astrojs/starlight/components';
 
-You can increase the storage volume of a managed database without a restart. The maximum size is 200 GiB. You cannot decrease the size later.
+Orchard pauses writes when a database volume is nearly full, so grow the volume before that happens. Orchard grows the volume of every instance without a restart. You cannot decrease the size later, so grow it only as far as you need.
+
+The largest volume is 200 GiB by default. An operator can change this limit under **Instance admin** > **Limits** > **Largest volume**, or with `MAX_VOLUME_SIZE`.
 
 ## Prerequisites
 
-- Edit access to the project.
+- Edit access to the project: the Admin or Member [project role](/teams/organizations/#project-roles).
 - A dedicated database.
 
 ## Grow the volume
@@ -50,11 +52,9 @@ The events **Writes paused (disk full)** and **Writes resumed** are available as
 
 ## WAL archiving failures
 
-If write-ahead log (WAL) archiving fails, WAL files continue to fill the volume. The **Storage** card shows `WAL archiving is failing`. Growing the volume adds time, but it does not fix the cause. To resolve the failure, check the backup storage configuration. For more information, refer to [Back up and restore a database](/data/backups/).
+If write-ahead log (WAL) archiving fails, WAL files continue to fill the volume. The **Storage** card shows `WAL archiving is failing`. Growing the volume adds time, but it does not fix the cause. To resolve the failure, check the [backup storage](/data/backups/#prerequisites) configuration.
 
 ## Related resources
 
-- [Create and manage a database](/data/databases/)
-- [Back up and restore a database](/data/backups/)
-- [`orchard db storage` reference](/reference/cli/#db)
-- [Monitor a database](/data/monitoring/)
+- [Monitor a database](/data/monitoring/) - Watch the **Disk used** panel to grow the volume before writes pause.
+- [`orchard db storage` reference](/reference/cli/#db) - Review the storage commands and their flags.

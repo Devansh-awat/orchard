@@ -3,9 +3,9 @@ title: Use the CLI
 description: Install the Orchard CLI, sign in to an instance, set a default project, and script commands with JSON output.
 ---
 
-The `orchard` command-line interface (CLI) calls the same API as the dashboard. Use it to deploy apps, read logs, and manage databases from a terminal or a script.
+The `orchard` command-line interface (CLI) calls the same API as the dashboard. Use it to deploy apps, read logs, and manage databases from a terminal, a script, or a CI job. Output is a table in a terminal and JSON when piped, and exit codes are stable, so scripts can rely on both.
 
-For every command and flag, refer to the [CLI reference](/reference/cli/). To run commands on the machine that hosts Orchard, refer to [Host commands](/operate/host-commands/).
+This page covers installing the CLI, signing in, and choosing what a command acts on. For every command and flag, refer to the [CLI reference](/reference/cli/). To run commands on the machine that hosts Orchard, use [host commands](/operate/host-commands/) instead.
 
 ## Install the CLI
 
@@ -50,13 +50,13 @@ Without a terminal or in CI, the CLI never asks. If no instance is set up, the c
 Each instance you sign in to becomes a context: its URL, your token for it, and the default organization, project and environment you set with `orchard use`. Signing in to another instance adds a context and switches to it.
 
 ```bash
-orchard auth login --api-url https://orchard.acme.dev --name acme
+orchard auth login --api-url https://staging.example.com --name staging
 orchard context list
 orchard context use          # pick from a list
-orchard context use acme
+orchard context use staging
 ```
 
-To run a single command against another instance, pass `--context <name>` or set `ORCHARD_CONTEXT`. Rename a context with `orchard context rename` and forget one, with its token, with `orchard context remove`.
+To run a single command against another instance, pass `--context <name>` or set `ORCHARD_CONTEXT`. To rename a context, run `orchard context rename`. To forget a context and its token, run `orchard context remove`.
 
 To sign in on a machine with no browser, add `--no-browser`. The CLI prints a URL and the local port that it listens on. Forward that port to your own machine with `ssh -L` before you open the URL. Without a terminal, the CLI cannot ask which instance to use, so also pass `--api-url` or set `ORCHARD_API_URL`.
 
@@ -124,25 +124,24 @@ orchard commands -o json
 
 ### Exit codes
 
-| Code  | Meaning                                                      |
-| ----- | ------------------------------------------------------------ |
-| `0`   | Success                                                      |
-| `1`   | General or network error, or no token configured             |
-| `2`   | Usage error, or a refused confirmation                       |
-| `3`   | Authentication rejected (HTTP 401)                           |
-| `4`   | Not found (HTTP 404)                                         |
-| `5`   | Request rejected (other HTTP 4xx, including a missing scope) |
-| `6`   | Rate limited (HTTP 429)                                      |
-| `7`   | Server error (HTTP 5xx)                                      |
-| `8`   | `--wait` reached its timeout                                 |
-| `9`   | The build failed during a wait                               |
-| `10`  | Pods are crash-looping or the rollout is unhealthy           |
-| `130` | Interrupted                                                  |
+| Code  | Meaning                                                                                              |
+| ----- | ---------------------------------------------------------------------------------------------------- |
+| `0`   | Success                                                                                              |
+| `1`   | General or network error, or no token configured                                                     |
+| `2`   | Usage error, or a refused confirmation                                                               |
+| `3`   | Authentication rejected (HTTP 401)                                                                   |
+| `4`   | Not found (HTTP 404)                                                                                 |
+| `5`   | Request rejected (other HTTP 4xx, including a missing scope)                                         |
+| `6`   | Rate limited (HTTP 429)                                                                              |
+| `7`   | Server error (HTTP 5xx)                                                                              |
+| `8`   | The request deadline passed, or `--wait` reached `--timeout`                                         |
+| `9`   | The build failed during a wait                                                                       |
+| `10`  | Pods are crash-looping or the rollout is unhealthy, or `orchard db diagnose` found the database down |
+| `11`  | `orchard doctor` found at least one failing check                                                    |
+| `130` | Interrupted                                                                                          |
 
 ## Related resources
 
-- [CLI reference](/reference/cli/)
-- [Code mode for agents](/agents-code-mode/)
-- [Manage API tokens](/account/tokens/)
-- [Use the terminal dashboard](/run/terminal-dashboard/)
-- [Deploy from your terminal](/deploy/deploy-from-terminal/)
+- [Code mode for agents](/agents-code-mode/) - Let a coding agent drive Orchard through the CLI instead of MCP.
+- [Use the terminal dashboard](/run/terminal-dashboard/) - Read logs, deploy, scale, and manage databases from an interactive dashboard in your terminal.
+- [`orchard auth` reference](/reference/cli/#auth) - Every sign-in, session, and token command.

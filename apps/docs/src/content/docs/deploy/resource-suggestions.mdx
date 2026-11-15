@@ -5,7 +5,7 @@ sidebar:
   order: 10
 ---
 
-Orchard can suggest CPU and memory values for an app based on its measured usage. You choose whether to apply a suggestion.
+Guessing CPU and memory leads to apps that run out of memory or reserve capacity they never use. Orchard reads an app's measured usage and suggests values that fit it, with a sentence that explains why. Nothing changes until you apply a suggestion.
 
 ## Prerequisites
 
@@ -26,26 +26,27 @@ If the row does not appear, Orchard has no suggestion for the app.
 
 Orchard uses up to 14 days of history.
 
-| Resource | Target                                                                              | Minimum |
-| -------- | ----------------------------------------------------------------------------------- | ------- |
-| Memory   | 115% of the highest daily peak.                                                     | 128 MB  |
-| CPU      | The larger of 115% of the 99th percentile and 150% of the 95th percentile of usage. | 100m    |
+| Resource | Target                                                                              | Minimum                                     |
+| -------- | ----------------------------------------------------------------------------------- | ------------------------------------------- |
+| Memory   | 115% of the highest daily peak.                                                     | 128 MiB, or more for an image that needs it |
+| CPU      | The larger of 115% of the 99th percentile and 150% of the 95th percentile of usage. | 100m                                        |
 
 Orchard rounds each target up to the next resource preset or step.
 
 Orchard also applies these rules:
 
-- If the app ran out of memory, the suggestion raises memory by at least 20%.
+- If the app ran out of memory, the suggestion raises memory by at least 20%, and by at least 100 MiB.
 - If the app was throttled more than 10% of the time at the 95th percentile, Orchard treats the CPU limit as the bottleneck. Orchard does not suggest a lower CPU value.
 - If the app restarted in the last 24 hours, Orchard does not suggest lower values.
 - Orchard ignores changes under 25% of the current value.
-- Orchard ignores memory changes under 128 MB and CPU changes under 100m.
+- Orchard ignores memory changes under 128 MiB and CPU changes under 100m.
 
 Orchard does not suggest values for an app that has no [limits](/operate/resource-limits/).
 
+When you apply suggestions, you have an app sized to what it uses. To scale it out instead of up, refer to [Scale an app and set resources](/deploy/scaling/).
+
 ## Related resources
 
-- [Scale an app and set resources](/deploy/scaling/)
-- [Set quotas](/teams/quotas/)
-- [Monitor an app](/run/monitor-an-app/)
-- [Review usage](/teams/usage/)
+- [Set quotas](/teams/quotas/) - Cap how much CPU and memory an organization and its members can use.
+- [Monitor an app](/run/monitor-an-app/) - Read the usage graphs that suggestions are based on.
+- [Review usage](/teams/usage/) - Compare what each project and app uses.

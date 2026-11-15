@@ -7,11 +7,11 @@ sidebar:
 
 import { Tabs, TabItem } from '@astrojs/starlight/components';
 
-You can change a set of Postgres parameters on a managed database. Some parameters restart the database when you save them.
+Orchard sets Postgres defaults for you and sizes `shared_buffers` from the memory limit of the database. When a workload needs something different, such as a longer statement timeout or more connections, you can change a set of parameters yourself. Some parameters restart the database when you save them.
 
 ## Prerequisites
 
-- Edit access to the project.
+- Edit access to the project: the Admin or Member [project role](/teams/organizations/#project-roles).
 - A dedicated database.
 
 ## Change a parameter
@@ -53,10 +53,10 @@ orchard db settings set <id> statement_timeout=
 | Dashboard label                      | Parameter                             | Default   | Range or values                                      | Restart |
 | ------------------------------------ | ------------------------------------- | --------- | ---------------------------------------------------- | ------- |
 | **Max connections**                  | `max_connections`                     | 100       | 10 to 500                                            | Yes     |
-| **Shared buffers**                   | `shared_buffers`                      | Automatic | Memory value                                         | Yes     |
-| **Work memory**                      | `work_mem`                            | 4MB       | Memory value                                         | No      |
-| **Maintenance work memory**          | `maintenance_work_mem`                | 64MB      | Memory value                                         | No      |
-| **Effective cache size**             | `effective_cache_size`                | 4GB       | Memory value                                         | No      |
+| **Shared buffers**                   | `shared_buffers`                      | Automatic | Memory value in `kB`, `MB`, or `GB`                  | Yes     |
+| **Work memory**                      | `work_mem`                            | 4MB       | Memory value in `kB`, `MB`, or `GB`                  | No      |
+| **Maintenance work memory**          | `maintenance_work_mem`                | 64MB      | Memory value in `kB`, `MB`, or `GB`                  | No      |
+| **Effective cache size**             | `effective_cache_size`                | 4GB       | Memory value in `kB`, `MB`, or `GB`                  | No      |
 | **Slow query log (ms)**              | `log_min_duration_statement`          | -1        | -1 to 600000. -1 turns this off.                     | No      |
 | **Statement timeout (ms)**           | `statement_timeout`                   | 0         | 0 to 3600000. 0 turns this off.                      | No      |
 | **Idle-in-transaction timeout (ms)** | `idle_in_transaction_session_timeout` | 0         | 0 to 3600000. 0 turns this off.                      | No      |
@@ -74,7 +74,6 @@ If a running value differs from the saved value, the parameter row shows the run
 
 ## Related resources
 
-- [Create and manage a database](/data/databases/)
-- [Monitor a database](/data/monitoring/)
-- [`orchard db settings` reference](/reference/cli/#db)
-- [Use a connection pooler](/data/connection-pooler/)
+- [Use a connection pooler](/data/connection-pooler/) - Serve more clients without raising `max_connections`.
+- [Monitor a database](/data/monitoring/) - Find slow queries before you change timeouts or memory settings.
+- [`orchard db settings` reference](/reference/cli/#db) - Review the settings commands.

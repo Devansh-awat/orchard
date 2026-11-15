@@ -68,6 +68,7 @@ export default defineConfig({
             { label: 'Install', slug: 'start/install' },
             { label: 'First deploy', slug: 'start/first-deploy' },
             { label: 'Concepts', slug: 'start/concepts' },
+            { label: 'FAQ', slug: 'start/faq' },
             { label: 'Directory', link: '/directory/' }
           ]
         },

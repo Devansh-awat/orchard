@@ -5,7 +5,7 @@ sidebar:
   order: 9
 ---
 
-The **Security** tab of an app shows configuration findings, image scan results, and attack attempts.
+The **Security** tab of an app collects what you need to judge its exposure in one place: settings that put it at risk, known vulnerabilities in its image, and suspicious requests that reach it. Each finding links to the setting that fixes it.
 
 To open the tab, open the app and select **Security**.
 
@@ -23,7 +23,7 @@ When there are no findings, the card shows **Nothing to flag**.
 
 ## Image scan
 
-The **Image scan** card lists known vulnerabilities in the app's container image. A superadmin must set up a scanner on the instance. For more information, refer to [Set up image scanning](/operate/image-scanning/).
+The **Image scan** card lists known vulnerabilities in the app's container image. A superadmin must [set up a scanner](/operate/image-scanning/) on the instance.
 
 To run a scan, select **Scan now** or **Scan again**.
 
@@ -33,11 +33,11 @@ To run a scan, select **Scan now** or **Scan again**.
 | `Not scanned yet`                         | No scan has run for this image.                                               |
 | `The last scan failed`                    | The scan did not finish. The card shows the error.                            |
 | `Image scanning is off`                   | No scanner is selected on this instance.                                      |
-| `Scanning is not set up on this instance` | A scanner is selected, but its credentials or server are missing.             |
+| `Scanning isn't set up on this instance`  | A scanner is selected, but its credentials or server are missing.             |
 | `Harbor only scans images Orchard builds` | The app uses an external image, and the instance uses Harbor.                 |
 | `This image is no longer in the registry` | The image was removed from the registry. Redeploy to build and scan it again. |
 | `The scanner refused Orchard`             | The scanner rejected the credentials.                                         |
-| `Cannot reach the scanner`                | Orchard cannot connect to the scanner.                                        |
+| `Can't reach the scanner`                 | Orchard cannot connect to the scanner.                                        |
 
 ## Attack attempts
 
@@ -52,10 +52,9 @@ The **Attack attempts** chart and the **Top sources** list show suspicious reque
 
 If the card shows `Requests aren't recorded yet`, the log store has no access logs for the app. To set up access logs, refer to [Configure logs and request data](/operate/logs/).
 
-The **Top sources** list can show the row **Hidden by the load balancer**. This row groups private and cluster addresses. For more information, refer to [Configure logs and request data](/operate/logs/).
+The **Top sources** list can show the row **Hidden by the load balancer**. This row groups private and cluster addresses, which usually means the load balancer hides the real client address. To fix it, refer to [Client IPs show as hidden](/operate/logs/#client-ips-show-as-hidden).
 
 ## Related resources
 
-- [Set up image scanning](/operate/image-scanning/)
-- [Manage variables and environments](/run/environments/)
-- [Protect an app](/deploy/protection/)
+- [Protect an app](/deploy/protection/) - Require a sign-in or a password before a domain opens.
+- [Turn on bot protection](/operate/bot-protection/) - Add a Cloudflare Turnstile challenge to sign-in pages and password-protected apps.

@@ -7,7 +7,7 @@ sidebar:
 
 import { Tabs, TabItem } from '@astrojs/starlight/components';
 
-The update strategy controls how Orchard replaces an app's pods when you deploy a new version.
+The update strategy controls how Orchard replaces an app's pods when you deploy a new version, which decides whether visitors see any downtime. Most apps keep the default, **Rolling**. Change it when an app cannot run two versions at the same time, or when you want traffic to move only after every new pod is ready.
 
 | Strategy       | CLI value       | Behavior                                               |
 | -------------- | --------------- | ------------------------------------------------------ |
@@ -56,6 +56,6 @@ The setting takes effect when the app has more replicas than the value. If you s
 
 ## Related resources
 
-- [Scale an app and set resources](/deploy/scaling/)
-- [Roll back an app](/deploy/rollbacks/)
-- [`orchard deploy strategy` reference](/reference/cli/#deploy)
+- [Scale an app and set resources](/deploy/scaling/) - Run more replicas so that a rolling update keeps serving traffic.
+- [Roll back an app](/deploy/rollbacks/) - Return an app to an earlier release.
+- [`orchard deploy strategy` reference](/reference/cli/#deploy) - Every flag of the `orchard deploy strategy` commands.

@@ -7,7 +7,7 @@ sidebar:
 
 import { Tabs, TabItem } from '@astrojs/starlight/components';
 
-To change how much of an app runs, set its replica count, its CPU and memory, or stop it.
+Scale an app out with more replicas so that it handles more traffic and survives a pod restart, or scale it up with more CPU and memory. Health checks tell Orchard when a pod is ready, so a deploy only sends traffic to pods that work. You can also stop an app to free its resources and start it again later.
 
 ## Change replicas
 
@@ -83,7 +83,7 @@ orchard deploy resources set <id> --cpu 500 --memory 512Mi
 </TabItem>
 </Tabs>
 
-The value you select is the container's limit. If a superadmin has turned resource limits off, the resource picker shows that limits are off and these sizes do not apply. For more information, refer to [Turn resource limits on or off](/operate/resource-limits/).
+The value you select is the container's limit. If a superadmin has [turned resource limits off](/operate/resource-limits/), the resource picker shows that limits are off and these sizes do not apply. To size an app from its measured usage, [apply resource suggestions](/deploy/resource-suggestions/).
 
 - **Memory:** The request equals the limit. The app gets that amount, and Kubernetes kills it if it uses more.
 - **CPU:** The request is 10% of the limit, with a minimum of 50 millicores. The app can use CPU up to the limit when the node has capacity. To change this, set `CPU_REQUEST_RATIO` and `CPU_REQUEST_MIN_MILLI` on the server.
@@ -119,12 +119,11 @@ orchard deploy health-check set <id> --path /healthz --port 3000
 
 ## Quotas
 
-An organization can set resource caps, and each member can have an allowance inside those caps. The limit for a new app is the smaller of the amount left in your allowance and the amount left in the organization's cap. For more information, refer to [Set quotas](/teams/quotas/).
+An organization can set resource caps, and each member can have an allowance inside those caps. The limit for a new app is the smaller of the amount left in your allowance and the amount left in the organization's cap. To set caps and allowances, refer to [Set quotas](/teams/quotas/).
 
 ## Related resources
 
-- [Metrics and alerts](/run/observability/)
-- [Attach storage to an app](/deploy/storage/)
-- [Apply resource suggestions](/deploy/resource-suggestions/)
-- [Choose an update strategy](/deploy/update-strategies/)
-- [`orchard deploy` reference](/reference/cli/#deploy)
+- [Metrics and alerts](/run/observability/) - Watch CPU, memory, and restarts after you change resources.
+- [Attach storage to an app](/deploy/storage/) - Keep files across restarts, and learn how volumes limit replicas.
+- [Choose an update strategy](/deploy/update-strategies/) - Control how Orchard replaces pods during a deploy.
+- [`orchard deploy` reference](/reference/cli/#deploy) - Every flag of the `orchard deploy` commands.

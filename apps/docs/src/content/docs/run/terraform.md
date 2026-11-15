@@ -5,7 +5,7 @@ sidebar:
   order: 9
 ---
 
-The `hackclub/orchard` provider manages Orchard resources from Terraform or OpenTofu. It is one binary that serves both tools, and it uses the same API client as the `orchard` CLI.
+The `hackclub/orchard` provider lets you describe Orchard projects, apps, databases, and jobs in HCL and keep them in version control, instead of creating them by hand in the dashboard. One binary serves both Terraform and OpenTofu, and it uses the same API client as the `orchard` CLI.
 
 ## Prerequisites
 
@@ -77,7 +77,7 @@ resource "orchard_database" "db" {
 resource "orchard_deployment" "web" {
   project_id = orchard_project.midnight.id
   name       = "web"
-  image      = "ghcr.io/acme/midnight-web:1.4.0"
+  image      = "ghcr.io/example/midnight-web:1.4.0"
   port       = 3000
   replicas   = 2
 }
@@ -101,7 +101,7 @@ resource "orchard_job" "nightly" {
 
   steps {
     name    = "report"
-    image   = "ghcr.io/acme/midnight-report:1.0.0"
+    image   = "ghcr.io/example/midnight-report:1.0.0"
     command = "node report.js"
   }
 }
@@ -115,14 +115,14 @@ A reference needs the database to be connected to the app, and the provider does
 
 ## Resources
 
-| Resource             | Manages                                                                                                                               | Replaced when these change                        |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
-| `orchard_project`    | A project in an organization                                                                                                          | `organization_id`, `slug`                         |
-| `orchard_deployment` | An app that runs a [container image](/deploy/image/). Image and replica changes roll the app in place.                                | `name`, `port`, `start_command`, `environment_id` |
-| `orchard_database`   | A [managed Postgres database](/data/databases/). Exposes `host`, `port`, `database_name`, and `status`. Does not expose the password. | Everything except `name`                          |
-| `orchard_ingress`    | A [custom domain](/deploy/domains/#add-a-custom-domain) routed to an app                                                              | `deployment_id`                                   |
-| `orchard_env_var`    | One [variable](/run/environments/) on an app. Other variables stay as they are. A `secret` value is write-only.                       | `deployment_id`, `key`                            |
-| `orchard_job`        | A scheduled or on-demand [job](/run/jobs/) made of image steps                                                                        | `project_id`                                      |
+| Resource             | Manages                                                                                                                               | Replaced when these change                                      |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| `orchard_project`    | A project in an organization                                                                                                          | `organization_id`, `slug`                                       |
+| `orchard_deployment` | An app that runs a [container image](/deploy/image/). Image and replica changes roll the app in place.                                | `project_id`, `environment_id`, `name`, `port`, `start_command` |
+| `orchard_database`   | A [managed Postgres database](/data/databases/). Exposes `host`, `port`, `database_name`, and `status`. Does not expose the password. | Every attribute                                                 |
+| `orchard_ingress`    | A [custom domain](/deploy/domains/#add-a-custom-domain) routed to an app                                                              | `project_id`, `deployment_id`                                   |
+| `orchard_env_var`    | One [variable](/run/environments/) on an app. Other variables stay as they are. A `secret` value is write-only.                       | `deployment_id`, `key`                                          |
+| `orchard_job`        | A scheduled or on-demand [job](/run/jobs/) made of image steps                                                                        | `project_id`                                                    |
 
 The provider creates only image-based apps. To create an app from a repository, use the dashboard or `orchard deploy create --github`. The provider can then read that app and set its variables.
 
@@ -137,6 +137,5 @@ tofu import orchard_ingress.www <project id>:<ingress id>
 
 ## Related resources
 
-- [Manage API tokens](/account/tokens/)
-- [Use the CLI](/cli/)
-- [Connect an app to a database or app](/deploy/connect-resources/)
+- [Manage API tokens](/account/tokens/) - Create a token for the provider to use in CI.
+- [Connect an app to a database or app](/deploy/connect-resources/) - Create the connection that a `${{resource...}}` reference needs.

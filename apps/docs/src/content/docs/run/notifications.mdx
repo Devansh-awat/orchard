@@ -7,7 +7,7 @@ sidebar:
 
 import { Tabs, TabItem } from '@astrojs/starlight/components';
 
-To receive events outside the dashboard, add a destination and a rule. A destination sets where a message goes. A rule sets which events reach that destination.
+Notifications send Orchard events, such as a failed deploy or a crashing database, to the places your team already reads. You set them up in two parts: a destination sets where a message goes, and a rule sets which events reach that destination. Because the two are separate, one destination can serve several rules.
 
 ## Prerequisites
 
@@ -53,7 +53,7 @@ Orchard validates webhook URLs before it saves them. It rejects internal address
 4. Select the events to send.
 5. Select **Add rule**.
 
-We recommend that you start with failure events.
+Orchard recommends that you start with failure events, such as `deploy.failed`, `pod.crashing`, and `backup.failed`.
 
 ## Scope a rule to an app
 
@@ -83,13 +83,12 @@ Your own notifications are separate from organization rules. To choose which cat
 
 ## Review deliveries
 
-Orchard records each delivery attempt and its outcome. The status appears on the destination's row. To list deliveries from the CLI, run `orchard notify deliveries`.
+Orchard records each delivery attempt and its outcome. The status appears on the destination's row. To list deliveries from the CLI, run `orchard notify deliveries <channelId>`.
 
 To resend events after you fix a destination, open the destination's menu and select **Replay the last 24 hours**.
 
 ## Related resources
 
-- [Create alert rules](/run/alerts/)
-- [Metrics and alerts](/run/observability/)
-- [Monitor an app](/run/monitor-an-app/)
-- [`orchard notify` reference](/reference/cli/#notify)
+- [Create alert rules](/run/alerts/) - Fire `alert.firing` and `alert.resolved` events when an app metric crosses a threshold.
+- [Monitor an app](/run/monitor-an-app/) - Read metrics, logs, requests, errors, and deploy results on the **Observe** tab of an app.
+- [`orchard notify` reference](/reference/cli/#notify) - Every `orchard notify` command and flag.

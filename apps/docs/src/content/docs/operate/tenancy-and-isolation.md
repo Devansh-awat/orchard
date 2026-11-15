@@ -1,11 +1,11 @@
 ---
 title: Tenancy and isolation
-description: See what Orchard isolates between organizations and projects, what you must configure for those guarantees to hold, and what Orchard does not guarantee.
+description: Review what Orchard isolates between organizations and projects, what you must configure for those guarantees to hold, and what Orchard does not guarantee.
 sidebar:
   order: 7
 ---
 
-Orchard treats every organization and every project as mutually untrusted. This page states what is isolated, what you must set up yourself, and what Orchard does not guarantee. For the network and kernel details, refer to [Security and isolation](/operate/security/).
+Orchard treats every organization and every project as mutually untrusted. Some of that isolation is automatic, some holds only when you configure the cluster for it, and some Orchard does not provide at all. The tables below separate the three, so you can see which guarantees hold on your instance. For the network and kernel details, refer to [Security and isolation](/operate/security/).
 
 ## What is isolated
 
@@ -19,7 +19,7 @@ Orchard treats every organization and every project as mutually untrusted. This 
 | Builds                                                  | One BuildKit daemon per project namespace, a separate pusher container that holds the registry login, rootless BuildKit by default, and a rule that stops a pod using another project's image. | Nodes that allow user namespaces. Keep `REGISTRY_IMAGE_POLICY` at its default or `enforce`.                            |
 | Build cache                                             | With the backup proxy enabled, each build gets a short-lived key that reaches only its own project's cache folder.                                                                             | Enable the proxy and let it serve the cache bucket.                                                                    |
 | Secrets                                                 | Encrypted at rest, write-only in the API, and mounted only in the project's namespace.                                                                                                         | `SECRETS_ENCRYPTION_KEY`.                                                                                              |
-| Shell access                                            | Project editors can open a shell in their own app pods. Database, pooler, job and build pods refuse it.                                                                                        | Nothing.                                                                                                               |
+| Shell access                                            | People with edit access to a project can open a shell in its app pods. Database, pooler, job and build pods refuse it.                                                                         | Nothing.                                                                                                               |
 | Database backups                                        | The backup proxy gives each database a key that works only for its own bucket prefix.                                                                                                          | `r2Proxy.allowedBuckets` listing only the buckets you intend.                                                          |
 | Single sign-on, group rules and SCIM                    | Sessions from one organization's identity provider see only that organization. Group rules can give `admin`, `member` or `guest`, never `owner`.                                               | Verify the organization's domains before you enforce SSO.                                                              |
 | Quotas                                                  | A ResourceQuota and LimitRange in each namespace, plus caps on load balancers, node ports and ephemeral storage.                                                                               | Set organization CPU and memory caps. Without them the namespace has no CPU or memory quota.                           |
@@ -72,7 +72,7 @@ These cost something, so they are your decision.
 
 Each setting, with what to check before and how to undo it, is on [Cluster settings to review](/operate/cluster-settings/).
 
-The admission guard refuses by default. Its hardening rules only warn until you switch them, and every policy fails open if the API server cannot evaluate it. See [Security and isolation](/operate/security/#admission-guard-for-tenant-namespaces).
+The admission guard refuses by default. Its hardening rules only warn until you switch them, and every policy fails open if the API server cannot evaluate it. For more information, refer to [Admission guard for tenant namespaces](/operate/security/#admission-guard-for-tenant-namespaces).
 
 ## What Orchard does not guarantee
 
@@ -81,7 +81,7 @@ The admission guard refuses by default. Its hardening rules only warn until you 
 - **Protection from the control plane itself.** The server's service account can create pods in any namespace, grant itself read access to Secrets in any namespace, and remove the isolation policies. A compromise of the server is a compromise of the cluster. Keep the server patched and limit who can reach it.
 - **Separate registry credentials.** All tenants' builds use one registry login, kept in a container that does not run tenant code.
 - **Separate encryption keys.** One key encrypts secrets for every organization.
-- **Secrecy from project editors.** Anyone with edit access can open a shell in their project's app pods and read their environment.
+- **Secrecy from people with edit access.** Anyone with edit access can open a shell in their project's app pods and read their environment.
 - **Hiding names from cluster operators.** Namespace names contain the organization and project slugs, and an organization transfer keeps the old name.
 - **Hardware isolation.** gVisor and Kata reduce the attack surface of the kernel. Neither is a separate machine.
 - **Scoping at the data layer.** Authorization runs in the API services. There is no row-level security in Postgres, so a missing check in one route is not caught by the database.
@@ -109,8 +109,6 @@ The full inventory, with the code and tests behind each guarantee, is in the [te
 
 ## Related resources
 
-- [Security and isolation](/operate/security/)
-- [Go to production](/operate/production/)
-- [Set up wildcard certificates](/operate/wildcard-certificates/)
-- [Set quotas](/teams/quotas/)
-- [Protect an app](/deploy/protection/)
+- [Go to production](/operate/production/) - Work through the settings to check before other people depend on your instance.
+- [Cluster settings to review](/operate/cluster-settings/) - Review each optional setting, what to check before, and how to undo it.
+- [Protect an app](/deploy/protection/) - Put a password or sign-in in front of an app.

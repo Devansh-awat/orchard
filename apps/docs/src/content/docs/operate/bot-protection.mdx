@@ -5,7 +5,7 @@ sidebar:
   order: 7
 ---
 
-Bot protection adds a Cloudflare Turnstile challenge to the sign-in pages and to [password-protected apps](/deploy/protection/).
+Bot protection adds a Cloudflare Turnstile challenge to the sign-in pages and to [password-protected apps](/deploy/protection/), so that scripts cannot request sign-in codes or guess app passwords in bulk. Turnstile checks the visitor in the background and usually does not ask them to solve a puzzle.
 
 Bot protection stays off until you set both keys.
 
@@ -56,6 +56,6 @@ On a Helm install, set the variable in your values file.
 
 ## Related resources
 
-- [Protect an app](/deploy/protection/)
-- [Configuration](/operate/configuration/)
-- [Host commands](/operate/host-commands/)
+- [Configuration](/operate/configuration/) - Set instance settings in the dashboard or with environment variables.
+- [Host commands](/operate/host-commands/) - Change environment variables on an installer host with `orchardctl`.
+- [Rate limits and client addresses](/operate/client-addresses/) - Make sign-in limits apply to each visitor.

@@ -7,7 +7,7 @@ sidebar:
 
 import { Tabs, TabItem } from '@astrojs/starlight/components';
 
-To change an app from a CI pipeline or another external system, create a webhook token. A request with the token restarts the app, or rolls it onto a new image.
+A webhook token lets a CI pipeline or another external system update an app without an Orchard account. After your pipeline pushes a new image, one `POST` request with the token rolls the app onto that image. A request without an image restarts the app.
 
 Each token belongs to one app. GitHub webhooks for auto-deploy are separate. The [GitHub App](/deploy/github/#auto-deploy) handles them.
 
@@ -94,10 +94,10 @@ orchard deploy webhook-token delete <id> <token-id>
 
 To rotate a token, create a new one, update the caller, then delete the old one.
 
-Orchard also deletes a token if the person who created it loses edit access to the project, or if the API token that created it is revoked.
+A token also stops working if the person who created it loses edit access to the project, or if the API token that created it is revoked or expires. Orchard deletes such a token the next time a request uses it.
 
 ## Related resources
 
-- [Deploy from an image](/deploy/image/)
-- [Roll back an app](/deploy/rollbacks/)
-- [`orchard webhook` reference](/reference/cli/#webhook)
+- [Deploy from an image](/deploy/image/) - Create an app that runs a container image from a registry.
+- [Roll back an app](/deploy/rollbacks/) - Return an app to an earlier release, including the image a webhook replaced.
+- [`orchard webhook` reference](/reference/cli/#webhook) - Send a webhook request from the CLI with `orchard webhook deploy`.

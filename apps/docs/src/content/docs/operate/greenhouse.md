@@ -5,9 +5,9 @@ sidebar:
   order: 8
 ---
 
-To run [Greenhouse](/greenhouse/) on your Orchard instance, install the graft and configure where its machines run. This page is for operators.
+[Greenhouse](/greenhouse/) gives the people on your instance cloud machines where coding agents work on their repositories. As an operator, you install the graft, choose where machines run (pods on your own cluster, Vercel Sandboxes, or both), and decide who can use it. Because a machine holds its host's agent and GitHub credentials, this page also describes the security model, so you can judge what sharing and previews expose.
 
-For the internal design, refer to `docs/ai-sandbox.md` in the repository.
+For the internal design, refer to [`docs/ai-sandbox.md`](https://github.com/hackclub/orchard/blob/main/docs/ai-sandbox.md) in the repository.
 
 ## Prerequisites
 
@@ -158,13 +158,13 @@ Orchard creates each machine as a persistent sandbox. A stop snapshots the whole
 Vercel lets you delete a drive while a stopped sandbox still mounts it. Do not delete `orchard-*` drives unless the machine is gone.
 :::
 
-If the team cannot create drives (`402` or `403` from Vercel), the runner logs the error, keeps new machines on snapshots, and tries again an hour later. A machine that already has a drive fails to start until the drive is reachable. To turn off drives for new machines, set `vercelDriveGiB` to 0.
+If the team cannot create drives (`402` or `403` from Vercel), the runner logs the error, keeps new machines on snapshots, and tries again an hour later. A machine that already has a drive fails to start until the drive is reachable. To turn off drives for new machines, set **Vercel drive size in GiB** to `0`, or set `SANDBOX_VERCEL_DRIVE_GIB=0`.
 
 Forking a machine with a drive needs Vercel drive forks. The runner checks for them every 10 minutes. Without them, Greenhouse hides the fork option. A machine without a drive forks from its snapshot.
 
 ### SSH bridge
 
-Machines reach SSH through a bridge, which is the `orchard` CLI. By default, the server reads the expected SHA-256 from `checksums.txt` of the release that matches the server. To use a mirror, set `bridgeBinaryUrl` and `bridgeBinarySha256`.
+Machines reach SSH through a bridge, which is the `orchard` CLI. By default, the server reads the expected SHA-256 from `checksums.txt` of the release that matches the server. To use a mirror, set **Bridge binary URL** and **Bridge binary SHA-256** in **Greenhouse runners**.
 
 A machine does not install a bridge it cannot verify. SSH to that machine fails until the checksum is available.
 
@@ -236,7 +236,7 @@ The Kubernetes runner then reports `previews: proxy` in its capabilities, or `no
 1. **Repository permissions** > **Issues**: **Read and write**.
 2. **Subscribe to events** > **Issue comment**.
 
-An App created from **Instance admin** > **GitHub App** already has both. For another App, change them in its settings on GitHub. Each installation must then accept the new permission.
+An App that Orchard created for you, with **Connect a GitHub App** on **Instance admin** > **Overview**, already has both. For another App, change them in its settings on GitHub. Each installation must then accept the new permission.
 
 ### Slack
 
@@ -308,37 +308,37 @@ These settings are in **Instance admin** > **Configuration**. Setting the enviro
 
 **Greenhouse runners**
 
-| Field                  | Variable                            | Default                         | Notes                                                                                     |
-| ---------------------- | ----------------------------------- | ------------------------------- | ----------------------------------------------------------------------------------------- |
-| `kubernetesEnabled`    | `SANDBOX_RUNNER_KUBERNETES_ENABLED` | On                              |                                                                                           |
-| `vercelEnabled`        | `SANDBOX_RUNNER_VERCEL_ENABLED`     | Off                             |                                                                                           |
-| `defaultRunner`        | `SANDBOX_DEFAULT_RUNNER`            | First available runner          | `kubernetes` or `vercel`.                                                                 |
-| `vercelToken`          | `SANDBOX_VERCEL_TOKEN`              |                                 | Secret.                                                                                   |
-| `vercelTeamId`         | `SANDBOX_VERCEL_TEAM_ID`            |                                 |                                                                                           |
-| `vercelProjectId`      | `SANDBOX_VERCEL_PROJECT_ID`         |                                 |                                                                                           |
-| `vercelImage`          | `SANDBOX_VERCEL_IMAGE`              | `vercel/sandbox/universal`      |                                                                                           |
-| `vercelVcpus`          | `SANDBOX_VERCEL_VCPUS`              | 2                               | 1 to 8.                                                                                   |
-| `vercelTimeoutMinutes` | `SANDBOX_VERCEL_TIMEOUT_MINUTES`    | 60                              | 1 to 1440. Orchard extends the timeout by 30 minutes at a time while a machine is in use. |
-| `vercelDriveGiB`       | `SANDBOX_VERCEL_DRIVE_GIB`          | 50                              | 0 to 16384. 0 turns drives off. Applies to new drives only.                               |
-| `bridgeBinaryUrl`      | `SANDBOX_BRIDGE_BINARY_URL`         | The release matching the server | `https://` only. The Linux amd64 `orchard` CLI tarball.                                   |
-| `bridgeBinarySha256`   | `SANDBOX_BRIDGE_BINARY_SHA256`      | From the release's checksums    | 64 hex characters. Required with `bridgeBinaryUrl`.                                       |
-| `previewDomain`        | `SANDBOX_PREVIEW_DOMAIN`            |                                 | A bare domain. Refer to [Configure previews](#configure-previews).                        |
+| Field                         | Variable                            | Default                         | Notes                                                                                     |
+| ----------------------------- | ----------------------------------- | ------------------------------- | ----------------------------------------------------------------------------------------- |
+| **Kubernetes runner**         | `SANDBOX_RUNNER_KUBERNETES_ENABLED` | On                              |                                                                                           |
+| **Vercel runner**             | `SANDBOX_RUNNER_VERCEL_ENABLED`     | Off                             |                                                                                           |
+| **Default runner**            | `SANDBOX_DEFAULT_RUNNER`            | First available runner          | `kubernetes` or `vercel`.                                                                 |
+| **Vercel token**              | `SANDBOX_VERCEL_TOKEN`              |                                 | Secret.                                                                                   |
+| **Vercel team id**            | `SANDBOX_VERCEL_TEAM_ID`            |                                 |                                                                                           |
+| **Vercel project id**         | `SANDBOX_VERCEL_PROJECT_ID`         |                                 |                                                                                           |
+| **Vercel image**              | `SANDBOX_VERCEL_IMAGE`              | `vercel/sandbox/universal`      |                                                                                           |
+| **Vercel vCPUs**              | `SANDBOX_VERCEL_VCPUS`              | 2                               | 1 to 8.                                                                                   |
+| **Vercel timeout in minutes** | `SANDBOX_VERCEL_TIMEOUT_MINUTES`    | 60                              | 1 to 1440. Orchard extends the timeout by 30 minutes at a time while a machine is in use. |
+| **Vercel drive size in GiB**  | `SANDBOX_VERCEL_DRIVE_GIB`          | 50                              | 0 to 16384. 0 turns drives off. Applies to new drives only.                               |
+| **Bridge binary URL**         | `SANDBOX_BRIDGE_BINARY_URL`         | The release matching the server | `https://` only. The Linux amd64 `orchard` CLI tarball.                                   |
+| **Bridge binary SHA-256**     | `SANDBOX_BRIDGE_BINARY_SHA256`      | From the release's checksums    | 64 hex characters. Required with **Bridge binary URL**.                                   |
+| **Preview domain**            | `SANDBOX_PREVIEW_DOMAIN`            |                                 | A bare domain. Refer to [Configure previews](#configure-previews).                        |
 
 Turning a runner off stops new machines on it. Existing machines keep working.
 
 **Slack app**
 
-| Field           | Variable               | Notes                                  |
-| --------------- | ---------------------- | -------------------------------------- |
-| `signingSecret` | `SLACK_SIGNING_SECRET` | Required. Secret.                      |
-| `botToken`      | `SLACK_BOT_TOKEN`      | Required. Secret. Starts with `xoxb-`. |
-| `appId`         | `SLACK_APP_ID`         | Optional.                              |
+| Field              | Variable               | Notes                                  |
+| ------------------ | ---------------------- | -------------------------------------- |
+| **Signing secret** | `SLACK_SIGNING_SECRET` | Required. Secret.                      |
+| **Bot token**      | `SLACK_BOT_TOKEN`      | Required. Secret. Starts with `xoxb-`. |
+| **App id**         | `SLACK_APP_ID`         | Optional.                              |
 
 **Linear**
 
-| Field           | Variable                | Notes             |
-| --------------- | ----------------------- | ----------------- |
-| `webhookSecret` | `LINEAR_WEBHOOK_SECRET` | Required. Secret. |
+| Field              | Variable                | Notes             |
+| ------------------ | ----------------------- | ----------------- |
+| **Webhook secret** | `LINEAR_WEBHOOK_SECRET` | Required. Secret. |
 
 ### Environment variables
 
@@ -447,7 +447,7 @@ Tokens do not appear in these places:
 - **Process arguments:** File contents and tokens reach a machine on stdin.
 - **Logs, audit metadata, and live events:** Error reports and traces redact the token in older `/share/sandbox/<token>` URLs. Git output in the browser masks credentials in remote URLs.
 
-Attached project env files skip names such as `GIT_*`, `LD_*`, `NODE_OPTIONS`, `PROMPT_COMMAND`, CA bundle variables, and `ANTHROPIC_BASE_URL`. An editor of an attached project therefore cannot redirect pushes or point the agent elsewhere. A preview deploy copies only plain variables from the source app.
+Attached project env files skip names such as `GIT_*`, `LD_*`, `NODE_OPTIONS`, `PROMPT_COMMAND`, CA bundle variables, and `ANTHROPIC_BASE_URL`. Someone who can edit an attached project's variables therefore cannot redirect pushes or point the agent elsewhere. A preview deploy copies only plain variables from the source app.
 
 ### Remaining risks
 
@@ -471,8 +471,7 @@ Greenhouse records these actions under `sandbox.`: `create`, `start`, `stop`, `d
 
 ## Related resources
 
-- [Greenhouse](/greenhouse/)
-- [Install grafts](/grafts/install/)
-- [Troubleshooting Greenhouse](/greenhouse/troubleshooting/)
-- [Security and isolation](/operate/security/)
-- [Machines](/greenhouse/machines/)
+- [Install grafts](/grafts/install/) - Learn how grafts are installed, trusted, and upgraded.
+- [Troubleshooting Greenhouse](/greenhouse/troubleshooting/) - Fix common Greenhouse failures by symptom.
+- [Security and isolation](/operate/security/) - Review how Orchard isolates tenants on the cluster.
+- [Machines](/greenhouse/machines/) - Learn how machines start, stop, fork, and store data from the user's side.

@@ -5,7 +5,7 @@ sidebar:
   order: 6
 ---
 
-To prepare each new worktree and start your app with one action, add a configuration file to your repository. A new worktree has your tracked files only. It has no installed dependencies and no untracked files such as `.env`.
+A new worktree has your tracked files only. It has no installed dependencies and no untracked files such as `.env`, so an agent that starts in it cannot run your tests until something installs them. Add a configuration file to your repository, and Greenhouse prepares each new worktree for you and starts your app with one action.
 
 ## 1. Add the configuration file
 
@@ -29,7 +29,7 @@ The setup script runs in the background when Greenhouse creates the worktree. It
 
 In the terminal dock, select the start control for the run script. Its output appears in the **Run** tab. Starting a script that is running restarts it.
 
-Bind your dev server to `0.0.0.0` so that you can preview it. For more information, refer to [Preview a session](/greenhouse/previews/).
+Bind your dev server to `0.0.0.0` so that you can [preview it](/greenhouse/previews/).
 
 The host and guests can start and stop run scripts. Everyone in the session can read the output.
 
@@ -130,6 +130,5 @@ A Python API:
 
 ## Related resources
 
-- [Machines](/greenhouse/machines/#setup-script)
-- [Preview a session](/greenhouse/previews/)
-- [Workspace](/greenhouse/workspace/)
+- [Machine setup script](/greenhouse/machines/#setup-script) - Install language runtimes and global tools once per machine.
+- [Workspace](/greenhouse/workspace/#terminal-dock) - Use the **Setup**, **Run**, **Terminal**, and **Ports** tabs of the terminal dock.

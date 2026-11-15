@@ -14,9 +14,11 @@ IPv4 server is unsupported and untested. `--allow-ipv6-only` continues anyway,
 and `--yes` does not imply it. Dual-stack servers work, and they use `A` records.
 
 Not `curl ... | sudo bash`: the installer asks questions, and a pipe takes the
-standard input it would read the answers from. `bash -c "$(...)"` keeps your
-terminal attached. `--yes` plus the environment variables below is the
-non-interactive path, and that one pipes fine.
+standard input it would read the answers from. Download the script to a file and
+run it, as above. Do not use `bash -c "$(curl ...)"` either: the script is
+larger than the kernel's limit for a single argument, so that form fails.
+`--yes` plus the environment variables below is the non-interactive path, and
+that one pipes fine.
 
 This is the amateur-friendly path. It creates its own k3s cluster and installs
 everything Orchard needs. If you already run Kubernetes, do **not** use this.
@@ -231,13 +233,19 @@ Build concurrency, cache size and registry size are derived from the machine:
 | > 16Gi | 3                 |
 
 Build cache, registry and backups each get a fifth of the free disk, capped at
-60G, 50G and 50G; the log store gets a tenth, capped at 20G. The floor is 4Gi
-RAM and 20G disk; 8Gi and 60G is comfortable.
+60G, 50G and 50G; the log store gets a tenth, capped at 20G. The installer
+refuses less than 20G of free disk and warns under 60G.
 
-Nothing is switched off to fit a small box. Under 8Gi, metrics, logs and the
-scanner run with smaller memory requests and limits, logs keep a week instead
-of two, and one scan runs at a time. The exact numbers are in the generated
-values file, and `orchardctl config set` changes any of them.
+Orchard runs on 2 GiB of RAM. 8 GB is recommended. The installer never refuses
+on memory: under about 2Gi it warns that apps will have little or no room, and
+under 3.5Gi it warns again and uses its smallest profile.
+
+Under 8Gi, metrics, logs and the scanner run with smaller memory requests and
+limits, logs keep a week instead of two, and one scan runs at a time. Under
+3.5Gi, a new install also turns MCP and image scanning off (unless you passed
+`--mcp`, `--mcp-domain` or `--image-scanning`), and gives the server, frontend,
+Postgres, Redis and each build smaller memory requests. The exact numbers are in
+the generated values file, and `orchardctl config set` changes any of them.
 
 ## What it deliberately leaves off
 

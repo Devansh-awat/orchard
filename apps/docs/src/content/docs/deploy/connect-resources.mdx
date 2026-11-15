@@ -7,7 +7,7 @@ sidebar:
 
 import { Tabs, TabItem } from '@astrojs/starlight/components';
 
-To read the connection details of a database or another app in the same project, add a reference to a [variable](/run/environments/). Orchard stores the reference instead of a copied value, so the variable stays correct after a password rotation or a restore.
+Connect an app to a database or to another app in the same project, and the app reads the connection details from a [variable](/run/environments/). Orchard stores a reference instead of a copied value, so the variable stays correct after a password rotation or a restore, and you never paste a password by hand.
 
 A reference has this format:
 
@@ -118,7 +118,6 @@ If a variable refers to a connection or field that does not exist, the app does 
 
 ## Related resources
 
-- [Manage variables and environments](/run/environments/)
-- [Create and manage a database](/data/databases/)
-- [score.yaml](/deploy/score/)
-- [`orchard deploy bindings` reference](/reference/cli/#deploy)
+- [Create and manage a database](/data/databases/) - Create the Postgres database an app connects to.
+- [score.yaml](/deploy/score/) - Declare database connections in a file in the repository.
+- [`orchard deploy bindings` reference](/reference/cli/#deploy) - Every flag of the `orchard deploy bindings` commands.

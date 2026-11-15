@@ -5,13 +5,13 @@ sidebar:
   order: 13
 ---
 
-Use this page to fix common failures with Greenhouse. Each entry lists the symptom, the cause, and the fix.
+Use this page to fix common Greenhouse failures. Entries are grouped by what you see, such as an error message or a machine that does not start, and each one lists the cause and the fix. Many fixes need an operator, so the entries say when to contact one.
 
 ## Greenhouse is not in the sidebar
 
 **Cause:** The `greenhouse` graft is not installed on this instance. `/sandboxes` shows a not found page.
 
-**Fix:** Ask an operator to install the graft. For more information, refer to [Run Greenhouse](/operate/greenhouse/#install-the-graft). **Instance admin** > **Grafts** shows whether the graft loaded, and the reason if it failed.
+**Fix:** Ask an operator to [install the graft](/operate/greenhouse/#install-the-graft). **Instance admin** > **Grafts** shows whether the graft loaded, and the reason if it failed.
 
 ## Sandbox feature is not enabled for your account
 
@@ -134,7 +134,7 @@ The pull request button reads **Link GitHub to push**, or an action fails with `
 
 **Cause:** Your account has no linked GitHub account. [Pushes, pull requests, and merges](/greenhouse/pull-requests/) use your own account.
 
-**Fix:** Link it in **Account settings** > **GitHub and Tailscale**. You can commit without it.
+**Fix:** Link it in **Account settings** > **Connections**. You can commit without it.
 
 ## No GitHub account is linked to read checks
 
@@ -144,7 +144,7 @@ No GitHub account is linked to read checks
 
 **Cause:** Neither you nor the host has linked GitHub.
 
-**Fix:** Link it in **Account settings** > **GitHub and Tailscale**.
+**Fix:** Link it in **Account settings** > **Connections**.
 
 ## A session does not start
 
@@ -189,8 +189,5 @@ Collect the machine's name, runner, status message, and the relevant log above. 
 
 ## Related resources
 
-- [Get started](/greenhouse/getting-started/)
-- [Machines](/greenhouse/machines/)
-- [Connect an editor over SSH](/greenhouse/editors/)
-- [Run Greenhouse](/operate/greenhouse/)
-- [Troubleshooting grafts](/grafts/troubleshooting/)
+- [Run Greenhouse](/operate/greenhouse/) - Configure runners, previews, and integrations as an operator.
+- [Troubleshooting grafts](/grafts/troubleshooting/) - Fix a graft that does not install or load.

@@ -5,7 +5,7 @@ sidebar:
   order: 1
 ---
 
-A graft is an extension that adds features to an Orchard instance without a fork. It can add pages, API endpoints, its own database tables, [Model Context Protocol (MCP) tools](/mcp/#choose-toolsets), instance settings, and cards or tabs on existing pages. You find grafts in the [Extension Marketplace](https://orchard.hackclub.com/extensions). You install them with [`orchardctl graft add`](/grafts/install/) or with Helm values, and Orchard rolls out the change like an upgrade.
+A graft is an extension that adds features to an Orchard instance, so you can add what your team needs without forking Orchard and keeping the fork up to date. It can add pages, API endpoints, its own database tables, [Model Context Protocol (MCP) tools](/mcp/#choose-toolsets), instance settings, and cards or tabs on existing pages. You find grafts in the [Extension Marketplace](https://orchard.hackclub.com/extensions). You install them with [`orchardctl graft add`](/grafts/install/) or with Helm values, and Orchard rolls out the change like an upgrade.
 
 :::caution
 Only install grafts you trust. A graft runs inside Orchard with the same access as Orchard: your database, your users' data, and your cluster. Orchard checks signatures, versions, and declared requirements, and shows them to you before you install. These checks are not a sandbox.
@@ -26,7 +26,7 @@ Only install grafts you trust. A graft runs inside Orchard with the same access 
 | Community | Another author, listed in the Extension Marketplace | **Community · by** the author |
 | Tap       | Anyone, from a catalog that you added               | **Tap:** the tap's name       |
 
-Your trust policy controls which kinds can load. For more information, refer to [Trust](/grafts/install/#trust).
+Your [trust policy](/grafts/install/#trust) controls which kinds can load.
 
 Orchard publishes these first-party grafts:
 
@@ -49,13 +49,11 @@ Orchard publishes these first-party grafts:
 
 - **Doors:** A graft reaches Orchard through versioned interfaces called doors. A stable door does not change shape. A change ships as a new version next to the old one. `orchardctl` refuses a graft that needs a door the instance does not have. For the list, refer to the [graft API reference](/reference/graft-api/).
 - **Islands:** A graft's UI carries its own Svelte and its own copy of Orchard's components, and draws in an element that Orchard gives it. Colors and fonts come from the shared theme.
-- **Claims:** A graft's names live under its ID, such as `/apiv1/<id>`, `/<id>`, and `<id>.` events. A graft can ask for a name outside its ID with a claim. For more information, refer to [Claims](/grafts/build/manifest/#claims).
+- **Claims:** A graft's names live under its ID, such as `/apiv1/<id>`, `/<id>`, and `<id>.` events. A graft can ask for a name outside its ID with a [claim](/grafts/build/manifest/#claims).
 - **Data:** Each graft has its own Postgres schema. When the database user can create roles, the graft also has a role that can read only the core columns it declared. Removing a graft keeps its data until you purge it.
 - **Failure handling:** Orchard skips a graft that fails to load, migrate, or boot, and shows it as failed in **Instance admin** > **Grafts**. Orchard itself still starts.
 
 ## Related resources
 
-- [Graft API versions](/reference/graft-api/)
-- [Run Greenhouse](/operate/greenhouse/)
-- [Host commands](/operate/host-commands/#graft)
-- [Security and isolation](/operate/security/)
+- [`orchardctl graft` reference](/operate/host-commands/#graft) - Every graft command on an installer host.
+- [Security and isolation](/operate/security/) - What Orchard isolates, and what a graft can reach.

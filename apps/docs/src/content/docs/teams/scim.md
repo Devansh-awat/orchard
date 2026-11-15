@@ -63,9 +63,7 @@ When a push creates a group, renames it, changes its members, or deletes it, Orc
 
 Only the token's organization is affected. A token cannot read, change, or delete another organization's groups, or add its people to a group. Group names must be 1 to 256 characters, an organization can hold up to 1,000 groups, and a group up to 10,000 members.
 
-The four built-in groups (`Owner`, `Admin`, `Member`, `Guest`, with IDs such as `role:admin`) remain a read-only view of roles. Requests that change them return a `400` status.
-
-Deactivating or deleting a user signs out their SSO sessions and deletes their API tokens for this organization, not only their membership.
+The four built-in groups (`Owner`, `Admin`, `Member`, `Guest`, with IDs such as `role:admin`) are a read-only view of roles. Requests that change them return a `400` status.
 
 Orchard records `scim.group.created`, `scim.group.updated`, and `scim.group.deleted` entries in the [audit log](/teams/audit-logs/).
 
@@ -77,5 +75,5 @@ The connector creates accounts, renames them, and turns them off. Instance rules
 
 ## Related resources
 
-- [Set up SSO](/teams/sso/)
-- [Manage organizations and roles](/teams/organizations/)
+- [Set up SSO](/teams/sso/) - Let the same provider sign members in.
+- [Manage organizations and roles](/teams/organizations/) - What each organization role can do.

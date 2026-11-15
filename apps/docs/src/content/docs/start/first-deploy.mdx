@@ -7,29 +7,30 @@ sidebar:
 
 import { Tabs, TabItem } from '@astrojs/starlight/components';
 
-Deploy a GitHub repository to Orchard and connect a Postgres database to it. At the end, your app runs on an HTTPS URL and reads its connection string from a variable.
+This guide takes a GitHub repository from code to a running app on your Orchard instance. You connect GitHub, deploy the repository, create a Postgres database, and connect the database to the app. At the end, your app runs on an HTTPS URL and reads its database connection string from a variable.
+
+You can follow each step in the dashboard or with the `orchard` CLI.
 
 ## Prerequisites
 
 - A running Orchard instance that you can sign in to. To set one up, refer to [Install](/start/install/).
-- A GitHub repository that contains a Dockerfile or an app that Orchard can detect.
+- A GitHub repository that contains a Dockerfile, or an app that Orchard can detect and build without one.
 - For private repositories, a GitHub App on the instance. To create one, refer to [Connect a GitHub App](/operate/finishing-setup/#connect-a-github-app).
 - For the CLI steps, the `orchard` CLI. To install it, refer to [Use the CLI](/cli/).
 
 ## 1. Connect GitHub
 
-Connect your GitHub account so that Orchard can list your repositories. You can skip this step for a public repository.
+Orchard needs access to your GitHub account to list your repositories and to deploy again on each push. For a public repository, you can skip this step.
 
 <Tabs syncKey="dashPlusCli">
 <TabItem label="Dashboard">
 
 1. Open your account menu.
-2. Select **Account settings**.
-3. Go to **GitHub and Tailscale**.
-4. In **GitHub**, select **Connect**.
-5. Approve the request on GitHub.
-6. In **Repository access**, select **Add account**.
-7. Install the GitHub App on the account that owns your repository.
+2. Select **Account settings** > **Connections**.
+3. In **GitHub**, select **Connect**.
+4. Approve the request on GitHub.
+5. In **Repository access**, select **Add account**.
+6. Install the GitHub App on the account that owns your repository.
 
 </TabItem>
 <TabItem label="CLI">
@@ -56,6 +57,8 @@ Connect your GitHub account so that Orchard can list your repositories. You can 
 </Tabs>
 
 ## 2. Deploy the app
+
+Orchard clones the repository, builds an image on your cluster, and starts the app.
 
 <Tabs syncKey="dashPlusCli">
 <TabItem label="Dashboard">
@@ -98,6 +101,8 @@ If the build fails, refer to [Builds](/deploy/builds/#troubleshoot-a-failed-buil
 
 ## 3. Create a database
 
+A managed database is a Postgres instance with its own backups. It has its own lifecycle, separate from any app that connects to it, so a redeploy of the app does not change it.
+
 <Tabs syncKey="dashPlusCli">
 <TabItem label="Dashboard">
 
@@ -119,7 +124,7 @@ orchard db create --name appdb --wait
 
 ## 4. Connect the database to the app
 
-Connect the database with [a reference](/deploy/connect-resources/). A reference follows the database through a password rotation or a restore.
+Connect the database with [a reference](/deploy/connect-resources/) instead of a copied connection string. A reference follows the database through a password rotation or a restore, so the app keeps working without an edit.
 
 <Tabs syncKey="dashPlusCli">
 <TabItem label="Dashboard">
@@ -147,14 +152,11 @@ Orchard restarts the app with the new variable.
 
 ## Next steps
 
-- [Add a custom domain](/deploy/domains/)
-- [Set up auto-deploy](/deploy/github/#auto-deploy)
-- [Set variables](/run/environments/)
-- [Roll back a deploy](/deploy/rollbacks/)
+At this point, your app runs on an HTTPS URL with a Postgres database behind it. To put it on your own domain, [add a custom domain](/deploy/domains/). To deploy on every push, [set up auto-deploy](/deploy/github/#auto-deploy).
 
 ## Related resources
 
-- [Create and manage a database](/data/databases/)
-- [Deploy from your terminal](/deploy/deploy-from-terminal/)
-- [Read logs and open a shell](/run/logs/)
-- [Concepts](/start/concepts/)
+- [Set variables](/run/environments/) - Set variables for one app, or share them across an environment.
+- [Roll back an app](/deploy/rollbacks/) - Go back to an earlier build, and restore bound databases with it.
+- [Deploy from your terminal](/deploy/deploy-from-terminal/) - Deploy a local folder with `orchard up`, without a repository.
+- [Read logs and open a shell](/run/logs/) - Search the logs of an app and open a shell in a running container.

@@ -3,7 +3,7 @@ title: Code mode for agents
 description: Call the whole Orchard API from an agent with the orchard CLI or the compact MCP server, without loading every MCP tool into context.
 ---
 
-To reach any Orchard API operation from an agent, use the CLI or the compact MCP server. Describing every operation to a model uses more context than most tasks have, and the [full MCP server](/mcp/) does not cover every operation.
+Code mode lets an agent reach every Orchard API operation without loading a tool definition for each one. Instead, the agent searches a spec, reads the contract for the operation it needs, and calls it by ID, either through the CLI or through the compact MCP server. Use code mode when a task needs an operation that the [full MCP server](/mcp/) does not cover, or when describing every operation to a model would use more context than the task has.
 
 | Your agent has                                     | Use                                                                    |
 | -------------------------------------------------- | ---------------------------------------------------------------------- |
@@ -41,7 +41,7 @@ Operation IDs come from the route: the path words, then a verb.
 
 ## Call the API from a shell
 
-The CLI caches the spec in `~/.orchard/agent-spec.json` and revalidates it at most once an hour. Search works offline after the first fetch.
+The CLI caches the spec for each instance in `~/.orchard/agent-spec.<host>.json` and revalidates it at most once an hour. To cache it somewhere else, set `ORCHARD_SPEC_CACHE_DIR`. Search works offline after the first fetch.
 
 ```bash
 orchard api search "deployment logs"
@@ -62,8 +62,8 @@ orchard api deployments_env_set -p id=$DEPLOYMENT -d @env.json --yes
 ### Deploy and wait until the app is live
 
 ```bash
-release=$(orchard api deployments_rebuild -p id=$APP | jq -r .releaseId)
-orchard api deployments_rollout_get -p id=$APP -q wait=1 -q timeout=120 -q release=$release \
+since=$(orchard api deployments_rebuild -p id=$APP | jq -r .rolloutSince)
+orchard api deployments_rollout_get -p id=$APP -q wait=1 -q timeout=120 -q since=$since \
   | jq '{phase, url, hint, error: .build.error}'
 ```
 
@@ -73,7 +73,7 @@ orchard api deployments_rollout_get -p id=$APP -q wait=1 -q timeout=120 -q relea
 orchard api projects_deployments_list -p id=$PROJECT | jq -r '.[].id' |
 while read -r id; do
   orchard api deployments_rollout_get -p id=$id |
-    jq -c --arg id "$id" 'select(.phase == "crashing" or .phase == "build_failed")
+    jq -c --arg id "$id" 'select(.phase == "crashing" or .phase == "unhealthy" or .phase == "build_failed")
       | {id: $id, phase, hint, failing: [.pods.failing[]? | {pod, reason, exitCode}]}'
 done
 ```
@@ -116,7 +116,7 @@ Point the client at `/compact` on the MCP host:
 claude mcp add --transport http orchard-compact https://mcp.example.com/compact
 ```
 
-Authentication works the same as on the full server. Use OAuth with `mcp:read`, `mcp:deploy`, or `mcp:exec`, or an `orch_` token. For more information, refer to [Connect an MCP client](/mcp/).
+Authentication works the same as on the full server. Use OAuth with `mcp:read`, `mcp:deploy`, or `mcp:exec`, or an `orch_` token, as described in [Connect an MCP client](/mcp/).
 
 The server has three tools:
 
@@ -139,8 +139,6 @@ Each call is one turn for the model. Scripts in a shell need fewer turns for wor
 
 ## Related resources
 
-- [Connect an MCP client](/mcp/)
-- [Use the CLI](/cli/)
-- [Docs for agents](/for-agents/)
-- [MCP tools](/reference/mcp-tools/)
-- [`orchard api` reference](/reference/cli/#api)
+- [Use the CLI](/cli/) - Install the CLI, sign in, and set the defaults that `orchard api` uses.
+- [Docs for agents](/for-agents/) - Give an agent this documentation as Markdown or `llms.txt`.
+- [`orchard api` reference](/reference/cli/#api) - Every flag of `orchard api`, `search`, and `describe`.

@@ -5,7 +5,7 @@ sidebar:
   order: 6
 ---
 
-To share a graft with other Orchard instances, publish it in one of three ways:
+To let other Orchard instances install your graft, sign it and publish it in one of three ways. An `https` address needs only a file host. A listing in the Extension Marketplace lets operators find the graft with `orchardctl graft search`.
 
 - From any `https` address.
 - From a [tap](/grafts/install/#add-a-tap): your own catalog of grafts.
@@ -58,7 +58,7 @@ A tap is a folder on an `https` host that people add once and then install from 
 4. Give operators these commands:
 
    ```sh
-   sudo orchardctl graft tap add acme https://acme.dev/orchard
+   sudo orchardctl graft tap add acme https://grafts.example.com/orchard
    sudo orchardctl graft add acme/notes --apply
    ```
 
@@ -105,7 +105,5 @@ Each version lists the Orchard versions it works with in `engines.platform`. `or
 
 ## Related resources
 
-- [Install grafts](/grafts/install/)
-- [Get started](/grafts/build/quickstart/)
-- [graft.json](/grafts/build/manifest/)
-- [Upgrade and roll back grafts](/grafts/upgrades/)
+- [Install grafts](/grafts/install/) - What operators run to install your graft, and how trust works.
+- [Upgrade and roll back grafts](/grafts/upgrades/) - How operators move between your versions.

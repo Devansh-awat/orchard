@@ -7,7 +7,7 @@ sidebar:
 
 import { Tabs, TabItem } from '@astrojs/starlight/components';
 
-To run an image that already exists, create an app with an image source. Orchard skips the build and pulls the image directly.
+Deploy from an image when something else already builds it, such as your CI pipeline or a vendor that publishes one. Orchard skips the build and pulls the image directly, so the app starts as fast as the registry can serve it. Private registries work too, with a credential stored once per project or organization.
 
 ## Create the app
 
@@ -20,7 +20,7 @@ To run an image that already exists, create an app with an image source. Orchard
 4. In **Image**, enter the image reference, such as `ghcr.io/org/app:latest`.
 5. In **Name**, enter a name for the app.
 6. Under **Networking**, confirm the port.
-7. Select a reach. For the options, refer to [Reach](/deploy/networking/#reach).
+7. Select a [reach](/deploy/networking/#reach).
 8. Select **Deploy**.
 
 When the image exposes a port, Orchard sets the first port for you and shows the value below **Image**. If the image exposes no port, the form uses port 80. Set the port your process listens on.
@@ -110,11 +110,11 @@ Orchard rolls the app onto the new image. [Health checks](/deploy/scaling/#set-h
 
 Orchard does not watch your registry. If you push a new image to the same tag, nothing changes until the app restarts. The pull policy decides whether the restart fetches the new image.
 
-| Pull policy        | Behavior                                                                                                                                               |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Automatic**      | The default. A tag that can move, such as `latest`, `main`, or a major version like `17`, uses `Always`. A pinned tag or a digest uses `IfNotPresent`. |
-| **Use cached**     | Starts reuse the copy already on the node.                                                                                                             |
-| **Always re-pull** | Every start fetches the image again.                                                                                                                   |
+| Pull policy     | Behavior                                                                                                                                               |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Automatic**   | The default. A tag that can move, such as `latest`, `main`, or a major version like `17`, uses `Always`. A pinned tag or a digest uses `IfNotPresent`. |
+| **Use cached**  | Starts reuse the copy already on the node.                                                                                                             |
+| **Always pull** | Every start fetches the image again. The new app form calls this option **Always re-pull**.                                                            |
 
 To change the policy on an existing app, go to **Settings** > **Source & build** > **Pulling**, or run `orchard deploy pull-policy set <id> --policy always`. The flag accepts `auto`, `always`, or `ifnotpresent`.
 
@@ -126,7 +126,5 @@ Where you control the build, tag images by commit or version. Rollbacks then poi
 
 ## Related resources
 
-- [Configure app networking](/deploy/networking/)
-- [Update an app with a webhook](/run/webhooks/)
-- [Roll back an app](/deploy/rollbacks/)
-- [Review app security](/deploy/security-tab/)
+- [Configure app networking](/deploy/networking/) - Set up ports, reach, and how traffic gets to an app.
+- [Review app security](/deploy/security-tab/) - Scan the image for known vulnerabilities and check the app's settings.

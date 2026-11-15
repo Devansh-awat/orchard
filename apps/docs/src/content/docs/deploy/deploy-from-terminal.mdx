@@ -5,7 +5,7 @@ sidebar:
   order: 3
 ---
 
-You can create and deploy an app from a terminal with the Orchard CLI. Use `orchard up` to deploy a local directory. Use `orchard import` to deploy a GitHub repository.
+The Orchard CLI can create and deploy an app without opening the dashboard. Use `orchard up` to deploy a local directory, which needs no Git repository, and run it again to ship each change. Use `orchard import` to turn a GitHub repository into a project and a running app with one command.
 
 ## Deploy a local directory
 
@@ -15,7 +15,7 @@ The `orchard up` command packs a directory, uploads it, and builds it on the clu
 
 - The [Orchard CLI](/cli/), installed and signed in.
 - A project linked to the directory. To link one, run `orchard link --project <project>`.
-- S3 storage on the instance. For more information, refer to [Turn on local deploys](#turn-on-local-deploys).
+- S3 storage on the instance, as described in [Turn on local deploys](#turn-on-local-deploys).
 
 ### Run the deploy
 
@@ -53,7 +53,7 @@ For all flags, refer to the [`orchard up` reference](/reference/cli/#up).
 
 Local deploys need S3 storage, because Orchard stores each uploaded directory in a bucket that build pods can reach. The store on the server holds database backups, so builds do not use it.
 
-To turn on local deploys, a superadmin adds S3 storage. Local deploys then turn on with no other setting. For more information, refer to [Add S3 storage](/operate/storage/).
+To turn on local deploys, a superadmin [adds S3 storage](/operate/storage/). Local deploys then turn on with no other setting.
 
 If the instance has no S3 storage, the CLI returns this error:
 
@@ -90,6 +90,5 @@ To select a branch, use `owner/repo#branch`. You can also pass a repository URL.
 
 ## Related resources
 
-- [Use the CLI](/cli/)
-- [Deploy from GitHub](/deploy/github/)
-- [Builds](/deploy/builds/)
+- [Deploy from GitHub](/deploy/github/) - Create an app from the dashboard and deploy on each push.
+- [Builds](/deploy/builds/) - Learn how Orchard builds images and how to fix common build errors.

@@ -7,12 +7,13 @@ sidebar:
 
 import { Tabs, TabItem } from '@astrojs/starlight/components';
 
-An alert rule watches one metric on an app. The rule fires when the metric stays past a threshold for the period you set. Orchard then sends an `alert.firing` notification.
+An alert rule tells you when an app is in trouble before your users do. Each rule watches one metric on an app, such as CPU or the 5xx rate, and fires when the metric stays past a threshold for the period you set. Orchard then sends an `alert.firing` notification, so you can route the alert to a team channel.
 
 ## Prerequisites
 
 - The **Owner** or **Admin** role in the organization, or admin access to the project. Only organization owners and admins can create organization rules.
 - A running metrics store on your instance. It is on by default (`metrics.enabled` in the Helm chart).
+- On an instance that uses PostHog, the Notifications beta turned on for your account. Go to **Account settings** > **Early access**.
 
 ## Create a rule
 
@@ -92,7 +93,7 @@ A rule does not contact a team channel by itself. To send alerts to a channel:
 5. Under **App and database health**, select **Alert firing** and **Alert resolved**.
 6. Select **Add rule**. If you are adding a new destination, select **Add destination**.
 
-Orchard also sends alert events to personal notifications, in the **App and database health** category. For more information, refer to [Set up notifications](/run/notifications/).
+Orchard also sends alert events to [personal notifications](/run/notifications/#personal-notifications), in the **App and database health** category.
 
 ## Pause or delete a rule
 
@@ -150,7 +151,6 @@ orchard alert create --metric error_rate --threshold 5 --for 300
 
 ## Related resources
 
-- [Set up notifications](/run/notifications/)
-- [Create a status page](/run/status-pages/)
-- [Scale an app and set resources](/deploy/scaling/)
-- [`orchard alert` reference](/reference/cli/#alert)
+- [Set up notifications](/run/notifications/) - Add destinations and rules that deliver alert events to Slack, Discord, email, or a webhook.
+- [Scale an app and set resources](/deploy/scaling/) - Set the CPU and memory limits that the CPU and memory percentages compare against.
+- [`orchard alert` reference](/reference/cli/#alert) - Every `orchard alert` command and flag.

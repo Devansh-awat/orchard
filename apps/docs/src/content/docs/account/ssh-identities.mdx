@@ -7,7 +7,7 @@ sidebar:
 
 import { Tabs, TabItem } from '@astrojs/starlight/components';
 
-To connect to a [Greenhouse machine](/greenhouse/) from your own terminal or a local editor, add an SSH identity. An SSH identity is a named public key on your account. Orchard never receives your private key.
+An SSH identity is a named public key on your account. Add one to connect to a [Greenhouse machine](/greenhouse/) from your own terminal or a local editor, such as VS Code or Zed over SSH. Orchard stores only the public key and never receives your private key.
 
 ## Prerequisites
 
@@ -21,7 +21,7 @@ Use this option if you do not need a specific key. The following command generat
 orchard sandbox ssh-config --install
 ```
 
-For more information, refer to [Connect an editor over SSH](/greenhouse/editors/).
+The command also adds an `orchard-*` entry to `~/.ssh/config`, so `ssh orchard-<MACHINE_NAME>` works. To connect an editor this way, refer to [Connect an editor over SSH](/greenhouse/editors/).
 
 ## Add an identity
 
@@ -93,6 +93,5 @@ Identity is attached to sandbox "my-machine"; detach it first
 
 ## Related resources
 
-- [Connect an editor over SSH](/greenhouse/editors/)
-- [Machines](/greenhouse/machines/)
-- [`orchard ssh-identity` reference](/reference/cli/#ssh-identity)
+- [Machines](/greenhouse/machines/) - Create, start, and stop Greenhouse machines and attach identities to them.
+- [`orchard ssh-identity` reference](/reference/cli/#ssh-identity) - Every flag of the `orchard ssh-identity` commands.

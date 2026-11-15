@@ -7,13 +7,13 @@ sidebar:
 
 import { Tabs, TabItem } from '@astrojs/starlight/components';
 
-To build and run an app from a GitHub repository, create an app with a GitHub source. To deploy each push, turn on auto-deploy.
+Connect a GitHub repository and Orchard builds it into a running app, using the repository's Dockerfile or the framework it detects. Turn on auto-deploy so that each push to a branch builds and rolls out a new version, and add watch paths so that pushes which do not touch the app skip the build.
 
 ## Prerequisites
 
 - A GitHub App on the instance. A superadmin creates it during setup, or by following [Connect a GitHub App](/operate/finishing-setup/#connect-a-github-app).
-- A GitHub account linked to Orchard. Go to **Account settings** > **GitHub and Tailscale**, and in **GitHub**, select **Connect**.
-- The GitHub App installed on the account that owns the repository. Go to **Account settings** > **GitHub and Tailscale**, and in **Repository access**, select **Add account**.
+- A GitHub account linked to Orchard. Go to **Account settings** > **Connections**, and in **GitHub**, select **Connect**.
+- The GitHub App installed on the account that owns the repository. Go to **Account settings** > **Connections**, and in **Repository access**, select **Add account**.
 
 You can deploy a public repository without these items. In the repository search field, paste `owner/repo`. Auto-deploy still needs the GitHub App and write access to the repository. If the repository later becomes private, builds stop until someone with access to it links it again.
 
@@ -166,7 +166,7 @@ Orchard passes the app's [variables](/run/environments/) to the build as Dockerf
 - Orchard adds the `ARG` declarations above your own `ENV` lines. An `ENV` line in the repository takes priority over a build argument of the same name.
 - The arguments also reach stages that build `FROM` the stage where they are declared.
 
-`DHI_USERNAME`, `DHI_TOKEN`, and `DOCKER_AUTH_CONFIG` are not build arguments. They authenticate base image pulls. For more information, refer to [Builds](/deploy/builds/#error-401-unauthorized-when-pulling-a-base-image).
+`DHI_USERNAME`, `DHI_TOKEN`, and `DOCKER_AUTH_CONFIG` are not build arguments. They [authenticate base image pulls](/deploy/builds/#error-401-unauthorized-when-pulling-a-base-image).
 
 ## Trigger a deploy from outside GitHub
 
@@ -174,8 +174,8 @@ To start a deploy from a CI pipeline or another system, use a [webhook token](/r
 
 ## Related resources
 
-- [Builds](/deploy/builds/)
-- [Deploy from GitLab, Gitea, and others](/deploy/git-providers/)
-- [Roll back an app](/deploy/rollbacks/)
-- [Deploy from your terminal](/deploy/deploy-from-terminal/)
-- [`orchard github` reference](/reference/cli/#github)
+- [Builds](/deploy/builds/) - Learn how Orchard builds images, where builds run, and how to fix common build errors.
+- [Deploy from GitLab, Gitea, and others](/deploy/git-providers/) - Deploy from a Git host other than GitHub.
+- [Roll back an app](/deploy/rollbacks/) - Return an app to an earlier release.
+- [Deploy from your terminal](/deploy/deploy-from-terminal/) - Build and deploy a local folder without a Git repository.
+- [`orchard github` reference](/reference/cli/#github) - Every flag of the `orchard github` commands.

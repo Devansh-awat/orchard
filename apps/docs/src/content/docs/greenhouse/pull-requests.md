@@ -5,11 +5,11 @@ sidebar:
   order: 8
 ---
 
-To get a session's changes into your repository, commit them, open a pull request, and merge it from the workspace.
+When a session's work is ready, you can take it all the way to your repository without leaving the workspace: commit the changes, open a pull request, follow its checks, and merge it. Each step runs with your own GitHub account, so the history shows who did what.
 
 ## Prerequisites
 
-- A GitHub account linked to Orchard. Link it in **Account settings** > **GitHub and Tailscale**. Until you link it, the pull request button reads **Link GitHub to push**. You can still commit.
+- A GitHub account linked to Orchard. Link it in **Account settings** > **Connections**. Until you link it, the pull request button reads **Link GitHub to push**. You can still commit.
 - [Host or guest access](/greenhouse/sharing/#roles) to the machine. Read-only guests cannot commit or push.
 
 Pushes, pull requests, and merges use your own GitHub account, on any machine you can edit.
@@ -74,6 +74,5 @@ The commit endpoint, `POST /apiv1/sandboxes/:id/git/commit`, can also commit onl
 
 ## Related resources
 
-- [Share a machine](/greenhouse/sharing/#git-identity)
-- [Automate Greenhouse](/greenhouse/automation/)
-- [Workspace](/greenhouse/workspace/)
+- [Git identity](/greenhouse/sharing/#git-identity) - Learn whose name and token each git operation uses on a shared machine.
+- [Automate Greenhouse](/greenhouse/automation/) - Open pull requests from an agent or a script with MCP tools, the CLI, or the API.

@@ -7,7 +7,7 @@ sidebar:
 
 import { Tabs, TabItem } from '@astrojs/starlight/components';
 
-Use the protection settings to prevent accidental deletion and to confirm that your backups work.
+A backup you have never restored is a backup you cannot trust, and a database deleted by mistake takes its data with it. The protection settings guard against both: they block accidental deletion, take a restore point before destructive SQL, and test your backups every week.
 
 | Setting                     | CLI flag            | What it does                                                                                                                     | Needs backup storage |
 | --------------------------- | ------------------- | -------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
@@ -17,9 +17,9 @@ Use the protection settings to prevent accidental deletion and to confirm that y
 
 ## Prerequisites
 
-- Edit access to the project.
+- Edit access to the project: the Admin or Member [project role](/teams/organizations/#project-roles).
 - A dedicated database.
-- For **Checkpoint before drops** and **Weekly restore tests**, [backup storage](/data/backups/) for your organization.
+- For **Checkpoint before drops** and **Weekly restore tests**, [backup storage](/data/backups/#prerequisites) for the organization or the instance.
 
 ## Change the protection settings
 
@@ -52,8 +52,9 @@ If you try to delete a protected database, Orchard returns this error:
 
 To delete the database, turn off **Deletion protection** first.
 
+After you turn these on, you can recover from a dropped table with a checkpoint, and a failed weekly test sends a [notification](/run/notifications/).
+
 ## Related resources
 
-- [Back up and restore a database](/data/backups/)
-- [Create and manage a database](/data/databases/)
-- [`orchard db protect` reference](/reference/cli/#db)
+- [Back up and restore a database](/data/backups/) - Restore from a checkpoint, a backup, or a point in time.
+- [`orchard db protect` reference](/reference/cli/#db) - Review the protection flags.

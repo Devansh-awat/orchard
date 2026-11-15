@@ -7,11 +7,11 @@ sidebar:
 
 import { Tabs, TabItem } from '@astrojs/starlight/components';
 
-A database with standby instances can continue to serve traffic when the primary fails. A database with one instance has no failover. To configure high availability, add a standby, then choose a replication mode.
+A database with one instance has no failover: if its node fails, the database is down until the instance comes back. Standby instances keep a copy of the primary, so one of them can take over when the primary fails. To configure high availability, add a standby, then choose a replication mode that sets how much data a failover can lose.
 
 ## Prerequisites
 
-- Edit access to the project.
+- Edit access to the project: the Admin or Member [project role](/teams/organizations/#project-roles).
 - A dedicated database.
 - Available [quota](/teams/quotas/) for each new instance.
 
@@ -71,9 +71,9 @@ Removing a standby deletes the standby and its volume.
 
 The primary keeps running.
 
+Standbys also serve read-only traffic. To send reads to them, refer to [Read replicas](/data/replicas/).
+
 ## Related resources
 
-- [Read replicas](/data/replicas/)
-- [Use a connection pooler](/data/connection-pooler/)
-- [`orchard db replication` reference](/reference/cli/#db)
-- [Monitor a database](/data/monitoring/)
+- [Monitor a database](/data/monitoring/) - Watch the **Replication lag** panel.
+- [`orchard db replication` reference](/reference/cli/#db) - Review the replication commands.

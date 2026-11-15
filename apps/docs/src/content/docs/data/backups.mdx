@@ -7,7 +7,7 @@ sidebar:
 
 import { Tabs, TabItem } from '@astrojs/starlight/components';
 
-Orchard backs up managed databases to S3-compatible object storage. Each database continuously archives its write-ahead log (WAL) and takes a daily base backup. A base backup is a full copy of the database. WAL is the stream of changes that Orchard replays onto a base backup.
+Backups let you undo a bad migration, bring back a dropped table, or recover a deleted database. Orchard backs up managed databases to S3-compatible object storage. Each database continuously archives its write-ahead log (WAL) and takes a daily base backup. A base backup is a full copy of the database, and WAL is the stream of changes that Orchard replays onto a base backup, which is why you can restore to any moment rather than only to the last backup.
 
 You can restore from a backup, from a checkpoint, or to any moment in the recovery window. Orchard keeps backups and WAL for 30 days.
 
@@ -16,7 +16,7 @@ You can restore from a backup, from a checkpoint, or to any moment in the recove
 A database needs one of these storage locations. The organization's bucket takes priority.
 
 - An organization bucket, set under **Organization settings** > **Backups**.
-- The instance bucket, set by an operator. For more information, refer to [Backup storage for operators](#backup-storage-for-operators).
+- The instance bucket, which an operator sets up as described in [Backup storage for operators](#backup-storage-for-operators).
 
 Without storage, the **Backups** tab shows **Backups need storage**. Checkpoints, the drop guard, and restore tests are not available.
 
@@ -50,7 +50,7 @@ Orchard gives each new database a daily schedule. To change it:
 
 1. Open the database.
 2. Go to **Backups**.
-3. In **Schedule**, select a preset, or select **Custom cron…** and enter a five-field cron expression in UTC.
+3. In **Schedule**, select a preset. For another schedule, select **Custom cron…**, enter a five-field cron expression in UTC, and select **Apply**.
 
 </TabItem>
 <TabItem label="CLI">
@@ -96,7 +96,7 @@ Orchard also takes checkpoints automatically:
 | Type                | When Orchard takes it                                                                                                                                                                             |
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Before a drop**   | Before any `DROP TABLE`, `DROP SCHEMA`, or `DROP COLUMN` runs, when **Checkpoint before drops** is on. The checkpoint records what was dropped and by whom. This check does not cover `TRUNCATE`. |
-| **Before a deploy** | Before a deploy, so that a [rollback](/deploy/rollbacks/) can also restore the app's databases.                                                                                                   |
+| **Before a deploy** | Before an app that references the database deploys, so that a [rollback](/deploy/rollbacks/) can also restore the app's databases.                                                                |
 | **Before a change** | Before an operation that changes the database, such as an in-place restore or a [major upgrade](/data/upgrades/).                                                                                 |
 
 ## Restore a database
@@ -114,8 +114,8 @@ You can restore in two ways.
 1. Open the database.
 2. Go to **Backups**.
 3. Select **Restore**.
-4. In **Point**, select **Latest**, **A backup**, **A checkpoint**, or **A time**. When you copy a database, **Now** replaces **Latest** and copies the live data.
-5. In **Where**, select **Replace this database** or **Copy into a new database**.
+4. In **Point to restore to**, select **Latest**, **A backup**, **A checkpoint**, or **A time**. When you copy a database, **Now** replaces **Latest** and copies the live data.
+5. In **Where to restore**, select **Replace this database** or **Copy into a new database**.
 6. For a copy, enter a **Name**.
 7. For a copy, select an **Environment**.
 8. Select **Restore** or **Create copy**.
@@ -195,11 +195,11 @@ orchard db trash restore <deleted-id> --wait
 </TabItem>
 </Tabs>
 
-To block deletion, turn on **Deletion protection**. For more information, refer to [Protect a database](/data/protection/).
+To block deletion, turn on **Deletion protection** as described in [Protect a database](/data/protection/).
 
 ## Test a backup
 
-A restore test restores the latest backup into a temporary copy, compares tables and row counts, and deletes the copy. A failed test sends a [notification](/run/notifications/).
+A restore test restores the latest backup into a temporary copy, compares its tables and estimated row counts with the source, and deletes the copy. A failed test sends a [notification](/run/notifications/).
 
 <Tabs syncKey="dashPlusCli">
 <TabItem label="Dashboard">
@@ -265,28 +265,25 @@ The one-command installer runs an S3 store (versitygw) in the `orchard-object-st
 The store on the server is not disaster recovery. Backups sit on the same machine as the databases, and usually on the same disk. They undo a bad migration or a dropped table. If the server is lost, the backups are lost.
 :::
 
-The chart keys are under `objectStorage.local`:
+The chart keys are under `objectStorage.local`. The installer overrides some of the chart defaults:
 
-| Key                    | Default                                                 |
-| ---------------------- | ------------------------------------------------------- |
-| `enabled`              | `true` on an installer host                             |
-| `bucket`               | `orchard-backups`                                       |
-| `uploadsBucket`        | `orchard-uploads`                                       |
-| `storage.size`         | One fifth of free disk, from 5 GB to 50 GB              |
-| `storage.storageClass` | The `local-path` class, which does not enforce the size |
+| Key                    | Chart default               | Installer value                                         |
+| ---------------------- | --------------------------- | ------------------------------------------------------- |
+| `enabled`              | `false`                     | `true`                                                  |
+| `bucket`               | `orchard-backups`           | `orchard-backups`                                       |
+| `uploadsBucket`        | `orchard-uploads`           | `orchard-uploads`                                       |
+| `storage.size`         | `20Gi`                      | One fifth of free disk, from 5 GiB to 50 GiB            |
+| `storage.storageClass` | The cluster's default class | The `local-path` class, which does not enforce the size |
 
 To install without this store, pass `--object-storage false`. Databases then have no backups until you add S3 storage.
 
-`orchardctl update` turns on this store for an older host only when no object storage is configured in the values file, in `server.envFrom`, in `r2Proxy.upstream`, or under **Instance admin**.
+On an installer host whose values file does not set `objectStorage.local.enabled`, `orchardctl update` turns the store on, unless object storage is already configured in the values file (in the server environment, `server.envFrom`, or `r2Proxy.upstream`) or under **Instance admin**.
 
 ### Add S3 storage later
 
-When you add S3 storage, new databases back up to it. Databases you already have keep backing up to where they are now, and their existing backups stay restorable from there. To move a database, create a copy of it. For more information, refer to [What happens when you change storage](/operate/storage/#what-happens-when-you-change-storage).
+When you add S3 storage, new databases back up to it. Databases you already have keep backing up to where they are now, and their existing backups stay restorable from there. To move a database, create a copy of it. For details, refer to [What happens when you change storage](/operate/storage/#what-happens-when-you-change-storage).
 
 ## Related resources
 
-- [Create and manage a database](/data/databases/)
-- [Protect a database](/data/protection/)
-- [Roll back an app](/deploy/rollbacks/)
-- [Add S3 storage](/operate/storage/)
-- [`orchard db` reference](/reference/cli/#db)
+- [Back up and restore an instance](/operate/backup-and-restore/) - Learn what else an instance needs backed up to survive the loss of a machine.
+- [`orchard db` reference](/reference/cli/#db) - Review the backup, checkpoint, and restore commands and their flags.

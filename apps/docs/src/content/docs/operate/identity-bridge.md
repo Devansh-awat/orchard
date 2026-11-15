@@ -5,7 +5,9 @@ sidebar:
   order: 6
 ---
 
-An instance identity provider can put people into organizations and give them roles based on the groups your provider sends. Orchard has no built-in LDAP client. To use LDAP or Active Directory, put Dex or Keycloak in front of the directory and add the bridge as an OIDC or SAML provider.
+An instance identity provider can put people into organizations and give them roles based on the groups your provider sends, so access follows your directory instead of a list that someone keeps by hand. When someone joins or leaves a group, their Orchard access changes at their next sign-in.
+
+Orchard has no built-in LDAP client. To use LDAP or Active Directory, put Dex or Keycloak in front of the directory and add the bridge as an OpenID Connect (OIDC) or SAML provider.
 
 ## Prerequisites
 
@@ -15,7 +17,7 @@ An instance identity provider can put people into organizations and give them ro
 
 ## Map groups to organizations
 
-An instance rule is an exact group name, a target organization, and a role. Rules belong to one provider.
+An instance rule is an exact group name, a target organization, and a role. Rules belong to one provider. You can edit them in **Instance admin** > **Sign in** > **Group rules**, or through the API as in the following steps.
 
 1. Make the provider send group names, and add `groups` to the provider's scopes if it is an OIDC provider that needs the scope.
 2. Preview group names against the saved rules:
@@ -36,7 +38,7 @@ An instance rule is an exact group name, a target organization, and a role. Rule
 
 How rules behave:
 
-- Roles are `admin`, `member`, and `guest`. A rule can never give `owner` or the superadmin role.
+- Roles are `admin`, `member`, and `guest`. A rule can never give `owner`. To make the people in a group superadmins, use the separate **Superadmin group** setting instead. Refer to [Route instance sign-ins into organizations](/teams/sso/#route-instance-sign-ins-into-organizations).
 - Group names match exactly after Unicode normalization, and case matters. Refer to [Map provider groups to roles](/teams/sso/#map-provider-groups-to-roles) for every matching rule.
 - Once a provider has any rule, a person who matches none is denied, and no account is created. Superadmins are exempt and are never changed by rules.
 - A matching group counts as access when sign-ups are closed or invite-only, because you wrote the rule.
@@ -47,7 +49,7 @@ How rules behave:
 
 Roll out rules in this order: add the rules, preview with real group names, sign in with a test account, then tell everyone else.
 
-Orchard does not create organizations from groups yet. Create the organizations first.
+Group rules map into organizations that already exist. To have a group create its own organization at first sign-in, turn on **Let providers create organizations**. Refer to [Route instance sign-ins into organizations](/teams/sso/#route-instance-sign-ins-into-organizations).
 
 ## Bridge LDAP or Active Directory
 
@@ -93,7 +95,7 @@ Dex is a small OIDC provider that signs people in against LDAP. Run it where Orc
 
 Dex emits group names in the `groups` claim. Use LDAPS or StartTLS between Dex and the directory, and a read-only service account.
 
-If Dex runs inside the cluster, Orchard's request guard blocks the private address. Set `SSO_ALLOW_INTERNAL_IDP=true` on the server to allow it for instance identity providers. Organization providers can never reach internal addresses, so each tenant's IdP has to be on the public internet. Refer to [Where settings live](/operate/configuration/).
+If Dex runs inside the cluster, Orchard's request guard blocks the private address. Set `SSO_ALLOW_INTERNAL_IDP=true` on the server to allow it for instance identity providers. Organization providers can never reach internal addresses, so each tenant's identity provider has to be on the public internet. To set a server variable, refer to [Configuration](/operate/configuration/).
 
 Keycloak works the same way. Add an LDAP user federation provider and a group mapper in Keycloak, then add Keycloak to Orchard as an OIDC or SAML provider.
 
@@ -103,6 +105,5 @@ Orchard rejects responses that a SAML provider starts on its own. Point the prov
 
 ## Related resources
 
-- [Set up SSO](/teams/sso/)
-- [Set up SCIM provisioning](/teams/scim/)
-- [Instance admin](/operate/instance-admin/)
+- [Set up SSO](/teams/sso/) - Add an identity provider and require single sign-on.
+- [Set up SCIM provisioning](/teams/scim/) - Create and turn off accounts from your company directory.

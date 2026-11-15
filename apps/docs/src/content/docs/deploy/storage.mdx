@@ -7,7 +7,7 @@ sidebar:
 
 import { Tabs, TabItem } from '@astrojs/starlight/components';
 
-A container's filesystem is deleted when the pod restarts. To keep files, attach a volume. Orchard creates a PersistentVolumeClaim from the cluster's storage class.
+A container's filesystem is deleted when the pod restarts, so an app that writes uploads, a SQLite file, or a cache to disk loses them on every deploy. Attach a volume to keep those files. Orchard creates a PersistentVolumeClaim from the cluster's storage class and mounts it at the path you choose.
 
 ## Attach a volume
 
@@ -54,6 +54,5 @@ Orchard records a volume as soon as you add it. A volume you add during a build 
 
 ## Related resources
 
-- [Scale an app and set resources](/deploy/scaling/)
-- [Create and manage a database](/data/databases/)
-- [Choose an update strategy](/deploy/update-strategies/)
+- [Scale an app and set resources](/deploy/scaling/) - Change replicas, CPU, and memory.
+- [Grow database storage](/data/storage/) - Increase the volume size of a managed database.

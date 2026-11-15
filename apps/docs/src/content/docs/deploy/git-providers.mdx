@@ -7,9 +7,9 @@ sidebar:
 
 import { Tabs, TabItem } from '@astrojs/starlight/components';
 
-To deploy from a Git host other than the [GitHub App](/deploy/github/), link a Git provider to your account. Orchard supports GitLab, Gitea, Forgejo, Codeberg, Bitbucket Cloud, GitHub with a token, and any Git host that serves HTTPS.
+Orchard can build apps from repositories outside the [GitHub App](/deploy/github/). Link a Git provider to your account, and you can pick its repositories in the new app form and turn on auto-deploy on push, the same way you do for GitHub. Orchard supports GitLab, Gitea, Forgejo, Codeberg, Bitbucket Cloud, GitHub with a token, and any Git host that serves HTTPS.
 
-A provider belongs to you. Orchard lists only the repositories your token can see.
+A provider belongs to you. Orchard lists only the repositories your token can see, and builds clone with your token.
 
 ## Link a provider
 
@@ -18,11 +18,11 @@ To link a provider, sign in with OAuth or add a token. OAuth is available for Gi
 <Tabs syncKey="dashPlusCli">
 <TabItem label="Dashboard">
 
-1. Go to **Account settings** > **GitHub and Tailscale**.
+1. Go to **Account settings** > **Connections**.
 2. In **Git providers**, take one of these steps:
    - If your instance has OAuth configured, select **Add provider**, then **Sign in with GitLab** or **Sign in with Bitbucket**.
    - Otherwise, select **Add with a token**.
-3. If you add a token, enter the **Provider**, **Name**, **Host**, and **Token**.
+3. If you add a token, enter the **Provider**, **Name**, **Host**, and **Token**. For **Any git host**, also enter the **Username** if the host expects one.
 4. Select **Connect**.
 
 </TabItem>
@@ -32,20 +32,26 @@ To link a provider, sign in with OAuth or add a token. OAuth is available for Gi
 orchard git add --provider gitlab --name work --token glpat-...
 ```
 
-The `--provider` flag accepts `github`, `gitlab`, `gitea`, `bitbucket`, or `generic`. For a self-hosted provider, add `--url`.
+The `--provider` flag accepts `github`, `gitlab`, `gitea`, `bitbucket`, or `generic`. For a self-hosted provider, add `--url`. For `generic`, add `--username` if the host expects one.
 
 </TabItem>
 </Tabs>
 
-Orchard stores the token encrypted and checks it once before it saves.
+Orchard stores the token encrypted. Before it saves, it lists your repositories with the token, so a wrong token fails here instead of at the first build. Orchard cannot check a token for **Any git host**, because a plain Git host has no API. A wrong token for that host fails when the first build clones.
 
 | Provider                 | Token                                 | Scopes                        |
 | ------------------------ | ------------------------------------- | ----------------------------- |
 | GitLab                   | Personal or project access token      | `read_api`, `read_repository` |
 | Gitea, Forgejo, Codeberg | Access token                          | Repository read               |
-| Bitbucket Cloud          | App password, with your username      | Repository read               |
+| Bitbucket Cloud          | Use **Sign in with Bitbucket**        | Repository read               |
 | GitHub with a token      | Fine-grained token                    | Contents read                 |
 | Any Git host             | The password used to clone over HTTPS | None                          |
+
+### Bitbucket Cloud
+
+Link Bitbucket Cloud with **Sign in with Bitbucket**. A superadmin turns it on in **Instance admin** > **Configuration** > **Bitbucket sign-in**, with the key and secret of a Bitbucket OAuth consumer that has repository read access and the callback URL `<origin>/apiv1/git/oauth/bitbucket/callback`, where `<origin>` is the address of your Orchard dashboard.
+
+The token form for Bitbucket Cloud takes a username and an app password, and Atlassian has retired app passwords in favor of API tokens. Orchard sends the same username to the Bitbucket API and to Git, but a Bitbucket API token needs your Atlassian account email for the API and your Bitbucket username for Git. Because of this, Orchard does not support linking Bitbucket Cloud with an API token. For details on API tokens, refer to [Using API tokens](https://support.atlassian.com/bitbucket-cloud/docs/using-api-tokens/) in the Atlassian documentation.
 
 ## Create an app
 
@@ -76,16 +82,16 @@ orchard deploy create --git work --repo https://gitlab.com/group/app#main --name
 
 ## Turn on auto-deploy
 
-When you turn on auto-deploy, Orchard registers a push webhook on the repository through the provider's API. Orchard signs the webhook with a secret that belongs to that provider. A push then builds the app and applies its [watch paths](/deploy/github/#limit-builds-to-certain-paths).
+Auto-deploy builds the app on each push to a branch. When you turn it on, Orchard registers a push webhook on the repository through the provider's API, signed with a secret that belongs to that provider. A push then builds the app and applies its [watch paths](/deploy/github/#limit-builds-to-certain-paths).
 
 1. Open the app.
 2. Go to **Settings** > **Deploy behavior**.
 3. In **Auto-deploy**, enter the branch.
 4. Turn on **Deploy on push**.
 
-**Webhook** shows **Registered** when the webhook is in place.
+**Webhook** shows **Registered on `<host>`** when the webhook is in place.
 
-A plain Git host has no API for Orchard to call. For those hosts, the page shows the webhook URL and secret. Paste them into the webhook settings of the repository. To print the same values from the CLI, run `orchard git webhook <name>`.
+If Orchard cannot register the webhook, the page shows the webhook URL and secret instead. This happens on a plain Git host, which has no API for Orchard to call, and when the token cannot manage webhooks on the repository. Paste the URL and secret into the webhook settings of the repository, for push events. A plain Git host must send a push payload in the GitHub, GitLab, or Bitbucket format. To print the same values from the CLI, run `orchard git webhook <name>`.
 
 ## Permissions
 
@@ -100,13 +106,12 @@ After an app exists, [project membership](/teams/projects/#add-a-member) control
 
 ## Replace a provider when someone leaves
 
-An app keeps the provider it was created from. If the person who linked the provider leaves or removes it, builds from that provider fail with an error. Orchard does not let you remove a provider that still has apps.
+An app keeps the provider it was created from, and builds clone with that provider's token. If the token expires or is revoked, or the account of the person who linked it is deleted, builds from that provider fail with an error. Orchard does not let you remove a provider that is still the source of an app.
 
 To restore builds, another member creates the app again from their own provider.
 
 ## Related resources
 
-- [Deploy from GitHub](/deploy/github/)
-- [Builds](/deploy/builds/)
-- [`orchard git` reference](/reference/cli/#git)
-- [Deploy from your terminal](/deploy/deploy-from-terminal/)
+- [Builds](/deploy/builds/) - Learn how Orchard builds images, where builds run, and how to fix common build errors.
+- [`orchard git` reference](/reference/cli/#git) - Every flag of the `orchard git` commands.
+- [Deploy from your terminal](/deploy/deploy-from-terminal/) - Build and deploy a local folder without a Git repository.

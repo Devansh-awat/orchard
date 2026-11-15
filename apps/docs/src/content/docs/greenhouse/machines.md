@@ -1,11 +1,11 @@
 ---
 title: Machines
-description: A Greenhouse machine is a Linux environment that belongs to one host and one organization. Learn what each runner provides, what persists, and which limits apply.
+description: A Greenhouse machine is a Linux environment that belongs to one host and one organization. Review what each runner provides, what persists across a stop, and which limits apply.
 sidebar:
   order: 3
 ---
 
-A machine is the Linux environment that your sessions run on. It belongs to the person who created it, called the **host**, and to that person's organization.
+A machine is the Linux environment that your sessions run on. It belongs to the person who created it, called the **host**, and to that person's organization. This page explains what each runner provides, what survives a stop, and which limits apply, so that you know what to keep on the machine and what to push to GitHub.
 
 ## Status
 
@@ -19,7 +19,7 @@ A machine is the Linux environment that your sessions run on. It belongs to the 
 | Deleting | Orchard is removing the machine and everything on it.              |
 | Error    | The machine failed. The status message states why.                 |
 
-A machine can also show **Applying** while Orchard carries out a change, or **Apply failed** if the change did not succeed. For more information, refer to [Troubleshooting Greenhouse](/greenhouse/troubleshooting/#a-machine-shows-apply-failed).
+A machine can also show **Applying** while Orchard carries out a change, or [**Apply failed**](/greenhouse/troubleshooting/#a-machine-shows-apply-failed) if the change did not succeed.
 
 ## Runners
 
@@ -91,7 +91,7 @@ Some sign-ins stay on one machine instead of your account. These are the ChatGPT
 | Delete | Yes  | No    | No              | Yes                |
 | Fork   | Yes  | No    | No              | No                 |
 
-For all permissions, refer to [Share a machine](/greenhouse/sharing/#what-each-role-can-do).
+For the full list of permissions, refer to [What each role can do](/greenhouse/sharing/#what-each-role-can-do).
 
 A stop ends running agents, terminals, and dev servers. Files on disk remain.
 
@@ -132,7 +132,6 @@ The [audit log](/teams/audit-logs/) records each stop caused by a limit.
 
 ## Related resources
 
-- [Get started](/greenhouse/getting-started/)
-- [Connect an editor over SSH](/greenhouse/editors/)
-- [Preview a session](/greenhouse/previews/)
-- [Run Greenhouse](/operate/greenhouse/)
+- [Get started](/greenhouse/getting-started/) - Create a machine and start your first session.
+- [Connect an editor over SSH](/greenhouse/editors/) - Work on a machine from a desktop editor or a terminal.
+- [Preview a session](/greenhouse/previews/) - Open a dev server that runs on the machine.

@@ -1,11 +1,11 @@
 ---
 title: Concepts
-description: Orchard organizes work into organizations, projects, environments, apps, and databases. Each environment maps to one Kubernetes namespace.
+description: Orchard organizes work into organizations, projects, environments, apps, and databases, and extends an instance with grafts such as Greenhouse. Each environment maps to one Kubernetes namespace.
 sidebar:
   order: 4
 ---
 
-Orchard groups resources in a fixed hierarchy. Access rules, variables, and Kubernetes namespaces all follow this hierarchy.
+Orchard groups resources in a fixed hierarchy. Access rules, variables, and Kubernetes namespaces all follow it, so once you know where a resource sits, you know who can reach it and which variables it can read.
 
 ```text
 Organization
@@ -27,11 +27,11 @@ An organization holds members, [quotas](/teams/quotas/), [SSO configuration](/te
 
 ## Project
 
-A project groups the apps and databases that belong together. [Project membership](/teams/projects/#add-a-member) controls access. A person who is not an organization owner or admin sees only the projects they belong to.
+A project groups the apps and databases that belong together, such as the frontend, the API, and the database of one product. [Project membership](/teams/projects/#add-a-member) controls access. A person who is not an organization owner or admin sees only the projects they belong to.
 
 ## Environment
 
-An environment is a named part of a project. Each project has a default environment, named `Production` unless you rename it.
+An environment is a named part of a project, such as production or staging, with its own apps and variables. Each project has a default environment, named `Production` unless you rename it.
 
 Each environment has its own Kubernetes namespace. Apps in the same environment reach each other by their internal addresses. Environments also hold [shared variables](/run/environments/#shared-variables).
 
@@ -43,7 +43,7 @@ In Kubernetes terms, an app is a Deployment and its Services, Ingresses, and Per
 
 ## Database
 
-A database is a [managed Postgres instance](/data/databases/) that runs as a CloudNativePG `Cluster`. CloudNativePG is the Kubernetes operator that handles failover, storage, and [backups](/data/backups/). A database has its own lifecycle, separate from any app that connects to it.
+A database is a [managed Postgres instance](/data/databases/) that runs as a CloudNativePG `Cluster`. CloudNativePG is the Kubernetes operator that handles failover, storage, and [backups](/data/backups/). A database has its own lifecycle, separate from any app that connects to it, so you can roll back an app without touching its data, or restore the data without a redeploy.
 
 ## Status
 
@@ -70,9 +70,20 @@ Organizations and projects each have their own roles.
 
 Superadmin is a separate role for the people who operate the instance. For more information, refer to [Manage organizations and roles](/teams/organizations/).
 
+## Graft
+
+A graft is an extension that adds features to an Orchard instance without a fork. You could think of it as a plugin that the operator installs for the whole instance. A graft can add pages, API endpoints, its own database tables, [MCP tools](/mcp/), and settings in **Instance admin**.
+
+A graft runs inside the Orchard server with the same access as Orchard. It reaches Orchard through versioned interfaces, and it keeps its data in its own Postgres schema. If a graft fails to load, Orchard skips it and still starts. Because a graft is not sandboxed, install only grafts that you trust. For more information, refer to [Grafts](/grafts/overview/).
+
+## Greenhouse
+
+Greenhouse is a first-party graft that runs coding agents on cloud machines. A machine is an isolated Linux environment with your repositories on it. Each agent session works on its own branch in its own git worktree, so several sessions can run on one machine at once.
+
+Greenhouse is for writing code, not for serving traffic. To run what you build, deploy it to Orchard as an app. Greenhouse is available only on instances where an operator has installed it. For more information, refer to [Greenhouse](/greenhouse/).
+
 ## Related resources
 
-- [What is Orchard](/start/what-is-orchard/)
-- [Deploy your first app](/start/first-deploy/)
-- [Manage a project](/teams/projects/)
-- [Architecture](/operate/architecture/)
+- [Deploy your first app](/start/first-deploy/) - Deploy a repository and connect a Postgres database to it.
+- [Manage a project](/teams/projects/) - Add members to a project and manage its environments.
+- [Architecture](/operate/architecture/) - Learn which components make up an Orchard instance and how they connect.

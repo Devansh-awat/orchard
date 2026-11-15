@@ -5,7 +5,7 @@ sidebar:
   order: 2
 ---
 
-Orchard is an open-source, self-hosted platform as a service (PaaS) from Hack Club. This page lists what an Orchard instance can do. For an overview, refer to [What is Orchard](/start/what-is-orchard/).
+This page lists what an Orchard instance can do. Every feature is part of the open-source code, and there is no paid tier. Some features need the operator to set them up first, such as Greenhouse or kernel sandboxing with gVisor or Kata. For an introduction to Orchard, refer to [What is Orchard](/start/what-is-orchard/).
 
 ## Deploy
 
@@ -24,7 +24,7 @@ Orchard is an open-source, self-hosted platform as a service (PaaS) from Hack Cl
 
 | Feature               | Description                                                                             | Refer to                                                |
 | --------------------- | --------------------------------------------------------------------------------------- | ------------------------------------------------------- |
-| Safe deploys          | A new version must be ready before the old one stops. Blue/green deploys are available. | [Choose an update strategy](/deploy/update-strategies/) |
+| Safe deploys          | By default, new pods start before old pods stop. Blue/green deploys are available.      | [Choose an update strategy](/deploy/update-strategies/) |
 | Rollbacks             | Go back to an earlier build, and restore the app's databases with it if you want.       | [Roll back an app](/deploy/rollbacks/)                  |
 | Scaling               | Run more replicas, and set CPU and memory for each app.                                 | [Scale an app](/deploy/scaling/)                        |
 | Persistent storage    | Attach volumes to apps that keep files.                                                 | [Storage](/deploy/storage/)                             |
@@ -52,7 +52,8 @@ Orchard is an open-source, self-hosted platform as a service (PaaS) from Hack Cl
 | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
 | Logs and shell | Search logs, stream them live, and open a shell in a running container.                                                                                          | [Read logs and open a shell](/run/logs/)     |
 | Metrics        | Read CPU, memory, and HTTP request metrics for each app.                                                                                                         | [Monitor an app](/run/monitor-an-app/)       |
-| Alerts         | Hear about deploys and crashes in Slack, Discord, email, or a webhook.                                                                                           | [Alerts](/run/alerts/)                       |
+| Notifications  | Send deploy, health, backup, and job events to Slack, Discord, email, or a signed webhook.                                                                       | [Set up notifications](/run/notifications/)  |
+| Alerts         | Get notified when an app metric stays past a threshold for a set period.                                                                                         | [Create alert rules](/run/alerts/)           |
 | Status pages   | Publish a public status page for your apps.                                                                                                                      | [Status pages](/run/status-pages/)           |
 | Security tab   | Read configuration findings, image scan results, and attack attempts for each app.                                                                               | [Security tab](/deploy/security-tab/)        |
 | Isolation      | Apps cannot reach each other over the network. They share the host kernel unless you turn on gVisor or Kata, so Orchard is not fully tenant-isolated by default. | [Security and isolation](/operate/security/) |
@@ -68,10 +69,11 @@ Orchard is an open-source, self-hosted platform as a service (PaaS) from Hack Cl
 
 ## Interfaces
 
-| Feature                | Description                                                                        | Refer to                                      |
-| ---------------------- | ---------------------------------------------------------------------------------- | --------------------------------------------- |
-| Dashboard              | Do everything from the web dashboard.                                              | [Deploy your first app](/start/first-deploy/) |
-| CLI                    | Deploy, read logs, and roll back from your terminal.                               | [Use the CLI](/cli/)                          |
-| MCP server             | Let Claude, Cursor, or another AI agent deploy apps, add databases, and read logs. | [MCP server](/mcp/)                           |
-| Terraform and OpenTofu | Manage Orchard resources as code.                                                  | [Terraform](/run/terraform/)                  |
-| Extensions             | Add pages, API endpoints, and MCP tools with grafts.                               | [Grafts](/grafts/overview/)                   |
+| Feature                | Description                                                                                                                          | Refer to                                      |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------- |
+| Dashboard              | Do everything from the web dashboard.                                                                                                | [Deploy your first app](/start/first-deploy/) |
+| CLI                    | Deploy, read logs, and roll back from your terminal.                                                                                 | [Use the CLI](/cli/)                          |
+| MCP server             | Let Claude, Cursor, or another AI agent deploy apps, add databases, and read logs.                                                   | [MCP server](/mcp/)                           |
+| Terraform and OpenTofu | Manage Orchard resources as code.                                                                                                    | [Terraform](/run/terraform/)                  |
+| Extensions             | Add pages, API endpoints, and MCP tools with grafts, which are extensions that the operator installs on the instance.                | [Grafts](/grafts/overview/)                   |
+| Greenhouse             | Run coding agents on cloud machines, with each session on its own branch. Available when the operator installs the Greenhouse graft. | [Greenhouse](/greenhouse/)                    |

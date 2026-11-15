@@ -5,7 +5,7 @@ sidebar:
   order: 5
 ---
 
-To open a Greenhouse session in a desktop editor, connect over SSH. The connection goes through the Orchard server, so the machine does not need to accept connections from the internet.
+To work on a Greenhouse session in VS Code, Cursor, Zed, or a terminal, connect to the machine over SSH. The connection goes through the Orchard server, so the machine does not need to accept connections from the internet, and you keep the tools and settings of your own editor.
 
 Your SSH client runs `orchard sandbox proxy` as its `ProxyCommand`. That command carries the connection over an authenticated WebSocket to the Orchard server, and from there to the machine.
 
@@ -85,9 +85,8 @@ Each machine generates SSH host keys on first boot and stores them in `/persist/
 
 When the proxy connects, the CLI fetches the machine's current host keys from Orchard and updates `~/.orchard/ssh/known_hosts`. This covers a machine that you deleted and recreated under the same name. The CLI does not change `~/.ssh/known_hosts`.
 
+You can now open any session you host in your editor. To prepare each new worktree with dependencies, [configure a setup script](/greenhouse/scripts/).
+
 ## Related resources
 
-- [Manage SSH identities](/account/ssh-identities/)
-- [Troubleshooting Greenhouse](/greenhouse/troubleshooting/#ssh-reports-that-the-host-key-changed)
-- [Workspace](/greenhouse/workspace/)
-- [Machines](/greenhouse/machines/)
+- [Troubleshooting Greenhouse](/greenhouse/troubleshooting/#ssh-reports-that-the-host-key-changed) - Fix a changed host key or a refused public key.

@@ -5,7 +5,7 @@ sidebar:
   order: 4
 ---
 
-To add pages, navigation, tabs, and cards to the dashboard, add UI to a graft. A graft's UI is an island: a bundle with its own copy of Svelte. Orchard loads the bundle and gives it an empty element to draw in. A graft can use any library.
+To add pages, navigation, tabs, and cards to the dashboard, add UI to a graft. A graft's UI is an island: a bundle with its own copy of Svelte. Orchard loads the bundle and gives it an empty element to draw in. Because the island does not share Orchard's build, a graft can use any library.
 
 ## Define what the graft adds
 
@@ -86,6 +86,5 @@ Orchard wraps each mount. If a graft throws while mounting or updating, that ele
 
 ## Related resources
 
-- [Graft UI slots](/reference/graft-slots/)
-- [graft.json](/grafts/build/manifest/)
-- [Write server code](/grafts/build/server/)
+- [graft.json](/grafts/build/manifest/) - Declare screens and their layouts.
+- [Write server code](/grafts/build/server/) - Add the API routes that `host.api` calls.

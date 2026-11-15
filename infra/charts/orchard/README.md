@@ -676,6 +676,7 @@ outside Orchard.
 | `databaseDumps.destination.prefix` | `platform-dumps` | Key prefix. |
 | `databaseDumps.destination.endpointURL` | `""` | S3 endpoint, for anything that is not AWS. |
 | `databaseDumps.destination.secretName` | `database-dumps-r2` | Secret you create, with keys `ACCESS_KEY_ID` and `ACCESS_SECRET_KEY`. |
+| `databaseDumps.destination.keep` | `0` | Dumps to keep per target. `0` keeps them all. |
 | `databaseDumps.targets` | `[]` | Each needs `name`, `host`, `database`, `user` and `passwordSecret.name`; optional `port`, `namespace`, `schedule`, `passwordSecret.key` (default `password`). |
 
 ### Metrics (`metrics.*`)

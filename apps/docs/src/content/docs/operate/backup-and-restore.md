@@ -5,18 +5,20 @@ sidebar:
   order: 8
 ---
 
-To recover an Orchard instance after you lose a machine, you need more than database backups. This page lists what to keep and how to bring back the control plane.
+To recover an Orchard instance after you lose a machine, you need more than database backups. Orchard keeps its own records in a control-plane database, your apps keep their data in their own databases and volumes, and the settings that tie them together live in a values file. This page lists where each part lives, how to protect it, and how to bring back the control plane.
 
 ## What to back up
 
-| Data                       | Where it lives                                                                                                         | How to protect it                                                                                                                  |
-| -------------------------- | ---------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| Settings and secrets       | `/etc/orchard/values.yaml` on an installer host. On a Helm install, your values file and the `orchard-secrets` Secret. | Copy them somewhere safe, off the machine. They contain secrets, so protect the copy.                                              |
-| Control-plane database     | The `orchard-db` CloudNativePG cluster in the `orchard` namespace.                                                     | Turn on backups. Refer to [Back up the control-plane database](/operate/production/#5-back-up-the-control-plane-database).         |
-| App databases              | Each database's own cluster.                                                                                           | Orchard backs them up to object storage. To survive the loss of a machine, use [S3 storage on another machine](/operate/storage/). |
-| App volumes                | PersistentVolumeClaims in each project's namespace.                                                                    | Orchard does not back up app volumes. Back up the data from inside the app.                                                        |
-| Uploads and build contexts | Object storage.                                                                                                        | Use your storage provider's replication or versioning.                                                                             |
-| Built images               | The container registry. On an installer host, this is zot on the server.                                               | Not backed up. A rebuild from the repository recreates an image.                                                                   |
+| Data                       | Where it lives                                                                                                         | How to protect it                                                                                                                          |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Settings and secrets       | `/etc/orchard/values.yaml` on an installer host. On a Helm install, your values file and the `orchard-secrets` Secret. | Copy them somewhere safe, off the machine. They contain secrets, so protect the copy.                                                      |
+| Control-plane database     | The `orchard-db` CloudNativePG cluster in the `orchard` namespace.                                                     | Off by default. Turn on backups. Refer to [Back up the control-plane database](/operate/production/#5-back-up-the-control-plane-database). |
+| App databases              | Each database's own cluster.                                                                                           | Orchard backs them up to object storage. To survive the loss of a machine, use [S3 storage on another machine](/operate/storage/).         |
+| App volumes                | PersistentVolumeClaims in each project's namespace.                                                                    | Orchard does not back up app volumes. Back up the data from inside the app.                                                                |
+| Uploads and build contexts | Object storage.                                                                                                        | Use your storage provider's replication or versioning.                                                                                     |
+| Built images               | The container registry. On an installer host, this is zot on the server.                                               | Not backed up. A rebuild from the repository recreates an image.                                                                           |
+
+Continuous backups of the control-plane database are off by default, and the installer does not turn them on. A new installer host writes a daily dump of this database to the object store on the same machine, which does not survive the loss of that machine.
 
 :::caution
 Keep `SECRETS_ENCRYPTION_KEY`. Without the original key, Orchard cannot read the secrets stored in the control-plane database, even after a successful restore.
@@ -26,8 +28,8 @@ Keep `SECRETS_ENCRYPTION_KEY`. Without the original key, Orchard cannot read the
 
 The chart always creates the control-plane database empty. To restore it, recover the backup into a separate cluster, and then load it into the new instance.
 
-:::note
-Orchard has not tested this procedure end to end. Try it on a spare machine before you rely on it.
+:::caution[Untested procedure]
+Orchard has not tested this procedure end to end. Run it on a spare machine before you rely on it, and repeat the test after major upgrades.
 :::
 
 1. Install Orchard on the new machine with your saved settings. On an installer host, copy your saved file to `/etc/orchard/values.yaml` first, with mode `0600`, and then run the installer. On a Helm install, recreate the `orchard-secrets` Secret, and install with your values file. Keep the same dashboard domain. Do not claim the instance.
@@ -68,7 +70,6 @@ The control-plane database holds Orchard's records. It does not hold the workloa
 
 ## Related resources
 
-- [Go to production](/operate/production/)
-- [Upgrade Orchard](/operate/upgrades/)
-- [Add S3 storage](/operate/storage/)
-- [Schedule database dumps](/operate/database-dumps/)
+- [Add S3 storage](/operate/storage/) - Keep database backups and uploads off the machine.
+- [Schedule database dumps](/operate/database-dumps/) - Run `pg_dump` on a schedule and upload the result to S3.
+- [Upgrade Orchard](/operate/upgrades/) - Upgrade an instance, and take a backup first.

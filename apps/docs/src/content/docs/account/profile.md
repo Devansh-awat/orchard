@@ -5,7 +5,7 @@ sidebar:
   order: 1
 ---
 
-To change how you appear in Orchard, update your profile. Your profile belongs to your account, so the same profile appears in every organization you belong to.
+Your profile is how other people see you in Orchard: your name, your username, and your photo. The profile belongs to your account instead of an organization, so a change here appears in every organization you belong to.
 
 ## Change your name or username
 
@@ -16,7 +16,7 @@ To change how you appear in Orchard, update your profile. Your profile belongs t
 
 Orchard uses your username in URLs and mentions.
 
-You can also run `orchard user profile update`. For the available flags, refer to the [CLI reference](/reference/cli/).
+You can also run `orchard user profile update`. The [CLI reference](/reference/cli/#user) lists its flags.
 
 ## Change your profile photo
 
@@ -32,6 +32,5 @@ If your email address has a picture on Libravatar or Gravatar, Orchard imports a
 
 ## Related resources
 
-- [Set your preferences](/account/preferences/)
-- [Manage sign-in and sessions](/account/security/)
-- [Manage API tokens](/account/tokens/)
+- [Set your preferences](/account/preferences/) - Change the theme, typeface, motion, and text size of the dashboard.
+- [Manage sign-in and sessions](/account/security/) - Add passkeys and sign out devices that you no longer use.
