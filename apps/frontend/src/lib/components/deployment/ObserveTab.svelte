@@ -445,6 +445,7 @@
 					{demo}
 					{hasIngress}
 					sharedHttp={!!capabilities?.httpMetricsShared}
+					httpRecorded={demo || capabilities?.httpMetrics !== false}
 				/>
 			{:else if view === 'logs'}
 				<LogsView

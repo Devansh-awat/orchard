@@ -48,7 +48,8 @@
 		active,
 		demo,
 		hasIngress,
-		sharedHttp
+		sharedHttp,
+		httpRecorded = true
 	}: {
 		metrics: MetricsState;
 		runtimeLabel?: string;
@@ -58,6 +59,7 @@
 		demo: boolean;
 		hasIngress: boolean;
 		sharedHttp: boolean;
+		httpRecorded?: boolean;
 	} = $props();
 
 	const MIB = 1024 * 1024;
@@ -240,7 +242,12 @@
 	const memTotal = $derived(memPod ? memPod * pods : null);
 
 	const source = $derived(
-		metrics.http.source ? (SOURCES[metrics.http.source] ?? metrics.http.source) : null
+		httpRecorded && metrics.http.source
+			? (SOURCES[metrics.http.source] ?? metrics.http.source)
+			: null
+	);
+	const unrecorded = $derived(
+		httpRecorded ? null : "The ingress controller hasn't recorded requests for this app"
 	);
 
 	const statusSeries = $derived<ChartSeries[]>(
@@ -796,7 +803,7 @@
 			<Disclosure
 				title="Traffic and errors"
 				size="lg"
-				note={source ? `Measured at ${source}` : undefined}
+				note={source ? `Measured at ${source}` : httpRecorded ? undefined : 'Not measured'}
 				bind:open={open.traffic}
 			>
 				<div class="grid">
@@ -819,7 +826,7 @@
 						events={metrics.events}
 						findings={findings.req}
 						bands={incidents}
-						empty="No requests reached this app in this range"
+						empty={unrecorded ?? 'No requests reached this app in this range'}
 						onZoom={(a, b) => metrics.zoom(a, b)}
 						note={sharedHttp ? shared : undefined}
 					/>
@@ -852,7 +859,7 @@
 						events={metrics.events}
 						findings={findings.err}
 						bands={incidents}
-						empty="No requests, so no error rate"
+						empty={unrecorded ?? 'No requests, so no error rate'}
 						zeroIsData
 						onZoom={(a, b) => metrics.zoom(a, b)}
 					/>
@@ -876,7 +883,7 @@
 						events={metrics.events}
 						findings={findings.lat}
 						bands={incidents}
-						empty="No requests to time in this range"
+						empty={unrecorded ?? 'No requests to time in this range'}
 						onZoom={(a, b) => metrics.zoom(a, b)}
 					/>
 				</div>
@@ -886,14 +893,14 @@
 						'Average response time of each domain and path over this range.',
 						slowest,
 						ms,
-						'No requests to time in this range'
+						unrecorded ?? 'No requests to time in this range'
 					)}
 					{@render rank(
 						'Busiest routes',
 						'Requests per second to each domain and path over this range.',
 						busiest,
 						rate,
-						'No requests reached this app in this range'
+						unrecorded ?? 'No requests reached this app in this range'
 					)}
 					{@render rank(
 						'Routes throwing errors',
