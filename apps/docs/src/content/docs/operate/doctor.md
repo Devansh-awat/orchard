@@ -39,10 +39,10 @@ Each section names the setting and the exact fix. For why the setting matters, r
 
 A NetworkPolicy only works when the CNI enforces it. The doctor looks for Cilium, Calico, Antrea, kube-router, Weave Net and Canal by their custom resources and daemonsets, and checks that the agent runs on every node.
 
-- `warn`: the agent is not ready on every node, or only Flannel was found.
+- `warn`: the agent is not ready on every node, only Flannel was found, or kube-router runs next to another enforcer (another CNI from the list, or a k3s or RKE2 node).
 - `unknown`: nothing recognizable was found. k3s and RKE2 embed a policy controller that is invisible here, and managed clusters (EKS, GKE Dataplane V2, AKS) hide theirs. Run the self-test to settle it.
 
-Fix: install Cilium or Calico, or enable your provider's network policy add-on. Detection only shows the CNI is installed. The self-test proves enforcement.
+Fix: install Cilium or Calico, or enable your provider's network policy add-on. On Flannel, set `networkPolicy.enforcer.enabled=true`. For more information, refer to [Enforce network policies on Flannel](/operate/tenancy-and-isolation/#enforce-network-policies-on-flannel). With two enforcers, turn one off. Detection only shows the CNI is installed. The self-test proves enforcement.
 
 ### `default-deny-coverage`
 

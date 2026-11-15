@@ -30,7 +30,7 @@ Orchard cannot do these for you. If one is missing, the matching guarantee does 
 
 | Requirement                          | Setting                                                                                                                                                                                                   | Why                                                                                                                                |
 | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| A CNI that enforces NetworkPolicy    | Cilium, Calico, Antrea or kube-router. Plain flannel does not.                                                                                                                                            | Every network control is a NetworkPolicy. To test it, try to reach a pod in another tenant namespace.                              |
+| A CNI that enforces NetworkPolicy    | Cilium, Calico, Antrea or kube-router. Plain Flannel does not. On Flannel, refer to [Enforce network policies on Flannel](#enforce-network-policies-on-flannel).                                          | Every network control is a NetworkPolicy. To test it, try to reach a pod in another tenant namespace.                              |
 | A firewall for node ports            | Block `10250`, `6443`, `2379`, `2380`, `22` and `9100` from the internet and from tenant networks.                                                                                                        | Orchard keeps tenants away from these addresses. The firewall closes them for everyone else.                                       |
 | Public load balancer addresses       | `tenant.extraDenyCidrs` (`PLATFORM_EXTRA_DENY_CIDRS`), a comma-separated list. Include the service CIDR if nodes do not report it.                                                                        | Orchard finds node, pod and API server addresses itself. It cannot find a load balancer that is not one.                           |
 | Ingress controller namespace         | `tenant.ingressNamespaces` (`TENANT_INGRESS_NAMESPACES`), if the controller is not in `network` or `orchard`.                                                                                             | Tenant ingress is default-deny. A wrong value stops sites and certificate issuing.                                                 |
@@ -53,6 +53,30 @@ Orchard cannot do these for you. If one is missing, the matching guarantee does 
 If you use Cilium, Orchard adds `host`, `remote-node` and `kube-apiserver` denies to tenant namespaces and to builder, sandbox and scan namespaces on its own. Do not set `TENANT_DENY_ENTITIES=none` unless your ingress controller uses host networking and your apps call their own hostnames. Do not set `networkPolicy.egressDeny.enabled: false`.
 
 Do not apply `infra/k8s/orchard-metrics/30-network-policies.yaml` on a shared cluster. It lets every namespace query the metrics store. The chart's control-plane policies replace it.
+
+## Enforce network policies on Flannel
+
+NetworkPolicy is a standard Kubernetes object, but the API server only stores it. The CNI plugin enforces it. Flannel, the default CNI on Talos and on several other distributions, does not enforce NetworkPolicy, so on a Flannel cluster every tenant policy has no effect. k3s also uses Flannel, but it embeds the kube-router network policy controller next to it, so k3s enforces policies unless you start it with `--disable-network-policy`.
+
+To enforce policies on a Flannel cluster, add the following to your values file and run `helm upgrade`:
+
+```yaml
+networkPolicy:
+  enforcer:
+    enabled: true
+```
+
+The chart runs kube-router on every node in policy-only mode, the same controller that k3s embeds. kube-router writes the policy rules into the node firewall. It does not route pod traffic, proxy Services or write a CNI configuration, so Flannel keeps the pod network. The `kube-router` DaemonSet runs in the `orchard-netpol` namespace, which allows privileged pods.
+
+Do not turn on the enforcer on a cluster that already enforces NetworkPolicy, such as one with Cilium, Calico, Antrea or Canal, or a k3s cluster with its built-in controller. Two controllers would write rules for the same policies. The `cni-enforcement` check in `orchard doctor` warns when it finds kube-router next to another enforcer.
+
+When the `kube-router` pods are ready on every node, run the isolation self-test to confirm that the policies hold:
+
+```sh
+orchard doctor --selftest
+```
+
+For what the self-test sends and how to read the result, refer to [The isolation self-test](/operate/doctor/#the-isolation-self-test).
 
 ## What you can choose
 
