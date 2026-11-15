@@ -32,7 +32,7 @@ var (
 	osvBuildKit    = []osvPackage{{ecosystem: "Go", name: "github.com/moby/buildkit"}}
 	osvVictoria    = []osvPackage{{ecosystem: "Go", name: "github.com/VictoriaMetrics/VictoriaMetrics"}}
 	osvAWSCLI      = []osvPackage{{ecosystem: "GIT", name: "https://github.com/aws/aws-cli"}}
-	osvZot         = []osvPackage{{ecosystem: "Go", name: "zotregistry.dev/zot"}, {ecosystem: "Go", name: "zotregistry.dev/zot", majorSuffix: true}}
+	osvZot         = []osvPackage{{ecosystem: "Go", name: "zotregistry.dev/zot", majorSuffix: true}}
 	osvCloudflared = []osvPackage{{ecosystem: "GIT", name: "https://github.com/cloudflare/cloudflared"}}
 )
 

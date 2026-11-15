@@ -303,6 +303,24 @@ func TestOSVQueriesUseTheModuleForTheMajorVersion(t *testing.T) {
 	}
 }
 
+func TestZotAdvisoriesComeFromItsV2Module(t *testing.T) {
+	osv := newFakeOSV(t, map[string][]string{
+		"zotregistry.dev/zot@2.1.23":    {"GO-2024-2979"},
+		"zotregistry.dev/zot/v2@2.1.14": {"GHSA-85jx-fm8m-x8c6"},
+	})
+	gate, _ := gateWithOSV(osv.server.URL)
+	current := imageCandidate(mustTag(t, "v2.1.23"))
+	d := gate.plan(osvZot, current, candidatesOf(t, "v2.1.24"), nil, publishedOn(nil))
+	if len(d.unfixed) != 0 || d.moves(current) {
+		t.Errorf("unfixed %v target %s", d.unfixed, d.target.tag.raw)
+	}
+	for _, q := range osv.queries {
+		if q.Package.Name != "zotregistry.dev/zot/v2" {
+			t.Errorf("query %+v", q)
+		}
+	}
+}
+
 func TestDockerHubAndQuayPushTimes(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
