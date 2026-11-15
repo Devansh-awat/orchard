@@ -107,9 +107,9 @@ Copyright (c) 2021 Samuel Gratzl
 The rest of LICENSE is word for word the text printed under @astrojs/starlight 0.41.9.
 
 ================================================================================
-astro 7.3.8
+astro 7.4.12
 Project: https://github.com/withastro/astro
-Source for this version: https://registry.npmjs.org/astro/-/astro-7.3.8.tgz
+Source for this version: https://registry.npmjs.org/astro/-/astro-7.4.12.tgz
 License: MIT
 
 MIT License

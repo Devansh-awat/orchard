@@ -4012,10 +4012,10 @@ Copyright (c) 2024 Colin McDonnell
 The rest of LICENSE is word for word the text printed under @astrojs/starlight 0.41.9.
 
 ================================================================================
-@sveltejs/kit 2.70.3
+@sveltejs/kit 2.70.4
 Ships in: Web app, Website
 Project: https://github.com/sveltejs/kit
-Source for this version: https://registry.npmjs.org/@sveltejs/kit/-/kit-2.70.3.tgz
+Source for this version: https://registry.npmjs.org/@sveltejs/kit/-/kit-2.70.4.tgz
 License: MIT
 
 Copyright (c) 2020 [these people](https://github.com/sveltejs/kit/graphs/contributors)
@@ -5082,10 +5082,10 @@ No license file ships with this package. It declares MIT in its package.json.
 Copyright Mark Cavage
 
 ================================================================================
-astro 7.3.8
+astro 7.4.12
 Ships in: Docs
 Project: https://github.com/withastro/astro
-Source for this version: https://registry.npmjs.org/astro/-/astro-7.3.8.tgz
+Source for this version: https://registry.npmjs.org/astro/-/astro-7.4.12.tgz
 License: MIT
 
 MIT License
@@ -15160,10 +15160,10 @@ Copyright © 2010-2025 three.js authors
 The rest of LICENSE is word for word the text printed under node-releases 2.0.54.
 
 ================================================================================
-tinyexec 1.3.0
+tinyexec 1.3.1
 Ships in: API server
 Project: https://github.com/tinylibs/tinyexec
-Source for this version: https://registry.npmjs.org/tinyexec/-/tinyexec-1.3.0.tgz
+Source for this version: https://registry.npmjs.org/tinyexec/-/tinyexec-1.3.1.tgz
 License: MIT
 
 Copyright (c) 2024 Tinylibs

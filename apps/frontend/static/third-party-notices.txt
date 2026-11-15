@@ -113,9 +113,9 @@ Copyright (c) 2020 Matthew Miller
 The rest of LICENSE.md is word for word the text printed under @floating-ui/core 1.8.0.
 
 ================================================================================
-@sveltejs/kit 2.70.3
+@sveltejs/kit 2.70.4
 Project: https://github.com/sveltejs/kit
-Source for this version: https://registry.npmjs.org/@sveltejs/kit/-/kit-2.70.3.tgz
+Source for this version: https://registry.npmjs.org/@sveltejs/kit/-/kit-2.70.4.tgz
 License: MIT
 
 Copyright (c) 2020 [these people](https://github.com/sveltejs/kit/graphs/contributors)
@@ -558,7 +558,7 @@ Source for this version: https://registry.npmjs.org/devalue/-/devalue-5.9.4.tgz
 License: MIT
 
 Copyright (c) 2018-19 [these people](https://github.com/rich-harris/devalue/graphs/contributors)
-The rest of LICENSE is word for word the text printed under @sveltejs/kit 2.70.3.
+The rest of LICENSE is word for word the text printed under @sveltejs/kit 2.70.4.
 
 ================================================================================
 Devicon
@@ -1320,7 +1320,7 @@ Source for this version: https://registry.npmjs.org/svelte/-/svelte-5.57.0.tgz
 License: MIT
 
 Copyright (c) 2016-2025 [Svelte Contributors](https://github.com/sveltejs/svelte/graphs/contributors)
-The rest of LICENSE.md is word for word the text printed under @sveltejs/kit 2.70.3.
+The rest of LICENSE.md is word for word the text printed under @sveltejs/kit 2.70.4.
 
 ================================================================================
 tabbable 6.3.0
