@@ -165,8 +165,8 @@
 				{#if linearOpen && !linearOn}
 					<div class="form">
 						<p class="muted">
-							Create one in Linear under Settings, Security and access, Personal API keys. Read
-							access is enough.
+							Create one in Linear under Settings, Account, Security & Access, Personal API keys.
+							Read access is enough.
 						</p>
 						<div class="form-row">
 							<div class="grow">
