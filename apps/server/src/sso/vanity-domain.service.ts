@@ -47,7 +47,7 @@ export class VanityDomainService {
           "This instance has no vanity domain (BASE_DOMAIN), so organization subdomains aren't available."
         );
       }
-      if (!/^[a-z0-9]([a-z0-9-]{1,48}[a-z0-9])?$/.test(normalized)) {
+      if (!/^[a-z0-9][a-z0-9-]{1,48}[a-z0-9]$/.test(normalized)) {
         throw new BadRequestException(
           "Subdomain must be 3 to 50 letters, digits or hyphens, and can't start or end with a hyphen"
         );
