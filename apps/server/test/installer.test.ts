@@ -33,7 +33,7 @@ source "${installer}"
 set +e
 step() { :; }
 HTTP_SUFFIX= HTTPS_SUFFIX= USE_TLS=true INGRESS_MODE=public CERT_ISSUER=letsencrypt
-HTTP_PORT=80 HTTPS_PORT=443 IMAGE_TAG= IMAGE_PULL_POLICY=Always
+HTTP_PORT=80 HTTPS_PORT=443 IMAGE_TAG= IMAGE_PULL_POLICY=
 ORCHARD_APP_DOMAIN=apps.example.com ORCHARD_DOMAIN=orchard.example.com
 ORCHARD_MCP_DOMAIN=mcp.example.com MAX_BUILDS=2 DB_DEFAULT_MEMORY_MB=1024 APP_DEFAULT_MEMORY_MB=1024 ARCH=amd64
 REGISTRY_HOST=registry.local REGISTRY_PORT=5000 REGISTRY_USER=orchard REGISTRY_PASSWORD=sekret
@@ -545,7 +545,7 @@ test(
 
       const output = box.run('load_previous_answers; write_values');
 
-      assert.equal(read('.hostDefaults'), '3');
+      assert.equal(read('.hostDefaults'), '4');
       assert.equal(env('CNPG_OPERATOR_NAMESPACE'), 'cnpg-system');
       assert.equal(read('.logs.retention'), '14d');
       assert.equal(read('.trivy.enabled'), 'true');
@@ -2479,28 +2479,88 @@ test(
       box.run(`mkdir -p "${box.state}"; write_values`);
       assert.equal(read('.server.image.tag // ""'), '');
       box.run(
-        `yq -i '.hostDefaults = 2 | .server.image.tag = "latest" | .frontend.image.tag = "latest"' "$VALUES_FILE"`
+        `yq -i '.hostDefaults = 2 | .image.pullPolicy = "Always" | .server.image.tag = "latest" | .frontend.image.tag = "latest"' "$VALUES_FILE"`
       );
 
-      const output = box.run('load_previous_answers; settle_image_tag; write_values');
+      const settle = 'load_previous_answers; settle_image_tag; settle_pull_policy; write_values';
+      const output = box.run(settle);
       assert.match(output, /server\.image\.tag: removed/);
+      assert.match(output, /image\.pullPolicy: removed/);
       assert.equal(read('.server.image.tag // ""'), '');
       assert.equal(read('.frontend.image.tag // ""'), '');
-      assert.equal(read('.hostDefaults'), '3');
+      assert.equal(read('.image.pullPolicy // ""'), '');
+      assert.equal(read('.hostDefaults'), '4');
 
       box.run(
         `yq -i '.server.image.tag = "latest" | .frontend.image.tag = "latest"' "$VALUES_FILE"`
       );
-      box.run('load_previous_answers; settle_image_tag; write_values');
+      box.run(settle);
       assert.equal(read('.server.image.tag'), 'latest', 'latest chosen after the change stays');
+      assert.equal(read('.image.pullPolicy'), 'Always', 'latest pulls on every start');
 
-      box.run('ORCHARD_VERSION=2.85.0; load_previous_answers; settle_image_tag; write_values');
+      box.run(`ORCHARD_VERSION=2.85.0; ${settle}`);
       assert.equal(read('.server.image.tag // ""'), '', 'a pinned chart version pins the images');
     } finally {
       box.cleanup();
     }
   }
 );
+
+test('the pull policy follows the image tag unless one is given', () => {
+  const box = sandbox();
+  try {
+    const settle = (setup: string, round = '3') =>
+      box
+        .run(
+          `mkdir -p "$STATE_DIR"; touch "$VALUES_FILE"; yq() { echo ${round}; }; ${setup}; settle_pull_policy; echo "policy=$IMAGE_PULL_POLICY"`
+        )
+        .trim();
+    assert.equal(settle(':'), 'policy=', 'pinned images keep the chart default');
+    assert.equal(settle('IMAGE_TAG=latest'), 'policy=Always');
+    assert.equal(
+      settle('PREVIOUS_INSTALL=true IMAGE_PULL_POLICY=Always'),
+      'policy=',
+      'the old installer default goes'
+    );
+    assert.equal(
+      settle('PREVIOUS_INSTALL=true IMAGE_PULL_POLICY=Always IMAGE_TAG=latest'),
+      'policy=Always'
+    );
+    assert.equal(
+      settle('PREVIOUS_INSTALL=true IMAGE_PULL_POLICY=Always', '4'),
+      'policy=Always',
+      'Always set after the change stays'
+    );
+    assert.equal(
+      settle('PREVIOUS_INSTALL=true IMAGE_PULL_POLICY=IfNotPresent IMAGE_TAG=latest'),
+      'policy=IfNotPresent',
+      'a saved policy stays'
+    );
+    assert.equal(
+      settle('FLAGS_GIVEN=" --image-pull-policy " PREVIOUS_INSTALL=true IMAGE_PULL_POLICY=Always'),
+      'policy=Always',
+      'an answer wins'
+    );
+  } finally {
+    box.cleanup();
+  }
+
+  const rendered = (setup: string) => {
+    const box = sandbox();
+    try {
+      box.run(`mkdir -p "${box.state}"; ${setup}; settle_pull_policy; write_values`);
+      return readFileSync(join(box.state, 'values.yaml'), 'utf8');
+    } finally {
+      box.cleanup();
+    }
+  };
+  assert.doesNotMatch(rendered(':'), /pullPolicy/);
+  assert.match(rendered('IMAGE_TAG=latest'), /^image:\n(  .*\n)*  pullPolicy: Always$/m);
+  assert.match(
+    rendered('FLAGS_GIVEN=" --image-pull-policy "; IMAGE_PULL_POLICY=Never'),
+    /^  pullPolicy: Never$/m
+  );
+});
 
 test('a release version is refused as an image tag', () => {
   const box = sandbox();

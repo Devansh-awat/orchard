@@ -94,10 +94,10 @@ PREV_PUBLIC_IP=''
 PREV_EMAIL=''
 PREV_UPDATES=''
 
-HOST_DEFAULTS_VERSION=3
+HOST_DEFAULTS_VERSION=4
 
 IMAGE_TAG=${ORCHARD_IMAGE_TAG:-}
-IMAGE_PULL_POLICY=${ORCHARD_IMAGE_PULL_POLICY:-Always}
+IMAGE_PULL_POLICY=${ORCHARD_IMAGE_PULL_POLICY:-}
 
 START_TS=$(date +%s)
 IS_TTY=false
@@ -358,6 +358,7 @@ usage() {
     --image-tag <tag>            ORCHARD_IMAGE_TAG      tag for server and frontend, such as latest.
                                                         Unset, they run the chart's release versions
     --image-pull-policy <policy> ORCHARD_IMAGE_PULL_POLICY
+                                                        Unset, Always for latest and IfNotPresent otherwise
     --image-registry <host>      ORCHARD_IMAGE_REGISTRY
     --image-repository <path>    ORCHARD_IMAGE_REPOSITORY
 
@@ -589,6 +590,17 @@ settle_image_tag() {
     fi
   fi
   if [ -z "$IMAGE_TAG" ] && [ -d "$CHART_REF" ]; then IMAGE_TAG=latest; fi
+}
+
+settle_pull_policy() {
+  local round
+  if answer_given --image-pull-policy ORCHARD_IMAGE_PULL_POLICY; then return 0; fi
+  if [ "$IMAGE_PULL_POLICY" = Always ] && [ "$PREVIOUS_INSTALL" = true ]; then
+    round=$(reuse_value '.hostDefaults')
+    case "$round" in ''|*[!0-9]*) round=0 ;; esac
+    if [ "$round" -lt 4 ]; then IMAGE_PULL_POLICY=''; fi
+  fi
+  if [ -z "$IMAGE_PULL_POLICY" ] && [ "$IMAGE_TAG" = latest ]; then IMAGE_PULL_POLICY=Always; fi
 }
 
 check_image_tag() {
@@ -3767,6 +3779,12 @@ clientIp:
     - { name: INSTANCE_RESOURCE_LIMITS_CHOICE, value: \"$ORCHARD_LIMITS\" }"
   fi
 
+  local pull_policy_line=""
+  if [ -n "$IMAGE_PULL_POLICY" ]; then
+    pull_policy_line="
+  pullPolicy: $IMAGE_PULL_POLICY"
+  fi
+
   local image_block=""
   if [ -n "$IMAGE_TAG" ]; then
     image_block="  image:
@@ -3782,8 +3800,7 @@ hostDefaults: $HOST_DEFAULTS_VERSION
 
 image:
   registry: $IMAGE_REGISTRY
-  repository: $IMAGE_REPOSITORY
-  pullPolicy: $IMAGE_PULL_POLICY
+  repository: $IMAGE_REPOSITORY$pull_policy_line
 
 signupMode: invite_only
 datadog:
@@ -4476,6 +4493,7 @@ main() {
   parse_args "$@"
   load_previous_answers
   settle_image_tag
+  settle_pull_policy
   check_image_tag
 
   if [ "$ASSUME_YES" != true ] && ! open_prompt_fd; then
