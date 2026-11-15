@@ -321,6 +321,7 @@ export default defineConfig({
                 { label: 'Finish setup', slug: 'operate/finishing-setup' },
                 { label: 'Add S3 storage', slug: 'operate/storage' },
                 { label: 'Resource limits', slug: 'operate/resource-limits' },
+                { label: 'Small servers', slug: 'operate/small-servers' },
                 { label: 'Wildcard certificates', slug: 'operate/wildcard-certificates' },
                 { label: 'Going to production', slug: 'operate/production' },
                 { label: 'Compatibility', slug: 'operate/compatibility' }
@@ -352,6 +353,7 @@ export default defineConfig({
                 { label: 'Architecture', slug: 'operate/architecture' },
                 { label: 'Nodes and pools', slug: 'operate/nodes' },
                 { label: 'Upgrades', slug: 'operate/upgrades' },
+                { label: 'Free disk space', slug: 'operate/disk-space' },
                 { label: 'Scale the control plane', slug: 'operate/scale-control-plane' },
                 { label: 'Size older workloads', slug: 'operate/backfill' },
                 { label: 'Run Greenhouse', slug: 'operate/greenhouse' }
