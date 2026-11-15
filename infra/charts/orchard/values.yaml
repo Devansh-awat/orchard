@@ -8,7 +8,8 @@ createNamespace: true
 image:
   registry: ghcr.io
   repository: hackclub/orchard
-  # tags default to .Chart.AppVersion; override per-component to pin a sha
+  # each component tag is the version of its last release; an empty tag falls
+  # back to .Chart.AppVersion
   pullPolicy: IfNotPresent
   pullSecrets: []
 
@@ -36,7 +37,7 @@ frontend:
   replicas: 2
   image:
     name: frontend
-    tag: "" # falls back to .Chart.AppVersion
+    tag: "1.87.0"
   service:
     port: 3000
   resources:
@@ -82,7 +83,7 @@ server:
   replicas: 2
   image:
     name: server
-    tag: ""
+    tag: "2.95.4"
   service:
     port: 3001
   resources:
@@ -324,7 +325,7 @@ mcp:
   replicas: 1
   image:
     name: mcp
-    tag: "latest"
+    tag: "2.95.4"
   service:
     port: 3100
   resources:
@@ -778,7 +779,7 @@ fcBuilder:
   replicas: 2
   image:
     name: fc-builder
-    tag: "latest"
+    tag: "1.1.0"
     repository: ""
   # Shared secret for the server -> fc-builder API. Empty keeps the existing
   # one, or mints one on first install.
@@ -845,7 +846,7 @@ r2Proxy:
   replicas: 2
   image:
     name: r2-proxy
-    tag: "latest"
+    tag: "0.8.0"
     # Falls back to the global image.repository. Set this to keep r2-proxy on a
     # registry path the other components have already moved off.
     repository: ""

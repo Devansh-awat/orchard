@@ -40,6 +40,8 @@ jobs:
       paths_released: ${{ steps.rp1.outputs.paths_released || steps.rp2.outputs.paths_released || steps.rp3.outputs.paths_released }}
       graft_sdk: ${{ steps.rp1.outputs['packages/graft-sdk--release_created'] || steps.rp2.outputs['packages/graft-sdk--release_created'] || steps.rp3.outputs['packages/graft-sdk--release_created'] }}
       graft_ui: ${{ steps.rp1.outputs['packages/graft-ui--release_created'] || steps.rp2.outputs['packages/graft-ui--release_created'] || steps.rp3.outputs['packages/graft-ui--release_created'] }}
+      prs_created: ${{ steps.rp1.outputs.prs_created || steps.rp2.outputs.prs_created || steps.rp3.outputs.prs_created }}
+      pr: ${{ steps.rp1.outputs.pr || steps.rp2.outputs.pr || steps.rp3.outputs.pr }}
     steps:
       - uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
         id: app-token
@@ -438,6 +440,58 @@ jobs:
           publish packages/graft-sdk "$SDK_RELEASED"
           publish packages/graft-ui "$UI_RELEASED"
 
+  release-pr-chart:
+    needs: release-please
+    if: needs.release-please.outputs.prs_created == 'true'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: release-pr-chart
+      cancel-in-progress: false
+    permissions:
+      contents: read
+    steps:
+      - id: pr
+        env:
+          PR: ${{ needs.release-please.outputs.pr }}
+        run: |
+          branch=$(jq -r '.headBranchName // empty' <<<"$PR")
+          case "$branch" in
+            release-please--*) echo "branch=$branch" >> "$GITHUB_OUTPUT" ;;
+            *) echo "::error::$branch is not a release-please branch"; exit 1 ;;
+          esac
+      - uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
+        id: app-token
+        with:
+          app-id: 1090304
+          private-key: ${{ secrets.LEAFDBOT_PRIVATE_KEY }}
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ steps.pr.outputs.branch }}
+          token: ${{ steps.app-token.outputs.token }}
+      - name: Pin the release versions in the chart
+        env:
+          BRANCH: ${{ steps.pr.outputs.branch }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
+        run: |
+          set -euo pipefail
+          curl -fsSL -o "$RUNNER_TEMP/yq" \
+            https://github.com/mikefarah/yq/releases/download/v4.54.3/yq_linux_amd64
+          echo "129534601871538efe0ba4c5e62a34fb1d5f469bcb975c4fddeb467d82974973  $RUNNER_TEMP/yq" | sha256sum -c -
+          sudo install -m 0755 "$RUNNER_TEMP/yq" /usr/local/bin/yq
+
+          scripts/chart-versions.sh
+          if git diff --quiet -- infra/charts/orchard; then
+            echo "The chart already carries the release versions."
+            exit 0
+          fi
+          git diff -- infra/charts/orchard
+          user_id=$(gh api "/users/${APP_SLUG}[bot]" --jq .id)
+          git config user.name "${APP_SLUG}[bot]"
+          git config user.email "${user_id}+${APP_SLUG}[bot]@users.noreply.github.com"
+          git commit -am "chore(chart): pin the release versions"
+          git push origin "HEAD:refs/heads/$BRANCH"
+
   # Runs after the (possibly-skipped) image jobs as long as none FAILED.
   publish-chart:
     needs: [release-please, image-frontend, image-server, image-mcp, image-r2-proxy, image-fc-builder]
@@ -463,21 +517,11 @@ jobs:
           echo "129534601871538efe0ba4c5e62a34fb1d5f469bcb975c4fddeb467d82974973  $RUNNER_TEMP/yq" | sha256sum -c -
           sudo install -m 0755 "$RUNNER_TEMP/yq" /usr/local/bin/yq
 
-          M=.release-please-manifest.json
-          FRONTEND=$(jq -r '."apps/frontend"' "$M"); SERVER=$(jq -r '."apps/server"' "$M")
-          R2=$(jq -r '."apps/r2-proxy"' "$M")
-          FCB=$(jq -r '."apps/fc-builder"' "$M")
-          UMBRELLA=$(printf '%s\n' \
-            "$(jq -r '."apps/frontend"' "$M")" "$(jq -r '."apps/server"' "$M")" \
-            "$(jq -r '."apps/gateway"' "$M")" "$(jq -r '."apps/cli"' "$M")" \
-            "$(jq -r '."apps/r2-proxy"' "$M")" | sort -V | tail -1)
-
-          yq -i ".version = \"$UMBRELLA\" | .appVersion = \"$UMBRELLA\"" infra/charts/orchard/Chart.yaml
-          yq -i ".frontend.image.tag = \"$FRONTEND\"" infra/charts/orchard/values.yaml
-          yq -i ".server.image.tag   = \"$SERVER\""   infra/charts/orchard/values.yaml
-          yq -i ".mcp.image.tag      = \"$SERVER\""   infra/charts/orchard/values.yaml
-          yq -i ".r2Proxy.image.tag  = \"$R2\""       infra/charts/orchard/values.yaml
-          [ "$FCB" != "0.0.0" ] && yq -i ".fcBuilder.image.tag = \"$FCB\"" infra/charts/orchard/values.yaml
+          scripts/chart-versions.sh
+          if ! git diff --quiet -- infra/charts/orchard; then
+            echo "::warning::The chart on main did not carry the released versions, so this run pinned them. Check the release-pr-chart job of the release PR's last run."
+            git diff -- infra/charts/orchard
+          fi
 
           echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io -u ${{ github.actor }} --password-stdin
           helm package infra/charts/orchard -d dist

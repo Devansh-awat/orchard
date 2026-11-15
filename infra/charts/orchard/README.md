@@ -298,7 +298,7 @@ APM for the server. Off by default; turn it on if you run a Datadog agent.
 | `frontend.enabled` | `true` | Deploy the SvelteKit frontend. |
 | `frontend.replicas` | `2` | Replica count. Ignored when `frontend.autoscaling.enabled`. |
 | `frontend.image.name` | `frontend` | Image name suffix. |
-| `frontend.image.tag` | `""` | Tag override; empty falls back to `Chart.AppVersion`. Use `sha-<commit>` to pin. |
+| `frontend.image.tag` | the last frontend release | Empty falls back to `Chart.AppVersion`. Use `sha-<commit>` to pin a build. |
 | `frontend.service.port` | `3000` | ClusterIP Service port. |
 | `frontend.sourceUrl` | `""` | Where the dashboard's Source link points, as `PUBLIC_SOURCE_URL`. Empty means the upstream repository. |
 | `frontend.resources` | requests `50m/128Mi`, limits `1/1Gi` | Standard k8s resource block. |
@@ -314,7 +314,7 @@ APM for the server. Off by default; turn it on if you run a Datadog agent.
 | `server.enabled` | `true` | Deploy the NestJS server. |
 | `server.replicas` | `2` | Replica count. Ignored when `server.autoscaling.enabled`. |
 | `server.image.name` | `server` | Image name suffix. |
-| `server.image.tag` | `""` | Tag override; empty → `Chart.AppVersion`. |
+| `server.image.tag` | the last server release | Empty falls back to `Chart.AppVersion`. |
 | `server.service.port` | `3001` | ClusterIP Service port. |
 | `server.resources` | requests `100m/384Mi`, limits `2/2Gi` | Resource block. |
 | `server.autoscaling.enabled` | `false` | HPA on CPU. Needs metrics-server. When on, `replicas` is omitted from the Deployment. |
