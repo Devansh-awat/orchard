@@ -25,6 +25,7 @@ auditConfig:
     - GHSA-w5hq-g745-h8pq
     - GHSA-gcqx-w48m-w2h4
 overrides:
+  '@astrojs/markdown-satteri>satteri': 0.10.5
   '@peculiar/asn1-schema': 2.10.0
   '@grpc/grpc-js': ^1.14.5
   multer@2: ^2.5.0
