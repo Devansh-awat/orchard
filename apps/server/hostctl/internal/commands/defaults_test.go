@@ -179,3 +179,56 @@ func TestStoredObjectStorageState(t *testing.T) {
 		}
 	}
 }
+
+func TestHostDefaultsThirdRoundDropsTheInstallerLatestTags(t *testing.T) {
+	const installed = "hostDefaults: 2\nimage:\n  registry: ghcr.io\n  repository: hackclub/orchard\n  pullPolicy: Always\nserver:\n  image:\n    tag: latest\n  env:\n    - {name: CNPG_OPERATOR_NAMESPACE, value: cnpg-system}\nfrontend:\n  image:\n    tag: latest\n"
+	values := load(t, installed)
+	changes := applyHostDefaults(values, hostFacts{ReleaseChart: true})
+	if len(changes) != 1 || !strings.Contains(changes[0], "server.image.tag and frontend.image.tag removed") {
+		t.Fatalf("expected one note for both tags, got %v", changes)
+	}
+	for _, path := range []string{"server.image", "frontend.image"} {
+		if got := values.Get(path); got != nil {
+			t.Fatalf("%s should follow the chart, got %#v", path, got)
+		}
+	}
+	if values.Get("image.pullPolicy") != "Always" || values.Get(hostDefaultsPath) != hostDefaultsVersion {
+		t.Fatal("only the tags change")
+	}
+
+	if err := values.Put("server.image.tag", "latest"); err != nil {
+		t.Fatal(err)
+	}
+	if changes := applyHostDefaults(values, hostFacts{ReleaseChart: true}); changes != nil {
+		t.Fatalf("latest set after the round has to stick, got %v", changes)
+	}
+
+	for name, tc := range map[string]struct {
+		body  string
+		facts hostFacts
+	}{
+		"local chart": {installed, hostFacts{}},
+		"mirror":      {strings.Replace(installed, "registry: ghcr.io", "registry: registry.example.com", 1), hostFacts{ReleaseChart: true}},
+		"fork":        {strings.Replace(installed, "repository: hackclub/orchard", "repository: someone/orchard", 1), hostFacts{ReleaseChart: true}},
+	} {
+		values := load(t, tc.body)
+		applyHostDefaults(values, tc.facts)
+		if values.Get("server.image.tag") != "latest" || values.Get("frontend.image.tag") != "latest" {
+			t.Fatalf("%s: a chart or registry without release versions keeps latest", name)
+		}
+	}
+
+	pinned := load(t, "hostDefaults: 2\nserver:\n  image:\n    tag: e2e\n  env:\n    - {name: CNPG_OPERATOR_NAMESPACE, value: cnpg-system}\n")
+	if changes := applyHostDefaults(pinned, hostFacts{ReleaseChart: true}); changes != nil || pinned.Get("server.image.tag") != "e2e" {
+		t.Fatalf("a tag other than latest is someone's choice, got %v", changes)
+	}
+}
+
+func TestReleaseChart(t *testing.T) {
+	if !releaseChart("oci://ghcr.io/hackclub/orchard/charts/orchard") {
+		t.Fatal("the published chart carries release versions")
+	}
+	if releaseChart(t.TempDir()) {
+		t.Fatal("a chart directory from a checkout does not")
+	}
+}

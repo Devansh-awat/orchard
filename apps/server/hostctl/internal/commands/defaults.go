@@ -13,11 +13,14 @@ import (
 
 const (
 	hostDefaultsPath    = "hostDefaults"
-	hostDefaultsVersion = 2
+	hostDefaultsVersion = 3
 	smallBoxMemMB       = 7500
 
 	cnpgOperatorNamespaceEnv = "CNPG_OPERATOR_NAMESPACE"
 	installerCnpgNamespace   = "cnpg-system"
+
+	releaseImageRegistry   = "ghcr.io"
+	releaseImageRepository = "hackclub/orchard"
 )
 
 type storedState int
@@ -32,6 +35,7 @@ type hostFacts struct {
 	MemMB         int
 	DiskGB        int
 	ObjectStorage storedState
+	ReleaseChart  bool
 }
 
 func resources(cpuReq, memReq, cpuLim, memLim string) map[string]any {
@@ -91,8 +95,40 @@ func applyHostDefaults(values *cli.Values, facts hostFacts) []string {
 		values.SetEnv(serverEnvPath, cnpgOperatorNamespaceEnv, installerCnpgNamespace)
 		changes = append(changes, cnpgOperatorNamespaceEnv+" = "+installerCnpgNamespace+" (lets the database operator reach database pods)")
 	}
+	if round < 3 && facts.ReleaseChart {
+		changes = append(changes, dropLatestImageTags(values)...)
+	}
 	_ = values.Put(hostDefaultsPath, hostDefaultsVersion)
 	return changes
+}
+
+func dropLatestImageTags(values *cli.Values) []string {
+	if registry := stringAt(values, "image.registry"); registry != "" && registry != releaseImageRegistry {
+		return nil
+	}
+	if repository := stringAt(values, "image.repository"); repository != "" && repository != releaseImageRepository {
+		return nil
+	}
+	var dropped []string
+	for _, component := range []string{"server", "frontend"} {
+		if stringAt(values, component+".image.tag") != "latest" {
+			continue
+		}
+		values.Unset(component + ".image.tag")
+		if image, ok := values.Get(component + ".image").(map[string]any); ok && len(image) == 0 {
+			values.Unset(component + ".image")
+		}
+		dropped = append(dropped, component+".image.tag")
+	}
+	if len(dropped) == 0 {
+		return nil
+	}
+	return []string{strings.Join(dropped, " and ") + " removed (it was latest, so a pod restart could pull a release the chart doesn't match; the images now follow the chart version, which orchardctl update moves)"}
+}
+
+func releaseChart(ref string) bool {
+	info, err := os.Stat(ref)
+	return err != nil || !info.IsDir()
 }
 
 func applyFirstRound(values *cli.Values, facts hostFacts) []string {
@@ -303,7 +339,7 @@ func migrateValues(c *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	facts := hostFacts{MemMB: memoryMB(), DiskGB: freeDiskGB("/var/lib")}
+	facts := hostFacts{MemMB: memoryMB(), DiskGB: freeDiskGB("/var/lib"), ReleaseChart: releaseChart(c.Env.Chart)}
 	if defaultsRound(values) < 1 && values.Get("objectStorage.local.enabled") == nil && !objectStorageInValues(values) {
 		facts.ObjectStorage = storedObjectStorage(c, values)
 	}

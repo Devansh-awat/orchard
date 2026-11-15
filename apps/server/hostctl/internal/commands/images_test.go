@@ -299,3 +299,19 @@ func TestChartBuilderVersionsMatchTheServer(t *testing.T) {
 		}
 	}
 }
+
+func TestMovingImage(t *testing.T) {
+	for image, want := range map[string]bool{
+		"ghcr.io/hackclub/orchard/server:latest":            true,
+		"ghcr.io/hackclub/orchard/server":                   true,
+		"":                                                  true,
+		"ghcr.io/hackclub/orchard/server:2.95.4":            false,
+		"ghcr.io/hackclub/orchard/server:e2e":               false,
+		"ghcr.io/hackclub/orchard/server:latest@sha256:abc": false,
+		"localhost:5000/orchard/server":                     true,
+	} {
+		if got := movingImage(image); got != want {
+			t.Errorf("%q: expected %v, got %v", image, want, got)
+		}
+	}
+}

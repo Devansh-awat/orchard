@@ -178,11 +178,13 @@ anywhere, an S3 store on this server for database backups. Only keys missing fro
 the values file are filled in, apart from metrics.enabled and r2Proxy.enabled,
 which older installers wrote as false themselves. An install with the bundled
 zot registry but no builders.registryEgress entry for it gets one, since builds
-can't push without it. Each change is printed. A
-hostDefaults key records that this ran, so turning something back off sticks.
+can't push without it. The latest server and frontend tags that older
+installers wrote are removed, so those images follow the chart version. Each
+change is printed. A hostDefaults key records that this ran, so turning
+something back off sticks.
 
-Then helm upgrade --install with your values file, waits for each deployment to
-roll out, makes sure Traefik writes the JSON access log the log store reads,
+Then helm upgrade --install with your values file, restarts a deployment whose
+image tag is latest or missing, waits for each deployment to roll out, makes sure Traefik writes the JSON access log the log store reads,
 and refreshes the host commands. Extra arguments are passed through to helm.
 
 It also installs newer versions of what Orchard bundles without waiting on an
@@ -214,32 +216,12 @@ ORCHARD_ADDON_UPDATES=off in /etc/orchard/env.
 				return err
 			}
 
-			values, err := cli.LoadValues(c.Env.Values)
-			if err != nil {
-				// An unreadable values file is not a reason to skip the
-				// rollout: treat every tag as moving.
-				values = nil
-			}
-
 			for _, deploy := range []string{"server", "frontend", "mcp"} {
-				if _, err := c.KubectlOut("get", "deploy/"+deploy); err != nil {
+				image, err := c.KubectlOut("get", "deploy/"+deploy, "-o", "jsonpath={.spec.template.spec.containers[?(@.name==\""+deploy+"\")].image}")
+				if err != nil {
 					continue
 				}
-
-				// The installer pins tags to `latest`, so a new build reuses
-				// the same tag string. Helm sees an identical pod template,
-				// writes no new ReplicaSet, and nothing re-pulls: upgrade can
-				// report success while the old image keeps running. An
-				// unreadable tag counts as moving, because restarting a pinned
-				// deployment costs one rollout while missing an update leaves a
-				// fixed bug undeployed.
-				moving := true
-				if values != nil {
-					if tag, ok := values.Get(deploy + ".image.tag").(string); ok {
-						moving = tag == "" || tag == "latest"
-					}
-				}
-				if moving {
+				if movingImage(image) {
 					if err := c.Kubectl("rollout", "restart", "deploy/"+deploy); err != nil {
 						return err
 					}
@@ -267,6 +249,18 @@ ORCHARD_ADDON_UPDATES=off in /etc/orchard/env.
 			return nil
 		},
 	}
+}
+
+func movingImage(image string) bool {
+	image = strings.TrimSpace(image)
+	if image == "" {
+		return true
+	}
+	if strings.Contains(image, "@") {
+		return false
+	}
+	_, tag, ok := splitImage(image)
+	return !ok || tag == "latest"
 }
 
 func clientSideApply(c *cli.Context) []string {
