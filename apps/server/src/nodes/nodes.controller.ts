@@ -29,9 +29,10 @@ export class NodesController {
       notes?: string | null;
       cpuCapacity?: string | null;
       memoryCapacity?: string | null;
-    }
+    },
+    @Request() req
   ) {
-    return this.nodes.updateNode(id, body);
+    return this.nodes.updateNode(id, body, req?.user?.email ?? null);
   }
 
   @Patch('nodes/:id/taints')

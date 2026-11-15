@@ -349,7 +349,12 @@
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ schedulable: !node.schedulable })
 			});
-			if (!res.ok) throw new Error('Failed');
+			if (!res.ok) {
+				const err = await res.json().catch(() => ({}));
+				throw new Error(
+					err.message || (node.schedulable ? "Couldn't cordon node" : "Couldn't uncordon node")
+				);
+			}
 			await loadNodes();
 			if (selectedNode?.id === node.id) await refreshNode(node.id);
 		} catch (e) {

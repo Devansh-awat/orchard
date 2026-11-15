@@ -2,14 +2,18 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
-  ForbiddenException
+  ForbiddenException,
+  HttpException,
+  HttpStatus
 } from '@nestjs/common';
+import type * as k8s from '@kubernetes/client-node';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { KubernetesService } from '../kubernetes/kubernetes.service';
 import { AuthorizationService } from '../auth/authorization.service';
 import { InstanceSettingsService } from '../instance-settings/instance-settings.service';
 import { parseCpu, parseMemory } from '../kubernetes/quantity';
+import { k8sErrorMessage, k8sHttpException } from '../kubernetes/k8s-error';
 import { mapNodeToRow, NodeTaint } from './node-mapping';
 import { nodeTransitions, type NodeTransition } from './node-transitions';
 import type { PoolPlacement, PlacementOverride } from '../kubernetes/kubernetes.service';
@@ -235,18 +239,50 @@ export class NodesService {
       notes?: string | null;
       cpuCapacity?: string | null;
       memoryCapacity?: string | null;
-    }
+    },
+    actorEmail: string | null = null
   ) {
     const node = await this.prisma.node.findUnique({ where: { id } });
     if (!node) throw new NotFoundException('Node not found');
+    if (data.schedulable !== undefined) {
+      if (typeof data.schedulable !== 'boolean') {
+        throw new BadRequestException('schedulable must be a boolean');
+      }
+      await this.setSchedulable(node, data.schedulable, actorEmail);
+    }
     return this.prisma.node.update({
       where: { id },
       data: {
-        ...(data.schedulable !== undefined && { schedulable: data.schedulable }),
         ...(data.notes !== undefined && { notes: data.notes }),
         ...(data.cpuCapacity !== undefined && { cpuCapacity: data.cpuCapacity }),
         ...(data.memoryCapacity !== undefined && { memoryCapacity: data.memoryCapacity })
       }
+    });
+  }
+
+  private async setSchedulable(
+    node: { id: string; name: string },
+    schedulable: boolean,
+    actorEmail: string | null
+  ) {
+    const verb = schedulable ? 'uncordon' : 'cordon';
+    let patched: k8s.V1Node;
+    try {
+      patched = await this.k8s.patchNode(node.name, { spec: { unschedulable: !schedulable } });
+    } catch (error) {
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(
+        `Couldn't ${verb} ${node.name}: ${k8sErrorMessage(error)}`,
+        k8sHttpException(error)?.getStatus() ?? HttpStatus.BAD_GATEWAY
+      );
+    }
+    await this.upsertNodeRow(mapNodeToRow(patched));
+    void this.audit.log({
+      action: schedulable ? 'node.uncordoned' : 'node.cordoned',
+      actorEmail,
+      targetType: 'node',
+      targetId: node.id,
+      targetLabel: node.name
     });
   }
 
