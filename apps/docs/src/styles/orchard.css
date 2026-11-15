@@ -166,7 +166,7 @@ site-search dialog {
   box-shadow: var(--shadow-overlay);
 }
 
-starlight-menu-button button {
+.sl-menu-button {
   border: 1px solid var(--o-rule-strong);
   border-radius: 0.5rem;
   background: var(--o-canvas);
@@ -175,6 +175,7 @@ starlight-menu-button button {
 }
 
 .sidebar-pane {
+  margin: 0;
   background: var(--neutral-chrome);
   border: 0;
   scrollbar-width: thin;

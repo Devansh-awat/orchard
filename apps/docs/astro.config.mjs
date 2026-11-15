@@ -1,5 +1,6 @@
 import { defineConfig } from 'astro/config';
 import mdx from '@astrojs/mdx';
+import { unified } from '@astrojs/markdown-remark';
 import starlight from '@astrojs/starlight';
 import starlightOpenAPI, { openAPISidebarGroups } from 'starlight-openapi';
 import rehypeWrapTables from './src/lib/rehype-wrap-tables.mjs';
@@ -10,7 +11,8 @@ export default defineConfig({
     '/run/sandboxes': '/greenhouse/',
     '/operate/node-pools': '/operate/nodes/'
   },
-  markdown: { rehypePlugins: [rehypeWrapTables] },
+  markdown: { processor: unified({ rehypePlugins: [rehypeWrapTables] }) },
+  scopedStyleStrategy: 'where',
   server: { port: 5174, host: true },
   devToolbar: { enabled: false },
   integrations: [

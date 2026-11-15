@@ -2516,6 +2516,16 @@ Copyright 2024 Justin Ridgewell <justin@ridgewell.name>
 The rest of LICENSE is word for word the text printed under @jridgewell/gen-mapping 0.3.13.
 
 ================================================================================
+@jridgewell/sourcemap-codec 1.6.0
+Ships in: API server
+Project: https://github.com/jridgewell/sourcemaps
+Source for this version: https://registry.npmjs.org/@jridgewell/sourcemap-codec/-/sourcemap-codec-1.6.0.tgz
+License: MIT
+
+Copyright 2024 Justin Ridgewell <justin@ridgewell.name>
+The rest of LICENSE is word for word the text printed under @jridgewell/gen-mapping 0.3.13.
+
+================================================================================
 @jridgewell/trace-mapping 0.3.31
 Ships in: API server
 Project: https://github.com/jridgewell/sourcemaps
