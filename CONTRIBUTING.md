@@ -137,6 +137,27 @@ pnpm --filter docs generate
 pnpm credits                                                 # after adding or upgrading a dependency
 ```
 
+## Third-party pins and advisories
+
+Orchard ships pinned versions of its third-party components: the images in
+`infra/charts/orchard/values.yaml`, the zot and cloudflared images and any add-on chart versions in
+`install/install.sh`. The component list, the OSV.dev package for each one and its update class live
+in `apps/server/hostctl/internal/commands` (`addons.go` and `images.go`), the same list that
+`orchardctl update` uses on a host.
+
+The `dependency-advisories` workflow checks those pins against OSV.dev every day, and on pull requests
+that change them. It fails when a pinned version has a known advisory, because new installs start on
+that version, and it tells you which pin to bump and whether hosts fix themselves first. To run it
+locally:
+
+```bash
+cd apps/server/hostctl && go run ./cmd/advisorycheck
+```
+
+It exits `1` when a pin needs you and `3` when OSV.dev, a registry or a chart repository did not
+answer. Add-on charts without a pin are checked at their newest release, which is what a new install
+gets.
+
 ## Code style
 
 - Lint with oxlint (`pnpm lint`) and format with oxfmt (`pnpm format`). ESLint and Prettier are not
