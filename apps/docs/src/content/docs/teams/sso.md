@@ -197,7 +197,7 @@ To set a provider through environment variables, refer to [Add an identity provi
 
 ### Route instance sign-ins into organizations
 
-On **Instance admin** > **Sign in**, **Group rules** maps groups from an instance provider to a role in any organization on the instance. Each rule names its organization. The rules above apply, including deny when a person matches none. Superadmins are exempt and rules never change them.
+On **Instance admin** > **Sign in**, **Group rules** maps groups from an instance provider to a role in any organization on the instance. Each rule names its organization. The rules above apply, including deny when a person matches none. Superadmins are exempt and rules never change them. A person who loses an SSO-granted superadmin role at sign-in then goes through the group rules, so they are denied if they match none.
 
 Two settings let an instance provider do more. Only a superadmin can change them, and an organization's own provider can never use either one.
 
