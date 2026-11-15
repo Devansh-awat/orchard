@@ -7,11 +7,21 @@
   prConcurrentLimit: 0,
   labels: ['dependencies'],
   postUpdateOptions: ['gomodTidy', 'gomodUpdateImportPaths'],
+  osvVulnerabilityAlerts: true,
   vulnerabilityAlerts: {
     dependencyDashboardApproval: false,
+    semanticCommitType: 'fix',
     labels: ['dependencies', 'security'],
   },
+  lockFileMaintenance: {
+    enabled: true,
+    schedule: ['* * * * 1'],
+  },
   packageRules: [
+    {
+      matchDatasources: ['npm', 'go'],
+      minimumReleaseAge: '3 days',
+    },
     {
       matchManagers: ['npm'],
       matchUpdateTypes: ['minor', 'patch'],
