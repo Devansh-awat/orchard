@@ -15,7 +15,7 @@ and `--yes` does not imply it. Dual-stack servers work, and they use `A` records
 
 Not `curl ... | sudo bash`: the installer asks questions, and a pipe takes the
 standard input it would read the answers from. Download the script to a file and
-run it, as above. Do not use `bash -c "$(curl ...)"` either: the script is
+run it, as above. Do not pass the script to `bash -c` either: the script is
 larger than the kernel's limit for a single argument, so that form fails.
 `--yes` plus the environment variables below is the non-interactive path, and
 that one pipes fine.
