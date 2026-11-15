@@ -137,6 +137,27 @@ jobs:
           test "$control" = Failed
           test "$tenant" = Succeeded
 
+      - name: An app pod cannot reach the API server or the node
+        run: |
+          node_ip=$(kubectl get node -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
+          service_ip=$(kubectl get service kubernetes -o jsonpath='{.spec.clusterIP}')
+          kubectl create namespace open
+          scan() {
+            kubectl -n "$1" run node-probe --restart=Never --image=curlimages/curl:8.17.0 --command -- \
+              sh -c "sleep 20
+                for target in https://$service_ip/version https://$node_ip:6443/version https://$node_ip:10250/healthz; do
+                  if curl -sk -m 8 -o /dev/null \"\$target\"; then echo \"reach \$target\"; else echo \"blocked \$target\"; fi
+                done" >/dev/null
+            kubectl -n "$1" wait pod/node-probe --for=jsonpath='{.status.phase}'=Succeeded --timeout=180s >/dev/null
+            kubectl -n "$1" logs node-probe
+          }
+          open=$(scan open)
+          tenant=$(scan tenant)
+          echo "open (no policy):"; echo "$open"
+          echo "tenant (Orchard's policies):"; echo "$tenant"
+          test "$(grep -c '^reach ' <<<"$open")" = 3
+          test "$(grep -c '^blocked ' <<<"$tenant")" = 3
+
       - name: The database comes back after its pod restarts
         run: |
           kubectl -n control delete pod db-1 --wait=true
@@ -163,6 +184,7 @@ jobs:
           kubectl get networkpolicy -A -o yaml || true
           for ns in tenant control; do
             kubectl -n "$ns" logs apiserver-probe --tail=20 || true
+            kubectl -n "$ns" logs node-probe --tail=20 || true
             kubectl -n "$ns" describe pod db-1 | tail -40 || true
             kubectl -n "$ns" logs db-1 -c postgres --tail=60 || true
             kubectl -n "$ns" logs db-1 -c postgres | grep -v 57P03 | tail -40 || true
