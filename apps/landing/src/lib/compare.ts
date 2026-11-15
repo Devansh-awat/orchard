@@ -363,7 +363,7 @@ const ROW = {
 	isolation: {
 		feature: 'Network isolation between apps by default',
 		cells: [
-			say('Yes, default-deny', `${DOCS}/operate/tenancy-and-isolation/`),
+			say('Yes, default-deny', `${DOCS}/operate/security/#network-isolation`),
 			say('Shared Docker network', SRC.coolifyNetwork),
 			say('Shared Docker network', SRC.dokployNetwork),
 			none,
