@@ -393,6 +393,95 @@ test('the last superadmin is kept even when the grant disappears', async () => {
   assert.equal(now.isSuperAdmin, true);
 });
 
+const OVERAGE: Array<[string, Record<string, unknown>]> = [
+  ['oidc', { hasgroups: true }],
+  ['oidc', { _claim_names: { groups: 'src1' }, _claim_sources: {} }],
+  [
+    'saml',
+    {
+      'http://schemas.microsoft.com/claims/groups.link':
+        'https://graph.windows.net/tenant/users/user/getMemberObjects'
+    }
+  ]
+];
+
+async function overageSync(w: World, user: any, claims: Record<string, unknown>) {
+  const provider = w.provider(INSTANCE_IDP);
+  const ctx = await w.mapping.prepare(provider, claims, user.id);
+  assert.deepEqual(ctx.groups, { kind: 'unknown', reason: 'overage' });
+  return w.mapping.syncSuperadmin(provider, user, ctx, true);
+}
+
+test('group overage never grants superadmin', async () => {
+  for (const [protocol, claims] of OVERAGE) {
+    const w = makeWorld();
+    w.provider(INSTANCE_IDP).protocol = protocol;
+    await w.identity.setSuperadminRule({ providerId: INSTANCE_IDP, value: 'platform-root' }, admin);
+    const ada = w.addUser('ada@example.com');
+    w.bind(ada.id);
+    assert.equal(await overageSync(w, ada, claims), false);
+    assert.equal(ada.isSuperAdmin, false);
+    assert.equal(w.tables.federatedIdentity[0].grantedSuperadmin, false);
+    assert.ok(!w.audits.some((a) => a.action === 'sso.superadmin.granted'));
+  }
+});
+
+test('group overage demotes an SSO-granted superadmin on OIDC and SAML', async () => {
+  for (const [protocol, claims] of OVERAGE) {
+    const w = makeWorld();
+    w.provider(INSTANCE_IDP).protocol = protocol;
+    await w.identity.setSuperadminRule({ providerId: INSTANCE_IDP, value: 'platform-root' }, admin);
+    const keeper = w.addUser('keeper@example.com', true);
+    const ada = w.addUser('ada@example.com');
+    w.bind(ada.id);
+    await w.identity.syncSuperadmin(
+      w.provider(INSTANCE_IDP),
+      ada,
+      new Set(['platform-root']),
+      true
+    );
+    const now = w.tables.user.find((u) => u.id === ada.id)! as any;
+    assert.equal(now.isSuperAdmin, true);
+
+    assert.equal(await overageSync(w, now, claims), false);
+    assert.equal(now.isSuperAdmin, false);
+    assert.equal(w.tables.federatedIdentity[0].grantedSuperadmin, false);
+    assert.ok(w.sessionWipes.some((s) => s.userIds?.includes(ada.id)));
+    assert.ok(w.audits.some((a) => a.action === 'sso.superadmin.revoked'));
+    assert.equal(keeper.isSuperAdmin, true);
+  }
+});
+
+test('group overage leaves a hand-made superadmin alone and never removes the last one', async () => {
+  for (const [protocol, claims] of OVERAGE) {
+    const w = makeWorld();
+    w.provider(INSTANCE_IDP).protocol = protocol;
+    await w.identity.setSuperadminRule({ providerId: INSTANCE_IDP, value: 'platform-root' }, admin);
+    const root = w.addUser('root@example.com', true);
+    w.addUser('second@example.com', true);
+    w.bind(root.id);
+    assert.equal(await overageSync(w, root, claims), true);
+    assert.equal(root.isSuperAdmin, true);
+    assert.equal(w.sessionWipes.length, 0);
+
+    const v = makeWorld();
+    v.provider(INSTANCE_IDP).protocol = protocol;
+    await v.identity.setSuperadminRule({ providerId: INSTANCE_IDP, value: 'platform-root' }, admin);
+    const ada = v.addUser('ada@example.com');
+    v.bind(ada.id);
+    await v.identity.syncSuperadmin(
+      v.provider(INSTANCE_IDP),
+      ada,
+      new Set(['platform-root']),
+      true
+    );
+    const last = v.tables.user.find((u) => u.id === ada.id)! as any;
+    assert.equal(await overageSync(v, last, claims), true);
+    assert.equal(last.isSuperAdmin, true);
+    assert.ok(!v.audits.some((a) => a.action === 'sso.superadmin.revoked'));
+  }
+});
+
 test('no grant without a verified email or a bound identity', async () => {
   const w = makeWorld();
   await w.identity.setSuperadminRule({ providerId: INSTANCE_IDP, value: 'platform-root' }, admin);

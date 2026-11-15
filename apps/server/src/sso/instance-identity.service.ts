@@ -218,12 +218,12 @@ export class InstanceIdentityService {
   ): Promise<boolean> {
     if (provider.organizationId) return user.isSuperAdmin;
     const rule = await this.superadminRule();
-    if (!rule || rule.providerId !== provider.id || !groups) return user.isSuperAdmin;
+    if (!rule || rule.providerId !== provider.id) return user.isSuperAdmin;
 
     const identity = await this.prisma.federatedIdentity.findUnique({
       where: { providerId_userId: { providerId: provider.id, userId: user.id } }
     });
-    if (groups.has(rule.value)) {
+    if (groups?.has(rule.value)) {
       if (user.isSuperAdmin) return true;
       if (!identity || !emailVerified) return false;
       await this.prisma.user.update({ where: { id: user.id }, data: { isSuperAdmin: true } });
