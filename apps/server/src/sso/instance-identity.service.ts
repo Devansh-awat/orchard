@@ -183,19 +183,19 @@ export class InstanceIdentityService {
     providerId: string | null,
     actor: Actor | null
   ): Promise<boolean> {
-    await this.prisma.federatedIdentity.update({
-      where: { id: row.id },
-      data: { grantedSuperadmin: false }
-    });
     const user = await this.prisma.user.findUnique({
       where: { id: row.userId },
       select: { id: true, email: true, isSuperAdmin: true }
     });
-    if (!user?.isSuperAdmin) return false;
-    if ((await this.otherSuperadmins(user.id)) === 0) {
+    if (user?.isSuperAdmin && (await this.otherSuperadmins(user.id)) === 0) {
       this.logger.warn(`Kept ${user.id} as superadmin: they are the last one`);
       return false;
     }
+    await this.prisma.federatedIdentity.update({
+      where: { id: row.id },
+      data: { grantedSuperadmin: false }
+    });
+    if (!user?.isSuperAdmin) return false;
     await this.prisma.user.update({ where: { id: user.id }, data: { isSuperAdmin: false } });
     await this.sessions.revokeSignInSessions({ authMethods: ['sso'], userIds: [user.id] });
     void this.audit.log({

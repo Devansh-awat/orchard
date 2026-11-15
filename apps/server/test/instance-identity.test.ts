@@ -482,6 +482,31 @@ test('group overage leaves a hand-made superadmin alone and never removes the la
   }
 });
 
+test('the last SSO superadmin stays SSO-granted and is demoted once another superadmin exists', async () => {
+  const w = makeWorld();
+  await w.identity.setSuperadminRule({ providerId: INSTANCE_IDP, value: 'platform-root' }, admin);
+  const ada = w.addUser('ada@example.com');
+  w.bind(ada.id);
+  await w.identity.syncSuperadmin(w.provider(INSTANCE_IDP), ada, new Set(['platform-root']), true);
+  const now = w.tables.user.find((u) => u.id === ada.id)! as any;
+
+  assert.equal(
+    await w.identity.syncSuperadmin(w.provider(INSTANCE_IDP), now, new Set(), true),
+    true
+  );
+  assert.equal(now.isSuperAdmin, true);
+  assert.equal(w.tables.federatedIdentity[0].grantedSuperadmin, true);
+
+  w.addUser('second@example.com', true);
+  assert.equal(
+    await w.identity.syncSuperadmin(w.provider(INSTANCE_IDP), now, new Set(), true),
+    false
+  );
+  assert.equal(now.isSuperAdmin, false);
+  assert.equal(w.tables.federatedIdentity[0].grantedSuperadmin, false);
+  assert.ok(w.audits.some((a) => a.action === 'sso.superadmin.revoked'));
+});
+
 test('no grant without a verified email or a bound identity', async () => {
   const w = makeWorld();
   await w.identity.setSuperadminRule({ providerId: INSTANCE_IDP, value: 'platform-root' }, admin);
