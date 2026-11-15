@@ -61,7 +61,7 @@ Runs the following steps in order:
 8. Applies the latest [k3s patch](#k3s).
 9. Upgrades Traefik, CloudNativePG, and cert-manager within their major versions, from their own charts.
 
-To turn off the image and add-on updates in steps 4, 6, and 9, add `ORCHARD_ADDON_UPDATES=off` to `/etc/orchard/env`. To turn off step 8, add `ORCHARD_K3S_UPDATES=off`.
+Steps 4, 6, and 9 follow the [third-party update policy](/operate/upgrades/#third-party-update-policy): a release waits 7 days before it installs, and a release that fixes a known vulnerability in the running version installs at once. To turn off the image and add-on updates in steps 4, 6, and 9, add `ORCHARD_ADDON_UPDATES=off` to `/etc/orchard/env`. To turn off step 8, add `ORCHARD_K3S_UPDATES=off`.
 
 The command restarts a deployment if its image has no tag or the tag `latest`, because Helm sees an identical pod template and the old image keeps running. A deployment on a release version rolls out when the new chart changes that version.
 
@@ -416,11 +416,13 @@ sudo orchardctl images
 
 Shows the images Orchard bundles, and what each can move to. `orchardctl update` installs newer versions from their own registries, so a fix does not wait on an Orchard release.
 
-| Images                                                                                                            | What installs on its own              |
-| ----------------------------------------------------------------------------------------------------------------- | ------------------------------------- |
-| Redis, pgbouncer, BuildKit                                                                                        | Patch versions                        |
-| VictoriaMetrics, vmagent, VictoriaLogs, kube-state-metrics, node-exporter, Vector, Trivy, versitygw, aws-cli, zot | Any version in the same major version |
-| cloudflared                                                                                                       | Any newer version                     |
+| Images                                                                                                            | What installs on its own                                                      |
+| ----------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| Redis, pgbouncer, BuildKit                                                                                        | Patch versions                                                                |
+| VictoriaMetrics, vmagent, VictoriaLogs, kube-state-metrics, node-exporter, Vector, Trivy, versitygw, aws-cli, zot | Any version in the same major version, or in the same minor version below 1.0 |
+| cloudflared                                                                                                       | Any newer version                                                             |
+
+A version below 1.0, such as Vector `0.61.0` or Trivy `0.76.2`, treats a new minor version as a new major version. Each version that `update` picks waits until it has been public for 7 days, unless it fixes a known vulnerability in the running version. For the full rules, refer to [Third-party update policy](/operate/upgrades/#third-party-update-policy).
 
 Each version that `update` picks is pinned to the digest that the registry served for it. Apart from cloudflared, a new major version needs a person. If a new version does not come up within three minutes, the update goes back and does not try that version again. To try it again, remove its line from `/etc/orchard/images-held`.
 

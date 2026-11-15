@@ -29,13 +29,15 @@ It does not list connections to services you configure yourself, such as S3 stor
 
 ## Host commands
 
-| Host                                                                  | Used by                                           | To turn it off                                            |
-| --------------------------------------------------------------------- | ------------------------------------------------- | --------------------------------------------------------- |
-| `update.k3s.io`, `github.com`                                         | `orchardctl k3s` and `orchardctl update`          | Set `ORCHARD_K3S_UPDATES=off` in `/etc/orchard/env`.      |
-| `traefik.github.io`, `cloudnative-pg.github.io`, `charts.jetstack.io` | `orchardctl update`                               | Set `ORCHARD_ADDON_UPDATES=off` in `/etc/orchard/env`.    |
-| `ghcr.io`, Docker Hub, `quay.io`, `registry.k8s.io`                   | `orchardctl update` and `orchardctl images`       | Set `ORCHARD_ADDON_UPDATES=off` in `/etc/orchard/env`.    |
-| `api.github.com`                                                      | `orchardctl images`, for the latest Railpack      | Do not run the command.                                   |
-| `assets.orchard.my/registry`                                          | `orchardctl graft`, for the Extension Marketplace | Set `ORCHARD_GRAFT_MARKETPLACE_URL` to your own registry. |
+| Host                                                                  | Used by                                                                                                     | To turn it off                                            |
+| --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| `update.k3s.io`, `github.com`                                         | `orchardctl k3s` and `orchardctl update`                                                                    | Set `ORCHARD_K3S_UPDATES=off` in `/etc/orchard/env`.      |
+| `traefik.github.io`, `cloudnative-pg.github.io`, `charts.jetstack.io` | `orchardctl update`                                                                                         | Set `ORCHARD_ADDON_UPDATES=off` in `/etc/orchard/env`.    |
+| `ghcr.io`, Docker Hub, `quay.io`, `registry.k8s.io`                   | `orchardctl update` and `orchardctl images`                                                                 | Set `ORCHARD_ADDON_UPDATES=off` in `/etc/orchard/env`.    |
+| `api.osv.dev`                                                         | `orchardctl update` and `orchardctl images`, for security advisories about the running third-party versions | Set `ORCHARD_ADDON_UPDATES=off` in `/etc/orchard/env`.    |
+| `hub.docker.com`                                                      | `orchardctl update` and `orchardctl images`, for the date that a Docker Hub tag was pushed                  | Set `ORCHARD_ADDON_UPDATES=off` in `/etc/orchard/env`.    |
+| `api.github.com`                                                      | `orchardctl images`, for the latest Railpack                                                                | Do not run the command.                                   |
+| `assets.orchard.my/registry`                                          | `orchardctl graft`, for the Extension Marketplace                                                           | Set `ORCHARD_GRAFT_MARKETPLACE_URL` to your own registry. |
 
 ## A running instance
 

@@ -81,23 +81,81 @@ For what each step does, refer to [`orchardctl k3s`](/operate/host-commands/#k3s
 
 Most parts of an instance get security fixes without an Orchard release:
 
-| Part                                                       | How it gets security fixes                                                                                                |
-| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| k3s, Kubernetes, and containerd                            | `orchardctl update` applies patches from the k3s release channels. `orchardctl k3s upgrade` moves to a new minor version. |
-| Postgres minor versions                                    | Orchard applies them from the [CloudNativePG image catalog](/data/upgrades/).                                             |
-| The host operating system                                  | Your distribution's updates. Orchard does not change them.                                                                |
-| Traefik, CloudNativePG, and cert-manager                   | `orchardctl update` upgrades them from their own charts, within their major versions.                                     |
-| Redis, pgbouncer, BuildKit, and the metrics and log stores | `orchardctl update` installs newer versions from their own registries. To see them, run `orchardctl images`.              |
-| Railpack                                                   | A new Orchard chart, because a version mismatch breaks builds. `orchardctl images` tells you when one is out.             |
-| Orchard                                                    | A new Orchard chart. `orchardctl update` installs it.                                                                     |
+| Part                                                       | How it gets security fixes                                                                                                                                                     |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| k3s, Kubernetes, and containerd                            | `orchardctl update` applies patches from the k3s release channels. `orchardctl k3s upgrade` moves to a new minor version.                                                      |
+| Postgres minor versions                                    | Orchard applies them from the [CloudNativePG image catalog](/data/upgrades/).                                                                                                  |
+| The host operating system                                  | Your distribution's updates. Orchard does not change them.                                                                                                                     |
+| Traefik, CloudNativePG, and cert-manager                   | `orchardctl update` upgrades them from their own charts. Refer to [Third-party update policy](#third-party-update-policy).                                                     |
+| Redis, pgbouncer, BuildKit, and the metrics and log stores | `orchardctl update` installs newer versions from their own registries. Refer to [Third-party update policy](#third-party-update-policy). To see them, run `orchardctl images`. |
+| Railpack                                                   | A new Orchard chart, because a version mismatch breaks builds. `orchardctl images` tells you when one is out.                                                                  |
+| Orchard                                                    | A new Orchard chart. `orchardctl update` installs it.                                                                                                                          |
 
-A new major version of a third-party component needs a person, because it can change behavior. `orchardctl update` tells you when one is out. To turn off these updates, add `ORCHARD_ADDON_UPDATES=off` to `/etc/orchard/env`.
+Security fixes in third-party components do not wait for an Orchard release. A new major version of a third-party component needs a person, because it can change behavior. `orchardctl update` tells you when one is out. To turn off these updates, add `ORCHARD_ADDON_UPDATES=off` to `/etc/orchard/env`.
 
 Upgrading CloudNativePG does not restart your databases, because the installer turns on in-place updates of the instance manager.
 
 An upgrade turns on, once, features that newer releases run by default. Orchard prints each change. If you turn a feature off afterward, it stays off. For the list, refer to [New defaults on an existing host](/operate/host-commands/#new-defaults-on-an-existing-host).
 
 `orchardctl update` also sets `kernel.apparmor_restrict_unprivileged_userns` to `0` where it is `1`, such as on Ubuntu 24.04, because rootless builds need user namespaces. It skips this when `builderSandbox.enabled` or `builders.allowPrivilegedOnHost` is `true`.
+
+## Third-party update policy
+
+`orchardctl update` installs new versions of Traefik, CloudNativePG, cert-manager, and the third-party images from their own sources. It does not wait for an Orchard release. Each new version goes through the following rules:
+
+1. **Version class**: A new major version never installs on its own. `orchardctl update` prints a note, so that you can read its upgrade notes first. Below version 1.0, a new minor version counts as a new major version. For example, `0.61.0` to `0.61.3` installs, and `0.61.0` to `0.62.0` needs a person. Redis, pgbouncer, and BuildKit take patch versions only. cloudflared uses calendar versions and takes any newer version.
+2. **Soak period**: A version installs only after it has been public for 7 days. If a release turns out to be broken or compromised during that time, and its publisher replaces it, your instance never installs it. A version without a publication date waits.
+3. **Security fast track**: If [OSV.dev](https://osv.dev) lists a vulnerability in the running version, the update installs a fixed version at once, without the soak period. It picks the version that fixes the most of those advisories and adds no new advisory. If more than one version qualifies, it prefers the newest one that has soaked, then the oldest one that has not. The command prints `security update: <advisory> affects <running version>, moving to <new version>`.
+
+The fast track follows the version class rules. If only a new major version fixes a vulnerability, `orchardctl update` names the version that fixes it and leaves the upgrade to you.
+
+If OSV.dev does not answer, every version waits for the soak period. Missing advisory data never blocks an update, and never skips the soak period. When OSV.dev answers, the update also skips a version that has an advisory that the running version does not have.
+
+`orchardctl update` respects versions in `/etc/orchard/images-held`, including on the fast track. It sends OSV.dev package names and version numbers only, and nothing about your instance.
+
+### Settings
+
+Set these in `/etc/orchard/env`:
+
+| Variable                   | Default | Effect                                                                                       |
+| -------------------------- | ------- | -------------------------------------------------------------------------------------------- |
+| `ORCHARD_UPDATE_SOAK_DAYS` | `7`     | The number of days that a version must be public before it installs. `0` turns off the wait. |
+| `ORCHARD_ADDON_UPDATES`    | `on`    | `off` turns off add-on and image updates, including security fixes.                          |
+
+### Publication dates
+
+| Source                                                              | Publication date                                                           |
+| ------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| Traefik, CloudNativePG, and cert-manager charts                     | The `created` field of the version in the chart repository's `index.yaml`. |
+| Images on Docker Hub                                                | The time that Docker Hub recorded for the last push of the tag.            |
+| Images on `quay.io`                                                 | The time that `quay.io` recorded for the tag.                              |
+| Images on other registries, such as `ghcr.io` and `registry.k8s.io` | The `created` time in the image configuration.                             |
+
+A new push to an existing Docker Hub tag starts its soak period again. The publisher's build sets the `created` time in an image configuration and in a chart index, so treat those dates as the publisher's claim.
+
+### Advisory sources
+
+`orchardctl update` checks each component against a package that OSV.dev indexes. For a chart, it checks the version of the application that the chart installs.
+
+| Component                   | OSV.dev package                                                          |
+| --------------------------- | ------------------------------------------------------------------------ |
+| Traefik                     | Go module `github.com/traefik/traefik/v3`, for the running major version |
+| CloudNativePG               | Go module `github.com/cloudnative-pg/cloudnative-pg`                     |
+| cert-manager                | Go module `github.com/cert-manager/cert-manager`                         |
+| Redis                       | Git repository `https://github.com/redis/redis`                          |
+| BuildKit                    | Go module `github.com/moby/buildkit`                                     |
+| skopeo                      | Go module `github.com/containers/skopeo`                                 |
+| VictoriaMetrics and vmagent | Go module `github.com/VictoriaMetrics/VictoriaMetrics`                   |
+| kube-state-metrics          | Go module `k8s.io/kube-state-metrics/v2`                                 |
+| node-exporter               | Go module `github.com/prometheus/node_exporter`                          |
+| Vector                      | Git repository `https://github.com/vectordotdev/vector`                  |
+| Trivy                       | Go module `github.com/aquasecurity/trivy`                                |
+| versitygw                   | Go module `github.com/versity/versitygw`                                 |
+| aws-cli                     | Git repository `https://github.com/aws/aws-cli`                          |
+| zot                         | Go modules `zotregistry.dev/zot` and `zotregistry.dev/zot/v2`            |
+| cloudflared                 | Git repository `https://github.com/cloudflare/cloudflared`               |
+
+pgbouncer and VictoriaLogs have no OSV.dev package that matches their release versions, so only the soak period applies to them. OSV.dev lists Vector advisories without the affected release versions, so a Vector advisory does not start the fast track.
 
 ## Re-run the installer
 
