@@ -21,6 +21,7 @@ type Env struct {
 	Kubeconfig   string
 	K3sUpdates   string
 	AddonUpdates string
+	UpdateSoak   string
 
 	AllowUnsignedCommands bool
 }
@@ -58,6 +59,8 @@ func LoadEnv() Env {
 			e.AllowUnsignedCommands = v == "true"
 		case "ORCHARD_ADDON_UPDATES":
 			e.AddonUpdates = v
+		case "ORCHARD_UPDATE_SOAK_DAYS":
+			e.UpdateSoak = v
 		}
 	}
 
@@ -70,6 +73,7 @@ func LoadEnv() Env {
 	e.Kubeconfig = envOr("KUBECONFIG", e.Kubeconfig)
 	e.K3sUpdates = envOr("ORCHARD_K3S_UPDATES", e.K3sUpdates)
 	e.AddonUpdates = envOr("ORCHARD_ADDON_UPDATES", e.AddonUpdates)
+	e.UpdateSoak = envOr("ORCHARD_UPDATE_SOAK_DAYS", e.UpdateSoak)
 	if v, ok := os.LookupEnv("ORCHARD_ALLOW_UNSIGNED_COMMANDS"); ok {
 		e.AllowUnsignedCommands = v == "true"
 	}

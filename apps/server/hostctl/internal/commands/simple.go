@@ -190,8 +190,11 @@ and refreshes the host commands. Extra arguments are passed through to helm.
 
 It also installs newer versions of what Orchard bundles without waiting on an
 Orchard release: the latest k3s patch, Traefik, CloudNativePG and cert-manager
-within their major versions, and the images the chart runs. See orchardctl k3s
---help and orchardctl images --help. To turn the add-on and image updates off, set
+within their major versions, and the images the chart runs. Below 1.0 a minor
+version counts as a major one. A third-party release waits until it has been
+public for ORCHARD_UPDATE_SOAK_DAYS (default 7), unless OSV.dev lists a
+vulnerability in the running version that it fixes. See orchardctl k3s --help
+and orchardctl images --help. To turn the add-on and image updates off, set
 ORCHARD_ADDON_UPDATES=off in /etc/orchard/env.
 `,
 		Run: func(c *cli.Context, args []string) error {

@@ -1,12 +1,16 @@
 package commands
 
-import "testing"
+import (
+	"strings"
+	"testing"
+	"time"
+)
 
 func TestAddonInstalledVersionReadsTheChart(t *testing.T) {
-	listing := []byte(`[{"name":"traefik","chart":"traefik-42.3.0"},{"name":"other","chart":"other-1.0.0"}]`)
-	version, found, err := addonInstalledVersion(listing, "traefik", "traefik")
-	if err != nil || !found || version != "42.3.0" {
-		t.Fatalf("got %q %v %v", version, found, err)
+	listing := []byte(`[{"name":"traefik","chart":"traefik-42.3.0","app_version":"v3.7.17"},{"name":"other","chart":"other-1.0.0"}]`)
+	installed, found, err := addonInstalledVersion(listing, "traefik", "traefik")
+	if err != nil || !found || installed.version != "42.3.0" || installed.appVersion != "v3.7.17" {
+		t.Fatalf("got %+v %v %v", installed, found, err)
 	}
 	if _, found, err := addonInstalledVersion(listing, "cnpg", "cloudnative-pg"); err != nil || found {
 		t.Fatalf("a missing release should be skipped: %v %v", found, err)
@@ -16,47 +20,139 @@ func TestAddonInstalledVersionReadsTheChart(t *testing.T) {
 	}
 }
 
-func TestChartVersionFromMetadata(t *testing.T) {
-	version, err := chartVersionFromMetadata("apiVersion: v2\nappVersion: v3.7.17\nname: traefik\nversion: 42.3.0\n")
-	if err != nil || version != "42.3.0" {
-		t.Fatalf("got %q %v", version, err)
+const cnpgIndex = `apiVersion: v1
+entries:
+  cloudnative-pg:
+  - appVersion: 1.30.1
+    created: "2026-11-14T16:56:41.882270061Z"
+    name: cloudnative-pg
+    version: 0.28.1
+  - appVersion: 1.29.3
+    created: "2026-11-13T10:00:00Z"
+    name: cloudnative-pg
+    version: 0.27.3
+  - appVersion: 1.29.2
+    created: "2026-11-01T10:00:00Z"
+    name: cloudnative-pg
+    version: 0.27.2
+  - appVersion: 1.29.1
+    created: "2026-10-01T10:00:00Z"
+    name: cloudnative-pg
+    version: 0.27.1
+  - appVersion: 1.30.0-rc1
+    name: cloudnative-pg
+    version: 0.28.0-rc1
+  plugin-barman-cloud:
+  - appVersion: 0.5.0
+    version: 0.3.0
+`
+
+func TestParseChartIndex(t *testing.T) {
+	releases, err := parseChartIndex([]byte(cnpgIndex), "cloudnative-pg")
+	if err != nil || len(releases) != 5 {
+		t.Fatalf("got %d %v", len(releases), err)
 	}
-	version, err = chartVersionFromMetadata("name: cert-manager\nversion: v1.21.3\n")
-	if err != nil || version != "v1.21.3" {
-		t.Fatalf("got %q %v", version, err)
+	if releases[0].version != "0.28.1" || releases[0].appVersion != "1.30.1" || !releases[0].created.Equal(time.Date(2026, 11, 14, 16, 56, 41, 882270061, time.UTC)) {
+		t.Errorf("got %+v", releases[0])
 	}
-	if _, err := chartVersionFromMetadata("name: nothing\n"); err == nil {
-		t.Fatal("metadata with no version should fail")
+	if !releases[4].created.IsZero() {
+		t.Errorf("a missing date should stay empty: %+v", releases[4])
+	}
+	if _, err := parseChartIndex([]byte(cnpgIndex), "traefik"); err == nil {
+		t.Error("a chart the repository doesn't list should fail")
 	}
 }
 
-func TestAddonActionStaysInTheMajorVersion(t *testing.T) {
-	cases := []struct {
-		installed, latest string
-		upgrade, behind   bool
-	}{
-		{"42.3.0", "42.3.0", false, false},
-		{"42.2.0", "42.3.0", true, false},
-		{"0.28.0", "0.29.1", true, false},
-		{"v1.20.0", "v1.21.3", true, false},
-		{"41.0.0", "42.3.0", false, true},
-		{"43.0.0", "42.3.0", false, false},
+func TestAddonPlanStaysInTheMinorBelowOne(t *testing.T) {
+	releases, err := parseChartIndex([]byte(cnpgIndex), "cloudnative-pg")
+	if err != nil {
+		t.Fatal(err)
 	}
-	for _, tc := range cases {
-		upgrade, behind, err := addonAction(tc.installed, tc.latest)
-		if err != nil || upgrade != tc.upgrade || behind != tc.behind {
-			t.Errorf("%s to %s: got %v %v %v", tc.installed, tc.latest, upgrade, behind, err)
-		}
+	gate := &updateGate{now: func() time.Time { return fixedNow }, soak: 7 * day}
+	plan, err := planAddon(gate, addons[1], installedChart{version: "0.27.1"}, releases)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if _, _, err := addonAction("garbage", "1.0.0"); err == nil {
+	if plan.decision.target.tag.raw != "0.27.2" {
+		t.Errorf("target %s", plan.decision.target.tag.raw)
+	}
+	if plan.decision.waiting == nil || plan.decision.waiting.tag.raw != "0.27.3" {
+		t.Errorf("waiting %v", plan.decision.waiting)
+	}
+	if plan.ahead == nil || plan.ahead.tag.raw != "0.28.1" {
+		t.Errorf("ahead %v", plan.ahead)
+	}
+	if plan.current.app.raw != "1.29.1" {
+		t.Errorf("the app version should come from the index: %+v", plan.current)
+	}
+}
+
+func TestAddonPlanFastTracksAnAdvisory(t *testing.T) {
+	releases, err := parseChartIndex([]byte(cnpgIndex), "cloudnative-pg")
+	if err != nil {
+		t.Fatal(err)
+	}
+	osv := newFakeOSV(t, map[string][]string{
+		"github.com/cloudnative-pg/cloudnative-pg@1.29.1": {"GHSA-c"},
+		"github.com/cloudnative-pg/cloudnative-pg@1.29.2": {"GHSA-c"},
+	})
+	gate, _ := gateWithOSV(osv.server.URL)
+	plan, err := planAddon(gate, addons[1], installedChart{version: "0.27.1"}, releases)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plan.decision.target.tag.raw != "0.27.3" || !plan.decision.early {
+		t.Errorf("target %s early %v", plan.decision.target.tag.raw, plan.decision.early)
+	}
+	notes, _ := plan.decision.messages(plan.current, chartName("cloudnative-pg"), gate.soak)
+	if len(notes) == 0 || notes[0] != "security update: GHSA-c affects cloudnative-pg 0.27.1, moving to cloudnative-pg 0.27.3" {
+		t.Errorf("notes %q", notes)
+	}
+}
+
+func TestAddonPlanAboveOne(t *testing.T) {
+	releases := []chartRelease{
+		{version: "v1.21.3", appVersion: "v1.21.3", created: fixedNow.Add(-20 * day)},
+		{version: "v1.22.0", appVersion: "v1.22.0", created: fixedNow.Add(-10 * day)},
+		{version: "v2.0.0", appVersion: "v2.0.0", created: fixedNow.Add(-10 * day)},
+	}
+	gate := &updateGate{now: func() time.Time { return fixedNow }, soak: 7 * day}
+	plan, err := planAddon(gate, addons[2], installedChart{version: "v1.21.3"}, releases)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plan.decision.target.tag.raw != "v1.22.0" || plan.ahead == nil || plan.ahead.tag.raw != "v2.0.0" {
+		t.Errorf("target %s ahead %v", plan.decision.target.tag.raw, plan.ahead)
+	}
+	if _, err := planAddon(gate, addons[2], installedChart{version: "garbage"}, releases); err == nil {
 		t.Error("an unreadable version should fail")
+	}
+}
+
+func TestAddonPlanTreatsANewAppMajorAsMajor(t *testing.T) {
+	releases := []chartRelease{
+		{version: "42.3.0", appVersion: "v3.7.17", created: fixedNow.Add(-20 * day)},
+		{version: "42.4.0", appVersion: "v4.0.0", created: fixedNow.Add(-10 * day)},
+	}
+	gate := &updateGate{now: func() time.Time { return fixedNow }, soak: 7 * day}
+	plan, err := planAddon(gate, addons[0], installedChart{version: "42.3.0"}, releases)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plan.decision.moves(plan.current) || plan.ahead == nil || plan.ahead.tag.raw != "42.4.0" {
+		t.Errorf("target %s ahead %v", plan.decision.target.tag.raw, plan.ahead)
 	}
 }
 
 func TestEveryAddonNamesItsChart(t *testing.T) {
 	for _, a := range addons {
-		if a.release == "" || a.namespace == "" || a.chart == "" || a.repo == "" {
+		if a.release == "" || a.namespace == "" || a.chart == "" || a.repo == "" || len(a.osv) == 0 {
 			t.Errorf("incomplete add-on: %+v", a)
+		}
+		for _, p := range a.osv {
+			if p.ecosystem == "" || !strings.Contains(p.name, "/") {
+				t.Errorf("%s: bad OSV package %+v", a.release, p)
+			}
 		}
 	}
 }

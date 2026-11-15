@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -21,35 +22,46 @@ import (
 type bundledImage struct {
 	path      string
 	patchOnly bool
+	osv       []osvPackage
 }
 
+var (
+	osvRedis       = []osvPackage{{ecosystem: "GIT", name: "https://github.com/redis/redis"}}
+	osvBuildKit    = []osvPackage{{ecosystem: "Go", name: "github.com/moby/buildkit"}}
+	osvVictoria    = []osvPackage{{ecosystem: "Go", name: "github.com/VictoriaMetrics/VictoriaMetrics"}}
+	osvAWSCLI      = []osvPackage{{ecosystem: "GIT", name: "https://github.com/aws/aws-cli"}}
+	osvZot         = []osvPackage{{ecosystem: "Go", name: "zotregistry.dev/zot"}, {ecosystem: "Go", name: "zotregistry.dev/zot", majorSuffix: true}}
+	osvCloudflared = []osvPackage{{ecosystem: "GIT", name: "https://github.com/cloudflare/cloudflared"}}
+)
+
 var bundledImages = []bundledImage{
-	{path: "redis.image", patchOnly: true},
+	{path: "redis.image", patchOnly: true, osv: osvRedis},
 	{path: "postgres.pooler.image", patchOnly: true},
-	{path: "builders.buildkitImage", patchOnly: true},
-	{path: "builders.buildkitRootlessImage", patchOnly: true},
-	{path: "builderSandbox.pusherImage"},
-	{path: "metrics.victoriametrics.image"},
-	{path: "metrics.vmagent.image"},
-	{path: "metrics.kubeStateMetrics.image"},
-	{path: "metrics.nodeExporter.image"},
+	{path: "builders.buildkitImage", patchOnly: true, osv: osvBuildKit},
+	{path: "builders.buildkitRootlessImage", patchOnly: true, osv: osvBuildKit},
+	{path: "builderSandbox.pusherImage", osv: []osvPackage{{ecosystem: "Go", name: "github.com/containers/skopeo"}}},
+	{path: "metrics.victoriametrics.image", osv: osvVictoria},
+	{path: "metrics.vmagent.image", osv: osvVictoria},
+	{path: "metrics.kubeStateMetrics.image", osv: []osvPackage{{ecosystem: "Go", name: "k8s.io/kube-state-metrics", majorSuffix: true}}},
+	{path: "metrics.nodeExporter.image", osv: []osvPackage{{ecosystem: "Go", name: "github.com/prometheus/node_exporter"}}},
 	{path: "logs.victorialogs.image"},
-	{path: "logs.vector.image"},
-	{path: "trivy.image"},
-	{path: "objectStorage.local.image"},
-	{path: "objectStorage.local.bucketImage"},
-	{path: "databaseDumps.uploaderImage"},
+	{path: "logs.vector.image", osv: []osvPackage{{ecosystem: "GIT", name: "https://github.com/vectordotdev/vector"}}},
+	{path: "trivy.image", osv: []osvPackage{{ecosystem: "Go", name: "github.com/aquasecurity/trivy"}}},
+	{path: "objectStorage.local.image", osv: []osvPackage{{ecosystem: "Go", name: "github.com/versity/versitygw"}}},
+	{path: "objectStorage.local.bucketImage", osv: osvAWSCLI},
+	{path: "databaseDumps.uploaderImage", osv: osvAWSCLI},
 }
 
 type floatingWorkload struct {
 	namespace string
 	name      string
 	anyMajor  bool
+	osv       []osvPackage
 }
 
 var floatingWorkloads = []floatingWorkload{
-	{namespace: "orchard", name: "zot"},
-	{namespace: "cloudflared", name: "cloudflared", anyMajor: true},
+	{namespace: "orchard", name: "zot", osv: osvZot},
+	{namespace: "cloudflared", name: "cloudflared", anyMajor: true, osv: osvCloudflared},
 }
 
 const (
@@ -104,45 +116,44 @@ func pinnedRef(repo, tag, digest string) string {
 	return repo + ":" + tag + "@" + digest
 }
 
-func chooseImageTag(current imageTag, tags []string, patchOnly bool, held map[string]bool, repo string) (best, ahead imageTag) {
-	best = current
-	ahead = current
+func imageCandidates(current imageTag, tags []string, patchOnly, anyMajor bool, held map[string]bool, repo string) (candidates []imageTag, ahead *imageTag) {
 	for _, raw := range tags {
 		tag, ok := parseImageTag(raw)
-		if !ok || tag.prefix != current.prefix || tag.suffix != current.suffix {
+		if !ok || tag.prefix != current.prefix || tag.suffix != current.suffix || !tag.newerThan(current) {
 			continue
 		}
-		if tag.newerThan(ahead) {
-			ahead = tag
-		}
-		if held[repo+":"+raw] || tag.major != current.major {
+		if (!anyMajor && crossesMajor(current, tag)) || (patchOnly && tag.minor != current.minor) {
+			if ahead == nil || tag.newerThan(*ahead) {
+				ahead = &tag
+			}
 			continue
 		}
-		if patchOnly && tag.minor != current.minor {
+		if held[repo+":"+raw] {
 			continue
 		}
-		if tag.newerThan(best) {
-			best = tag
-		}
+		candidates = append(candidates, tag)
 	}
-	return best, ahead
+	sort.Slice(candidates, func(i, j int) bool { return candidates[j].newerThan(candidates[i]) })
+	return candidates, ahead
 }
 
-func floatingTarget(current imageTag, tags []string, held map[string]bool, repo string, anyMajor bool) (best, ahead imageTag) {
-	if !anyMajor {
-		return chooseImageTag(current, tags, false, held, repo)
+func planImage(gate *updateGate, pkgs []osvPackage, repo string, current imageTag, candidates []imageTag, ahead *imageTag, published func(repo, tag string) (time.Time, error)) decision {
+	releases := make([]candidate, len(candidates))
+	for i, tag := range candidates {
+		releases[i] = imageCandidate(tag)
 	}
-	best = current
-	for _, raw := range tags {
-		tag, ok := parseImageTag(raw)
-		if !ok || tag.prefix != current.prefix || tag.suffix != current.suffix || held[repo+":"+raw] {
-			continue
-		}
-		if tag.newerThan(best) {
-			best = tag
-		}
+	var beyond *candidate
+	if ahead != nil {
+		r := imageCandidate(*ahead)
+		beyond = &r
 	}
-	return best, best
+	return gate.plan(pkgs, imageCandidate(current), releases, beyond, func(r candidate) (time.Time, error) {
+		return published(repo, r.tag.raw)
+	})
+}
+
+func imageName(repo string) func(candidate) string {
+	return func(r candidate) string { return repo + ":" + r.tag.raw }
 }
 
 func registryRef(repo string) (host, path string) {
@@ -202,11 +213,30 @@ func nextPage(host, link string) string {
 }
 
 type registryClient struct {
-	http *http.Client
+	http    *http.Client
+	hubAPI  string
+	quayAPI string
 }
 
 func newRegistryClient() *registryClient {
-	return &registryClient{http: &http.Client{Timeout: registryTimeout}}
+	return &registryClient{http: &http.Client{Timeout: registryTimeout}, hubAPI: "https://hub.docker.com", quayAPI: "https://quay.io"}
+}
+
+func (r *registryClient) get(target string, out any) error {
+	req, err := http.NewRequest(http.MethodGet, target, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("User-Agent", userAgent)
+	res, err := r.http.Do(req)
+	if err != nil {
+		return err
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		return fmt.Errorf("%s answered %d", req.URL.Host, res.StatusCode)
+	}
+	return json.NewDecoder(io.LimitReader(res.Body, 8<<20)).Decode(out)
 }
 
 func (r *registryClient) token(challenge string) (string, error) {
@@ -214,7 +244,12 @@ func (r *registryClient) token(challenge string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	res, err := r.http.Get(tokenURL)
+	req, err := http.NewRequest(http.MethodGet, tokenURL, nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("User-Agent", userAgent)
+	res, err := r.http.Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -241,6 +276,7 @@ func (r *registryClient) do(method, target, bearer string, accept string) (*http
 		if err != nil {
 			return nil, err
 		}
+		req.Header.Set("User-Agent", userAgent)
 		if token != "" {
 			req.Header.Set("Authorization", "Bearer "+token)
 		}
@@ -319,6 +355,123 @@ func (r *registryClient) digest(repo, tag string) (string, error) {
 	return digest, nil
 }
 
+func (r *registryClient) published(repo, tag string) (time.Time, error) {
+	host, path := registryRef(repo)
+	switch host {
+	case "registry-1.docker.io":
+		return r.dockerHubPushed(path, tag)
+	case "quay.io":
+		return r.quayPushed(path, tag)
+	}
+	return r.configCreated(host, path, tag)
+}
+
+func (r *registryClient) dockerHubPushed(path, tag string) (time.Time, error) {
+	namespace, name, ok := strings.Cut(path, "/")
+	if !ok {
+		return time.Time{}, fmt.Errorf("unexpected Docker Hub repository %q", path)
+	}
+	var body struct {
+		TagLastPushed string `json:"tag_last_pushed"`
+		LastUpdated   string `json:"last_updated"`
+	}
+	target := fmt.Sprintf("%s/v2/namespaces/%s/repositories/%s/tags/%s", r.hubAPI, url.PathEscape(namespace), url.PathEscape(name), url.PathEscape(tag))
+	if err := r.get(target, &body); err != nil {
+		return time.Time{}, err
+	}
+	pushed := body.TagLastPushed
+	if pushed == "" {
+		pushed = body.LastUpdated
+	}
+	return time.Parse(time.RFC3339Nano, pushed)
+}
+
+func (r *registryClient) quayPushed(path, tag string) (time.Time, error) {
+	var body struct {
+		Tags []struct {
+			Name    string `json:"name"`
+			StartTS int64  `json:"start_ts"`
+		} `json:"tags"`
+	}
+	target := fmt.Sprintf("%s/api/v1/repository/%s/tag/?specificTag=%s&onlyActiveTags=true", r.quayAPI, path, url.QueryEscape(tag))
+	if err := r.get(target, &body); err != nil {
+		return time.Time{}, err
+	}
+	for _, t := range body.Tags {
+		if t.Name == tag && t.StartTS > 0 {
+			return time.Unix(t.StartTS, 0).UTC(), nil
+		}
+	}
+	return time.Time{}, fmt.Errorf("quay.io has no push time for %s", tag)
+}
+
+func (r *registryClient) registryJSON(host, path, ref, kind, accept string, out any) error {
+	target := fmt.Sprintf("https://%s/v2/%s/%s/%s", host, path, kind, ref)
+	res, _, err := r.do(http.MethodGet, target, "", accept)
+	if err != nil {
+		return err
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		return fmt.Errorf("%s answered %d", host, res.StatusCode)
+	}
+	return json.NewDecoder(io.LimitReader(res.Body, 8<<20)).Decode(out)
+}
+
+type imageManifest struct {
+	Manifests []struct {
+		Digest   string `json:"digest"`
+		Platform struct {
+			OS           string `json:"os"`
+			Architecture string `json:"architecture"`
+		} `json:"platform"`
+	} `json:"manifests"`
+	Config struct {
+		Digest string `json:"digest"`
+	} `json:"config"`
+}
+
+func platformManifest(m imageManifest) string {
+	for _, entry := range m.Manifests {
+		if entry.Platform.OS == "linux" && entry.Platform.Architecture == "amd64" {
+			return entry.Digest
+		}
+	}
+	for _, entry := range m.Manifests {
+		if entry.Platform.OS != "unknown" {
+			return entry.Digest
+		}
+	}
+	return ""
+}
+
+func (r *registryClient) configCreated(host, path, tag string) (time.Time, error) {
+	var manifest imageManifest
+	if err := r.registryJSON(host, path, tag, "manifests", manifestAccept, &manifest); err != nil {
+		return time.Time{}, err
+	}
+	if len(manifest.Manifests) > 0 {
+		digest := platformManifest(manifest)
+		if digest == "" {
+			return time.Time{}, errors.New("the image index lists no platform image")
+		}
+		manifest = imageManifest{}
+		if err := r.registryJSON(host, path, digest, "manifests", manifestAccept, &manifest); err != nil {
+			return time.Time{}, err
+		}
+	}
+	if manifest.Config.Digest == "" {
+		return time.Time{}, errors.New("the image has no config")
+	}
+	var config struct {
+		Created string `json:"created"`
+	}
+	if err := r.registryJSON(host, path, manifest.Config.Digest, "blobs", "", &config); err != nil {
+		return time.Time{}, err
+	}
+	return time.Parse(time.RFC3339Nano, config.Created)
+}
+
 func imagesPath(c *cli.Context) string {
 	return filepath.Join(c.Env.StateDir, imagesFileName)
 }
@@ -374,12 +527,20 @@ func loadOrEmptyValues(path string) (*cli.Values, error) {
 }
 
 type imageReport struct {
-	path    string
-	running string
-	chosen  string
-	ahead   string
-	pinned  bool
-	err     error
+	path     string
+	running  string
+	chosen   string
+	ahead    string
+	pinned   bool
+	err      error
+	notes    []string
+	warnings []string
+}
+
+type registryLookups struct {
+	tags      func(repo string) ([]string, error)
+	digest    func(repo, tag string) (string, error)
+	published func(repo, tag string) (time.Time, error)
 }
 
 func imageAt(values *cli.Values, path string) string {
@@ -390,7 +551,7 @@ func imageAt(values *cli.Values, path string) string {
 	return s
 }
 
-func reportImage(entry bundledImage, chart, user, pinnedFile *cli.Values, tagsFor func(string) ([]string, error), digestFor func(repo, tag string) (string, error), held map[string]bool) imageReport {
+func reportImage(entry bundledImage, chart, user, pinnedFile *cli.Values, lookups registryLookups, held map[string]bool, gate *updateGate) imageReport {
 	report := imageReport{path: entry.path}
 	if pinned := imageAt(user, entry.path); pinned != "" {
 		report.running, report.chosen, report.pinned = pinned, pinned, true
@@ -418,19 +579,22 @@ func reportImage(entry bundledImage, chart, user, pinnedFile *cli.Values, tagsFo
 			}
 		}
 	}
-	tags, err := tagsFor(repo)
+	tags, err := lookups.tags(repo)
 	if err != nil {
 		report.err = err
 		return report
 	}
-	best, ahead := chooseImageTag(current, tags, entry.patchOnly, held, repo)
-	if ahead.raw != best.raw {
+	candidates, ahead := imageCandidates(current, tags, entry.patchOnly, false, held, repo)
+	if ahead != nil {
 		report.ahead = repo + ":" + ahead.raw
 	}
+	plan := planImage(gate, entry.osv, repo, current, candidates, ahead, lookups.published)
+	report.notes, report.warnings = plan.messages(imageCandidate(current), imageName(repo), gate.soak)
+	best := plan.target.tag
 	if best.raw == current.raw && strings.Contains(report.chosen, "@") {
 		return report
 	}
-	digest, err := digestFor(repo, best.raw)
+	digest, err := lookups.digest(repo, best.raw)
 	if err != nil {
 		report.err = err
 		return report
@@ -468,10 +632,23 @@ func imageReports(c *cli.Context) ([]imageReport, *cli.Values, *cli.Values, erro
 		}
 		return tags, err
 	}
+	pushed := map[string]time.Time{}
+	publishedFor := func(repo, tag string) (time.Time, error) {
+		if at, ok := pushed[repo+":"+tag]; ok {
+			return at, nil
+		}
+		at, err := client.published(repo, tag)
+		if err == nil {
+			pushed[repo+":"+tag] = at
+		}
+		return at, err
+	}
+	lookups := registryLookups{tags: tagsFor, digest: client.digest, published: publishedFor}
 	held := readHeld(c)
+	gate := gateFor(c)
 	reports := make([]imageReport, 0, len(bundledImages))
 	for _, entry := range bundledImages {
-		reports = append(reports, reportImage(entry, chart, user, pinnedFile, tagsFor, client.digest, held))
+		reports = append(reports, reportImage(entry, chart, user, pinnedFile, lookups, held, gate))
 	}
 	return reports, chart, pinnedFile, nil
 }
@@ -499,6 +676,12 @@ func refreshBundledImages(c *cli.Context) []imageChange {
 		}
 		if report.pinned || report.chosen == "" {
 			continue
+		}
+		for _, note := range report.notes {
+			c.Printf("%s\n", note)
+		}
+		for _, warning := range report.warnings {
+			c.Warnf("%s\n", warning)
 		}
 		if report.ahead != "" {
 			c.Warnf("note: %s is out and needs a person. %s stays on %s. Read its upgrade notes, then set %s in %s.\n",
@@ -657,6 +840,7 @@ func refreshFloatingWorkloads(c *cli.Context) {
 	}
 	client := newRegistryClient()
 	held := readHeld(c)
+	gate := gateFor(c)
 	for _, workload := range floatingWorkloads {
 		image, err := c.Capture("kubectl", "-n", workload.namespace, "get", "deploy", workload.name,
 			"-o", "jsonpath={.spec.template.spec.containers[0].image}")
@@ -669,14 +853,14 @@ func refreshFloatingWorkloads(c *cli.Context) {
 			continue
 		}
 		if tag == "latest" {
-			restartOnNewLatest(c, client, workload, repo)
+			restartOnNewLatest(c, client, gate, workload, repo)
 		} else {
-			movePinnedWorkload(c, client, workload, image, repo, tag, held)
+			movePinnedWorkload(c, client, gate, workload, image, repo, tag, held)
 		}
 	}
 }
 
-func restartOnNewLatest(c *cli.Context, client *registryClient, workload floatingWorkload, repo string) {
+func restartOnNewLatest(c *cli.Context, client *registryClient, gate *updateGate, workload floatingWorkload, repo string) {
 	digest, err := client.digest(repo, "latest")
 	if err != nil {
 		c.Warnf("note: couldn't check %s: %s\n", repo, err)
@@ -692,6 +876,11 @@ func restartOnNewLatest(c *cli.Context, client *registryClient, workload floatin
 	}
 	for _, d := range running {
 		if d != digest {
+			latest := candidate{tag: imageTag{raw: "latest"}}
+			if !gate.soaked(func(candidate) (time.Time, error) { return client.published(repo, "latest") })(latest) {
+				c.Printf("%s: a new %s:latest is out and waits until it has been public for %d days\n", workload.name, repo, int(gate.soak.Hours()/24))
+				return
+			}
 			c.Printf("%s: a new %s:latest is out\n", workload.name, repo)
 			if err := c.Run("kubectl", "-n", workload.namespace, "rollout", "restart", "deploy/"+workload.name); err != nil {
 				c.Warnf("note: couldn't restart %s: %s\n", workload.name, err)
@@ -705,7 +894,7 @@ func restartOnNewLatest(c *cli.Context, client *registryClient, workload floatin
 	}
 }
 
-func movePinnedWorkload(c *cli.Context, client *registryClient, workload floatingWorkload, image, repo, rawTag string, held map[string]bool) {
+func movePinnedWorkload(c *cli.Context, client *registryClient, gate *updateGate, workload floatingWorkload, image, repo, rawTag string, held map[string]bool) {
 	current, ok := parseImageTag(rawTag)
 	if !ok {
 		return
@@ -715,8 +904,17 @@ func movePinnedWorkload(c *cli.Context, client *registryClient, workload floatin
 		c.Warnf("note: couldn't check %s: %s\n", repo, err)
 		return
 	}
-	best, ahead := floatingTarget(current, tags, held, repo, workload.anyMajor)
-	if ahead.raw != best.raw {
+	candidates, ahead := imageCandidates(current, tags, false, workload.anyMajor, held, repo)
+	plan := planImage(gate, workload.osv, repo, current, candidates, ahead, client.published)
+	notes, warnings := plan.messages(imageCandidate(current), imageName(repo), gate.soak)
+	for _, note := range notes {
+		c.Printf("%s\n", note)
+	}
+	for _, warning := range warnings {
+		c.Warnf("%s\n", warning)
+	}
+	best := plan.target.tag
+	if ahead != nil {
 		c.Warnf("note: %s:%s is out and needs a person. %s stays on %s:%s.\n", repo, ahead.raw, workload.name, repo, best.raw)
 	}
 	if best.raw == current.raw {
@@ -796,6 +994,17 @@ image you set in your values file stays as you set it.
   Redis, pgbouncer and BuildKit   patches only
   everything else listed          any version in the same major version
 
+A version below 1.0 treats a minor version as a major one, so 0.61 to 0.62
+needs a person and 0.61.0 to 0.61.1 doesn't. A new version waits until it has
+been public for 7 days (ORCHARD_UPDATE_SOAK_DAYS in /etc/orchard/env, 0 turns
+the wait off). The date comes from Docker Hub or quay.io for their images, and
+from the image's creation date elsewhere. A version without a date waits.
+
+If OSV.dev lists a vulnerability in the running version, the update moves at
+once to the release that fixes it without adding another known vulnerability,
+and prints "security update". If OSV.dev can't be reached, only the wait
+applies.
+
 Each version it picks is pinned to the digest the registry served for it. The
 installer's zot and cloudflared move the same way, cloudflared to any newer
 release. A new major version always needs a person. If a new version doesn't
@@ -823,6 +1032,9 @@ ORCHARD_ADDON_UPDATES=off in /etc/orchard/env.
 					c.Printf("%-34s %s, can move to %s\n", report.path, report.running, report.chosen)
 				default:
 					c.Printf("%-34s %s\n", report.path, report.running)
+				}
+				for _, note := range append(report.notes, report.warnings...) {
+					c.Printf("%-34s %s\n", "", note)
 				}
 			}
 			noteRailpack(c, chart)

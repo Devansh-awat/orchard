@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/hackclub/orchard/orchardctl/internal/cli"
 )
@@ -35,37 +36,56 @@ func TestParseImageTagKeepsPrefixAndSuffix(t *testing.T) {
 	}
 }
 
-func TestChooseStaysInTheSameMajorAndFlavour(t *testing.T) {
-	tags := []string{"v1.154.1", "v1.155.0", "v1.160.2", "v2.0.0", "1.999.0", "v1.200.0-rc1", "latest"}
-	best, ahead := chooseImageTag(mustTag(t, "v1.154.1"), tags, false, nil, "repo")
-	if best.raw != "v1.160.2" {
-		t.Errorf("best %s", best.raw)
+func raws(tags []imageTag) []string {
+	out := make([]string, len(tags))
+	for i, tag := range tags {
+		out[i] = tag.raw
 	}
-	if ahead.raw != "v2.0.0" {
-		t.Errorf("ahead %s", ahead.raw)
+	return out
+}
+
+func TestCandidatesStayInTheSameMajorAndFlavour(t *testing.T) {
+	tags := []string{"v1.154.1", "v1.160.2", "v1.155.0", "v2.0.0", "1.999.0", "v1.200.0-rc1", "latest", "v1.150.0"}
+	candidates, ahead := imageCandidates(mustTag(t, "v1.154.1"), tags, false, false, nil, "repo")
+	if got := strings.Join(raws(candidates), " "); got != "v1.155.0 v1.160.2" {
+		t.Errorf("candidates %s", got)
+	}
+	if ahead == nil || ahead.raw != "v2.0.0" {
+		t.Errorf("ahead %v", ahead)
 	}
 }
 
-func TestChooseKeepsTheAlpineFlavour(t *testing.T) {
+func TestCandidatesTreatAZeroMinorAsAMajor(t *testing.T) {
+	tags := []string{"0.61.0", "0.61.1", "0.61.4", "0.62.0", "0.63.1", "1.0.0"}
+	candidates, ahead := imageCandidates(mustTag(t, "0.61.0"), tags, false, false, nil, "vector")
+	if got := strings.Join(raws(candidates), " "); got != "0.61.1 0.61.4" {
+		t.Errorf("candidates %s", got)
+	}
+	if ahead == nil || ahead.raw != "1.0.0" {
+		t.Errorf("ahead %v", ahead)
+	}
+	candidates, _ = imageCandidates(mustTag(t, "1.4.0"), []string{"1.4.1", "1.5.0", "2.0.0"}, false, false, nil, "x")
+	if got := strings.Join(raws(candidates), " "); got != "1.4.1 1.5.0" {
+		t.Errorf("a minor version above 1.0 should be eligible: %s", got)
+	}
+}
+
+func TestCandidatesKeepTheAlpineFlavour(t *testing.T) {
 	tags := []string{"7.4.11-alpine", "7.4.12-alpine", "7.4.13", "7.4.14-bookworm", "7.6.0-alpine", "8.0.0-alpine"}
-	best, ahead := chooseImageTag(mustTag(t, "7.4.11-alpine"), tags, true, nil, "redis")
-	if best.raw != "7.4.12-alpine" {
-		t.Errorf("patch-only best %s", best.raw)
+	candidates, ahead := imageCandidates(mustTag(t, "7.4.11-alpine"), tags, true, false, nil, "redis")
+	if got := strings.Join(raws(candidates), " "); got != "7.4.12-alpine" {
+		t.Errorf("patch-only candidates %s", got)
 	}
-	if ahead.raw != "8.0.0-alpine" {
-		t.Errorf("ahead %s", ahead.raw)
+	if ahead == nil || ahead.raw != "8.0.0-alpine" {
+		t.Errorf("ahead %v", ahead)
 	}
 }
 
-func TestChooseSkipsAHeldVersion(t *testing.T) {
+func TestCandidatesSkipAHeldVersion(t *testing.T) {
 	held := map[string]bool{"repo:v1.156.0": true}
-	best, _ := chooseImageTag(mustTag(t, "v1.155.0"), []string{"v1.155.0", "v1.156.0"}, false, held, "repo")
-	if best.raw != "v1.155.0" {
-		t.Errorf("a held version was chosen: %s", best.raw)
-	}
-	best, _ = chooseImageTag(mustTag(t, "v1.155.0"), []string{"v1.156.0", "v1.157.0"}, false, held, "repo")
-	if best.raw != "v1.157.0" {
-		t.Errorf("a newer version than the held one should be tried: %s", best.raw)
+	candidates, _ := imageCandidates(mustTag(t, "v1.155.0"), []string{"v1.155.0", "v1.156.0", "v1.157.0"}, false, false, held, "repo")
+	if got := strings.Join(raws(candidates), " "); got != "v1.157.0" {
+		t.Errorf("candidates %s", got)
 	}
 }
 
@@ -86,16 +106,16 @@ func TestSplitImage(t *testing.T) {
 	}
 }
 
-func TestFloatingTargetCanCrossACalendarYear(t *testing.T) {
+func TestFloatingCandidatesCanCrossACalendarYear(t *testing.T) {
 	tags := []string{"2026.11.0", "2026.12.1", "2027.1.0", "2027.1.1", "latest"}
 	held := map[string]bool{"cf:2027.1.1": true}
-	best, _ := floatingTarget(mustTag(t, "2026.11.0"), tags, held, "cf", true)
-	if best.raw != "2027.1.0" {
-		t.Errorf("calendar best %s", best.raw)
+	candidates, ahead := imageCandidates(mustTag(t, "2026.11.0"), tags, false, true, held, "cf")
+	if got := strings.Join(raws(candidates), " "); got != "2026.12.1 2027.1.0" || ahead != nil {
+		t.Errorf("calendar candidates %s, ahead %v", got, ahead)
 	}
-	best, ahead := floatingTarget(mustTag(t, "v2.1.20"), []string{"v2.1.23", "v3.0.0"}, nil, "zot", false)
-	if best.raw != "v2.1.23" || ahead.raw != "v3.0.0" {
-		t.Errorf("semver best %s ahead %s", best.raw, ahead.raw)
+	candidates, ahead = imageCandidates(mustTag(t, "v2.1.20"), []string{"v2.1.23", "v3.0.0"}, false, false, nil, "zot")
+	if got := strings.Join(raws(candidates), " "); got != "v2.1.23" || ahead == nil || ahead.raw != "v3.0.0" {
+		t.Errorf("semver candidates %s ahead %v", got, ahead)
 	}
 }
 
@@ -147,13 +167,23 @@ func values(t *testing.T, raw string) *cli.Values {
 	return v
 }
 
+func lookups(tags func(string) ([]string, error), digest func(string, string) (string, error)) registryLookups {
+	return registryLookups{tags: tags, digest: digest, published: func(string, string) (time.Time, error) {
+		return time.Time{}, errors.New("no dates in this test")
+	}}
+}
+
+func openGate() *updateGate {
+	return &updateGate{now: func() time.Time { return fixedNow }}
+}
+
 func TestReportLeavesAnImageTheUserSet(t *testing.T) {
 	report := reportImage(bundledImage{path: "redis.image", patchOnly: true},
 		values(t, "redis: {image: 'redis:8.10.3-alpine'}"),
 		values(t, "redis: {image: 'my.registry/redis:6.0.0'}"),
 		values(t, "{}"),
-		func(string) ([]string, error) { t.Fatal("no registry call for a pinned image"); return nil, nil },
-		noDigest(t), nil)
+		lookups(func(string) ([]string, error) { t.Fatal("no registry call for a pinned image"); return nil, nil }, noDigest(t)),
+		nil, openGate())
 	if !report.pinned || report.chosen != "my.registry/redis:6.0.0" {
 		t.Errorf("got %+v", report)
 	}
@@ -163,21 +193,46 @@ func TestReportNeverGoesBelowTheChartOrTheLastVersion(t *testing.T) {
 	entry := bundledImage{path: "logs.vector.image"}
 	chart := values(t, "logs: {vector: {image: 'timberio/vector:0.61.0-distroless-libc'}}")
 	tags := func(string) ([]string, error) {
-		return []string{"0.60.0-distroless-libc", "0.61.0-distroless-libc", "0.62.0-distroless-libc"}, nil
+		return []string{"0.60.0-distroless-libc", "0.61.0-distroless-libc", "0.61.2-distroless-libc", "0.61.3-distroless-libc", "0.62.0-distroless-libc"}, nil
 	}
-	report := reportImage(entry, chart, values(t, "{}"), values(t, "{}"), tags, digestOf, nil)
-	if report.running != "timberio/vector:0.61.0-distroless-libc" || report.chosen != "timberio/vector:0.62.0-distroless-libc@sha256:0.62.0-distroless-libc" {
+	report := reportImage(entry, chart, values(t, "{}"), values(t, "{}"), lookups(tags, digestOf), nil, openGate())
+	if report.running != "timberio/vector:0.61.0-distroless-libc" || report.chosen != "timberio/vector:0.61.3-distroless-libc@sha256:0.61.3-distroless-libc" {
 		t.Errorf("got %+v", report)
 	}
-	previous := values(t, "logs: {vector: {image: 'timberio/vector:0.63.0-distroless-libc'}}")
-	report = reportImage(entry, chart, values(t, "{}"), previous, tags, digestOf, nil)
-	if report.chosen != "timberio/vector:0.63.0-distroless-libc@sha256:0.63.0-distroless-libc" {
+	if report.ahead != "timberio/vector:0.62.0-distroless-libc" {
+		t.Errorf("a new minor version below 1.0 should need a person: %+v", report)
+	}
+	previous := values(t, "logs: {vector: {image: 'timberio/vector:0.61.5-distroless-libc'}}")
+	report = reportImage(entry, chart, values(t, "{}"), previous, lookups(tags, digestOf), nil, openGate())
+	if report.chosen != "timberio/vector:0.61.5-distroless-libc@sha256:0.61.5-distroless-libc" {
 		t.Errorf("went backwards: %+v", report)
 	}
 	older := values(t, "logs: {vector: {image: 'timberio/vector:0.50.0-distroless-libc'}}")
-	report = reportImage(entry, chart, values(t, "{}"), older, tags, digestOf, nil)
+	report = reportImage(entry, chart, values(t, "{}"), older, lookups(tags, digestOf), nil, openGate())
 	if report.running != "timberio/vector:0.61.0-distroless-libc" {
 		t.Errorf("a new chart should win over an older record: %+v", report)
+	}
+}
+
+func TestReportWaitsForTheSoak(t *testing.T) {
+	entry := bundledImage{path: "metrics.vmagent.image"}
+	chart := values(t, "metrics: {vmagent: {image: 'victoriametrics/vmagent:v1.156.0'}}")
+	tags := func(string) ([]string, error) { return []string{"v1.156.0", "v1.157.0", "v1.158.0"}, nil }
+	dates := map[string]time.Time{"v1.157.0": fixedNow.Add(-9 * day), "v1.158.0": fixedNow.Add(-2 * day)}
+	gate := &updateGate{now: func() time.Time { return fixedNow }, soak: 7 * day}
+	look := lookups(tags, digestOf)
+	look.published = func(_, tag string) (time.Time, error) {
+		if at, ok := dates[tag]; ok {
+			return at, nil
+		}
+		return time.Time{}, errors.New("unknown")
+	}
+	report := reportImage(entry, chart, values(t, "{}"), values(t, "{}"), look, nil, gate)
+	if report.chosen != "victoriametrics/vmagent:v1.157.0@sha256:v1.157.0" {
+		t.Errorf("got %+v", report)
+	}
+	if len(report.notes) != 1 || !strings.Contains(report.notes[0], "v1.158.0 is out and waits") {
+		t.Errorf("notes %v", report.notes)
 	}
 }
 
@@ -185,7 +240,7 @@ func TestReportKeepsTheVersionWhenARegistryFails(t *testing.T) {
 	failure := errors.New("no route")
 	report := reportImage(bundledImage{path: "redis.image"},
 		values(t, "redis: {image: 'redis:8.10.3-alpine'}"), values(t, "{}"), values(t, "{}"),
-		func(string) ([]string, error) { return nil, failure }, noDigest(t), nil)
+		lookups(func(string) ([]string, error) { return nil, failure }, noDigest(t)), nil, openGate())
 	if !errors.Is(report.err, failure) || report.chosen != "redis:8.10.3-alpine" {
 		t.Errorf("got %+v", report)
 	}
@@ -205,19 +260,19 @@ func noDigest(t *testing.T) func(string, string) (string, error) {
 func TestReportKeepsAPinnedChartDigest(t *testing.T) {
 	chart := values(t, "redis: {image: 'redis:8.10.3-alpine@sha256:chart'}")
 	tags := func(string) ([]string, error) { return []string{"8.10.3-alpine", "8.11.0-alpine"}, nil }
-	report := reportImage(bundledImage{path: "redis.image", patchOnly: true}, chart, values(t, "{}"), values(t, "{}"), tags, noDigest(t), nil)
+	report := reportImage(bundledImage{path: "redis.image", patchOnly: true}, chart, values(t, "{}"), values(t, "{}"), lookups(tags, noDigest(t)), nil, openGate())
 	if report.chosen != "redis:8.10.3-alpine@sha256:chart" || report.ahead != "redis:8.11.0-alpine" {
 		t.Errorf("got %+v", report)
 	}
 	unpinned := values(t, "redis: {image: 'redis:8.10.3-alpine'}")
-	report = reportImage(bundledImage{path: "redis.image", patchOnly: true}, unpinned, values(t, "{}"), values(t, "{}"), tags, digestOf, nil)
+	report = reportImage(bundledImage{path: "redis.image", patchOnly: true}, unpinned, values(t, "{}"), values(t, "{}"), lookups(tags, digestOf), nil, openGate())
 	if report.chosen != "redis:8.10.3-alpine@sha256:8.10.3-alpine" {
 		t.Errorf("a tag without a digest should be pinned: %+v", report)
 	}
 	failure := errors.New("no digest")
 	report = reportImage(bundledImage{path: "redis.image"}, unpinned, values(t, "{}"), values(t, "{}"),
-		func(string) ([]string, error) { return []string{"8.10.4-alpine"}, nil },
-		func(string, string) (string, error) { return "", failure }, nil)
+		lookups(func(string) ([]string, error) { return []string{"8.10.4-alpine"}, nil },
+			func(string, string) (string, error) { return "", failure }), nil, openGate())
 	if !errors.Is(report.err, failure) || report.chosen != "redis:8.10.3-alpine" {
 		t.Errorf("a failed digest lookup should keep the version: %+v", report)
 	}
