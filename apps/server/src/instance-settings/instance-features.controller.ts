@@ -26,6 +26,7 @@ export class InstanceFeaturesController {
       earlyAccessOpen: !this.analytics.configured,
       fastBuilder: new FirecrackerClient().enabled,
       email: this.emailService.isConfigured(),
+      superBuilds: Boolean(process.env.DEPOT_TOKEN),
       storage: storageFeatures(),
       resourceLimits: (await this.settings.getResourceLimitsState()).value
     };

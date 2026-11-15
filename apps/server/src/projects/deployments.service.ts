@@ -165,6 +165,9 @@ function safeDockerfileTarget(raw: string | null | undefined): string | null {
   return target;
 }
 
+export const SUPER_BUILDS_UNAVAILABLE =
+  "Super builds aren't set up on this instance. Set DEPOT_TOKEN on the server to use them.";
+
 @Injectable()
 export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(DeploymentsService.name);
@@ -2972,6 +2975,9 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       throw new ForbiddenException(
         'Super builds and persistent build cache are superadmin-only settings'
       );
+    }
+    if (buildWithDepot === true && !deployment.buildWithDepot && !process.env.DEPOT_TOKEN) {
+      throw new BadRequestException(SUPER_BUILDS_UNAVAILABLE);
     }
 
     // Super builds cannot execute a Railpack plan, so refuse the combination
@@ -7141,6 +7147,9 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       throw new ForbiddenException(
         'Super builds and persistent build cache are superadmin-only settings'
       );
+    }
+    if (data.buildWithDepot && !process.env.DEPOT_TOKEN) {
+      throw new BadRequestException(SUPER_BUILDS_UNAVAILABLE);
     }
 
     const nameInput = String(data.name || '').trim();

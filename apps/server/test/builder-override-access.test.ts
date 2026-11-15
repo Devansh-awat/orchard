@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { ForbiddenException } from '@nestjs/common';
-import { DeploymentsService } from '../src/projects/deployments.service';
+import { BadRequestException, ForbiddenException } from '@nestjs/common';
+import { DeploymentsService, SUPER_BUILDS_UNAVAILABLE } from '../src/projects/deployments.service';
 import { AuthorizationService } from '../src/auth/authorization.service';
 import { requestAuthStorage } from '../src/auth/request-context';
 
@@ -88,8 +88,25 @@ test('a superadmin sets super builds only from an unrestricted principal', async
     );
   }
   assert.equal(deployment.buildWithDepot, false);
-  await requestAuthStorage.run({ browserSession: true }, () =>
-    service.updateDeploymentBuildConfig('dep', { buildWithDepot: true }, 'clerk')
-  );
+  process.env.DEPOT_TOKEN = 'depot';
+  try {
+    await requestAuthStorage.run({ browserSession: true }, () =>
+      service.updateDeploymentBuildConfig('dep', { buildWithDepot: true }, 'clerk')
+    );
+  } finally {
+    delete process.env.DEPOT_TOKEN;
+  }
   assert.equal(deployment.buildWithDepot, true);
+});
+
+test('super builds are refused when the instance has no depot token', async () => {
+  const { service, deployment } = harness({ canEdit: true, superAdmin: true });
+  delete process.env.DEPOT_TOKEN;
+  await assert.rejects(
+    requestAuthStorage.run({ browserSession: true }, () =>
+      service.updateDeploymentBuildConfig('dep', { buildWithDepot: true }, 'clerk')
+    ),
+    (error) => error instanceof BadRequestException && error.message === SUPER_BUILDS_UNAVAILABLE
+  );
+  assert.equal(deployment.buildWithDepot, false);
 });
