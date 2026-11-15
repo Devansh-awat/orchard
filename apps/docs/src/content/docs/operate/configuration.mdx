@@ -274,7 +274,7 @@ When `BASE_DOMAIN` is set, Orchard creates an Ingress and a certificate for each
 | `PLATFORM_SERVICE_PORT` | The Service port. The chart sets this to the frontend port.                                                         |
 | `CERT_CLUSTER_ISSUER`   | The ClusterIssuer for the certificate. Set this with `tenant.certClusterIssuer`. The default is `letsencrypt-prod`. |
 
-The chart does not set these values if you use `server.envFrom`. In that case, add them to your Secret. Without them, the server uses `default/leaf-frontend:3000`.
+The chart does not set these values if you use `server.envFrom`. In that case, add them to your Secret. Without them, the server uses `default/leaf-frontend:3000`. With `server.envFrom`, the chart also does not pass `BASE_DOMAIN` to the dashboard, so set `PUBLIC_BASE_DOMAIN` to the same domain in `frontend.env`. Without it, the dashboard does not show the **Vanity address** section or the **Host** field of a status page.
 
 A vanity address sends visitors to the organization's SSO sign-in page. If the organization has no working SSO connection, visitors go to the default sign-in page. The dashboard host keeps working if it is a subdomain of `BASE_DOMAIN`.
 

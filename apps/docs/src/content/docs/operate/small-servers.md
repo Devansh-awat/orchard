@@ -52,7 +52,7 @@ Without metrics, the dashboard does not show charts of CPU, memory, and requests
 
 ## Datadog
 
-Orchard sends traces and profiles to Datadog only when you turn it on. The installer and the chart leave it off. When it is off, the server does not load the Datadog tracer, which saves about 25 MiB of memory. With the tracer, the profiler, and App and API Protection on, each server pod uses about 100 MiB more.
+Orchard sends traces and profiles to Datadog only when you turn it on. The installer and the chart leave it off. When it is off, the server does not load the Datadog tracer, so the tracer uses no memory. The tracer, the profiler, and App and API Protection each add to the memory of every server pod, so leave Datadog off on a small server unless you use it.
 
 To turn it on, run a Datadog agent in the cluster and set `datadog.enabled` to `true`. For the values, refer to the [chart reference](https://github.com/hackclub/orchard/tree/main/infra/charts/orchard#datadog-datadog).
 

@@ -5,7 +5,7 @@ sidebar:
   order: 7
 ---
 
-Bot protection adds a Cloudflare Turnstile challenge to the sign-in pages and to [password-protected apps](/deploy/protection/), so that scripts cannot request sign-in codes or guess app passwords in bulk. Turnstile checks the visitor in the background and usually does not ask them to solve a puzzle.
+Bot protection adds a Cloudflare Turnstile challenge to sign-in with an email code or a password, and to [password-protected apps](/deploy/protection/), so that scripts cannot request sign-in codes or guess passwords in bulk. Passkeys and single sign-on do not get a challenge. Turnstile checks the visitor in the background and usually does not ask them to solve a puzzle.
 
 Bot protection stays off until you set both keys.
 
@@ -26,10 +26,10 @@ Bot protection stays off until you set both keys.
 After you save the keys, Orchard refuses a sign-in that cannot solve the challenge. Test the sign-in page in a private browser window before you sign out.
 :::
 
-| Setting                                           | Default | Description                                                                                                      |
-| ------------------------------------------------- | ------- | ---------------------------------------------------------------------------------------------------------------- |
-| **Challenge the sign-in pages**                   | On      | Orchard ignores this setting until both keys are set. Turning it off keeps the keys.                             |
-| **Refuse sign-in when Cloudflare is unreachable** | Off     | When this is off, Orchard allows sign-ins without a challenge if it cannot reach Cloudflare, and logs the event. |
+| Setting                                           | Default | Description                                                                                                                                                   |
+| ------------------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Challenge the sign-in pages**                   | On      | Orchard ignores this setting until both keys are set. Turning it off removes the challenge from sign-in and from password-protected apps, and keeps the keys. |
+| **Refuse sign-in when Cloudflare is unreachable** | Off     | When this is off, Orchard allows sign-ins without a challenge if it cannot reach Cloudflare, and logs the event.                                              |
 
 ## Set keys with environment variables
 

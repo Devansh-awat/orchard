@@ -120,13 +120,13 @@ The default name is `<name>-fork`.
 
 The [operator sets these limits](/operate/greenhouse/#settings-reference). The following values are the defaults.
 
-| Limit               | Default    | Behavior                                                                                                             |
-| ------------------- | ---------- | -------------------------------------------------------------------------------------------------------------------- |
-| Machines per person | 1          | Creating or forking past the limit fails. Superadmins can change the limit per person, and have no limit themselves. |
-| Idle stop           | 60 minutes | Orchard stops a running machine with no terminal or SSH activity for this long. A working agent counts as activity.  |
-| Maximum lifetime    | 168 hours  | Orchard stops a machine this long after its last start, whether or not it is active. Orchard does not delete it.     |
-| People per machine  | 50         | Fixed.                                                                                                               |
-| Active share links  | 50         | Fixed, per machine.                                                                                                  |
+| Limit               | Default    | Behavior                                                                                                                                                    |
+| ------------------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Machines per person | 1          | Creating or forking past the limit fails. Superadmins can change the limit per person in **Instance admin** > **Greenhouse**, and have no limit themselves. |
+| Idle stop           | 60 minutes | Orchard stops a running machine with no terminal or SSH activity for this long. A working agent counts as activity.                                         |
+| Maximum lifetime    | 168 hours  | Orchard stops a machine this long after its last start, whether or not it is active. Orchard does not delete it.                                            |
+| People per machine  | 50         | Fixed.                                                                                                                                                      |
+| Active share links  | 50         | Fixed, per machine.                                                                                                                                         |
 
 The [audit log](/teams/audit-logs/) records each stop caused by a limit.
 
