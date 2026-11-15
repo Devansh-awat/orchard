@@ -13,7 +13,7 @@ import (
 
 const (
 	hostDefaultsPath    = "hostDefaults"
-	hostDefaultsVersion = 4
+	hostDefaultsVersion = 5
 	smallBoxMemMB       = 7500
 
 	cnpgOperatorNamespaceEnv = "CNPG_OPERATOR_NAMESPACE"
@@ -100,6 +100,10 @@ func applyHostDefaults(values *cli.Values, facts hostFacts) []string {
 	}
 	if round < 4 {
 		changes = append(changes, dropAlwaysPullPolicy(values)...)
+	}
+	if round < 5 && values.Get("gateway.enabled") == true {
+		values.Unset("gateway.enabled")
+		changes = append(changes, "gateway.enabled removed (Orchard routes apps with Ingress and creates no Gateway API routes, so the chart's Gateway objects carried no traffic)")
 	}
 	_ = values.Put(hostDefaultsPath, hostDefaultsVersion)
 	return changes

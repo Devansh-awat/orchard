@@ -259,6 +259,30 @@ func TestHostDefaultsFourthRoundDropsAlwaysForPinnedImages(t *testing.T) {
 	}
 }
 
+func TestHostDefaultsFifthRoundTurnsOffTheGateway(t *testing.T) {
+	const installed = "hostDefaults: 4\ngateway:\n  enabled: true\n  namespace: network\n  http:\n    enabled: false\n    appDomain: apps.example.com\n"
+	values := load(t, installed)
+	changes := applyHostDefaults(values, hostFacts{ReleaseChart: true})
+	if len(changes) != 1 || !strings.Contains(changes[0], "gateway.enabled removed") {
+		t.Fatalf("expected one note for the gateway, got %v", changes)
+	}
+	if values.Get("gateway.enabled") != nil || values.Get("gateway.http.appDomain") != "apps.example.com" {
+		t.Fatalf("only the switch goes, got %#v", values.Get("gateway"))
+	}
+
+	if err := values.Put("gateway.enabled", true); err != nil {
+		t.Fatal(err)
+	}
+	if changes := applyHostDefaults(values, hostFacts{ReleaseChart: true}); changes != nil || values.Get("gateway.enabled") != true {
+		t.Fatalf("a gateway turned on after the round has to stick, got %v", changes)
+	}
+
+	off := load(t, "hostDefaults: 4\ngateway:\n  enabled: false\n")
+	if changes := applyHostDefaults(off, hostFacts{ReleaseChart: true}); changes != nil || off.Get("gateway.enabled") != false {
+		t.Fatalf("an explicit false stays, got %v", changes)
+	}
+}
+
 func TestReleaseChart(t *testing.T) {
 	if !releaseChart("oci://ghcr.io/hackclub/orchard/charts/orchard") {
 		t.Fatal("the published chart carries release versions")

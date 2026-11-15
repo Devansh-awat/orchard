@@ -179,8 +179,9 @@ the values file are filled in, apart from metrics.enabled and r2Proxy.enabled,
 which older installers wrote as false themselves. An install with the bundled
 zot registry but no builders.registryEgress entry for it gets one, since builds
 can't push without it. The latest server and frontend tags that older
-installers wrote are removed, so those images follow the chart version. Each
-change is printed. A hostDefaults key records that this ran, so turning
+installers wrote are removed, so those images follow the chart version, and
+so is the gateway.enabled: true they wrote, since Orchard creates no Gateway
+API routes. Each change is printed. A hostDefaults key records that this ran, so turning
 something back off sticks.
 
 Then helm upgrade --install with your values file, restarts a deployment whose
