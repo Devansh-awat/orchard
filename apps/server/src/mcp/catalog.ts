@@ -204,6 +204,8 @@ export const TOOL_CATALOG: Record<string, ToolSpec> = {
   delete_database_user: t('databases', 'destructive'),
   list_postgres_versions: t('databases', 'read'),
   get_database_security: t('databases', 'read'),
+  get_project_database_security: t('databases', 'read'),
+  update_database_minor: t('databases', 'update'),
 
   list_ingresses: t('domains', 'read'),
   get_ingress: t('domains', 'read'),

@@ -428,6 +428,8 @@ Show which known Postgres vulnerabilities (CVEs from postgresql.org) affect a da
 
 ### `get_project_database_security`
 
+**toolset: databases · read-only · idempotent**
+
 Summarise Postgres security for every dedicated database in a project: running version, action (none, minor_update, major_upgrade, unknown), vulnerability count, highest CVSS score, end of life and the available minor update. autoUpdate says whether the organization opted in to automatic minor updates.
 
 ### `list_checkpoints`
@@ -502,6 +504,8 @@ Prove a database can actually be restored: restores its latest backup into a thr
 Bring a deleted database back from the trash, restored from its backups up to the moment it was deleted. It keeps its id and password but runs on a new cluster, so read get_database_connection afterwards and update DATABASE_URL on the apps that used it. Returns the operation; poll it with get_database_operation.
 
 ### `update_database_minor`
+
+**toolset: databases · idempotent**
 
 Move a database to the newest minor release of its Postgres major (the minorUpdate.to from get_database_security). CNPG restarts the instances one at a time, replicas first, so a database with replicas stays available and a single instance restarts once. Refused when the update also changes the OS image and a database uses a non-C collation.
 
