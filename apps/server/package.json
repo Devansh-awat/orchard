@@ -18,6 +18,8 @@
     "test:migration-drift": "tsx --test test/migration-drift.test.ts",
     "prisma:studio": "prisma studio",
     "test:rbac": "tsx --test test/rbac.e2e.ts",
+    "test": "node scripts/run-tests.mjs unit",
+    "test:postgres": "node scripts/run-tests.mjs postgres",
     "test:auth-coverage": "tsx --test test/auth-coverage.test.ts",
     "test:isolation:matrix": "tsx --test test/isolation/matrix.test.ts",
     "test:isolation": "node -r ts-node/register/transpile-only --test --test-force-exit test/isolation/replay.test.ts",

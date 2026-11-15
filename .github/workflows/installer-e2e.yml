@@ -26,6 +26,7 @@ defaults:
 
 jobs:
   install:
+    if: ${{ !startsWith(github.head_ref, 'release-please--') }}
     name: install (${{ matrix.arch }}, ${{ matrix.runner }})
     strategy:
       fail-fast: false
