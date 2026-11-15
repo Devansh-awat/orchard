@@ -114,7 +114,7 @@ func gitAddCmd() *cobra.Command {
 	c.Flags().StringVar(&provider, "provider", "", "github | gitlab | gitea | bitbucket | generic")
 	c.Flags().StringVar(&name, "name", "", "short name used with --git on deploy create")
 	c.Flags().StringVar(&baseURL, "url", "", "base URL of the host (default: the public instance of the provider)")
-	c.Flags().StringVar(&username, "username", "", "username for bitbucket app passwords and generic hosts")
+	c.Flags().StringVar(&username, "username", "", "Atlassian account email for a bitbucket API token, or the username for a generic host")
 	c.Flags().StringVar(&token, "token", "", "token or password")
 	_ = c.MarkFlagRequired("provider")
 	_ = c.MarkFlagRequired("name")
