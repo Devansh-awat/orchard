@@ -33,7 +33,7 @@ source "${installer}"
 set +e
 step() { :; }
 HTTP_SUFFIX= HTTPS_SUFFIX= USE_TLS=true INGRESS_MODE=public CERT_ISSUER=letsencrypt
-HTTP_PORT=80 HTTPS_PORT=443 IMAGE_TAG=latest IMAGE_PULL_POLICY=Always
+HTTP_PORT=80 HTTPS_PORT=443 IMAGE_TAG= IMAGE_PULL_POLICY=Always
 ORCHARD_APP_DOMAIN=apps.example.com ORCHARD_DOMAIN=orchard.example.com
 ORCHARD_MCP_DOMAIN=mcp.example.com MAX_BUILDS=2 DB_DEFAULT_MEMORY_MB=1024 APP_DEFAULT_MEMORY_MB=1024 ARCH=amd64
 REGISTRY_HOST=registry.local REGISTRY_PORT=5000 REGISTRY_USER=orchard REGISTRY_PASSWORD=sekret
@@ -545,7 +545,7 @@ test(
 
       const output = box.run('load_previous_answers; write_values');
 
-      assert.equal(read('.hostDefaults'), '2');
+      assert.equal(read('.hostDefaults'), '3');
       assert.equal(env('CNPG_OPERATOR_NAMESPACE'), 'cnpg-system');
       assert.equal(read('.logs.retention'), '14d');
       assert.equal(read('.trivy.enabled'), 'true');
@@ -2418,7 +2418,7 @@ test('containers may signal themselves only where AppArmor stacks their profile'
   }
 });
 
-test('a pinned chart version keeps the images it ships with', () => {
+test('the server and frontend run the chart versions unless a tag is given', () => {
   const rendered = (setup: string) => {
     const box = sandbox();
     try {
@@ -2430,13 +2430,77 @@ test('a pinned chart version keeps the images it ships with', () => {
   };
   const frontendTag = (tag: string) =>
     new RegExp(`^frontend:\\n  replicas: 1\\n  image:\\n    tag: ${tag}`, 'm');
-  assert.match(rendered('ORCHARD_VERSION='), frontendTag('latest'));
-  assert.doesNotMatch(rendered('ORCHARD_VERSION=2.85.0'), frontendTag('.'));
+  assert.doesNotMatch(rendered('settle_image_tag'), frontendTag('.'));
+  assert.doesNotMatch(rendered('ORCHARD_VERSION=2.85.0; settle_image_tag'), frontendTag('.'));
   assert.match(
-    rendered('ORCHARD_VERSION=2.85.0; FLAGS_GIVEN=" --image-tag "; IMAGE_TAG=main'),
+    rendered(
+      'ORCHARD_VERSION=2.85.0; FLAGS_GIVEN=" --image-tag "; IMAGE_TAG=main; settle_image_tag'
+    ),
     frontendTag('main')
   );
 });
+
+test('a saved latest tag gives way to the chart versions once', () => {
+  const box = sandbox();
+  try {
+    const settle = (setup: string, round = '2') =>
+      box
+        .run(
+          `mkdir -p "$STATE_DIR"; touch "$VALUES_FILE"; yq() { echo ${round}; }; PREVIOUS_INSTALL=true IMAGE_TAG=latest; ${setup}; settle_image_tag; echo "tag=$IMAGE_TAG"`
+        )
+        .trim();
+    assert.equal(settle(':'), 'tag=', 'the old installer default goes');
+    assert.equal(settle(':', '3'), 'tag=latest', 'a latest set after the change stays');
+    assert.equal(settle('ORCHARD_VERSION=2.85.0', '3'), 'tag=', 'a pinned chart pins its images');
+    assert.equal(settle('FLAGS_GIVEN=" --image-tag "'), 'tag=latest', 'an answer wins');
+    assert.equal(
+      settle('IMAGE_REGISTRY=registry.example.com'),
+      'tag=latest',
+      'a mirror may not carry release tags'
+    );
+    assert.equal(settle('PREVIOUS_INSTALL=false'), 'tag=latest');
+    assert.equal(
+      box.run(`CHART_REF="${chart}"; settle_image_tag; echo "tag=$IMAGE_TAG"`).trim(),
+      'tag=latest',
+      'a chart from a checkout has no release versions to fall back on'
+    );
+  } finally {
+    box.cleanup();
+  }
+});
+
+test(
+  'a re-run drops the latest tags an older installer wrote',
+  { skip: !has('yq', '--version') },
+  () => {
+    const box = sandbox();
+    try {
+      const { read } = readValues(box);
+      box.run(`mkdir -p "${box.state}"; write_values`);
+      assert.equal(read('.server.image.tag // ""'), '');
+      box.run(
+        `yq -i '.hostDefaults = 2 | .server.image.tag = "latest" | .frontend.image.tag = "latest"' "$VALUES_FILE"`
+      );
+
+      const output = box.run('load_previous_answers; settle_image_tag; write_values');
+      assert.match(output, /server\.image\.tag: removed/);
+      assert.equal(read('.server.image.tag // ""'), '');
+      assert.equal(read('.frontend.image.tag // ""'), '');
+      assert.equal(read('.hostDefaults'), '3');
+
+      box.run(
+        `yq -i '.server.image.tag = "latest" | .frontend.image.tag = "latest"' "$VALUES_FILE"`
+      );
+      box.run('load_previous_answers; settle_image_tag; write_values');
+      assert.equal(read('.server.image.tag'), 'latest', 'latest chosen after the change stays');
+
+      box.run('ORCHARD_VERSION=2.85.0; load_previous_answers; settle_image_tag; write_values');
+      assert.equal(read('.server.image.tag // ""'), '', 'a pinned chart version pins the images');
+    } finally {
+      box.cleanup();
+    }
+  }
+);
 
 test('a release version is refused as an image tag', () => {
   const box = sandbox();

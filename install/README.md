@@ -345,14 +345,22 @@ sudo ./install.sh --yes \
 | ------------------------------ | --------------------------- | ----------------------------------------------- |
 | `--chart <ref>`                | `ORCHARD_CHART`             | `oci://ghcr.io/hackclub/orchard/charts/orchard` |
 | `--chart-version <semver>`     | `ORCHARD_VERSION`           | latest                                          |
-| `--image-tag <tag>`            | `ORCHARD_IMAGE_TAG`         | `latest`                                        |
+| `--image-tag <tag>`            | `ORCHARD_IMAGE_TAG`         | unset: the chart's release versions             |
 | `--image-pull-policy <policy>` | `ORCHARD_IMAGE_PULL_POLICY` | `Always`                                        |
 | `--image-registry <host>`      | `ORCHARD_IMAGE_REGISTRY`    | `ghcr.io`                                       |
 | `--image-repository <path>`    | `ORCHARD_IMAGE_REPOSITORY`  | `hackclub/orchard`                              |
 
-The image tag is pinned rather than inherited from the chart's `appVersion`,
-because the server and the frontend are versioned independently and one
-`appVersion` cannot name both.
+By default the values file sets no image tag, so the server, frontend and MCP
+run the versions the published chart was released with, and they move together
+when `orchardctl update` installs a newer chart. A restart never changes the
+version. `--image-tag` sets one tag for the server and frontend, such as
+`latest` or a build of your own, and is kept on re-runs. A release version is
+refused there, because the server and frontend are versioned separately: use
+`--chart-version` instead. A chart from a local directory has no release
+versions, so with `--chart <dir>` the tag falls back to `latest`.
+
+Earlier installers wrote `latest`. On such a host, the next re-run or
+`orchardctl update` removes those two tags once and prints the change.
 
 ### Cluster
 

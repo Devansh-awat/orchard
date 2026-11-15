@@ -94,9 +94,9 @@ PREV_PUBLIC_IP=''
 PREV_EMAIL=''
 PREV_UPDATES=''
 
-HOST_DEFAULTS_VERSION=2
+HOST_DEFAULTS_VERSION=3
 
-IMAGE_TAG=${ORCHARD_IMAGE_TAG:-latest}
+IMAGE_TAG=${ORCHARD_IMAGE_TAG:-}
 IMAGE_PULL_POLICY=${ORCHARD_IMAGE_PULL_POLICY:-Always}
 
 START_TS=$(date +%s)
@@ -355,7 +355,8 @@ usage() {
   Versions and images
     --chart <ref>                ORCHARD_CHART          helm chart, OCI ref or local path
     --chart-version <semver>     ORCHARD_VERSION        pin the chart version and its images
-    --image-tag <tag>            ORCHARD_IMAGE_TAG      moving tag for server and frontend, such as latest
+    --image-tag <tag>            ORCHARD_IMAGE_TAG      tag for server and frontend, such as latest.
+                                                        Unset, they run the chart's release versions
     --image-pull-policy <policy> ORCHARD_IMAGE_PULL_POLICY
     --image-registry <host>      ORCHARD_IMAGE_REGISTRY
     --image-repository <path>    ORCHARD_IMAGE_REPOSITORY
@@ -574,6 +575,20 @@ tiny_box_defaults() {
     ORCHARD_MCP=false
   fi
   answer_given --image-scanning ORCHARD_IMAGE_SCANNING || ORCHARD_IMAGE_SCANNING=false
+}
+
+settle_image_tag() {
+  local round
+  if answer_given --image-tag ORCHARD_IMAGE_TAG; then return 0; fi
+  if [ "$IMAGE_TAG" = latest ] && [ "$PREVIOUS_INSTALL" = true ]; then
+    round=$(reuse_value '.hostDefaults')
+    case "$round" in ''|*[!0-9]*) round=0 ;; esac
+    if [ -n "$ORCHARD_VERSION" ] \
+       || { [ "$round" -lt 3 ] && [ "$IMAGE_REGISTRY" = ghcr.io ] && [ "$IMAGE_REPOSITORY" = hackclub/orchard ] && [ ! -d "$CHART_REF" ]; }; then
+      IMAGE_TAG=''
+    fi
+  fi
+  if [ -z "$IMAGE_TAG" ] && [ -d "$CHART_REF" ]; then IMAGE_TAG=latest; fi
 }
 
 check_image_tag() {
@@ -2794,7 +2809,7 @@ unsigned_commands_allowed() {
      || grep -qs '^ORCHARD_ALLOW_UNSIGNED_COMMANDS=true$' "$STATE_DIR/env" \
      || [ "$IMAGE_REGISTRY" != ghcr.io ] \
      || [ "$IMAGE_REPOSITORY" != hackclub/orchard ] \
-     || ! [[ "$IMAGE_TAG" =~ ^(latest|v?[0-9]+\.[0-9]+\.[0-9]+.*)$ ]]; then
+     || ! [[ "$IMAGE_TAG" =~ ^(latest|v?[0-9]+\.[0-9]+\.[0-9]+.*)?$ ]]; then
     echo true
   else
     echo false
@@ -3750,10 +3765,10 @@ clientIp:
     - { name: INSTANCE_RESOURCE_LIMITS_CHOICE, value: \"$ORCHARD_LIMITS\" }"
   fi
 
-  local image_block="  image:
+  local image_block=""
+  if [ -n "$IMAGE_TAG" ]; then
+    image_block="  image:
     tag: $IMAGE_TAG"
-  if [ -n "$ORCHARD_VERSION" ] && ! answer_given --image-tag ORCHARD_IMAGE_TAG; then
-    image_block=""
   fi
 
   cat <<EOF
@@ -4445,6 +4460,7 @@ EOF
 main() {
   parse_args "$@"
   load_previous_answers
+  settle_image_tag
   check_image_tag
 
   if [ "$ASSUME_YES" != true ] && ! open_prompt_fd; then
