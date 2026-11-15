@@ -529,7 +529,7 @@ export function signupCheck(inputs: DoctorInputs): DoctorCheck {
   const id = 'signup-and-domain-verification';
   const title = 'Signup mode and custom-domain verification';
   const fix =
-    'Turn on custom-domain verification in Admin, Instance settings (or CUSTOM_DOMAIN_VERIFICATION=true), or set SIGNUP_MODE=invite_only.';
+    'Turn on Require proof of domain ownership in Instance admin, under Networking (or set CUSTOM_DOMAIN_VERIFICATION=true), or set SIGNUP_MODE=invite_only.';
   if (!inputs.settings.ok) return unreadable(id, title, inputs.settings.error, fix);
   const { signupMode, customDomainVerification } = inputs.settings.value;
   const facts = `SIGNUP_MODE is ${signupMode}; custom-domain verification is ${customDomainVerification ? 'required' : 'off'}.`;
@@ -619,7 +619,7 @@ export function nodePortCheck(inputs: DoctorInputs): DoctorCheck {
       title,
       'warn',
       'Tenants can publish TCP ports on node addresses. Nothing inside the cluster stops a published port from being reachable on every node.',
-      'Turn off raw node ports under Admin -> Limits (or set tenant.nodePortExposure=false) unless you need them, and firewall node ports (30000-32767 and 10250, 22, 6443, 50000) at the cloud or host.'
+      'Turn off Raw node ports in Instance admin, under Limits (or set tenant.nodePortExposure=false) unless you need them, and firewall node ports (30000-32767 and 10250, 22, 6443, 50000) at the cloud or host.'
     );
   }
   return check(id, title, 'pass', 'Tenant NodePort exposure is disabled.');
