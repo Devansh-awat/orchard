@@ -165,6 +165,7 @@ test('cni: enforcing CNI passes, unready agents warn, flannel warns, k3s and not
     })
   );
   assert.equal(flannel.status, 'warn');
+  assert.match(flannel.fix, /networkPolicy\.enforcer\.enabled=true/);
   const k3s = cniCheck(
     inputs({
       apiGroups: ok([]),
@@ -176,6 +177,41 @@ test('cni: enforcing CNI passes, unready agents warn, flannel warns, k3s and not
   const none = cniCheck(inputs({ apiGroups: ok([]), daemonSets: ok([]) }));
   assert.equal(none.status, 'unknown');
   assert.match(none.fix, /self-test/);
+});
+
+test('cni: the chart enforcer next to flannel passes, next to another enforcer warns', () => {
+  const enforcer = { name: 'kube-router', namespace: 'orchard-netpol', desired: 3, ready: 3 };
+  const flannel = { name: 'kube-flannel', namespace: 'kube-system', desired: 3, ready: 3 };
+  const talos = cniCheck(
+    inputs({
+      apiGroups: ok([]),
+      daemonSets: ok([flannel, enforcer]),
+      nodes: ok([{ name: 'n1', kubelet: 'v1.34.1' }])
+    })
+  );
+  assert.equal(talos.status, 'pass');
+  assert.match(talos.evidence, /kube-router/);
+  const starting = cniCheck(
+    inputs({
+      apiGroups: ok([]),
+      daemonSets: ok([flannel, { ...enforcer, ready: 2 }])
+    })
+  );
+  assert.equal(starting.status, 'warn');
+  assert.match(starting.evidence, /orchard-netpol\/kube-router 2\/3/);
+  const doubled = cniCheck(inputs({ daemonSets: ok([enforcer]) }));
+  assert.equal(doubled.status, 'warn');
+  assert.match(doubled.evidence, /next to Cilium/);
+  assert.match(doubled.fix, /networkPolicy\.enforcer\.enabled=false/);
+  const onK3s = cniCheck(
+    inputs({
+      apiGroups: ok([]),
+      daemonSets: ok([enforcer]),
+      nodes: ok([{ name: 'n1', kubelet: 'v1.34.1+k3s1' }])
+    })
+  );
+  assert.equal(onK3s.status, 'warn');
+  assert.match(onK3s.evidence, /k3s/);
 });
 
 test('cni: group CRDs alone count, and one unreadable source still allows a verdict', () => {

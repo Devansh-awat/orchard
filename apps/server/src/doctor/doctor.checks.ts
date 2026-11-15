@@ -106,6 +106,9 @@ const NON_ENFORCING_CNIS = /^(kube-flannel-ds|flannel|kube-flannel)/;
 const CNI_FIX =
   'Install a CNI that enforces NetworkPolicy (Cilium or Calico), or enable your cloud provider network policy add-on. Then run the isolation self-test to confirm enforcement.';
 
+const FLANNEL_FIX =
+  'Set networkPolicy.enforcer.enabled=true in the Orchard chart to run kube-router as a policy-only enforcer next to Flannel, or install a CNI that enforces NetworkPolicy (Cilium or Calico). Then run the isolation self-test to confirm enforcement.';
+
 const unreadable = (id: string, title: string, error: string, fix: string): DoctorCheck =>
   check(id, title, 'unknown', `Could not read it: ${error}`, fix);
 
@@ -122,6 +125,8 @@ export function cniCheck(inputs: DoctorInputs): DoctorCheck {
   }
   const groups = inputs.apiGroups.ok ? inputs.apiGroups.value : [];
   const daemonSets = inputs.daemonSets.ok ? inputs.daemonSets.value : [];
+  const nodes = inputs.nodes.ok ? inputs.nodes.value : [];
+  const k3sNodes = nodes.some((n) => /k3s|rke2/i.test(n.kubelet));
   const found: string[] = [];
   const unready: string[] = [];
   for (const cni of ENFORCING_CNIS) {
@@ -142,7 +147,19 @@ export function cniCheck(inputs: DoctorInputs): DoctorCheck {
         title,
         'warn',
         `${found.join(', ')} detected, but not every node runs it: ${unready.join('; ')}. Nodes without the agent do not enforce policy.`,
-        'Get the CNI daemonset healthy on every node (kubectl -n kube-system get ds).'
+        'Get the CNI daemonset healthy on every node (kubectl get ds -A).'
+      );
+    }
+    const others = found.filter((name) => name !== 'kube-router');
+    if (found.includes('kube-router') && (others.length > 0 || k3sNodes)) {
+      const alongside =
+        others.length > 0 ? others.join(', ') : 'the k3s or RKE2 embedded controller';
+      return check(
+        id,
+        title,
+        'warn',
+        `kube-router runs next to ${alongside}. Two controllers program rules for the same policies.`,
+        'Run one NetworkPolicy enforcer. If the kube-router daemonset is the Orchard enforcer, set networkPolicy.enforcer.enabled=false, unless k3s runs with --disable-network-policy.'
       );
     }
     return check(
@@ -152,8 +169,7 @@ export function cniCheck(inputs: DoctorInputs): DoctorCheck {
       `${found.join(', ')} detected (CRDs or daemonset). Detection shows the CNI is installed, not that it enforces; the self-test proves enforcement.`
     );
   }
-  const nodes = inputs.nodes.ok ? inputs.nodes.value : [];
-  if (nodes.some((n) => /k3s|rke2/i.test(n.kubelet))) {
+  if (k3sNodes) {
     return check(
       id,
       title,
@@ -168,7 +184,7 @@ export function cniCheck(inputs: DoctorInputs): DoctorCheck {
       title,
       'warn',
       'Only Flannel was found, which does not enforce NetworkPolicy by itself. Every tenant policy is inert unless something else enforces it.',
-      CNI_FIX
+      FLANNEL_FIX
     );
   }
   return check(
