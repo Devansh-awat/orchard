@@ -80,6 +80,7 @@ On its next `update`, a host installed earlier gets the same defaults as a new i
 | Small machines    | Under 8 GB of memory, reduces requests and limits for metrics, logs, and the scanner, keeps 7 days of logs, and runs one scan at a time.           |
 | Image tags        | Removes `server.image.tag` and `frontend.image.tag` when they are `latest`, so the server and frontend run the versions of the installed chart.    |
 | Pull policy       | Removes `image.pullPolicy` when it is `Always` and no Orchard image uses `latest`, so pods start from the image on the node.                       |
+| Gateway API       | Removes `gateway.enabled` when it is `true`. Orchard does not route apps through Gateway API, so the chart's `Gateway` objects carry no traffic.   |
 | Backups           | Sets `objectStorage.local.enabled: true` and `r2Proxy.enabled: true`, sized from free disk.                                                        |
 | Database operator | Sets `CNPG_OPERATOR_NAMESPACE` to `cnpg-system`, if it is not set.                                                                                 |
 | Image cleanup     | Writes Orchard's [image garbage collection](/operate/disk-space/#old-container-images) settings if the file does not exist, and restarts k3s once. |
@@ -88,7 +89,7 @@ On its next `update`, a host installed earlier gets the same defaults as a new i
 
 Orchard turns on the local backup store only when no object storage is configured. It checks for `R2_ENDPOINT`, `R2_ACCOUNT_ID`, or `R2_BACKUP_BUCKET` in `server.env`, `server.envFrom`, `r2Proxy.upstream.endpoint`, and values at **Instance admin** > **Configuration** > **Object storage**. If it cannot read the database, it leaves the store off and prints the commands that turn it on.
 
-Except for `metrics.enabled` and `r2Proxy.enabled`, which older installers wrote as `false`, and the `latest` image tags and `Always` pull policy that they wrote, Orchard only fills in keys that are missing. It does not change a value you set.
+Except for `metrics.enabled` and `r2Proxy.enabled`, which older installers wrote as `false`, and the `latest` image tags, `Always` pull policy, and `gateway.enabled: true` that they wrote, Orchard only fills in keys that are missing. It does not change a value you set.
 
 These changes happen once. The top-level `hostDefaults` key records which defaults a values file has. If you turn something off afterward, it stays off:
 
@@ -108,7 +109,7 @@ If the `traefik` release is missing any access log setting, `update` upgrades th
 sudo orchardctl harden
 ```
 
-Moves the image registry onto loopback, adds a password to it, and gives that password to the containerd mirror and the builders. It also opens an active `ufw` or `firewalld` for k3s, and makes the k3s kubeconfig readable only by root.
+Moves the image registry onto loopback, adds a password to it, and gives that password to the containerd mirror and the builders. It also opens an active `ufw` or `firewalld` for k3s, closes ports `9100/tcp` and `8472/udp` in that firewall to everything outside the pod and service networks, and makes the k3s kubeconfig readable only by root.
 
 `update` runs this command first. Run it directly only on a host that you do not want to upgrade yet. You can run it more than once.
 

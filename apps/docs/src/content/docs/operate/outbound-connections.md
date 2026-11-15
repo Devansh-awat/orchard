@@ -20,7 +20,7 @@ It does not list connections to services you configure yourself, such as S3 stor
 | `cloudflare-dns.com`, `dns.google`, over HTTPS                        | Checking your DNS records, when `dig` is missing or those resolvers do not answer. |
 | `get.k3s.io`, `update.k3s.io`, `github.com`                           | The k3s install script, its release channels, and its binary.                      |
 | `raw.githubusercontent.com`, `get.helm.sh`                            | The Helm install script and binary.                                                |
-| `github.com`                                                          | `yq`, and the Gateway API CRDs.                                                    |
+| `github.com`                                                          | `yq`.                                                                              |
 | `traefik.github.io`, `cloudnative-pg.github.io`, `charts.jetstack.io` | The Traefik, CloudNativePG, and cert-manager charts.                               |
 | `ghcr.io`                                                             | The Orchard chart and images, and the CloudNativePG images.                        |
 | Docker Hub, `quay.io`, `registry.k8s.io`                              | Other images that k3s, the operators, and the chart run.                           |

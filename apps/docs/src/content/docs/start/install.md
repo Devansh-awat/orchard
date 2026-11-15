@@ -60,6 +60,8 @@ The mode also decides which host ports Orchard binds.
 | `lan`    | The dashboard and the MCP endpoint, in plain HTTP                              | Deployed apps |
 | `tunnel` | Not bound                                                                      | Not bound     |
 
+In every mode, Flannel listens on port `8472/udp`, and node-exporter listens on port `9100` while metrics are on. Only the cluster needs these ports. With `ufw` or `firewalld` active, the installer closes both to everything outside the pod and service networks. Without a host firewall, close them in your provider's firewall. For details, refer to [Host firewalls](/operate/security/#host-firewalls).
+
 :::caution
 In `public` mode, port 80 must stay open after the install. Let's Encrypt uses it for every new app hostname and every certificate renewal. If another process owns port 80 or 443, use `tunnel` mode.
 :::
@@ -446,7 +448,6 @@ You need Kubernetes 1.30 or later, because the chart installs `ValidatingAdmissi
 | ----------------------------- | ----------------------------------------------------------------------------------------------- |
 | CloudNativePG operator        | The control-plane database and every database users create                                      |
 | Traefik                       | Control-plane ingress (`IngressRoute`)                                                          |
-| Gateway API CRDs              | The `Gateway` for database exposure, unless `gateway.enabled: false`                            |
 | cert-manager                  | TLS, plus a DNS-01 `ClusterIssuer` for [wildcard certificates](/operate/wildcard-certificates/) |
 | A default StorageClass        | Postgres volumes, build cache, Redis, metrics, and logs                                         |
 | An OCI registry               | Where built images are pushed and pulled                                                        |
@@ -466,22 +467,13 @@ You also need these domains:
 
 ### Install the prerequisites
 
-k3s includes Traefik, the Gateway API CRDs, and the `local-path` StorageClass, so these steps do not install them.
+k3s includes Traefik and the `local-path` StorageClass, so these steps do not install them. Orchard does not use Gateway API, so the chart does not need its CRDs.
 
-1. Get the Gateway API CRDs ready.
-
-   On k3s, do not install them. k3s installs them with Traefik in the first minutes after it starts, and CRDs that you apply yourself stop that install with `Required CRDs are missing`. Wait for Traefik instead:
+1. On k3s, wait for the bundled Traefik. k3s installs it in the first minutes after it starts:
 
    ```bash
    until kubectl -n kube-system get deploy traefik >/dev/null 2>&1; do sleep 5; done
    kubectl -n kube-system rollout status deploy/traefik --timeout=5m
-   ```
-
-   On any other cluster, install them if they are missing:
-
-   ```bash
-   kubectl get crd gateways.gateway.networking.k8s.io || \
-     kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.6.1/standard-install.yaml
    ```
 
 2. Install CloudNativePG and cert-manager:
@@ -525,7 +517,6 @@ To add Traefik to a cluster that does not have it, run the same command that the
 helm repo add traefik https://traefik.github.io/charts
 helm upgrade --install traefik traefik/traefik \
   --namespace traefik --create-namespace \
-  --set providers.kubernetesGateway.enabled=true \
   --set gateway.enabled=false \
   --wait --timeout 10m
 ```

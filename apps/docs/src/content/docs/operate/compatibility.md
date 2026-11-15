@@ -96,7 +96,7 @@ Notes on the table:
 - **Control-plane routes.** The chart routes the dashboard (`ingress.enabled`) and the MCP endpoint (`mcp.ingress.enabled`) with Traefik `IngressRoute` objects. On another controller, turn both off and route the hostnames yourself. Refer to [Ingress controller](/operate/production/#ingress-controller).
 - **Controller namespace.** Tenant namespaces accept traffic only from the namespaces in `tenant.ingressNamespaces`. Set it to your controller's namespace, or certificates never issue. Refer to [Let the ingress controller reach apps](/operate/finishing-setup/#let-the-ingress-controller-reach-apps).
 
-Orchard does not create Gateway API routes (`HTTPRoute`) for apps. The installer applies the Gateway API CRDs because the Traefik chart's Gateway provider uses them.
+Orchard does not support Gateway API yet. It creates no `HTTPRoute` or `Gateway` for apps, and the chart's `gateway.enabled` is off by default. The installer does not install the Gateway API CRDs or turn on the Traefik Gateway provider. If the Gateway API CRDs are already on the cluster, the installer leaves them in place, because removing a CRD deletes every object of that kind.
 
 ## Storage classes and CSI drivers
 

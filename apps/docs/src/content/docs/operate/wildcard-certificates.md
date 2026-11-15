@@ -35,16 +35,15 @@ The first limit is shared by every name under the registered domain, so `apps.ex
 
 ## What the chart renders
 
-| Template            | Renders                                                                                            | Condition                                                       |
-| ------------------- | -------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
-| `certificates.yaml` | A `Certificate` for `*.apps.example.com` and `apps.example.com` in `certificates.namespace`.       | `certificates.enabled`, and an app domain is set.               |
-| `certificates.yaml` | A `Certificate` for `*.<db domain>`, for TLS on public databases.                                  | `certificates.enabled`, and `wildcards.db.domain` is set.       |
-| `gateway.yaml`      | The `http-gateway` Gateway, with an `https-wildcard` listener that references the app certificate. | `gateway.enabled`, `gateway.http.enabled`, and a domain is set. |
-| `_helpers.tpl`      | `PLATFORM_WILDCARD_DOMAINS` on the server, which names the Secret to use on each Ingress.          | An app domain or `tenant.wildcardDomains` is set.               |
+| Template            | Renders                                                                                      | Condition                                                 |
+| ------------------- | -------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| `certificates.yaml` | A `Certificate` for `*.apps.example.com` and `apps.example.com` in `certificates.namespace`. | `certificates.enabled`, and an app domain is set.         |
+| `certificates.yaml` | A `Certificate` for `*.<db domain>`, for TLS on public databases.                            | `certificates.enabled`, and `wildcards.db.domain` is set. |
+| `_helpers.tpl`      | `PLATFORM_WILDCARD_DOMAINS` on the server, which names the Secret to use on each Ingress.    | An app domain or `tenant.wildcardDomains` is set.         |
 
 The chart does not create the issuer.
 
-Orchard routes each app through an `Ingress`, so the `https-wildcard` listener carries no app traffic. Set `gateway.http.enabled` to `false` unless something else uses that listener.
+Orchard routes each app through an `Ingress`. It does not support Gateway API yet, so `gateway.enabled` is off by default and the chart renders no `Gateway`.
 
 ## 1. Point DNS at the cluster
 
@@ -106,7 +105,6 @@ Add the following to your values file:
 ```yaml
 gateway:
   http:
-    enabled: false
     appDomain: apps.example.com
     appWildcardSecretName: wildcard-apps-example-com-tls
 

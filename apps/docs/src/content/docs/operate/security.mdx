@@ -112,6 +112,17 @@ One organization can hold at most 20 public ports in total, counting NodePorts, 
 
 A `ufw` deny rule does not close ports `80` and `443` on a machine that runs the installer. Traffic to these ports is forwarded to pods and does not pass through the rules that `ufw` applies to the machine. The installer leaves your deny rule in place and warns you. To close a port, use a firewall in front of the machine.
 
+Two host ports serve only the cluster:
+
+| Port       | Service       | Who needs it                                                                                   |
+| ---------- | ------------- | ---------------------------------------------------------------------------------------------- |
+| `9100/tcp` | node-exporter | vmagent, which scrapes each node from the pod network. The port requires a password.           |
+| `8472/udp` | Flannel VXLAN | Other nodes in the cluster. A single-node installer host has none, so nothing needs this port. |
+
+When `ufw` or `firewalld` is active, the installer and `orchardctl harden` add a deny rule for both ports, after the rules that allow the pod and service networks (`10.42.0.0/16` and `10.43.0.0/16`). Traffic from the machine itself uses the loopback interface, which both firewalls accept. Without a host firewall, the installer prints a note, and you must close both ports in your provider's firewall.
+
+On a cluster installed with the Helm chart, node-exporter runs on the host network and listens on the node's IP address on port `9100` while `metrics.enabled` is on. Block port `9100` at the node or cloud firewall for every source outside the cluster, and allow the pod network so that vmagent can scrape it. Node-exporter cannot listen on a private address only, because vmagent reaches it through the address that the node reports.
+
 ### Reverse DNS lookups
 
 Every pod can reach cluster DNS. With the default CoreDNS configuration, a pod can sweep the service address range with reverse (`PTR`) lookups and read the name of every Service, which includes the namespace names of other tenants. Orchard cannot close this from inside a tenant namespace, so the block belongs in CoreDNS.

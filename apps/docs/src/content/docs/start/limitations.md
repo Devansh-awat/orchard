@@ -35,6 +35,7 @@ This page lists what Orchard does not support, what works only when you configur
 - **Public ports hide the client address.** Public ports and public databases need a layer 4 load balancer and a public IP address. The app sees a node address as the client address, not the real one. Refer to [Public TCP and UDP ports](/operate/security/#public-tcp-and-udp-ports).
 - **Protected domains depend on the server.** Requests to a domain with **Password** or **Project members** protection, and with **Username and password** protection on a cluster without Cilium, pass through the Orchard server. Those domains stop responding while the server is down. Protection does not apply to raw TCP or UDP ports. Refer to [How operators enable each type](/deploy/protection/#how-operators-enable-each-type).
 - **Self-signed certificates in `lan` mode.** A `lan` install gives apps self-signed certificates and serves the dashboard over plain HTTP, and passkeys need HTTPS. Refer to [Certificates](/deploy/domains/#certificates).
+- **No Gateway API.** Orchard does not support Gateway API (`HTTPRoute`) yet. Tenant apps use `Ingress`. Refer to [Ingress controllers](/operate/compatibility/#supported-ingress-controllers).
 - **Port 80 stays open in `public` mode.** Let's Encrypt uses port 80 for every new app hostname and every renewal. If another process owns port 80 or 443, use `tunnel` mode. Refer to [Choose an ingress mode](/start/install/#choose-an-ingress-mode).
 
 ## Databases and storage
