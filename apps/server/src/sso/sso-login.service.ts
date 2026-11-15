@@ -682,12 +682,16 @@ export class SsoLoginService {
     if (user.disabledAt) throw new UnauthorizedException('sso_access_disabled');
 
     await this.mapping.bind(provider, subject, user);
+    const wasSuperAdmin = Boolean(user.isSuperAdmin);
     const elevated = await this.mapping.syncSuperadmin(
       provider,
-      { id: user.id, email: user.email, isSuperAdmin: Boolean(user.isSuperAdmin) },
+      { id: user.id, email: user.email, isSuperAdmin: wasSuperAdmin },
       mapping,
       profile.emailVerified === true
     );
+    if (wasSuperAdmin && !elevated && mapping.hasRules && !mapping.allowed) {
+      await this.mapping.deny(provider, mapping, { email, userId: user.id });
+    }
     await this.mapping.materialize(provider, mapping);
     if (!elevated || mapping.hasRules) await this.mapping.apply(provider, user, mapping);
 

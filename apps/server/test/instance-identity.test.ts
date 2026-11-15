@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { IdentityMappingService } from '../src/sso/identity-mapping.service';
 import { InstanceIdentityService, slugFor } from '../src/sso/instance-identity.service';
 import { InstanceSettingsService } from '../src/instance-settings/instance-settings.service';
+import { SsoLoginService } from '../src/sso/sso-login.service';
 import { collection as memoryCollection, type Row } from './support/memory-db';
 
 const INSTANCE_IDP = '55555555-5555-4555-8555-555555555555';
@@ -594,4 +595,125 @@ test('a superadmin group lets the user through when other rules would deny them'
 
   const denied = await w.mapping.prepare(w.provider(INSTANCE_IDP), { groups: ['nope'] });
   assert.equal(denied.allowed, false);
+});
+
+const ENTRA_GROUPS = 'http://schemas.microsoft.com/ws/2008/06/identity/claims/groups';
+const GROUPS_LINK = 'http://schemas.microsoft.com/claims/groups.link';
+
+const PROTOCOLS = [
+  {
+    protocol: 'oidc',
+    groupClaim: 'groups',
+    claims: (groups: string[]) => ({ groups }),
+    overage: { hasgroups: true }
+  },
+  {
+    protocol: 'saml',
+    groupClaim: ENTRA_GROUPS,
+    claims: (groups: string[]) => ({ [ENTRA_GROUPS]: groups }),
+    overage: { [GROUPS_LINK]: 'https://graph.windows.net/t/users/u/getMemberObjects' }
+  }
+];
+
+async function signInWorld(protocol: (typeof PROTOCOLS)[number]) {
+  const w = makeWorld();
+  Object.assign(w.provider(INSTANCE_IDP), {
+    protocol: protocol.protocol,
+    groupClaim: protocol.groupClaim,
+    allowedDomains: [],
+    requireVerifiedEmail: false
+  });
+  await w.identity.setSuperadminRule({ providerId: INSTANCE_IDP, value: 'platform-root' }, admin);
+  w.tables.organization.push({ id: HOME_ORG });
+  w.tables.idpGroupRule.push({
+    id: randomUUID(),
+    providerId: INSTANCE_IDP,
+    organizationId: HOME_ORG,
+    value: 'acme',
+    role: 'member'
+  });
+  const login = Object.create(SsoLoginService.prototype) as any;
+  login.prisma = w.prisma;
+  login.mapping = w.mapping;
+  login.authz = {
+    assertSsoNotEnforced: async () => {},
+    assertSsoNotEnforcedForEmail: async () => {}
+  };
+  login.legacyAllowedDomains = () => null;
+  login.hasSignupAccess = async () => true;
+  login.issueSession = async (_p: any, user: any) => ({ token: 'session', userId: user.id });
+  const addUser = (email: string, isSuperAdmin: boolean, granted: boolean) => {
+    const user = { id: randomUUID(), email, isSuperAdmin, emailScope: 'account' };
+    w.tables.user.push(user);
+    w.bind(user.id);
+    w.tables.federatedIdentity.at(-1)!.grantedSuperadmin = granted;
+    return user;
+  };
+  const signIn = (user: Row, claims: Record<string, unknown>) =>
+    login.completeLogin(w.provider(INSTANCE_IDP), {
+      email: user.email,
+      name: 'Someone',
+      emailVerified: true,
+      subject: `sub-${user.id}`,
+      claims
+    });
+  const superadmin = (user: Row) => w.tables.user.find((u) => u.id === user.id)!.isSuperAdmin;
+  return { w, addUser, signIn, superadmin };
+}
+
+test('a superadmin demoted at sign-in is denied when no rule lets them in', async () => {
+  for (const p of PROTOCOLS) {
+    for (const claims of [p.claims(['nope']), p.overage]) {
+      const { w, addUser, signIn, superadmin } = await signInWorld(p);
+      addUser('keeper@example.com', true, false);
+      const ada = addUser('ada@example.com', true, true);
+      await assert.rejects(
+        () => signIn(ada, claims),
+        (e: any) => e.message === 'sso_not_mapped'
+      );
+      assert.equal(superadmin(ada), false, `${p.protocol} demotes`);
+      assert.ok(w.audits.some((a) => a.action === 'sso.superadmin.revoked'));
+      assert.ok(w.audits.some((a) => a.action === 'sso.login.denied'));
+    }
+  }
+});
+
+test('a demoted superadmin who matches a rule still signs in as a member', async () => {
+  for (const p of PROTOCOLS) {
+    const { w, addUser, signIn, superadmin } = await signInWorld(p);
+    addUser('keeper@example.com', true, false);
+    const ada = addUser('ada@example.com', true, true);
+    const out = await signIn(ada, p.claims(['acme']));
+    assert.equal(out.token, 'session');
+    assert.equal(superadmin(ada), false);
+    assert.equal(
+      w.tables.organizationMember.find((m) => m.userId === ada.id)?.role,
+      'member',
+      p.protocol
+    );
+  }
+});
+
+test('a superadmin who stays superadmin is never denied by the rules', async () => {
+  for (const p of PROTOCOLS) {
+    for (const claims of [p.claims(['nope']), p.overage]) {
+      const hand = await signInWorld(p);
+      hand.addUser('second@example.com', true, false);
+      const root = hand.addUser('root@example.com', true, false);
+      assert.equal((await hand.signIn(root, claims)).token, 'session');
+      assert.equal(hand.superadmin(root), true);
+      assert.ok(!hand.w.audits.some((a) => a.action === 'sso.login.denied'));
+
+      const last = await signInWorld(p);
+      const ada = last.addUser('ada@example.com', true, true);
+      assert.equal((await last.signIn(ada, claims)).token, 'session');
+      assert.equal(last.superadmin(ada), true);
+      assert.ok(!last.w.audits.some((a) => a.action === 'sso.login.denied'));
+    }
+    const member = await signInWorld(p);
+    member.addUser('keeper@example.com', true, false);
+    const ada = member.addUser('ada@example.com', true, true);
+    assert.equal((await member.signIn(ada, p.claims(['platform-root']))).token, 'session');
+    assert.equal(member.superadmin(ada), true);
+  }
 });
