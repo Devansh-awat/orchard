@@ -22,7 +22,7 @@ To link a provider, sign in with OAuth or add a token. OAuth is available for Gi
 2. In **Git providers**, take one of these steps:
    - If your instance has OAuth configured, select **Add provider**, then **Sign in with GitLab** or **Sign in with Bitbucket**.
    - Otherwise, select **Add with a token**.
-3. If you add a token, enter the **Provider**, **Name**, **Host**, and **Token**. For **Any git host**, also enter the **Username** if the host expects one.
+3. If you add a token, enter the **Provider**, **Name**, **Host**, and **Token**. For **Bitbucket Cloud**, also enter the **Atlassian account email** that owns the API token. For **Any git host**, also enter the **Username** if the host expects one.
 4. Select **Connect**.
 
 </TabItem>
@@ -32,26 +32,63 @@ To link a provider, sign in with OAuth or add a token. OAuth is available for Gi
 orchard git add --provider gitlab --name work --token glpat-...
 ```
 
-The `--provider` flag accepts `github`, `gitlab`, `gitea`, `bitbucket`, or `generic`. For a self-hosted provider, add `--url`. For `generic`, add `--username` if the host expects one.
+The `--provider` flag accepts `github`, `gitlab`, `gitea`, `bitbucket`, or `generic`. For a self-hosted provider, add `--url`. For `bitbucket` with an API token, add `--username` with your Atlassian account email. For `generic`, add `--username` if the host expects one.
+
+```sh
+orchard git add --provider bitbucket --name bitbucket --username you@example.com --token ATATT...
+```
 
 </TabItem>
 </Tabs>
 
 Orchard stores the token encrypted. Before it saves, it lists your repositories with the token, so a wrong token fails here instead of at the first build. Orchard cannot check a token for **Any git host**, because a plain Git host has no API. A wrong token for that host fails when the first build clones.
 
-| Provider                 | Token                                 | Scopes                        |
-| ------------------------ | ------------------------------------- | ----------------------------- |
-| GitLab                   | Personal or project access token      | `read_api`, `read_repository` |
-| Gitea, Forgejo, Codeberg | Access token                          | Repository read               |
-| Bitbucket Cloud          | Use **Sign in with Bitbucket**        | Repository read               |
-| GitHub with a token      | Fine-grained token                    | Contents read                 |
-| Any Git host             | The password used to clone over HTTPS | None                          |
+| Provider                 | Token                                 | Scopes                                                                                                   |
+| ------------------------ | ------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| GitLab                   | Personal or project access token      | `read_api`, `read_repository`                                                                            |
+| Gitea, Forgejo, Codeberg | Access token                          | Repository read                                                                                          |
+| Bitbucket Cloud          | Atlassian API token, or access token  | `read:repository:bitbucket`, plus `read:webhook:bitbucket` and `write:webhook:bitbucket` for auto-deploy |
+| GitHub with a token      | Fine-grained token                    | Contents read                                                                                            |
+| Any Git host             | The password used to clone over HTTPS | None                                                                                                     |
 
 ### Bitbucket Cloud
 
-Link Bitbucket Cloud with **Sign in with Bitbucket**. A superadmin turns it on in **Instance admin** > **Configuration** > **Bitbucket sign-in**, with the key and secret of a Bitbucket OAuth consumer that has repository read access and the callback URL `<origin>/apiv1/git/oauth/bitbucket/callback`, where `<origin>` is the address of your Orchard dashboard.
+You can link Bitbucket Cloud with **Sign in with Bitbucket** or with an Atlassian API token.
 
-The token form for Bitbucket Cloud takes a username and an app password, and Atlassian has retired app passwords in favor of API tokens. Orchard sends the same username to the Bitbucket API and to Git, but a Bitbucket API token needs your Atlassian account email for the API and your Bitbucket username for Git. Because of this, Orchard does not support linking Bitbucket Cloud with an API token. For details on API tokens, refer to [Using API tokens](https://support.atlassian.com/bitbucket-cloud/docs/using-api-tokens/) in the Atlassian documentation.
+**Sign in with Bitbucket** uses OAuth. A superadmin turns it on in **Instance admin** > **Configuration** > **Bitbucket sign-in**, with the key and secret of a Bitbucket OAuth consumer that has repository read access and the callback URL `<origin>/apiv1/git/oauth/bitbucket/callback`, where `<origin>` is the address of your Orchard dashboard.
+
+To link Bitbucket Cloud with an API token:
+
+1. Go to [API tokens](https://id.atlassian.com/manage-profile/security/api-tokens) in your Atlassian account settings.
+2. Select **Create API token with scopes**, enter a name and an expiry date, and select **Bitbucket** as the app.
+3. Select the `read:repository:bitbucket` scope. For auto-deploy, also select `read:webhook:bitbucket` and `write:webhook:bitbucket`.
+4. Copy the token.
+5. In Orchard, select **Add with a token**, then select **Bitbucket Cloud** as the **Provider**.
+6. In **Atlassian account email**, enter the email of the Atlassian account that created the token, not your Bitbucket username.
+7. In **API token**, paste the token, then select **Connect**.
+
+Orchard sends the email and the API token to the Bitbucket API, and clones with the token under the username `x-bitbucket-api-token-auth`. For details, refer to [Using API tokens](https://support.atlassian.com/bitbucket-cloud/docs/using-api-tokens/) and [API token permissions](https://support.atlassian.com/bitbucket-cloud/docs/api-token-permissions/) in the Atlassian documentation.
+
+To use a workspace, project, or repository access token instead, leave **Atlassian account email** empty. Orchard sends the access token to the Bitbucket API as a bearer token and clones with the username `x-token-auth`. An access token reaches only the repositories it was created for. For details, refer to [Access tokens](https://support.atlassian.com/bitbucket-cloud/docs/using-access-tokens/) in the Atlassian documentation.
+
+#### Replace a Bitbucket app password
+
+Bitbucket Cloud does not accept app passwords. A provider that you linked with an app password shows **app password, reconnect with an API token** in **Git providers**, and listing its repositories fails with an error that asks you to reconnect.
+
+To keep the apps that build from the provider, replace its app password with an API token through the Orchard API:
+
+1. Find the ID of the provider with `orchard git list`.
+2. Create an Atlassian API token as described in the previous steps.
+3. Send the token and your Atlassian account email to the provider, with an [Orchard API token](/account/tokens/) that has **Deploy** access:
+
+   ```bash
+   curl --request PATCH "https://orchard.example.com/apiv1/users/me/git-connections/<PROVIDER_ID>" \
+     --header "Authorization: Bearer <ORCHARD_API_TOKEN>" \
+     --header "Content-Type: application/json" \
+     --data '{"username": "you@example.com", "token": "<BITBUCKET_API_TOKEN>"}'
+   ```
+
+Orchard checks the new token against the Bitbucket API before it saves it. To start over instead, link Bitbucket Cloud again with an API token or with **Sign in with Bitbucket**, and create the apps again from the new provider.
 
 ## Create an app
 
