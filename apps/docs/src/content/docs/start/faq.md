@@ -9,13 +9,13 @@ sidebar:
 
 No. The installer builds a single-node k3s cluster on one machine, with `local-path` disks, a registry that only that machine can pull from, and backups on the same disk. That machine is a single point of failure. The installer suits a home lab, a side project, a small team, or a trial.
 
-For production, Orchard recommends the [Helm chart](/start/install/#install-on-an-existing-cluster) on a multi-node cluster built for it, such as [Talos Linux](https://docs.siderolabs.com/talos), with components that you operate. The Helm steps were run end to end on one node, and the install guide lists what has not been tested on that path. Whichever setup you choose, work through [Go to production](/operate/production/) before you go live.
+For production, Orchard recommends the [Helm chart](/start/install/#install-on-an-existing-cluster) on a multi-node cluster built for it, such as [Talos Linux](https://docs.siderolabs.com/talos), with components that you operate. Hack Club runs Orchard this way, on six Talos Linux nodes. The install guide lists what has not been tested on the Helm path. Whichever setup you choose, work through [Go to production](/operate/production/) before you go live.
 
 ## Can I add more servers to my instance?
 
 Yes, if you installed Orchard with the Helm chart. Join the node with your distribution's tools, then sync nodes in **Instance admin**.
 
-No, if you used the one-command installer. Kubernetes nodes pull app images through a registry address that exists only on the install machine, and the host setup that Orchard needs runs only on that machine, so joining nodes to an installer host is not supported yet. For both cases, refer to [Add and remove nodes](/operate/nodes/#add-and-remove-nodes).
+Not for now, if you used the one-command installer. An installer host is single-node: its nodes pull app images through a registry address that exists only on the install machine, and the host setup that Orchard needs runs only on that machine. Support for adding nodes is planned for a later release. If you need more than one node, use the Helm chart on a multi-node cluster. For both cases, refer to [Add and remove nodes](/operate/nodes/#add-and-remove-nodes).
 
 ## Is it safe to let people I do not trust deploy code?
 

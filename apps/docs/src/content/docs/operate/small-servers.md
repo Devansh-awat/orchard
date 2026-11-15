@@ -60,7 +60,7 @@ To turn it on, run a Datadog agent in the cluster and set `datadog.enabled` to `
 
 A build uses the most memory of anything that Orchard does. On a server with 2 GiB of RAM, a large build can fail with an out-of-memory error. To keep builds off the server, build the image in CI, push it to a registry, and deploy the image. For more information, refer to [Deploy an image](/deploy/image/).
 
-An installer host cannot take a second node for builds. If you outgrow one machine, run the Helm chart on a multi-node cluster and [reserve a node for builds](/operate/nodes/#control-where-builds-run). For the reasons, refer to [Add and remove nodes](/operate/nodes/#add-and-remove-nodes).
+An installer host is single-node, so it cannot take a second node for builds. If you outgrow one machine, run the Helm chart on a multi-node cluster and [reserve a node for builds](/operate/nodes/#control-where-builds-run). For the reasons, refer to [Add and remove nodes](/operate/nodes/#on-an-installer-host).
 
 ## Free disk space
 

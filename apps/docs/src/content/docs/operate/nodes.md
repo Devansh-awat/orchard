@@ -13,9 +13,9 @@ Pools use Kubernetes node selectors, affinity, and tolerations, so `kubectl desc
 
 ### On an installer host
 
-An installer host cannot take extra nodes yet. The node pulls tenant images through a registry mirror at `127.0.0.1`, which reaches the bundled zot registry only on the machine that runs it. The host setup that Orchard needs, such as the AppArmor profiles, `orchardctl harden`, and the k3s registry configuration, also runs only on the install host. A second machine joined to the cluster cannot pull tenant images.
+An installer host is single-node. Adding nodes to it is not supported for now, because the node pulls tenant images through a registry mirror at `127.0.0.1` that reaches the bundled zot registry only on the install host. The host setup that Orchard needs, such as the AppArmor profiles, the kernel setting for rootless builds, and `orchardctl harden`, also runs only on that machine. Support for more nodes is planned for a later release.
 
-To run Orchard on more than one machine, use the Helm chart on a multi-node cluster, such as one running [Talos Linux](https://docs.siderolabs.com/talos). For the differences, refer to [Choose a layout](/operate/production/#choose-a-layout).
+To run Orchard on more than one machine, use the Helm chart on a multi-node cluster, such as one running [Talos Linux](https://docs.siderolabs.com/talos). Hack Club runs Orchard this way, on six Talos Linux nodes. For the differences, refer to [Choose a layout](/operate/production/#choose-a-layout).
 
 ### Add a node to a Helm cluster
 

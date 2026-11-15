@@ -44,7 +44,8 @@ over HTTPS, and two healthy databases. That run set `CNPG_OPERATOR_NAMESPACE` in
 variable. Its rendered output is checked in CI, but it has not been run on a cluster.
 
 These were not tested on this path: backups with the `objectStorage` values, MCP,
-public database exposure, more than one node, and other ingress controllers.
+public database exposure, and other ingress controllers. Hack Club runs Orchard with
+this chart on a six-node Talos Linux cluster.
 
 To install the prerequisites, including the commands and a ClusterIssuer example,
 refer to [Install the prerequisites](https://docs.orchard.hackclub.com/start/install/#install-the-prerequisites).

@@ -15,7 +15,7 @@ The installer builds a single-node [k3s](https://k3s.io/) cluster. k3s is a cert
 
 - **One machine is a single point of failure.** If the machine stops, every app, database, and the dashboard stop with it.
 - **Volumes use `local-path`.** Each volume is a directory on that machine's disk, with no replication.
-- **The registry is bound to loopback.** The bundled zot registry listens on `127.0.0.1` on the install host, and the node pulls tenant images through it. Another machine cannot pull from it, so the installer host cannot take extra nodes. For details, refer to [Add and remove nodes](/operate/nodes/#add-and-remove-nodes).
+- **The registry is bound to loopback.** The bundled zot registry listens on `127.0.0.1` on the install host, and the node pulls tenant images through it. Another machine cannot pull from it, so adding nodes to an installer host is not supported for now. Support is planned for a later release. For details, refer to [Add and remove nodes](/operate/nodes/#on-an-installer-host).
 - **Backups stay on the same disk.** Database backups go to an object store inside the cluster, on the same disk as the databases. They undo a mistake. They do not survive the loss of the machine unless you [add S3 storage](/operate/storage/).
 
 | Layout                             | Suits                                                                  | You operate                                                                    |
@@ -23,15 +23,15 @@ The installer builds a single-node [k3s](https://k3s.io/) cluster. k3s is a cert
 | One-command installer              | A home lab, a side project, a small team, or a trial                   | One Linux machine. The installer and `orchardctl` manage the rest.             |
 | Helm chart on a multi-node cluster | Production, and any instance where people depend on uptime and backups | The cluster, its storage, its registry, and its object storage, as you choose. |
 
-For production, run the Helm chart on a multi-node cluster built for it, such as one running [Talos Linux](https://docs.siderolabs.com/talos). Talos is an operating system made only to run Kubernetes, and it offers the gVisor and Kata runtimes that [kernel isolation](/operate/security/#kernel-isolation) needs as system extensions. For the chart install, refer to [Install on an existing cluster](/start/install/#install-on-an-existing-cluster).
+For production, run the Helm chart on a multi-node cluster built for it, such as one running [Talos Linux](https://docs.siderolabs.com/talos). Hack Club runs Orchard this way, on six Talos Linux nodes. Talos is an operating system made only to run Kubernetes, and it offers the gVisor and Kata runtimes that [kernel isolation](/operate/security/#kernel-isolation) needs as system extensions. For the chart install, refer to [Install on an existing cluster](/start/install/#install-on-an-existing-cluster).
 
 When you build the cluster, plan for the following:
 
-- **A CNI that enforces NetworkPolicy**, such as Cilium or Calico. Every tenant network boundary is a NetworkPolicy. Talos deploys Flannel unless you configure another CNI, and Flannel does not enforce NetworkPolicy. For Cilium on Talos, refer to [Deploying Cilium CNI](https://docs.siderolabs.com/kubernetes-guides/cni/deploying-cilium).
+- **A CNI that enforces NetworkPolicy**, such as Cilium or Calico. Every tenant network boundary is a NetworkPolicy. Talos deploys Flannel unless you configure another CNI, and Flannel does not enforce NetworkPolicy. For Cilium on Talos, refer to [Deploying Cilium CNI](https://docs.siderolabs.com/kubernetes-guides/cni/deploying-cilium). To keep Flannel, set `networkPolicy.enforcer.enabled` to `true` in the chart, which runs kube-router in policy-only mode next to Flannel. Refer to [Enforce network policies on Flannel](/operate/tenancy-and-isolation/#enforce-network-policies-on-flannel).
 - **Kubernetes 1.30 or later**, for the [admission guard](/operate/security/#admission-guard-for-tenant-namespaces).
 - **The components below**, either the ones the chart expects or your replacements.
 
-The chart's defaults describe the cluster that the Orchard project runs itself, with Harbor as the registry and the HAProxy ingress controller in the `network` namespace. The chart's own quick install was run end to end on a single node. Before you plan a cluster, read which configurations were tested in the [chart README](https://github.com/hackclub/orchard/tree/main/infra/charts/orchard#1-quick-install).
+The chart's defaults describe the cluster that the Orchard project runs itself, with Harbor as the registry and the HAProxy ingress controller in the `network` namespace. The chart's own quick install was run end to end on a single node, and Hack Club runs the chart on a six-node cluster. Before you plan a cluster, read which configurations were tested in the [chart README](https://github.com/hackclub/orchard/tree/main/infra/charts/orchard#1-quick-install).
 
 ## Replace bundled components
 

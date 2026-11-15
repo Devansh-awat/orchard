@@ -11,7 +11,7 @@ You can install Orchard on a single Linux machine with one command, or on a Kube
 
 The one-command installer builds a single-node k3s cluster on one machine. It puts app data on `local-path` disks, runs a zot registry that only that machine can pull from, and keeps backups in an S3 store on the same disk. You answer a few questions and the installer configures everything else, which makes it the fastest way to a working instance. It suits a home lab, a side project, a small team, or a trial. Because everything runs on one machine, that machine is a single point of failure.
 
-For production, Orchard recommends the Helm chart on a multi-node cluster built for it, such as [Talos Linux](https://docs.siderolabs.com/talos). You operate the cluster, and you can replace bundled components with ones that you run yourself: [Harbor](https://goharbor.io/docs/) or another registry instead of zot, external S3 storage for backups, and a replicated StorageClass instead of `local-path`.
+For production, Orchard recommends the Helm chart on a multi-node cluster built for it, such as [Talos Linux](https://docs.siderolabs.com/talos). Hack Club runs Orchard this way, on six Talos Linux nodes. You operate the cluster, and you can replace bundled components with ones that you run yourself: [Harbor](https://goharbor.io/docs/) or another registry instead of zot, external S3 storage for backups, and a replicated StorageClass instead of `local-path`.
 
 | Environment                                                | Method                                               |
 | ---------------------------------------------------------- | ---------------------------------------------------- |
@@ -19,7 +19,7 @@ For production, Orchard recommends the Helm chart on a multi-node cluster built 
 | A Kubernetes cluster you operate, such as a production one | [Helm chart](#install-on-an-existing-cluster)        |
 | A laptop, for a local trial                                | [Quickstart script](#try-orchard-on-a-laptop)        |
 
-You cannot add nodes to an installer host yet. Kubernetes nodes pull app images from the zot registry through an address that exists only on the install machine, and the host setup that Orchard needs runs only on that machine. To run on more than one machine, use the Helm chart. For more information, refer to [Add and remove nodes](/operate/nodes/#add-and-remove-nodes).
+An installer host is single-node. Adding nodes to it is not supported for now, because Kubernetes nodes pull app images from the zot registry through an address that exists only on the install machine, and the host setup that Orchard needs runs only on that machine. Support is planned for a later release. To run on more than one machine, use the Helm chart. For more information, refer to [Add and remove nodes](/operate/nodes/#on-an-installer-host).
 
 After you install Orchard, [claim the instance](#claim-the-instance).
 
@@ -335,7 +335,7 @@ To change an answer that you gave the installer:
 | Sandboxed builds and tenant isolation                  | Install gVisor or Kata on the node, then set `tenantSandbox` and `builderSandbox` in `/etc/orchard/values.yaml`. Without them, image builds run rootless, and builds and apps share the host kernel.                                                      |
 | DNS for your own domain                                | The installer prints the records and checks them, but you create them. To check them later, go to **Instance admin** > **Networking**. For more information, refer to [Point DNS at this instance](/operate/finishing-setup/#point-dns-at-this-instance). |
 | Off-server backups                                     | The installer asks for S3 storage, and you can add it later. Refer to [Add S3 storage](/operate/storage/).                                                                                                                                                |
-| Multiple nodes, and public TCP or UDP in `tunnel` mode | Use the [Helm chart](#install-on-an-existing-cluster). You cannot add nodes to an installer host yet.                                                                                                                                                     |
+| Multiple nodes, and public TCP or UDP in `tunnel` mode | Use the [Helm chart](#install-on-an-existing-cluster). Adding nodes to an installer host is not supported for now.                                                                                                                                        |
 | One certificate for every app URL                      | Add a DNS-01 issuer. Refer to [Set up wildcard certificates](/operate/wildcard-certificates/).                                                                                                                                                            |
 
 The following values turn on the sandboxes:
@@ -435,7 +435,7 @@ These steps were run end to end on one node: k3s v1.36.5 with its bundled Traefi
 
 That run set `CNPG_OPERATOR_NAMESPACE` in `server.env`. The `tenant.cnpgOperatorNamespace` value used below sets the same variable. Its rendered output is checked in CI, but it has not been run on a cluster.
 
-These were not tested on this path: backups with the `objectStorage` values, MCP, public database exposure, more than one node, and other ingress controllers.
+These were not tested on this path: backups with the `objectStorage` values, MCP, public database exposure, and other ingress controllers. Hack Club runs Orchard with this chart on a six-node Talos Linux cluster.
 :::
 
 ### Prerequisites

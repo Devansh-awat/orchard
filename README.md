@@ -20,7 +20,7 @@ Orchard runs on Kubernetes, but you do not have to touch Kubernetes. One command
 server into a k3s cluster with everything Orchard needs, which suits a home lab, a side project, a small
 team, or a trial. For production, run the Helm chart on a multi-node cluster such as
 [Talos Linux](https://docs.siderolabs.com/talos), with components you operate, such as Harbor for the
-registry. [Choose how to run Orchard](https://docs.orchard.hackclub.com/start/install/#choose-how-to-run-orchard)
+registry. Hack Club runs Orchard this way, on six Talos Linux nodes. [Choose how to run Orchard](https://docs.orchard.hackclub.com/start/install/#choose-how-to-run-orchard)
 explains the difference.
 
 Orchard is free and licensed under AGPL-3.0 (the graft SDK for extensions is MIT). Hack Club runs its own
@@ -63,8 +63,9 @@ curl -fsSL https://assets.orchard.my/install.sh -o orchard-install.sh && sudo ba
 
 ### Already running Kubernetes, or going to production?
 
-The installer builds its own single-node k3s cluster and cannot take more nodes yet. On a cluster you
-operate, use the Helm chart instead (Kubernetes 1.30 or later):
+The installer builds its own single-node k3s cluster. Adding nodes to it is not supported for now, and
+support is planned for a later release. For more than one node, or on a cluster you operate, use the Helm
+chart instead (Kubernetes 1.30 or later):
 
 ```bash
 helm install orchard oci://ghcr.io/hackclub/orchard/charts/orchard \
