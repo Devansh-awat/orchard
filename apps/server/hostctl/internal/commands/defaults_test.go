@@ -184,16 +184,16 @@ func TestHostDefaultsThirdRoundDropsTheInstallerLatestTags(t *testing.T) {
 	const installed = "hostDefaults: 2\nimage:\n  registry: ghcr.io\n  repository: hackclub/orchard\n  pullPolicy: Always\nserver:\n  image:\n    tag: latest\n  env:\n    - {name: CNPG_OPERATOR_NAMESPACE, value: cnpg-system}\nfrontend:\n  image:\n    tag: latest\n"
 	values := load(t, installed)
 	changes := applyHostDefaults(values, hostFacts{ReleaseChart: true})
-	if len(changes) != 1 || !strings.Contains(changes[0], "server.image.tag and frontend.image.tag removed") {
-		t.Fatalf("expected one note for both tags, got %v", changes)
+	if len(changes) != 2 || !strings.Contains(changes[0], "server.image.tag and frontend.image.tag removed") {
+		t.Fatalf("expected one note for both tags and one for the pull policy, got %v", changes)
 	}
 	for _, path := range []string{"server.image", "frontend.image"} {
 		if got := values.Get(path); got != nil {
 			t.Fatalf("%s should follow the chart, got %#v", path, got)
 		}
 	}
-	if values.Get("image.pullPolicy") != "Always" || values.Get(hostDefaultsPath) != hostDefaultsVersion {
-		t.Fatal("only the tags change")
+	if values.Get("image.pullPolicy") != nil || values.Get(hostDefaultsPath) != hostDefaultsVersion {
+		t.Fatal("without latest tags, Always gives way to the chart's pull policy")
 	}
 
 	if err := values.Put("server.image.tag", "latest"); err != nil {
@@ -216,11 +216,46 @@ func TestHostDefaultsThirdRoundDropsTheInstallerLatestTags(t *testing.T) {
 		if values.Get("server.image.tag") != "latest" || values.Get("frontend.image.tag") != "latest" {
 			t.Fatalf("%s: a chart or registry without release versions keeps latest", name)
 		}
+		if values.Get("image.pullPolicy") != "Always" {
+			t.Fatalf("%s: latest keeps pulling on every start", name)
+		}
 	}
 
 	pinned := load(t, "hostDefaults: 2\nserver:\n  image:\n    tag: e2e\n  env:\n    - {name: CNPG_OPERATOR_NAMESPACE, value: cnpg-system}\n")
 	if changes := applyHostDefaults(pinned, hostFacts{ReleaseChart: true}); changes != nil || pinned.Get("server.image.tag") != "e2e" {
 		t.Fatalf("a tag other than latest is someone's choice, got %v", changes)
+	}
+}
+
+func TestHostDefaultsFourthRoundDropsAlwaysForPinnedImages(t *testing.T) {
+	const installed = "hostDefaults: 3\nimage:\n  registry: ghcr.io\n  repository: hackclub/orchard\n  pullPolicy: Always\nserver:\n  env:\n    - {name: CNPG_OPERATOR_NAMESPACE, value: cnpg-system}\n"
+	values := load(t, installed)
+	changes := applyHostDefaults(values, hostFacts{ReleaseChart: true})
+	if len(changes) != 1 || !strings.Contains(changes[0], "image.pullPolicy removed") {
+		t.Fatalf("expected one note for the pull policy, got %v", changes)
+	}
+	if values.Get("image.pullPolicy") != nil || values.Get("image.registry") != "ghcr.io" {
+		t.Fatalf("only the pull policy goes, got %#v", values.Get("image"))
+	}
+
+	if err := values.Put("image.pullPolicy", "Always"); err != nil {
+		t.Fatal(err)
+	}
+	if changes := applyHostDefaults(values, hostFacts{ReleaseChart: true}); changes != nil {
+		t.Fatalf("Always set after the round has to stick, got %v", changes)
+	}
+
+	for name, body := range map[string]string{
+		"server on latest": installed + "  image:\n    tag: latest\n",
+		"mcp on latest":    installed + "mcp:\n  image:\n    tag: latest\n",
+		"if not present":   strings.Replace(installed, "pullPolicy: Always", "pullPolicy: IfNotPresent", 1),
+		"never":            strings.Replace(installed, "pullPolicy: Always", "pullPolicy: Never", 1),
+	} {
+		values := load(t, body)
+		before := values.Get("image.pullPolicy")
+		if changes := applyHostDefaults(values, hostFacts{ReleaseChart: true}); changes != nil || values.Get("image.pullPolicy") != before {
+			t.Fatalf("%s: the pull policy has to stay %v, got %v and %v", name, before, values.Get("image.pullPolicy"), changes)
+		}
 	}
 }
 

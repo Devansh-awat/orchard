@@ -13,7 +13,7 @@ import (
 
 const (
 	hostDefaultsPath    = "hostDefaults"
-	hostDefaultsVersion = 3
+	hostDefaultsVersion = 4
 	smallBoxMemMB       = 7500
 
 	cnpgOperatorNamespaceEnv = "CNPG_OPERATOR_NAMESPACE"
@@ -98,6 +98,9 @@ func applyHostDefaults(values *cli.Values, facts hostFacts) []string {
 	if round < 3 && facts.ReleaseChart {
 		changes = append(changes, dropLatestImageTags(values)...)
 	}
+	if round < 4 {
+		changes = append(changes, dropAlwaysPullPolicy(values)...)
+	}
 	_ = values.Put(hostDefaultsPath, hostDefaultsVersion)
 	return changes
 }
@@ -124,6 +127,19 @@ func dropLatestImageTags(values *cli.Values) []string {
 		return nil
 	}
 	return []string{strings.Join(dropped, " and ") + " removed (it was latest, so a pod restart could pull a release the chart doesn't match; the images now follow the chart version, which orchardctl update moves)"}
+}
+
+func dropAlwaysPullPolicy(values *cli.Values) []string {
+	if stringAt(values, "image.pullPolicy") != "Always" {
+		return nil
+	}
+	for _, component := range []string{"server", "frontend", "mcp", "r2Proxy", "fcBuilder"} {
+		if stringAt(values, component+".image.tag") == "latest" {
+			return nil
+		}
+	}
+	values.Unset("image.pullPolicy")
+	return []string{"image.pullPolicy removed (it was Always, so every pod start waited on the registry; release versions don't move, so the chart's IfNotPresent starts pods from the image already on the node)"}
 }
 
 func releaseChart(ref string) bool {
