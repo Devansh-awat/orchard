@@ -27,6 +27,7 @@
 		fetchGitConnections,
 		fetchOauthAvailability,
 		fetchWebhookSecret,
+		isBitbucketAppPassword,
 		oauthStartUrl,
 		type OauthAvailability,
 		type GitConnection,
@@ -155,10 +156,20 @@
 	function detail(c: GitConnection) {
 		const parts = [c.host];
 		if (c.oauth) parts.push('signed in');
+		if (isBitbucketAppPassword(c)) parts.push('app password, reconnect with an API token');
 		if (c.dependents > 0) parts.push(`${c.dependents} app${c.dependents === 1 ? '' : 's'}`);
 		return parts.join(' · ');
 	}
 </script>
+
+{#snippet tokenHint()}
+	{spec.tokenHint}
+	{#if spec.tokenLink}
+		<a href={spec.tokenLink.href} target="_blank" rel="noopener noreferrer"
+			>{spec.tokenLink.label}</a
+		>
+	{/if}
+{/snippet}
 
 {#snippet providerMark(kind: string)}
 	<GitHostMark host={gitHostOf(kind)} />
@@ -263,11 +274,15 @@
 		</Field>
 		<FieldGrid>
 			{#if spec.needsUsername}
-				<Field label="Username" for="{uid}-user">
-					<Input id="{uid}-user" bind:value={username} placeholder="username" />
+				<Field label={spec.usernameLabel ?? 'Username'} for="{uid}-user" hint={spec.usernameHint}>
+					<Input
+						id="{uid}-user"
+						bind:value={username}
+						placeholder={spec.usernamePlaceholder ?? 'username'}
+					/>
 				</Field>
 			{/if}
-			<Field label="Token" for="{uid}-token" hint={spec.tokenHint}>
+			<Field label={spec.tokenLabel ?? 'Token'} for="{uid}-token" hint={tokenHint}>
 				<SecretInput id="{uid}-token" bind:value={token} placeholder="token" />
 			</Field>
 		</FieldGrid>

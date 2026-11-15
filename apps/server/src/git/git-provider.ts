@@ -110,9 +110,33 @@ export function normalizeBaseUrl(raw: string): string | null {
   return `https://${url.host}${path}`;
 }
 
-export function providerFailureMessage(e: unknown): string {
-  if (e instanceof GitProviderError && (e.status === 401 || e.status === 403)) {
-    return 'The provider rejected the token';
+export const BITBUCKET_TOKEN_REJECTED =
+  'Bitbucket rejected the token. Use an Atlassian API token with the read:repository:bitbucket scope and the email of the Atlassian account that created it, or an access token with the email left empty';
+
+export const BITBUCKET_APP_PASSWORD_RETIRED =
+  'Bitbucket no longer accepts app passwords. Reconnect this provider with an Atlassian API token, or use Sign in with Bitbucket';
+
+export function isProviderAuthFailure(e: unknown): boolean {
+  return e instanceof GitProviderError && (e.status === 401 || e.status === 403);
+}
+
+export function isBitbucketEmail(username: string | null | undefined): username is string {
+  return !!username && username.includes('@');
+}
+
+export function isBitbucketAppPassword(row: {
+  provider: string;
+  oauth?: boolean;
+  username: string | null;
+}): boolean {
+  return (
+    row.provider === 'bitbucket' && !row.oauth && !!row.username && !isBitbucketEmail(row.username)
+  );
+}
+
+export function providerFailureMessage(e: unknown, kind?: GitProviderKind): string {
+  if (isProviderAuthFailure(e)) {
+    return kind === 'bitbucket' ? BITBUCKET_TOKEN_REJECTED : 'The provider rejected the token';
   }
   return "Couldn't reach the provider";
 }

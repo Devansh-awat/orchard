@@ -3,6 +3,7 @@ import {
   GitProviderError,
   PROVIDER_UNREACHABLE,
   hostOf,
+  isBitbucketEmail,
   type BranchRef,
   type CloneCredential,
   type ConnectionConfig,
@@ -22,6 +23,8 @@ import {
 } from './parse-push';
 
 const MAX_PAGES = 5;
+const BITBUCKET_API_TOKEN_USER = 'x-bitbucket-api-token-auth';
+const BITBUCKET_ACCESS_TOKEN_USER = 'x-token-auth';
 const MAX_TREE_PAGES = 20;
 const REQUEST_TIMEOUT_MS = 20_000;
 
@@ -429,7 +432,7 @@ export class GiteaProvider extends BaseProvider {
   }
 }
 
-/** Bitbucket Cloud with an app password, or a repository access token. */
+/** Bitbucket Cloud with an API token, an OAuth token, or an access token. */
 export class BitbucketProvider extends BaseProvider {
   readonly kind = 'bitbucket' as const;
 
@@ -437,9 +440,13 @@ export class BitbucketProvider extends BaseProvider {
     return 'https://api.bitbucket.org/2.0';
   }
 
+  private get email(): string | null {
+    return isBitbucketEmail(this.config.username) ? this.config.username : null;
+  }
+
   private get headers() {
-    if (this.config.username) {
-      const pair = Buffer.from(`${this.config.username}:${this.config.token}`).toString('base64');
+    if (this.email) {
+      const pair = Buffer.from(`${this.email}:${this.config.token}`).toString('base64');
       return { Authorization: `Basic ${pair}` };
     }
     return { Authorization: `Bearer ${this.config.token}` };
@@ -503,7 +510,7 @@ export class BitbucketProvider extends BaseProvider {
   cloneCredential(): CloneCredential {
     return {
       host: this.host,
-      username: this.config.username || 'x-token-auth',
+      username: this.email ? BITBUCKET_API_TOKEN_USER : BITBUCKET_ACCESS_TOKEN_USER,
       password: this.config.token
     };
   }

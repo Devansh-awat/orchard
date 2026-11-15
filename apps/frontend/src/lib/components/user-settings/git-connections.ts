@@ -35,7 +35,12 @@ export const PROVIDERS: {
 	label: string;
 	baseUrl: string;
 	tokenHint: string;
+	tokenLabel?: string;
+	tokenLink?: { href: string; label: string };
 	needsUsername: boolean;
+	usernameLabel?: string;
+	usernamePlaceholder?: string;
+	usernameHint?: string;
 	webhookHint: string;
 }[] = [
 	{
@@ -66,8 +71,17 @@ export const PROVIDERS: {
 		kind: 'bitbucket',
 		label: 'Bitbucket Cloud',
 		baseUrl: 'https://bitbucket.org',
-		tokenHint: 'App password with repository read',
+		tokenLabel: 'API token',
+		tokenHint:
+			'Scopes read:repository:bitbucket, plus read:webhook:bitbucket and write:webhook:bitbucket for auto-deploy.',
+		tokenLink: {
+			href: 'https://id.atlassian.com/manage-profile/security/api-tokens',
+			label: 'Create an API token with scopes'
+		},
 		needsUsername: true,
+		usernameLabel: 'Atlassian account email',
+		usernamePlaceholder: 'you@example.com',
+		usernameHint: 'Leave it empty for a workspace or repository access token',
 		webhookHint: 'Secret field, repository push trigger'
 	},
 	{
@@ -79,6 +93,10 @@ export const PROVIDERS: {
 		webhookHint: 'Send a GitHub-shaped push payload signed with X-Hub-Signature-256'
 	}
 ];
+
+export function isBitbucketAppPassword(c: GitConnection): boolean {
+	return c.provider === 'bitbucket' && !c.oauth && !!c.username && !c.username.includes('@');
+}
 
 export function providerLabel(kind: GitProviderKind): string {
 	return PROVIDERS.find((p) => p.kind === kind)?.label ?? kind;

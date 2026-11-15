@@ -20,9 +20,14 @@ import { parseRepoUrl } from '../docker/repo-url';
 import { assertPublicUrl } from '../notifications/webhook-guard';
 import { encodeCloneCredential } from './clone-credential';
 import {
+  BITBUCKET_APP_PASSWORD_RETIRED,
   GIT_PROVIDER_KINDS,
+  GitProviderError,
   PROVIDER_DEFAULT_BASE_URL,
   hostOf,
+  isBitbucketAppPassword,
+  isBitbucketEmail,
+  isProviderAuthFailure,
   normalizeBaseUrl,
   providerFailureMessage,
   type BranchRef,
@@ -82,6 +87,14 @@ export interface RepoDetection {
 }
 
 const NAME_RE = /^[A-Za-z0-9][A-Za-z0-9 ._-]{0,79}$/;
+
+const BITBUCKET_EMAIL_REQUIRED =
+  'Enter the email of your Atlassian account, not your Bitbucket username. Bitbucket API tokens sign in with the account email';
+
+function bitbucketUsername(raw: string | null): string | null {
+  if (raw && !isBitbucketEmail(raw)) throw new BadRequestException(BITBUCKET_EMAIL_REQUIRED);
+  return raw;
+}
 
 @Injectable()
 export class GitConnectionsService {
@@ -267,10 +280,8 @@ export class GitConnectionsService {
     const token = String(input.token || '').trim();
     if (!token) throw new BadRequestException('A token is required');
     if (token.length > 4096) throw new BadRequestException('Token is too long');
-    const username = String(input.username || '').trim() || null;
-    if (provider === 'bitbucket' && !username) {
-      throw new BadRequestException('Bitbucket needs the username the app password belongs to');
-    }
+    const rawUsername = String(input.username || '').trim() || null;
+    const username = provider === 'bitbucket' ? bitbucketUsername(rawUsername) : rawUsername;
     const existing = await this.prisma.gitConnection.findFirst({
       where: { userId, name },
       select: { id: true }
@@ -318,8 +329,17 @@ export class GitConnectionsService {
     try {
       await providerFor(config).listRepos();
     } catch (e) {
-      throw new BadRequestException(providerFailureMessage(e));
+      throw new BadRequestException(providerFailureMessage(e, config.kind));
     }
+  }
+
+  private rejected(row: { provider: string; oauth: boolean; username: string | null }, e: unknown) {
+    const gone = e instanceof GitProviderError && e.status === 410;
+    if (isBitbucketAppPassword(row) && (gone || isProviderAuthFailure(e))) {
+      return new BadRequestException(BITBUCKET_APP_PASSWORD_RETIRED);
+    }
+    if (!isProviderAuthFailure(e)) return e;
+    return new BadRequestException(providerFailureMessage(e, row.provider as GitProviderKind));
   }
 
   async update(
@@ -334,13 +354,19 @@ export class GitConnectionsService {
       if (!NAME_RE.test(name)) throw new BadRequestException('Give the connection a short name');
       data.name = name;
     }
-    if (input.username !== undefined) data.username = String(input.username || '').trim() || null;
+    if (input.username !== undefined) {
+      const raw = String(input.username || '').trim() || null;
+      data.username = row.provider === 'bitbucket' ? bitbucketUsername(raw) : raw;
+    }
+    if (input.token && data.username === undefined && isBitbucketAppPassword(row)) {
+      data.username = null;
+    }
     if (input.token) {
       const token = String(input.token).trim();
       await this.probe({
         ...this.configFor(row),
         token,
-        username: data.username ?? row.username
+        username: data.username !== undefined ? data.username : row.username
       });
       data.token = this.crypto.encrypt(token);
     }
@@ -376,12 +402,21 @@ export class GitConnectionsService {
 
   async repos(userId: string, connectionId: string): Promise<RepoRef[]> {
     const row = await this.rowOrThrow(userId, connectionId);
-    return (await this.providerForRow(row)).listRepos();
+    try {
+      return await (await this.providerForRow(row)).listRepos();
+    } catch (e) {
+      throw this.rejected(row, e);
+    }
   }
 
   async branches(userId: string, connectionId: string, repo: string): Promise<BranchRef[]> {
     const row = await this.rowOrThrow(userId, connectionId);
-    return (await this.providerForRow(row)).listBranches(this.repoArg(repo));
+    const repoPath = this.repoArg(repo);
+    try {
+      return await (await this.providerForRow(row)).listBranches(repoPath);
+    } catch (e) {
+      throw this.rejected(row, e);
+    }
   }
 
   private repoArg(repo: string): string {
