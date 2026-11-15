@@ -25,7 +25,7 @@ After you install Orchard, [claim the instance](#claim-the-instance).
 
 ## Install on a Linux machine
 
-The installer creates a single-node k3s cluster. It then installs Traefik, CloudNativePG, cert-manager, a zot registry, and Orchard. If the machine can already reach another Kubernetes cluster, the installer warns you and leaves that cluster alone.
+The installer creates a single-node k3s cluster. It then installs Traefik, CloudNativePG with the Barman Cloud plugin, cert-manager, a zot registry, and Orchard. If the machine can already reach another Kubernetes cluster, the installer warns you and leaves that cluster alone.
 
 ### Prerequisites
 
@@ -46,11 +46,11 @@ Do not run the installer inside a Docker container. k3s cannot nest its overlayf
 
 The ingress mode sets how traffic reaches the machine.
 
-| Mode     | Use for                                                  | TLS                                                               |
-| -------- | -------------------------------------------------------- | ----------------------------------------------------------------- |
-| `public` | A routable IP address with DNS pointed at it             | Let's Encrypt over HTTP-01                                        |
-| `tunnel` | A machine behind NAT or CGNAT, through Cloudflare Tunnel | Cloudflare terminates TLS and the installer skips cert-manager    |
-| `lan`    | A LAN or Tailscale network, reached by address           | Self-signed certificates for apps. The dashboard uses plain HTTP. |
+| Mode     | Use for                                                  | TLS                                                                |
+| -------- | -------------------------------------------------------- | ------------------------------------------------------------------ |
+| `public` | A routable IP address with DNS pointed at it             | Let's Encrypt over HTTP-01                                         |
+| `tunnel` | A machine behind NAT or CGNAT, through Cloudflare Tunnel | Cloudflare terminates TLS. cert-manager has no certificate issuer. |
+| `lan`    | A LAN or Tailscale network, reached by address           | Self-signed certificates for apps. The dashboard uses plain HTTP.  |
 
 The mode also decides which host ports Orchard binds.
 

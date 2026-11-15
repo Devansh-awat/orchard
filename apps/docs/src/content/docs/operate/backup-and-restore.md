@@ -24,6 +24,19 @@ Continuous backups of the control-plane database are off by default, and the ins
 Keep `SECRETS_ENCRYPTION_KEY`. Without the original key, Orchard cannot read the secrets stored in the control-plane database, even after a successful restore.
 :::
 
+## How app databases are backed up
+
+CloudNativePG archives each database's write-ahead log (WAL) and takes base backups to object storage. It does this in one of two ways:
+
+| Method                  | Used by                                                                                                                      |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| The Barman Cloud plugin | New installer hosts, and any instance with `CNPG_BARMAN_PLUGIN=on`. Each database has an `ObjectStore` and a backup sidecar. |
+| Built-in Barman Cloud   | Older installer hosts and Helm installs without `CNPG_BARMAN_PLUGIN=on`.                                                     |
+
+CloudNativePG 1.31 removes the built-in method, and a database that still uses it stops taking backups after that upgrade. Before CloudNativePG 1.31 reaches your cluster, move every database to the plugin. Refer to [Move database backups to the Barman Cloud plugin](/operate/upgrades/#move-database-backups-to-the-barman-cloud-plugin).
+
+Both methods write the same archive format to the same path, so a backup taken with one method restores with the other. To recover a database on a new cluster, install CloudNativePG, cert-manager, and the Barman Cloud plugin first.
+
 ## Restore the control plane
 
 The chart always creates the control-plane database empty. To restore it, recover the backup into a separate cluster, and then load it into the new instance.

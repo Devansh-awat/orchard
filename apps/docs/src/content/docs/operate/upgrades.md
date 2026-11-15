@@ -165,6 +165,8 @@ You can also re-run the installer on an existing host. A re-run:
 - Changes a value only when you change an answer that it depends on, and prints each change.
 - Saves a copy of the values file before it changes the file.
 - Does not restart k3s unless the registry mirror configuration changed.
+- Upgrades CloudNativePG to the chart version that the installer pins, one minor version at a time, and installs the Barman Cloud plugin. It never moves either chart to an older version.
+- Keeps the backup method of your databases. To move them to the Barman Cloud plugin, refer to [Move database backups to the Barman Cloud plugin](#move-database-backups-to-the-barman-cloud-plugin).
 
 Without `--chart-version`, a re-run installs the newest chart. For more information, refer to [Run the installer again](/start/install/#run-the-installer-again).
 
@@ -194,6 +196,42 @@ Upgrading the control plane does not restart tenant apps. The server, frontend, 
 You can roll back the release with `helm rollback`. If the new version migrated the schema, the old version may not run against it. If downtime matters, test upgrades on a non-production instance first.
 
 ## Upgrade from an earlier version
+
+### Move database backups to the Barman Cloud plugin
+
+CloudNativePG 1.31 removes its built-in Barman Cloud support (`spec.backup.barmanObjectStore`). A database that still archives that way stops taking backups after the operator moves to 1.31. The replacement is the [Barman Cloud plugin](https://cloudnative-pg.io/plugin-barman-cloud/), which needs CloudNativePG 1.30 or later and cert-manager.
+
+An installer host set up with this version of the installer already uses the plugin, and the installer prints **Database backups: Barman Cloud plugin** in its summary. An older installer host, or a Helm install, uses the built-in support until you move it. Finish these steps before CloudNativePG 1.31 reaches the cluster.
+
+1. Check the CloudNativePG chart version. Chart `0.29.x` runs CloudNativePG 1.30.
+
+   ```bash
+   helm list -n cnpg-system
+   ```
+
+2. Upgrade CloudNativePG to 1.30 and install the plugin.
+
+   - On an installer host, run the installer again. The re-run upgrades CloudNativePG one minor version at a time, installs cert-manager and the plugin, and keeps your backup method. Its summary shows how many databases still use the built-in support.
+   - On a Helm install, upgrade the `cloudnative-pg` chart one minor version at a time with `config.data.ENABLE_INSTANCE_MANAGER_INPLACE_UPDATES=true`, so that the databases do not restart. Then install the plugin into the operator namespace:
+
+     ```bash
+     helm upgrade --install plugin-barman-cloud cnpg/plugin-barman-cloud \
+       --namespace cnpg-system --version <PLUGIN_CHART_VERSION> --wait
+     ```
+
+3. Turn on the plugin for new databases. On an installer host, run the following command. On a Helm install, add `CNPG_BARMAN_PLUGIN=on` to `server.env` and upgrade the chart.
+
+   ```bash
+   sudo orchardctl env set CNPG_BARMAN_PLUGIN on --apply
+   ```
+
+4. In the dashboard, go to **Instance admin** > **Configuration** > **Databases**, and turn on **Move backups to the Barman Cloud plugin**.
+
+The migration moves a few databases every 10 minutes. Each database keeps its archive path and server name, so its earlier backups stay restorable. The plugin runs a sidecar of up to 256 MiB of memory in each database instance, so the migration skips a namespace whose quota has no room for it. If a moved database stops archiving, the migration stops itself, and the setting offers to resume it. The **Databases** setting shows how many databases are left. Upgrade CloudNativePG to 1.31 only after none are left.
+
+:::caution
+If **Move backups to the Barman Cloud plugin** is already on, the migration starts as soon as step 2 installs the plugin. The migration waits for the plugin, not for `CNPG_BARMAN_PLUGIN`.
+:::
 
 ### Turn off the Postgres superuser on older databases
 
