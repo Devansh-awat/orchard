@@ -10,6 +10,7 @@ function makeController() {
   const calls: any[][] = [];
   const prisma = {
     project: { findFirst: async () => ({ id: 'proj-1' }) },
+    environment: { findUnique: async () => null },
     user: { findFirst: async () => ({ id: USER_ID }) }
   };
   const authz = {

@@ -17,7 +17,7 @@ function build() {
     },
     environment: { findUnique: async () => null },
     user: { findUnique: async () => ({ id: CALLER, isSuperAdmin: false }) },
-    organizationMember: { findUnique: async () => null },
+    organizationMember: { findUnique: async () => null, findFirst: async () => null },
     projectMember: { findUnique: async () => null, findFirst: async () => null }
   };
   const authz = new AuthorizationService(prisma, {} as any);

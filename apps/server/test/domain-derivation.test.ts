@@ -3,13 +3,13 @@ import assert from 'node:assert';
 import { execFileSync } from 'node:child_process';
 import * as path from 'path';
 
-// PLATFORM_WILDCARD_DOMAINS is resolved once at module load, so each case has
+// platformWildcardDomains() caches its first result, so each case has
 // to run in its own process to see a different environment.
 function resolve(env: Record<string, string>) {
   const script = `
-    import { PLATFORM_WILDCARD_DOMAINS, isPlatformGeneratedHost } from ${JSON.stringify(path.join(__dirname, '../src/projects/projects.utils'))};
+    import { platformWildcardDomains, isPlatformGeneratedHost } from ${JSON.stringify(path.join(__dirname, '../src/projects/projects.utils'))};
     process.stdout.write(JSON.stringify({
-      domains: PLATFORM_WILDCARD_DOMAINS,
+      domains: platformWildcardDomains(),
       generated: isPlatformGeneratedHost('main-forge-16294e.apps.example.com'),
       hackclub: isPlatformGeneratedHost('main-forge-16294e.k.hackclub.dev'),
     }));

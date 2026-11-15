@@ -12,7 +12,7 @@ test('only a systeminfo answer with a harbor version counts as Harbor', () => {
   });
   const zot = readSystemInfo(404, null, base);
   assert.equal(zot.harbor, false);
-  assert.ok(!zot.transient && zot.reason?.includes('not Harbor'));
+  assert.ok(!zot.transient && zot.reason?.includes("isn't Harbor"));
   assert.equal(readSystemInfo(200, { version: '1' }, base).harbor, false);
   assert.equal(readSystemInfo(401, null, base).harbor, false);
   const down = readSystemInfo(503, null, base);

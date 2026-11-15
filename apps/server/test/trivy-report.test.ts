@@ -145,7 +145,7 @@ test('trivy failures keep only the fatal line', async () => {
     trivyErrorMessage(
       'FATAL Fatal error run error: scan failed: Post "http://trivy.orchard-scans.svc.cluster.local:4954/twirp/trivy.scanner.v1.Scanner/Scan": dial tcp 10.43.0.9:4954: connect: connection refused'
     ),
-    'Could not reach the Trivy server'
+    "Couldn't reach the Trivy server"
   );
   assert.equal(
     trivyErrorMessage(

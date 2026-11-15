@@ -70,6 +70,7 @@ test('a compose preflight checks the namespace of the stack environment', async 
 function teardownHarness(rows: VolumeHolder[]) {
   const { service } = guard(rows);
   const deleted: string[] = [];
+  service.prisma.database = { findMany: async () => [] };
   service.kubernetesService = {
     deletePVC: async (_ns: string, name: string) => {
       deleted.push(name);
