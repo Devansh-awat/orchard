@@ -107,11 +107,30 @@ An upgrade turns on, once, features that newer releases run by default. Orchard 
 2. **Soak period**: A version installs only after it has been public for 7 days. If a release turns out to be broken or compromised during that time, and its publisher replaces it, your instance never installs it. A version without a publication date waits.
 3. **Security fast track**: If [OSV.dev](https://osv.dev) lists a vulnerability in the running version, the update installs a fixed version at once, without the soak period. It picks the version that fixes the most of those advisories and adds no new advisory. If more than one version qualifies, it prefers the newest one that has soaked, then the oldest one that has not. The command prints `security update: <advisory> affects <running version>, moving to <new version>`.
 
-The fast track follows the version class rules. If only a new major version fixes a vulnerability, `orchardctl update` names the version that fixes it and leaves the upgrade to you.
+The fast track follows the version class rules, with one exception: a standalone tool below version 1.0 can move to a new minor version to fix a vulnerability. Refer to [Security fixes in a new minor version](#security-fixes-in-a-new-minor-version). If no version that the rules allow fixes a vulnerability, `orchardctl update` names the version that fixes it and leaves the upgrade to you.
 
 If OSV.dev does not answer, every version waits for the soak period. Missing advisory data never blocks an update, and never skips the soak period. When OSV.dev answers, the update also skips a version that has an advisory that the running version does not have.
 
 `orchardctl update` respects versions in `/etc/orchard/images-held`, including on the fast track. It sends OSV.dev package names and version numbers only, and nothing about your instance.
+
+### Security fixes in a new minor version
+
+Below version 1.0, a project often fixes a vulnerability only in a new minor version. A standalone tool keeps no data that it cannot rebuild, and no other component depends on its stored format. If no release in its running minor version fixes a vulnerability, `orchardctl update` moves a standalone tool to the nearest minor version that does. The new version fixes the advisories, adds no advisory, and follows the fast track preference for a version that has soaked. The move never crosses a major version, and it never happens without an advisory. A new minor version without a security fix still needs a person.
+
+Operators and components that hold data stay in their minor version, because a new minor version can change their CRDs, their APIs, or the data that they store. For those components, `orchardctl update` prints the version that fixes the vulnerability, and you upgrade.
+
+| Component                                     | Crosses a minor version for a security fix | Reason                                                                                                                                                            |
+| --------------------------------------------- | ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Trivy                                         | Yes                                        | Scans an image and exits. It downloads the vulnerability database that its version reads.                                                                         |
+| Vector                                        | Yes                                        | Ships logs and keeps only its read positions. A version that rejects its configuration does not come up, and the update goes back.                                |
+| skopeo and aws-cli                            | Yes                                        | Run one task and exit.                                                                                                                                            |
+| vmagent, kube-state-metrics, node-exporter    | Yes                                        | Collect and serve metrics, and keep nothing that they cannot rebuild.                                                                                             |
+| cloudflared                                   | Yes                                        | Forwards traffic and keeps nothing. It takes any newer version in any case.                                                                                       |
+| Traefik, CloudNativePG, cert-manager          | No                                         | Operators. A new minor version can change their CRDs. Traefik routes every request, CloudNativePG runs every database, and cert-manager issues every certificate. |
+| Redis, pgbouncer, BuildKit                    | No                                         | Take patch versions only. Redis holds data, pgbouncer sits in front of every database connection, and a new BuildKit minor version can change the build cache.    |
+| VictoriaMetrics, VictoriaLogs, versitygw, zot | No                                         | Hold data: metrics, logs, objects, and the images that Orchard builds.                                                                                            |
+
+Trivy and Vector are the standalone tools below version 1.0, so the exception applies to them. The CloudNativePG chart is below version 1.0, so a CloudNativePG fix that is only in a new chart minor version needs a person.
 
 ### Settings
 
@@ -152,7 +171,7 @@ A new push to an existing Docker Hub tag starts its soak period again. The publi
 | Trivy                       | Go module `github.com/aquasecurity/trivy`                                |
 | versitygw                   | Go module `github.com/versity/versitygw`                                 |
 | aws-cli                     | Git repository `https://github.com/aws/aws-cli`                          |
-| zot                         | Go modules `zotregistry.dev/zot` and `zotregistry.dev/zot/v2`            |
+| zot                         | Go module `zotregistry.dev/zot/v2`, for the running major version        |
 | cloudflared                 | Git repository `https://github.com/cloudflare/cloudflared`               |
 
 pgbouncer and VictoriaLogs have no OSV.dev package that matches their release versions, so only the soak period applies to them. OSV.dev lists Vector advisories without the affected release versions, so a Vector advisory does not start the fast track.
