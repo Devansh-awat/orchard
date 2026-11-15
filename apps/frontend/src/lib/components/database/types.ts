@@ -1,3 +1,5 @@
+import type { PublicStatus } from '$lib/components/deployment/network/network';
+
 export interface DatabasePod {
 	name: string;
 	status?: string;
@@ -30,6 +32,7 @@ export interface DatabaseDetail {
 	publicPort?: number | null;
 	publicHostname?: string | null;
 	publicConnectionString?: string | null;
+	publicStatus?: PublicStatus | null;
 	pods?: DatabasePod[];
 	cpuRequestMilli?: number | null;
 	memoryRequestBytes?: number | null;

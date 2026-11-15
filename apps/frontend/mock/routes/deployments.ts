@@ -203,6 +203,9 @@ function service(store: Store, d: MockDeployment) {
 				publicEnabled: d.name === 'game-server',
 				publicPort: d.name === 'game-server' ? 30565 : null,
 				publicAddress: d.name === 'game-server' ? 'tcp.orchard.my:30565' : null,
+				...(d.name === 'game-server'
+					? { publicStatus: { state: 'ready', addresses: ['203.0.113.10'], reason: null } }
+					: {}),
 				internalUrl: `http://${internalHost}`
 			},
 			...(d.name === 'game-server'

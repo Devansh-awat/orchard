@@ -13,6 +13,7 @@
 	} from '$lib/components/ui';
 	import Widget from '$lib/components/ui/Widget.svelte';
 	import CopyButton from '$lib/components/ui/CopyButton.svelte';
+	import PublicAddressLine from './PublicAddressLine.svelte';
 	import { bareAddress, type PortEntry } from './network';
 
 	let {
@@ -74,8 +75,10 @@
 					{#snippet subtitle()}
 						<span class="addresses">
 							{#if open && entry.port.publicAddress}
-								<span class="address address--public">{entry.port.publicAddress}</span>
-								<CopyButton value={entry.port.publicAddress} label="Copy public address" />
+								<PublicAddressLine
+									address={entry.port.publicAddress}
+									status={entry.port.publicStatus}
+								/>
 							{:else if entry.internalUrl}
 								<span class="address">{bareAddress(entry.internalUrl)}</span>
 								<CopyButton value={entry.internalUrl} label="Copy private address" />
@@ -175,9 +178,6 @@
 		font-size: var(--text-footnote);
 		text-overflow: ellipsis;
 		white-space: nowrap;
-	}
-	.address--public {
-		color: var(--text-default);
 	}
 	.addresses :global(button) {
 		width: 1.5rem;

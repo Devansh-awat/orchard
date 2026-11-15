@@ -305,7 +305,7 @@ export class ServicesController {
 				title: currentlyEnabled ? 'Port is private' : 'Port is public',
 				description:
 					!currentlyEnabled && res?.host && res?.port
-						? `Reachable at ${res.host}:${res.port}`
+						? `Address ${res.host}:${res.port}`
 						: undefined,
 				color: 'success'
 			});

@@ -41,6 +41,7 @@
 	import DatabaseProvisioning from '$lib/components/DatabaseProvisioning.svelte';
 	import ResourceLimits from '$lib/components/ResourceLimits.svelte';
 	import DatabaseConnect from '$lib/components/database/DatabaseConnect.svelte';
+	import PublicAddressLine from '$lib/components/deployment/network/PublicAddressLine.svelte';
 	import DatabaseHealth from '$lib/components/database/DatabaseHealth.svelte';
 	import DatabaseActivity from '$lib/components/database/DatabaseActivity.svelte';
 	import DatabaseObserve from '$lib/components/database/DatabaseObserve.svelte';
@@ -511,6 +512,17 @@
 		return () => clearInterval(interval);
 	});
 
+	const publicPending = $derived(
+		!!database?.publicEnabled && database?.publicStatus?.state === 'pending'
+	);
+	$effect(() => {
+		if (!publicPending) return;
+		const interval = setInterval(() => {
+			if (!document.hidden) void fetchLive();
+		}, 5_000);
+		return () => clearInterval(interval);
+	});
+
 	let filteredExtensions = $derived.by(() => {
 		const q = extensionSearch.trim().toLowerCase();
 		const byName = new Map<string, ExtInfo>();
@@ -591,7 +603,15 @@
 			database = {
 				...incoming,
 				liveStatus: incoming?.liveStatus ?? database?.liveStatus,
-				pods: incoming?.pods?.length ? incoming.pods : (database?.pods ?? [])
+				pods: incoming?.pods?.length ? incoming.pods : (database?.pods ?? []),
+				publicStatus:
+					incoming?.publicStatus !== undefined
+						? incoming.publicStatus
+						: incoming?.publicEnabled &&
+							  database?.publicEnabled &&
+							  incoming?.publicPort === database?.publicPort
+							? database?.publicStatus
+							: null
 			};
 			error = null;
 			if (database?.backupsEnabled) fetchBackups();
@@ -685,6 +705,7 @@
 			database.liveStatus = mergeLiveStatus(database.liveStatus, live.liveStatus);
 			database.pods = live.pods;
 			if (live.status) database.status = live.status;
+			if ('publicStatus' in live) database.publicStatus = live.publicStatus;
 		} catch {
 			return;
 		} finally {
@@ -1902,7 +1923,11 @@
 										/>
 									</ActionRow>
 								</SettingsList>
-								{#if database.publicEnabled && database.publicConnectionString}
+								{#if database.publicEnabled && (database.publicStatus?.state === 'pending' || database.publicStatus?.state === 'failed')}
+									<div class="public-address">
+										<PublicAddressLine address={null} status={database.publicStatus} />
+									</div>
+								{:else if database.publicEnabled && database.publicConnectionString}
 									<div class="public-address">
 										<SecretString
 											masked={database.publicConnectionString}

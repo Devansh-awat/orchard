@@ -15,6 +15,7 @@
 	import { toEnvWrite, type EditableEnvVar } from '$lib/utils/env-secrets';
 	import { TailscaleController } from '$lib/components/deployment/tailscale.svelte';
 	import { ServicesController } from '$lib/components/deployment/services.svelte';
+	import { anyPublicPending } from '$lib/components/deployment/network/network';
 	import { computeHealth, type Rollout } from '$health';
 	import {
 		podLabel,
@@ -1236,6 +1237,7 @@
 			const buildSt = (deployment?.buildStatus ?? '').toLowerCase();
 			const transient = TRANSIENT_DEPLOYMENT_STATUSES.has(status) || buildSt === 'building';
 			const sseUp = sseStatusValue === 'connected';
+			if (anyPublicPending(deployment?.services)) return 5_000;
 			if (sseUp) return 60_000;
 			return transient ? 3_000 : 10_000;
 		})(),

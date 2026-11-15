@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { apiFetch } from '$lib/stores';
 	import { ActionRow, Button, SecretString, SegmentedControl, Swap } from '$lib/components/ui';
+	import PublicAddressLine from '$lib/components/deployment/network/PublicAddressLine.svelte';
 	import { formatConnection, parsePublicAddress, type ConnectionFormat } from './connection';
 	import type { DatabaseDetail } from './types';
 
@@ -32,6 +33,12 @@
 	);
 	const publicAddress = $derived(parsePublicAddress(database.publicConnectionString));
 	const publicReady = $derived(!!database.publicEnabled && !!publicAddress);
+	const publicWaiting = $derived(
+		database.publicStatus?.state === 'pending' || database.publicStatus?.state === 'failed'
+	);
+	const view = $derived(
+		network !== 'public' ? 'on' : !publicReady ? 'off' : publicWaiting ? 'waiting' : 'on'
+	);
 	const isPostgres = $derived(database.mode !== 'shared' || !!database.dbName);
 	const standbys = $derived(Math.max(0, (database.replicas ?? 1) - 1));
 	const endpoints = $derived(database.endpoints ?? null);
@@ -78,8 +85,15 @@
 			]}
 		/>
 	{/if}
-	<Swap key={network === 'public' && !publicReady ? 'off' : 'on'}>
-		{#if network === 'public' && !publicReady}
+	<Swap key={view}>
+		{#if view === 'waiting'}
+			<div class="details">
+				<PublicAddressLine address={null} status={database.publicStatus} />
+				<p class="where">
+					<a href={settingsHref} onclick={onnavigate}>Manage public access</a>
+				</p>
+			</div>
+		{:else if view === 'off'}
 			<ActionRow
 				label="Public access is off"
 				hint="Turn it on to connect from your computer or another host. Anyone with the password can connect."

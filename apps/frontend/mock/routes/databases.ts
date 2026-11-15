@@ -103,6 +103,15 @@ function liveStatus(db: MockDatabase) {
 }
 
 const PUBLIC = new Map<string, number>();
+const PUBLIC_SINCE = new Map<string, number>();
+
+function publicStatus(id: string) {
+	if (!PUBLIC.has(id)) return null;
+	const pending = Date.now() - (PUBLIC_SINCE.get(id) ?? 0) < 8_000;
+	return pending
+		? { state: 'pending', addresses: [], reason: null }
+		: { state: 'ready', addresses: ['203.0.113.10'], reason: null };
+}
 
 function publicConnection(db: MockDatabase, orgSlug: string, password: string) {
 	const port = PUBLIC.get(db.id);
@@ -244,7 +253,12 @@ export function databaseRoutes(r: Router, { store }: MockContext) {
 	r.get('/databases/:id/live', ({ params }) => {
 		const db = find(params.id);
 		if (!db) return notFound();
-		return { liveStatus: liveStatus(db), pods: pods(db), status: db.status };
+		return {
+			liveStatus: liveStatus(db),
+			pods: pods(db),
+			status: db.status,
+			publicStatus: publicStatus(db.id)
+		};
 	});
 	r.get('/databases/:id/provisioning', ({ params }) => {
 		const db = find(params.id);
@@ -456,6 +470,7 @@ export function databaseRoutes(r: Router, { store }: MockContext) {
 	});
 	r.delete('/databases/:id/public', ({ params }) => {
 		PUBLIC.delete(params.id);
+		PUBLIC_SINCE.delete(params.id);
 		return { ok: true };
 	});
 
@@ -507,6 +522,7 @@ export function databaseRoutes(r: Router, { store }: MockContext) {
 	r.post('/databases/:id/public', ({ params }) => {
 		const port = PUBLIC.get(params.id) ?? 31000 + PUBLIC.size;
 		PUBLIC.set(params.id, port);
+		PUBLIC_SINCE.set(params.id, Date.now());
 		return { enabled: true, host: '203.0.113.10', port };
 	});
 	r.delete('/databases/:id', ({ params }) => {

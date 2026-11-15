@@ -10,6 +10,36 @@ export const REDIRECT_STATUS_OPTIONS: DropdownOption[] = [
 
 export type ProtectionMode = 'none' | 'password' | 'basic' | 'orchard';
 
+export type PublicStatus = {
+	state: 'ready' | 'pending' | 'failed' | 'unknown';
+	addresses: string[];
+	reason: string | null;
+};
+
+export const PUBLIC_ADDRESS_DOCS =
+	'https://docs.orchard.hackclub.com/deploy/networking/#troubleshoot-a-public-address';
+
+export function publicStatusMeta(status: PublicStatus | null | undefined): StatusMeta | null {
+	switch (status?.state) {
+		case 'ready':
+			return statusMeta('success', 'Live');
+		case 'pending':
+			return statusMeta('progress', 'Waiting for an address', true);
+		case 'failed':
+			return statusMeta('error', status.reason || 'No public address');
+		default:
+			return null;
+	}
+}
+
+export function anyPublicPending(services: any[] | undefined): boolean {
+	return (services ?? []).some((s) =>
+		(s?.ports ?? []).some(
+			(p: ServicePort) => p.publicEnabled && p.publicStatus?.state === 'pending'
+		)
+	);
+}
+
 export type ServicePort = {
 	id?: string;
 	name?: string;
@@ -20,6 +50,7 @@ export type ServicePort = {
 	publicEnabled?: boolean;
 	publicPort?: number | null;
 	publicAddress?: string | null;
+	publicStatus?: PublicStatus;
 	internalUrl?: string;
 };
 
