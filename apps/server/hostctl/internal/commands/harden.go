@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/hackclub/orchard/orchardctl/internal/cli"
 )
@@ -45,6 +46,11 @@ out against the API after a reboot. In the same firewall it closes 9100/tcp
 only talks between nodes) to everything outside the pod and service networks.
 It also makes the k3s kubeconfig readable by root only.
 
+The installer creates the certificates the CloudNativePG operator and the
+Barman Cloud plugin use to talk to each other, valid for two years. When one of
+them is missing, unreadable or expires within 90 days, this issues a new set
+and restarts the plugin. It leaves certificates that cert-manager manages alone.
+
 orchardctl update runs this first, so an upgrade fixes an old install. Run it by
 hand on a server you don't want to upgrade yet. You can run it more than once.
 
@@ -63,7 +69,13 @@ func harden(c *cli.Context) error {
 	if err := ensureFirewall(c); err != nil {
 		return err
 	}
-	return privateKubeconfig(c)
+	if err := privateKubeconfig(c); err != nil {
+		return err
+	}
+	if err := renewBarmanCertificates(c, time.Now()); err != nil {
+		c.Warnf("note: couldn't renew the Barman Cloud plugin certificates: %s\n", err)
+	}
+	return nil
 }
 
 func privateKubeconfig(c *cli.Context) error {
