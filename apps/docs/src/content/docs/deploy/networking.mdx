@@ -81,7 +81,7 @@ This feature is not available in Cloudflare Tunnel mode, because tunnels carry H
 3. In **Ports**, turn on **Public** for the port.
 4. Select **Make public**.
 
-The public address replaces the internal address on the row.
+The public address replaces the internal address on the row. Until the load balancer assigns the address, the row shows **Waiting for an address**. If the load balancer reports an error, the row shows the reason instead. For the causes, refer to [Troubleshoot a public address](#troubleshoot-a-public-address).
 
 </TabItem>
 <TabItem label="CLI">
@@ -96,6 +96,28 @@ orchard service port public enable <service-id> <port-id> --deployment <id>
 :::caution
 Public TCP and UDP traffic skips the HTTP layer, so [app protection](/deploy/protection/) does not apply. The service must handle its own authentication.
 :::
+
+### Troubleshoot a public address
+
+A public port or a [public database](/data/databases/#public-access) is reachable only after the cluster's load balancer assigns it an address. Orchard reads the state from Kubernetes and shows one of these states:
+
+| State                      | Meaning                                                                                    |
+| -------------------------- | ------------------------------------------------------------------------------------------ |
+| **Live**                   | The load balancer assigned the address. The port accepts connections.                      |
+| **Waiting for an address** | The load balancer has not assigned an address yet. A cloud load balancer can take minutes. |
+| An error with a reason     | The load balancer reported a problem. The address does not accept connections.             |
+
+If Orchard cannot read the state from Kubernetes, the row shows the address without **Live**.
+
+| Reason                                                                | Cause and fix                                                                                                                                                                                                                                    |
+| --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Port _N_ is already in use on the server**                          | On k3s, the built-in load balancer (ServiceLB) listens on the port on every node, and another LoadBalancer Service or a pod with a host port already holds that port. Turn **Public** off and on to get a new port, or remove the other Service. |
+| **No address could be allocated** or **No address could be assigned** | MetalLB or Cilium has no free address in its pool, or the public IP is not in a pool. Add the organization's public IP to an address pool, or free an address.                                                                                   |
+| **The load balancer could not be created**                            | The cloud provider rejected the request. The reason includes the provider's message, for example a quota limit. Fix the cause in the cloud account. Orchard picks up the address when the provider assigns it.                                   |
+| **The load balancer assigned _X_ instead of _Y_**                     | The load balancer ignores the requested IP address. Set the organization's public IP to the assigned address, or configure the load balancer to honor `spec.loadBalancerIP`.                                                                     |
+| **No load balancer assigned an address after 5 minutes**              | Nothing in the cluster handles LoadBalancer Services. Install a load balancer such as MetalLB, or use k3s with ServiceLB.                                                                                                                        |
+
+To read the full history, run `kubectl describe service <name> -n <namespace>` and check **Events**.
 
 ## Outbound traffic
 
