@@ -36,6 +36,7 @@ export interface StoredReport {
   digest: string | null;
   scannerVersion: string | null;
   counts: ReturnType<typeof countVulnerabilities>;
+  covered?: boolean;
 }
 
 function describe(v: TrivyVulnerability): string | null {
@@ -95,7 +96,8 @@ export function mapTrivyReport(raw: unknown): StoredReport {
     truncated: Math.max(0, all.length - MAX_VULNERABILITIES),
     digest,
     scannerVersion: report.Trivy?.Version ?? null,
-    counts: countVulnerabilities(all)
+    counts: countVulnerabilities(all),
+    covered: (report.Results ?? []).length > 0
   };
 }
 
@@ -103,9 +105,10 @@ export function summaryFromStored(
   stored: StoredReport,
   times: { startedAt: Date | null; finishedAt: Date | null }
 ): ScanSummary {
+  const uncovered = stored.counts.total === 0 && stored.covered === false;
   return {
-    state: stored.counts.total > 0 ? 'vulnerable' : 'clean',
-    reason: null,
+    state: stored.counts.total > 0 ? 'vulnerable' : uncovered ? 'unsupported' : 'clean',
+    reason: uncovered ? 'not_scannable' : null,
     severity: worstSeverity(stored.counts),
     counts: stored.counts,
     progress: null,

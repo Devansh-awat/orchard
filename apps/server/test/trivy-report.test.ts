@@ -64,15 +64,33 @@ test('trivy findings map onto the tab shape, deduped and worst first', () => {
   assert.equal(mapped.counts.fixable, 1);
 });
 
-test('a clean image and junk input both read as clean', () => {
+test('a clean image reads as clean', () => {
+  const summary = summaryFromStored(
+    mapTrivyReport({ Results: [{ Target: 'app (alpine 3.20)', Vulnerabilities: null }] }),
+    { startedAt: null, finishedAt: new Date(0) }
+  );
+  assert.equal(summary.state, 'clean');
+  assert.equal(summary.reason, null);
+  assert.equal(summary.scanner?.name, 'Trivy');
+});
+
+test('a report that checked nothing is never called clean', () => {
   assert.equal(mapTrivyReport({ Results: [] }).counts.total, 0);
   assert.equal(mapTrivyReport(null).counts.total, 0);
-  const summary = summaryFromStored(mapTrivyReport({}), {
-    startedAt: null,
-    finishedAt: new Date(0)
-  });
+  for (const raw of [{}, { Results: [] }, null]) {
+    const summary = summaryFromStored(mapTrivyReport(raw), {
+      startedAt: null,
+      finishedAt: new Date(0)
+    });
+    assert.equal(summary.state, 'unsupported');
+    assert.equal(summary.reason, 'not_scannable');
+  }
+});
+
+test('a report stored before coverage was recorded keeps its verdict', () => {
+  const { covered: _covered, ...legacy } = mapTrivyReport({});
+  const summary = summaryFromStored(legacy, { startedAt: null, finishedAt: new Date(0) });
   assert.equal(summary.state, 'clean');
-  assert.equal(summary.scanner?.name, 'Trivy');
 });
 
 test('the summary carries the worst severity', () => {
