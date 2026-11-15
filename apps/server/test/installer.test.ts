@@ -2889,6 +2889,7 @@ test(
           info() { echo "INFO $*"; }
           install_cluster_issuer() { echo ISSUER; }
           settle_backup_method() { :; }
+          ensure_barman_certificates() { echo CERTS; }
           cnpg=${cnpg} plugin=${plugin}
           helm() {
             echo "helm $*" >> "${calls}"
@@ -2916,14 +2917,20 @@ test(
       assert.match(fresh.helm, /upgrade --install cert-manager /);
       assert.match(
         fresh.helm,
-        /upgrade --install plugin-barman-cloud \S+\/plugin-barman-cloud-0\.9\.0\.tgz --namespace cnpg-system/
+        /upgrade --install plugin-barman-cloud \S+\/plugin-barman-cloud-0\.9\.0\.tgz --namespace cnpg-system --set certificate\.createClientCertificate=false --set certificate\.createServerCertificate=false --set certificate\.createIssuer=false /
       );
       assert.match(fresh.out, /ISSUER/);
+      assert.match(fresh.out, /CERTS/);
 
       const tunnel = operators('', '', 'CERT_ISSUER=');
-      assert.match(tunnel.helm, /upgrade --install cert-manager /);
-      assert.match(tunnel.helm, /upgrade --install plugin-barman-cloud /);
+      assert.doesNotMatch(tunnel.helm, /cert-manager/);
+      assert.match(tunnel.out, /cert-manager skipped, TLS terminates at the tunnel/);
+      assert.match(
+        tunnel.helm,
+        /upgrade --install plugin-barman-cloud \S+ --namespace cnpg-system --set certificate\.createClientCertificate=false /
+      );
       assert.doesNotMatch(tunnel.out, /ISSUER/);
+      assert.match(tunnel.out, /CERTS/);
 
       const old = operators('0.27.1', '');
       assert.deepEqual(
@@ -2939,6 +2946,7 @@ test(
       assert.doesNotMatch(newer.helm, /plugin-barman-cloud-0\.9\.0\.tgz/);
       assert.match(newer.out, /keeping CloudNativePG chart 0\.30\.0/);
       assert.match(newer.out, /keeping Barman Cloud plugin chart 0\.10\.0/);
+      assert.match(newer.out, /CERTS/);
 
       const tampered = box.attempt(`
         helm() { [ "$1" != pull ] || printf other > "$6/plugin-barman-cloud-$4.tgz"; return 0; }
@@ -2951,6 +2959,273 @@ test(
       const unknown = box.attempt('BARMAN_PLUGIN_CHART_VERSION=0.10.0 install_barman_plugin');
       assert.notEqual(unknown.status, 0);
       assert.match(unknown.stderr, /no known checksum/);
+    } finally {
+      box.cleanup();
+    }
+  }
+);
+
+const FAKE_CNPG_KUBECTL = String.raw`#!/bin/bash
+echo "$*" >> "@CALLS@"
+case " $* " in
+  *" get certificates.cert-manager.io "*)
+    [ -f "@DIR@/cert-manager" ] || exit 1
+    echo certificate.cert-manager.io/barman-cloud-server ;;
+  *" get deploy plugin-barman-cloud "*)
+    [ -f "@DIR@/deploy" ] || exit 1
+    echo deployment.apps/plugin-barman-cloud ;;
+  *" get secret "*)
+    [ -f "@STORE@/$5.yaml" ] || exit 1
+    key=$(printf '%s' "$7" | sed -e 's/^jsonpath={.data.//' -e 's/}$//' -e 's/\\//g')
+    yq -r ".data[\"$key\"] // \"\"" "@STORE@/$5.yaml" ;;
+  *" create secret generic "*" --type=kubernetes.io/tls "*" --dry-run=client -o yaml "*)
+    printf 'apiVersion: v1\nkind: Secret\nmetadata:\n  name: %s\n  namespace: cnpg-system\ntype: kubernetes.io/tls\ndata:\n' "$6"
+    for arg in "$@"; do
+      case "$arg" in
+        --from-file=*)
+          spec=$(printf '%s' "$arg" | sed 's/^--from-file=//')
+          printf '  %s: %s\n' "$(printf '%s' "$spec" | cut -d= -f1)" "$(base64 -w0 < "$(printf '%s' "$spec" | cut -d= -f2-)")" ;;
+      esac
+    done ;;
+  *" apply -f - "*)
+    doc=$(cat)
+    name=$(printf '%s\n' "$doc" | yq -r .metadata.name)
+    printf '%s\n' "$doc" > "@STORE@/$name.yaml"
+    echo "applied $name" >> "@CALLS@" ;;
+esac
+exit 0
+`;
+
+function cnpgCluster(box: ReturnType<typeof sandbox>) {
+  const store = join(box.dir, 'secrets');
+  const calls = join(box.dir, 'kubectl-calls');
+  const opensslCalls = join(box.dir, 'openssl-calls');
+  const tmp = join(box.dir, 'tmp');
+  mkdirSync(store);
+  mkdirSync(tmp);
+  writeFileSync(
+    join(box.dir, 'kubectl'),
+    FAKE_CNPG_KUBECTL.replaceAll('@CALLS@', calls)
+      .replaceAll('@DIR@', box.dir)
+      .replaceAll('@STORE@', store)
+  );
+  const realOpenssl = execFileSync('bash', ['-c', 'command -v openssl'], {
+    encoding: 'utf8'
+  }).trim();
+  writeFileSync(
+    join(box.dir, 'openssl'),
+    `#!/bin/bash\necho "$*" >> "${opensslCalls}"\nexec "${realOpenssl}" "$@"\n`
+  );
+  chmodSync(join(box.dir, 'kubectl'), 0o755);
+  chmodSync(join(box.dir, 'openssl'), 0o755);
+  const secretFile = (secret: string) => join(store, `${secret}.yaml`);
+  const field = (secret: string, key: string) =>
+    execFileSync('yq', ['-r', `.data["${key}"]`, secretFile(secret)], { encoding: 'utf8' }).trim();
+  const pem = (secret: string, key: string) =>
+    Buffer.from(field(secret, key), 'base64').toString('utf8');
+  const x509 = (input: string, ...args: string[]) =>
+    execFileSync(realOpenssl, ['x509', '-noout', ...args], { input, encoding: 'utf8' });
+  const daysLeft = (input: string) =>
+    Math.round(
+      (Date.parse(x509(input, '-enddate').trim().replace('notAfter=', '')) - Date.now()) /
+        86_400_000
+    );
+  return {
+    ensure: () => {
+      rmSync(calls, { force: true });
+      return box.run(`export TMPDIR="${tmp}"; ensure_barman_certificates`);
+    },
+    calls: () => (existsSync(calls) ? readFileSync(calls, 'utf8') : ''),
+    opensslCalls: () => (existsSync(opensslCalls) ? readFileSync(opensslCalls, 'utf8') : ''),
+    tmpLeft: () => readdirSync(tmp),
+    snapshot: () =>
+      readdirSync(store)
+        .sort()
+        .map((name) => readFileSync(join(store, name), 'utf8'))
+        .join('\n'),
+    realOpenssl,
+    store,
+    secretFile,
+    field,
+    pem,
+    x509,
+    daysLeft,
+    tmp
+  };
+}
+
+const PLUGIN_SECRETS = ['barman-cloud-server-tls', 'barman-cloud-client-tls'];
+
+test(
+  'the installer issues the barman plugin certificates itself and keeps valid ones',
+  { skip: !has('yq', '--version') || !has('openssl', 'version') },
+  () => {
+    const box = sandbox();
+    try {
+      const k = cnpgCluster(box);
+      k.ensure();
+      const fresh = k.calls();
+      for (const secret of PLUGIN_SECRETS) {
+        assert.match(
+          fresh,
+          new RegExp(`create secret generic ${secret} --type=kubernetes\\.io/tls`)
+        );
+        assert.match(fresh, new RegExp(`applied ${secret}`));
+      }
+      assert.doesNotMatch(fresh, /rollout restart/, 'no deployment yet, nothing to restart');
+      assert.deepEqual(k.tmpLeft(), [], 'the keys leave no files behind');
+      for (const log of [fresh, k.opensslCalls()]) {
+        assert.doesNotMatch(log, /PRIVATE KEY|BEGIN|MI[GH]/);
+      }
+
+      const ca = k.pem(PLUGIN_SECRETS[0], 'ca.crt');
+      assert.equal(k.pem(PLUGIN_SECRETS[1], 'ca.crt'), ca, 'one CA signs both');
+      assert.match(k.x509(ca, '-text'), /CA:TRUE/);
+      assert.equal(k.daysLeft(ca), 3650);
+      for (const secret of PLUGIN_SECRETS) {
+        const chain = k.pem(secret, 'tls.crt');
+        assert.match(k.pem(secret, 'tls.key'), /BEGIN PRIVATE KEY/);
+        assert.equal(chain.match(/BEGIN CERTIFICATE/g)?.length, 2, 'the leaf, then the CA');
+        assert.ok(chain.endsWith(ca));
+        assert.equal(k.daysLeft(chain), 730);
+      }
+      const server = k.x509(k.pem(PLUGIN_SECRETS[0], 'tls.crt'), '-text');
+      assert.match(server, /TLS Web Server Authentication/);
+      assert.match(
+        server,
+        /DNS:barman-cloud, DNS:barman-cloud\.cnpg-system, DNS:barman-cloud\.cnpg-system\.svc, DNS:barman-cloud\.cnpg-system\.svc\.cluster\.local/
+      );
+      const client = k.x509(k.pem(PLUGIN_SECRETS[1], 'tls.crt'), '-text');
+      assert.match(client, /TLS Web Client Authentication/);
+      assert.doesNotMatch(client, /TLS Web Server Authentication/);
+
+      const before = k.snapshot();
+      writeFileSync(join(box.dir, 'deploy'), '');
+      k.ensure();
+      assert.doesNotMatch(k.calls(), /applied|create secret|rollout restart/);
+      assert.equal(k.snapshot(), before, 'valid certificates stay untouched');
+    } finally {
+      box.cleanup();
+    }
+  }
+);
+
+test(
+  'an expiring, missing or broken plugin certificate gets a new set and a restart',
+  { skip: !has('yq', '--version') || !has('openssl', 'version') },
+  () => {
+    const box = sandbox();
+    try {
+      const k = cnpgCluster(box);
+      writeFileSync(join(box.dir, 'deploy'), '');
+      k.ensure();
+      assert.match(k.calls(), /-n cnpg-system rollout restart deploy\/plugin-barman-cloud/);
+      const issued = k.snapshot();
+
+      const short = join(box.dir, 'short');
+      mkdirSync(short);
+      execFileSync(
+        k.realOpenssl,
+        [
+          'req',
+          '-x509',
+          '-newkey',
+          'ec',
+          '-pkeyopt',
+          'ec_paramgen_curve:prime256v1',
+          '-nodes',
+          '-keyout',
+          join(short, 'tls.key'),
+          '-out',
+          join(short, 'tls.crt'),
+          '-days',
+          '60',
+          '-subj',
+          '/CN=barman-cloud-client'
+        ],
+        { stdio: 'ignore' }
+      );
+      const b64 = (name: string) => readFileSync(join(short, name)).toString('base64');
+      writeFileSync(
+        k.secretFile('barman-cloud-client-tls'),
+        `metadata:\n  name: barman-cloud-client-tls\ndata:\n  tls.crt: ${b64('tls.crt')}\n  tls.key: ${b64('tls.key')}\n  ca.crt: ${b64('tls.crt')}\n`
+      );
+      k.ensure();
+      for (const secret of PLUGIN_SECRETS) assert.match(k.calls(), new RegExp(`applied ${secret}`));
+      assert.match(k.calls(), /-n cnpg-system rollout restart deploy\/plugin-barman-cloud/);
+      assert.notEqual(k.snapshot(), issued);
+      assert.equal(k.daysLeft(k.pem('barman-cloud-client-tls', 'tls.crt')), 730);
+      assert.equal(
+        k.pem(PLUGIN_SECRETS[0], 'ca.crt'),
+        k.pem(PLUGIN_SECRETS[1], 'ca.crt'),
+        'a renewal replaces the CA and both leaves together'
+      );
+
+      rmSync(k.secretFile('barman-cloud-server-tls'));
+      k.ensure();
+      assert.match(k.calls(), /rollout restart/, 'a missing secret');
+      assert.ok(existsSync(k.secretFile('barman-cloud-server-tls')));
+
+      const server = readFileSync(k.secretFile('barman-cloud-server-tls'), 'utf8');
+      const otherKey = k.field('barman-cloud-client-tls', 'tls.key');
+      writeFileSync(
+        k.secretFile('barman-cloud-server-tls'),
+        server.replace(/tls\.key: \S+/, `tls.key: ${otherKey}`)
+      );
+      k.ensure();
+      assert.match(k.calls(), /rollout restart/, 'a key that does not match its certificate');
+
+      writeFileSync(
+        k.secretFile('barman-cloud-server-tls'),
+        server.replace(/tls\.crt: \S+/, `tls.crt: ${Buffer.from('junk').toString('base64')}`)
+      );
+      k.ensure();
+      assert.match(k.calls(), /rollout restart/, 'an unparsable certificate');
+      assert.deepEqual(k.tmpLeft(), []);
+    } finally {
+      box.cleanup();
+    }
+  }
+);
+
+test(
+  'a host on cert-manager plugin certificates moves to installer ones after the upgrade',
+  { skip: !has('yq', '--version') || !has('openssl', 'version') },
+  () => {
+    const box = sandbox();
+    try {
+      const k = cnpgCluster(box);
+      writeFileSync(join(box.dir, 'deploy'), '');
+      writeFileSync(join(box.dir, 'cert-manager'), '');
+      const out = box.run(`
+        export TMPDIR="${k.tmp}"
+        helm() {
+          case "$1" in
+            pull) printf chart > "$6/plugin-barman-cloud-$4.tgz" ;;
+            upgrade)
+              echo "HELM $*"
+              ls "${k.store}" | sed 's/^/SECRET-AT-UPGRADE /'
+              rm -f "${join(box.dir, 'cert-manager')}" ;;
+          esac
+          return 0
+        }
+        BARMAN_PLUGIN_CHART_SHA256=$(printf chart | sha256sum | cut -d' ' -f1)
+        install_barman_plugin
+      `);
+      assert.match(
+        out,
+        /HELM upgrade --install plugin-barman-cloud .*certificate\.createIssuer=false/
+      );
+      assert.doesNotMatch(
+        out,
+        /SECRET-AT-UPGRADE/,
+        'cert-manager owns the secrets until the chart drops its Certificates'
+      );
+      const calls = k.calls();
+      for (const secret of PLUGIN_SECRETS) assert.match(calls, new RegExp(`applied ${secret}`));
+      const restart = calls.indexOf('rollout restart deploy/plugin-barman-cloud');
+      assert.ok(restart >= 0);
+      assert.ok(restart < calls.indexOf('rollout status deploy/plugin-barman-cloud'));
     } finally {
       box.cleanup();
     }

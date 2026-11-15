@@ -726,6 +726,8 @@ preflight() {
   detect_arch
   info "architecture: $ARCH"
 
+  command -v openssl >/dev/null 2>&1 \
+    || die "the installer needs openssl to create the database backup plugin's certificates. Install it and run the installer again"
   if [ -n "$RELEASE_KEYS" ] && [ "$(unsigned_commands_allowed)" != true ] && ! openssl_checks_signatures; then
     die "the installer checks release signatures and needs OpenSSL 3 or newer. Upgrade it, or set ORCHARD_ALLOW_UNSIGNED_COMMANDS=true to install without the check"
   fi
@@ -3194,19 +3196,26 @@ install_operators() {
   done
   run_step "CloudNativePG" 1m install_cnpg "$cnpg_target"
 
-  run_step "cert-manager" 1m30s helm upgrade --install cert-manager jetstack/cert-manager \
-    --namespace cert-manager --create-namespace \
-    --set crds.enabled=true \
-    --set resources.requests.memory=32Mi \
-    --set webhook.resources.requests.memory=16Mi \
-    --set cainjector.resources.requests.memory=32Mi \
-    --wait --timeout 10m
-  if [ -n "$CERT_ISSUER" ]; then install_cluster_issuer; fi
+  if [ -n "$CERT_ISSUER" ]; then
+    run_step "cert-manager" 1m30s helm upgrade --install cert-manager jetstack/cert-manager \
+      --namespace cert-manager --create-namespace \
+      --set crds.enabled=true \
+      --set resources.requests.memory=32Mi \
+      --set webhook.resources.requests.memory=16Mi \
+      --set cainjector.resources.requests.memory=32Mi \
+      --wait --timeout 10m
+    install_cluster_issuer
+  else
+    info "cert-manager skipped, TLS terminates at the tunnel"
+  fi
 
   local plugin_installed
   plugin_installed=$(helm_chart_version plugin-barman-cloud cnpg-system plugin-barman-cloud)
   if [ "$(newer_version "$plugin_installed" "$BARMAN_PLUGIN_CHART_VERSION")" != "$BARMAN_PLUGIN_CHART_VERSION" ]; then
     info "keeping Barman Cloud plugin chart $plugin_installed, newer than $BARMAN_PLUGIN_CHART_VERSION"
+    if ! barman_certificates_by_cert_manager; then
+      run_step "Barman Cloud plugin certificates" 30s ensure_barman_certificates
+    fi
   else
     run_step "Barman Cloud plugin" 1m install_barman_plugin
   fi
@@ -3281,14 +3290,106 @@ install_barman_plugin() {
     echo "plugin-barman-cloud-$BARMAN_PLUGIN_CHART_VERSION.tgz doesn't match its sha256" >&2
     return 1
   fi
+  if ! barman_certificates_by_cert_manager && ! ensure_barman_certificates; then
+    rm -rf "$dir"
+    return 1
+  fi
   helm upgrade --install plugin-barman-cloud "$chart" \
     --namespace cnpg-system \
+    --set certificate.createClientCertificate=false \
+    --set certificate.createServerCertificate=false \
+    --set certificate.createIssuer=false \
     --set resources.requests.cpu=10m \
     --set resources.requests.memory=32Mi \
     --wait --timeout 10m || rc=$?
   rm -rf "$dir"
   [ "$rc" -eq 0 ] || return "$rc"
+  ensure_barman_certificates || return 1
   kubectl -n cnpg-system rollout status deploy/plugin-barman-cloud --timeout=5m
+}
+
+BARMAN_SERVER_SECRET=barman-cloud-server-tls
+BARMAN_CLIENT_SECRET=barman-cloud-client-tls
+BARMAN_CERT_RENEW_SECONDS=$((90 * 86400))
+
+barman_certificates_by_cert_manager() {
+  local found
+  found=$(kubectl -n cnpg-system get certificates.cert-manager.io barman-cloud-server barman-cloud-client \
+    -o name 2>/dev/null || true)
+  [ -n "$found" ]
+}
+
+barman_secret_field() {
+  local field=${2//./\\.}
+  kubectl -n cnpg-system get secret "$1" -o "jsonpath={.data.$field}" 2>/dev/null | base64 -d 2>/dev/null
+}
+
+barman_secret_valid() {
+  local crt key ca cert_pub key_pub
+  crt=$(barman_secret_field "$1" tls.crt)
+  key=$(barman_secret_field "$1" tls.key)
+  ca=$(barman_secret_field "$1" ca.crt)
+  [ -n "$crt" ] && [ -n "$key" ] && [ -n "$ca" ] || return 1
+  printf '%s\n' "$ca" | openssl x509 -noout >/dev/null 2>&1 || return 1
+  printf '%s\n' "$crt" | openssl x509 -noout -checkend "$BARMAN_CERT_RENEW_SECONDS" >/dev/null 2>&1 || return 1
+  cert_pub=$(printf '%s\n' "$crt" | openssl x509 -noout -pubkey 2>/dev/null)
+  key_pub=$(printf '%s\n' "$key" | openssl pkey -pubout 2>/dev/null)
+  [ -n "$cert_pub" ] && [ "$cert_pub" = "$key_pub" ]
+}
+
+barman_sign_certificates() {
+  local dns='DNS:barman-cloud,DNS:barman-cloud.cnpg-system,DNS:barman-cloud.cnpg-system.svc,DNS:barman-cloud.cnpg-system.svc.cluster.local'
+  printf '%s\n' basicConstraints=critical,CA:TRUE keyUsage=critical,keyCertSign,cRLSign \
+    subjectKeyIdentifier=hash >ca.ext
+  openssl req -new -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes \
+    -keyout ca.key -out ca.csr -subj /CN=barman-cloud-ca >/dev/null 2>&1 || return 1
+  openssl x509 -req -in ca.csr -signkey ca.key -days 3650 -extfile ca.ext \
+    -set_serial "0x$(openssl rand -hex 16)" -out ca.crt >/dev/null 2>&1 || return 1
+  printf '%s\n' basicConstraints=critical,CA:FALSE keyUsage=critical,digitalSignature \
+    extendedKeyUsage=serverAuth "subjectAltName=$dns" >server.ext
+  printf '%s\n' basicConstraints=critical,CA:FALSE keyUsage=critical,digitalSignature \
+    extendedKeyUsage=clientAuth >client.ext
+  local leaf
+  for leaf in server client; do
+    openssl req -new -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes \
+      -keyout "$leaf.key" -out "$leaf.csr" -subj "/CN=barman-cloud-$leaf" >/dev/null 2>&1 || return 1
+    openssl x509 -req -in "$leaf.csr" -CA ca.crt -CAkey ca.key \
+      -set_serial "0x$(openssl rand -hex 16)" -days 730 -extfile "$leaf.ext" \
+      -out "$leaf.pem" >/dev/null 2>&1 || return 1
+    cat "$leaf.pem" ca.crt >"$leaf.crt"
+  done
+}
+
+barman_apply_secret() {
+  local name=$1 dir=$2 leaf=$3
+  kubectl -n cnpg-system create secret generic "$name" --type=kubernetes.io/tls \
+    --from-file=tls.crt="$dir/$leaf.crt" --from-file=tls.key="$dir/$leaf.key" \
+    --from-file=ca.crt="$dir/ca.crt" --dry-run=client -o yaml \
+    | kubectl apply -f - >/dev/null
+}
+
+issue_barman_certificates() {
+  local dir rc=0
+  dir=$(umask 077 && mktemp -d) || return 1
+  (umask 077 && cd "$dir" && barman_sign_certificates) || rc=$?
+  if [ "$rc" -ne 0 ]; then
+    echo "openssl couldn't create the Barman Cloud plugin certificates" >&2
+  else
+    barman_apply_secret "$BARMAN_SERVER_SECRET" "$dir" server \
+      && barman_apply_secret "$BARMAN_CLIENT_SECRET" "$dir" client || rc=$?
+  fi
+  rm -rf "$dir"
+  return "$rc"
+}
+
+ensure_barman_certificates() {
+  if barman_secret_valid "$BARMAN_SERVER_SECRET" && barman_secret_valid "$BARMAN_CLIENT_SECRET"; then
+    return 0
+  fi
+  issue_barman_certificates || return 1
+  if kubectl -n cnpg-system get deploy plugin-barman-cloud -o name >/dev/null 2>&1; then
+    kubectl -n cnpg-system rollout restart deploy/plugin-barman-cloud >/dev/null || return 1
+  fi
 }
 
 in_tree_backup_count() {
