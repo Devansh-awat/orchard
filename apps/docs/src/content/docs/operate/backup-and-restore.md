@@ -35,7 +35,21 @@ CloudNativePG archives each database's write-ahead log (WAL) and takes base back
 
 CloudNativePG 1.31 removes the built-in method, and a database that still uses it stops taking backups after that upgrade. Before CloudNativePG 1.31 reaches your cluster, move every database to the plugin. Refer to [Move database backups to the Barman Cloud plugin](/operate/upgrades/#move-database-backups-to-the-barman-cloud-plugin).
 
-Both methods write the same archive format to the same path, so a backup taken with one method restores with the other. To recover a database on a new cluster, install CloudNativePG, cert-manager, and the Barman Cloud plugin first.
+Both methods write the same archive format to the same path, so a backup taken with one method restores with the other. To recover a database on a new cluster, install CloudNativePG and the Barman Cloud plugin first.
+
+### Plugin certificates
+
+The CloudNativePG operator connects to the Barman Cloud plugin over mutual TLS. On an installer host, the installer creates the certificates for this connection with OpenSSL, so the plugin does not need cert-manager in any ingress mode:
+
+| Certificate                       | Valid for | Stored in                                             |
+| --------------------------------- | --------- | ----------------------------------------------------- |
+| A private certificate authority   | 10 years  | `ca.crt` in both Secrets                              |
+| The plugin's server certificate   | 2 years   | The `barman-cloud-server-tls` Secret in `cnpg-system` |
+| The operator's client certificate | 2 years   | The `barman-cloud-client-tls` Secret in `cnpg-system` |
+
+`orchardctl update` checks these certificates every time it runs, through `orchardctl harden`. If a certificate is missing, cannot be read, or expires within 90 days, it issues a new authority and new certificates, and restarts the plugin. A re-run of the installer applies the same check. If cert-manager still manages the plugin's certificates, both leave them to cert-manager.
+
+On a Helm install, the plugin chart issues these certificates with cert-manager by default, and cert-manager renews them.
 
 ## Restore the control plane
 

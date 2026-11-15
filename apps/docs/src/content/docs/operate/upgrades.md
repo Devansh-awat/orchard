@@ -218,7 +218,7 @@ You can roll back the release with `helm rollback`. If the new version migrated 
 
 ### Move database backups to the Barman Cloud plugin
 
-CloudNativePG 1.31 removes its built-in Barman Cloud support (`spec.backup.barmanObjectStore`). A database that still archives that way stops taking backups after the operator moves to 1.31. The replacement is the [Barman Cloud plugin](https://cloudnative-pg.io/plugin-barman-cloud/), which needs CloudNativePG 1.30 or later and cert-manager.
+CloudNativePG 1.31 removes its built-in Barman Cloud support (`spec.backup.barmanObjectStore`). A database that still archives that way stops taking backups after the operator moves to 1.31. The replacement is the [Barman Cloud plugin](https://cloudnative-pg.io/plugin-barman-cloud/), which needs CloudNativePG 1.30 or later.
 
 An installer host set up with this version of the installer already uses the plugin, and the installer prints **Database backups: Barman Cloud plugin** in its summary. An older installer host, or a Helm install, uses the built-in support until you move it. Finish these steps before CloudNativePG 1.31 reaches the cluster.
 
@@ -230,8 +230,8 @@ An installer host set up with this version of the installer already uses the plu
 
 2. Upgrade CloudNativePG to 1.30 and install the plugin.
 
-   - On an installer host, run the installer again. The re-run upgrades CloudNativePG one minor version at a time, installs cert-manager and the plugin, and keeps your backup method. Its summary shows how many databases still use the built-in support.
-   - On a Helm install, upgrade the `cloudnative-pg` chart one minor version at a time with `config.data.ENABLE_INSTANCE_MANAGER_INPLACE_UPDATES=true`, so that the databases do not restart. Then install the plugin into the operator namespace:
+   - On an installer host, run the installer again. The re-run upgrades CloudNativePG one minor version at a time, installs the plugin with its certificates, and keeps your backup method. Its summary shows how many databases still use the built-in support.
+   - On a Helm install, upgrade the `cloudnative-pg` chart one minor version at a time with `config.data.ENABLE_INSTANCE_MANAGER_INPLACE_UPDATES=true`, so that the databases do not restart. By default, the plugin chart issues its certificates with cert-manager, so cert-manager must run in the cluster. Then install the plugin into the operator namespace:
 
      ```bash
      helm upgrade --install plugin-barman-cloud cnpg/plugin-barman-cloud \

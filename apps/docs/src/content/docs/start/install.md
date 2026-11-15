@@ -25,7 +25,7 @@ After you install Orchard, [claim the instance](#claim-the-instance).
 
 ## Install on a Linux machine
 
-The installer creates a single-node k3s cluster. It then installs Traefik, CloudNativePG with the Barman Cloud plugin, cert-manager, a zot registry, and Orchard. If the machine can already reach another Kubernetes cluster, the installer warns you and leaves that cluster alone.
+The installer creates a single-node k3s cluster. It then installs Traefik, CloudNativePG with the Barman Cloud plugin, cert-manager (except in `tunnel` mode), a zot registry, and Orchard. If the machine can already reach another Kubernetes cluster, the installer warns you and leaves that cluster alone.
 
 ### Prerequisites
 
@@ -33,7 +33,7 @@ The installer creates a single-node k3s cluster. It then installs Traefik, Cloud
 - A Linux distribution that uses systemd. Continuous integration (CI) tests the installer on Ubuntu 24.04 (amd64 and arm64) and Ubuntu 26.04 (amd64). Other distributions with systemd can work, but they are not tested.
 - An IPv4 address. IPv6-only servers are not supported yet. For more information, refer to [The installer stops on an IPv6-only server](/operate/troubleshooting/#the-installer-stops-on-an-ipv6-only-server).
 - Root access.
-- OpenSSL 3 or newer, which the published installer uses to check release signatures. Without it, the installer stops, unless you set `ORCHARD_ALLOW_UNSIGNED_COMMANDS=true` to install without the check.
+- OpenSSL 3 or newer, which the published installer uses to check release signatures. Without it, the installer stops, unless you set `ORCHARD_ALLOW_UNSIGNED_COMMANDS=true` to install without the check. The installer also uses OpenSSL to create the [Barman Cloud plugin certificates](/operate/backup-and-restore/#plugin-certificates), so it needs OpenSSL even with that setting.
 - At least 20 GB of free disk on `/var/lib`. The installer refuses less, and it warns below 60 GB. For real use, plan for at least 40 GB of disk.
 - 2 GiB of RAM. 8 GiB is recommended. The installer warns below 2 GiB but does not refuse, and it trims Orchard on smaller machines. Refer to [Run on a small server](/operate/small-servers/).
 - For `public` mode, ports 80 and 443 free and reachable from the internet. A domain is optional. To try Orchard without one, refer to [Try Orchard without a domain](#try-orchard-without-a-domain).
@@ -46,11 +46,11 @@ Do not run the installer inside a Docker container. k3s cannot nest its overlayf
 
 The ingress mode sets how traffic reaches the machine.
 
-| Mode     | Use for                                                  | TLS                                                                |
-| -------- | -------------------------------------------------------- | ------------------------------------------------------------------ |
-| `public` | A routable IP address with DNS pointed at it             | Let's Encrypt over HTTP-01                                         |
-| `tunnel` | A machine behind NAT or CGNAT, through Cloudflare Tunnel | Cloudflare terminates TLS. cert-manager has no certificate issuer. |
-| `lan`    | A LAN or Tailscale network, reached by address           | Self-signed certificates for apps. The dashboard uses plain HTTP.  |
+| Mode     | Use for                                                  | TLS                                                               |
+| -------- | -------------------------------------------------------- | ----------------------------------------------------------------- |
+| `public` | A routable IP address with DNS pointed at it             | Let's Encrypt over HTTP-01                                        |
+| `tunnel` | A machine behind NAT or CGNAT, through Cloudflare Tunnel | Cloudflare terminates TLS and the installer skips cert-manager    |
+| `lan`    | A LAN or Tailscale network, reached by address           | Self-signed certificates for apps. The dashboard uses plain HTTP. |
 
 The mode also decides which host ports Orchard binds.
 

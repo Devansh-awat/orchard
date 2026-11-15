@@ -33,7 +33,7 @@ Install the Helm chart instead and keep your own platform layer
 | Traefik             | Control-plane ingress and the app Gateway                                                                  |
 | CloudNativePG       | Orchard's own database and every database you create, pinned to a tested chart version                     |
 | Barman Cloud plugin | Database backups and point-in-time restore for new installs (plugin-barman-cloud, pinned and checksummed)  |
-| cert-manager        | TLS, unless Cloudflare is terminating it for you, and the Barman Cloud plugin's certificates               |
+| cert-manager        | TLS, unless Cloudflare is terminating it for you                                                           |
 | zot                 | Registry for images Orchard builds                                                                         |
 | Orchard             | The Helm chart, with a generated values file, including the MCP endpoint agents connect to                 |
 | Observability       | VictoriaMetrics for the metrics graphs, VictoriaLogs and Vector for log search and per-route request stats |
@@ -102,7 +102,7 @@ It also asks how traffic should reach the box:
 - **public**: you have a routable IP. Let's Encrypt issues certificates over
   HTTP-01. A domain is optional
 - **tunnel**: Cloudflare Tunnel, for boxes behind NAT or CGNAT. Cloudflare
-  terminates TLS, so cert-manager gets no issuer, Traefik stays on a
+  terminates TLS, so cert-manager is skipped entirely, Traefik stays on a
   ClusterIP, and nothing binds a port on the host. This is also the answer when
   something else on the box already owns 80 or 443
 - **lan**: LAN or Tailscale only, over plain HTTP. The dashboard

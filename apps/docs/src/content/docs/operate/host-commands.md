@@ -109,7 +109,7 @@ If the `traefik` release is missing any access log setting, `update` upgrades th
 sudo orchardctl harden
 ```
 
-Moves the image registry onto loopback, adds a password to it, and gives that password to the containerd mirror and the builders. It also opens an active `ufw` or `firewalld` for k3s, closes ports `9100/tcp` and `8472/udp` in that firewall to everything outside the pod and service networks, and makes the k3s kubeconfig readable only by root.
+Moves the image registry onto loopback, adds a password to it, and gives that password to the containerd mirror and the builders. It also opens an active `ufw` or `firewalld` for k3s, closes ports `9100/tcp` and `8472/udp` in that firewall to everything outside the pod and service networks, and makes the k3s kubeconfig readable only by root. It also renews the [Barman Cloud plugin certificates](/operate/backup-and-restore/#plugin-certificates) when one is missing, cannot be read, or expires within 90 days, and then restarts the plugin.
 
 `update` runs this command first. Run it directly only on a host that you do not want to upgrade yet. You can run it more than once.
 
