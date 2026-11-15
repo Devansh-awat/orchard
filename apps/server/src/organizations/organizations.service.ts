@@ -58,6 +58,8 @@ function mailLabel(value: string): string {
   return value.replace(/\p{Cc}/gu, ' ').slice(0, MAIL_LABEL_MAX);
 }
 
+const INVITE_MAIL_WAIT_MS = 15_000;
+
 @Injectable()
 export class OrganizationsService {
   private readonly logger = new Logger(OrganizationsService.name);
@@ -91,6 +93,20 @@ export class OrganizationsService {
 
   private inviteDelivery(): 'email' | 'link' {
     return this.emailService.isConfigured() ? 'email' : 'link';
+  }
+
+  private async inviteMailed(send: Promise<boolean>, what: string): Promise<boolean> {
+    const timeout = new Promise<null>((resolve) => {
+      setTimeout(() => resolve(null), INVITE_MAIL_WAIT_MS).unref?.();
+    });
+    const sent = await Promise.race([
+      send.catch((err) => {
+        console.error(`Failed to send ${what}:`, err);
+        return false;
+      }),
+      timeout
+    ]);
+    return sent !== false;
   }
 
   async checkPermission(organizationId: string, userId: string, requiredRole: 'owner' | 'admin') {
@@ -1003,18 +1019,20 @@ export class OrganizationsService {
         ? `${inviter.firstName} ${inviter.lastName}`
         : inviter.username || inviter.email || 'Someone';
 
-    this.emailService
-      .sendOrganizationInviteEmail({
-        recipientEmail: normalizedEmail,
-        recipientName: normalizedEmail.split('@')[0],
-        organizationName: organization.name,
-        inviterName,
-        role,
-        loginUrl: frontendUrl
-      })
-      .catch((err) => {
-        console.error('Failed to send organization invite email:', err);
-      });
+    const configured = this.inviteDelivery() === 'email';
+    const mailed =
+      configured &&
+      (await this.inviteMailed(
+        this.emailService.sendOrganizationInviteEmail({
+          recipientEmail: normalizedEmail,
+          recipientName: normalizedEmail.split('@')[0],
+          organizationName: organization.name,
+          inviterName,
+          role,
+          loginUrl: frontendUrl
+        }),
+        'organization invite email'
+      ));
 
     void this.audit.log({
       action: 'org.member.invited',
@@ -1028,10 +1046,11 @@ export class OrganizationsService {
     });
 
     const { tokenHash: _hash, ...visible } = invitation;
-    const delivery = this.inviteDelivery();
+    const delivery = mailed ? 'email' : 'link';
     return {
       ...visible,
       delivery,
+      ...(configured && !mailed ? { emailFailed: true } : {}),
       ...(delivery === 'link' ? { inviteLink: this.inviteLink(token) } : {})
     };
   }
@@ -1124,19 +1143,21 @@ export class OrganizationsService {
         ? `${inviter.firstName} ${inviter.lastName}`
         : inviter.username || inviter.email || 'Someone';
 
-    this.emailService
-      .sendProjectInviteEmail({
-        recipientEmail: normalizedEmail,
-        recipientName: normalizedEmail.split('@')[0],
-        organizationName: mailLabel(organization.name),
-        projectName: mailLabel(projectName),
-        inviterName: mailLabel(inviterName),
-        role: projectRoleName,
-        loginUrl: frontendUrl
-      })
-      .catch((err) => {
-        console.error('Failed to send project invite email:', err);
-      });
+    const configured = this.inviteDelivery() === 'email';
+    const mailed =
+      configured &&
+      (await this.inviteMailed(
+        this.emailService.sendProjectInviteEmail({
+          recipientEmail: normalizedEmail,
+          recipientName: normalizedEmail.split('@')[0],
+          organizationName: mailLabel(organization.name),
+          projectName: mailLabel(projectName),
+          inviterName: mailLabel(inviterName),
+          role: projectRoleName,
+          loginUrl: frontendUrl
+        }),
+        'project invite email'
+      ));
 
     void this.audit.log({
       action: 'project.member.invited',
@@ -1150,7 +1171,7 @@ export class OrganizationsService {
       metadata: { email: normalizedEmail, role: projectRoleName }
     });
 
-    const delivery = this.inviteDelivery();
+    const delivery = mailed ? 'email' : 'link';
     const orgAccess = await this.authz.getOrgAccess(organizationId, inviter.id);
     return {
       id: invitation.id,
@@ -1158,6 +1179,7 @@ export class OrganizationsService {
       expiresAt: invitation.expiresAt,
       createdAt: invitation.createdAt,
       delivery,
+      ...(configured && !mailed ? { emailFailed: true } : {}),
       ...(delivery === 'link' && orgAccess?.isAdmin ? { inviteLink: this.inviteLink(token) } : {})
     };
   }
@@ -1796,18 +1818,20 @@ export class OrganizationsService {
         ? `${invitation.inviter.firstName} ${invitation.inviter.lastName}`
         : invitation.inviter.username || invitation.inviter.email || 'Someone';
 
-    this.emailService
-      .sendOrganizationInviteEmail({
+    const mailed = await this.inviteMailed(
+      this.emailService.sendOrganizationInviteEmail({
         recipientEmail: invitation.email,
         recipientName: invitation.email.split('@')[0],
         organizationName: invitation.organization.name,
         inviterName,
         role: invitation.role,
         loginUrl: frontendUrl
-      })
-      .catch((err) => {
-        console.error('Failed to resend organization invite email:', err);
-      });
+      }),
+      'organization invite email'
+    );
+    if (!mailed) {
+      return { ...(await this.reissueInvitationLink(invitation, user)), emailFailed: true };
+    }
 
     return { success: true, message: 'Invitation resent', delivery: 'email' as const };
   }

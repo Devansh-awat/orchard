@@ -42,6 +42,7 @@ function invitationRow(token: string, overrides: Partial<Invitation> = {}): Invi
 function setup(
   opts: {
     email?: boolean;
+    mailFails?: boolean;
     invitation?: Invitation | null;
     accounts?: any[];
     orgRole?: 'owner' | 'admin' | 'member' | null;
@@ -159,9 +160,11 @@ function setup(
     isConfigured: () => opts.email === true,
     sendOrganizationInviteEmail: async () => {
       state.mails += 1;
+      return !opts.mailFails;
     },
     sendProjectInviteEmail: async () => {
       state.mails += 1;
+      return !opts.mailFails;
     }
   };
   const users = { findOrCreateByClerkId: async () => inviter };
@@ -222,6 +225,42 @@ test('with email, inviting mails and never returns a link', async () => {
   assert.equal(state.mails, 1);
 });
 
+test('when the invite email fails, inviting returns the link instead of claiming it was sent', async () => {
+  const { service, state } = setup({ email: true, mailFails: true });
+  const result: any = await service.inviteMemberToOrganization(
+    'org1',
+    'new@example.com',
+    'member' as any,
+    'clerk'
+  );
+
+  assert.equal(state.mails, 1);
+  assert.equal(result.delivery, 'link');
+  assert.equal(result.emailFailed, true);
+  const token = result.inviteLink.split('/invite/')[1];
+  assert.equal(state.invitation!.tokenHash, hash(token));
+});
+
+test('a failed project guest invite email is reported, not called sent', async () => {
+  const result: any = await setup({
+    email: true,
+    mailFails: true,
+    orgRole: 'admin'
+  }).service.createProjectGuestInvitation({
+    organizationId: 'org1',
+    projectId: 'p1',
+    projectName: 'P',
+    projectRoleId: 'r1',
+    projectRoleName: 'viewer',
+    email: 'guest@example.com',
+    inviter: { id: 'admin1', email: 'a@example.com' }
+  });
+
+  assert.equal(result.delivery, 'link');
+  assert.equal(result.emailFailed, true);
+  assert.ok(result.inviteLink);
+});
+
 test('a non-admin gets nothing, because the invite itself is refused', async () => {
   const { service } = setup({ orgRole: 'member' });
   await assert.rejects(
@@ -272,6 +311,21 @@ test('resending with email mails and leaves the token alone', async () => {
   assert.equal('inviteLink' in result, false);
   assert.equal(state.mails, 1);
   assert.equal(state.invitation!.tokenHash, hash('old'));
+});
+
+test('resending when the email fails hands back a fresh link', async () => {
+  const { service, state } = setup({
+    email: true,
+    mailFails: true,
+    invitation: invitationRow('old')
+  });
+  const result: any = await service.resendInvitation('inv1', 'clerk');
+
+  assert.equal(state.mails, 1);
+  assert.equal(result.delivery, 'link');
+  assert.equal(result.emailFailed, true);
+  const token = result.inviteLink.split('/invite/')[1];
+  assert.equal(state.invitation!.tokenHash, hash(token));
 });
 
 test('an admin cannot take the link of an owner invitation', async () => {
