@@ -339,7 +339,7 @@ The chart creates a `PriorityClass` named `orchard-platform` (value 100000) and 
 
 ## Egress bandwidth
 
-`TENANT_EGRESS_BANDWIDTH` (`tenant.egressBandwidth` in the chart), for example `50M`, makes Orchard set the standard `kubernetes.io/egress-bandwidth` annotation on app and job pods. It is off by default. The annotation limits the pod's outbound traffic only on a cluster whose CNI runs a bandwidth manager, such as Cilium with `bandwidthManager.enabled=true`. On other clusters it has no effect, so the cluster side is yours to set up. Running pods pick the annotation up on their next rollout.
+`TENANT_EGRESS_BANDWIDTH` (`tenant.egressBandwidth` in the chart), for example `50M`, makes Orchard set the standard `kubernetes.io/egress-bandwidth` annotation on app and job pods. It is off by default. The annotation limits the pod's outbound traffic only where the CNI enforces it: Cilium with `bandwidthManager.enabled=true`, or a CNI chain that includes the `bandwidth` plugin, which k3s and installer hosts include. On other clusters it has no effect, so the cluster side is yours to set up. Running pods pick the annotation up on their next rollout.
 
 ## Log rate limit
 

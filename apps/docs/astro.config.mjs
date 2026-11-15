@@ -321,7 +321,8 @@ export default defineConfig({
                 { label: 'Add S3 storage', slug: 'operate/storage' },
                 { label: 'Resource limits', slug: 'operate/resource-limits' },
                 { label: 'Wildcard certificates', slug: 'operate/wildcard-certificates' },
-                { label: 'Going to production', slug: 'operate/production' }
+                { label: 'Going to production', slug: 'operate/production' },
+                { label: 'Compatibility', slug: 'operate/compatibility' }
               ]
             },
             {
