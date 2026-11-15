@@ -879,7 +879,8 @@
 							<SectionTitle title="Limits" size="md" />
 							<p class="hint">
 								Limits apply across all projects in this organization. New organizations start with
-								the instance default, which is unlimited unless you set one under Instance settings.
+								the instance default, which is unlimited unless you set one in Instance admin under
+								Limits.
 							</p>
 						</div>
 						<FieldGrid>
