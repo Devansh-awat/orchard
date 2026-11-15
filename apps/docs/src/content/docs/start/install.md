@@ -556,7 +556,6 @@ helm upgrade --install traefik traefik/traefik \
        issuerRef: { name: letsencrypt, kind: ClusterIssuer }
    gateway:
      http:
-       enabled: false
        appDomain: apps.example.com
    certificates:
      enabled: false
@@ -586,7 +585,6 @@ helm upgrade --install traefik traefik/traefik \
    | `tenant.ingressNamespaces`     | The namespace your ingress controller's pods run in, followed by `orchard`. The Traefik bundled with k3s runs in `kube-system`. To find the namespace, run `kubectl get pods -A -l app.kubernetes.io/name=traefik`. Tenant namespaces deny traffic by default. With the wrong value, apps are unreachable and HTTP-01 certificates are not issued. |
    | `tenant.cnpgOperatorNamespace` | The namespace where CloudNativePG runs, which is `cnpg-system` in the commands above. With the wrong value, the tenant network policy blocks the operator, and databases show `Instance Status Extraction Error`.                                                                                                                                  |
    | `tenant.certClusterIssuer`     | A ClusterIssuer from `kubectl get clusterissuer`. Use the same issuer in `ingress.tls.issuerRef`.                                                                                                                                                                                                                                                  |
-   | `gateway.http.enabled`         | Leave `false`. App URLs use `Ingress`, and this listener needs a wildcard Secret that nothing creates.                                                                                                                                                                                                                                             |
    | `certificates.enabled`         | Leave `false` unless you have a DNS-01 issuer for wildcards. The default needs one named `letsencrypt-dns01-wildcard`.                                                                                                                                                                                                                             |
    | `mcp.enabled`                  | Leave `false` to start. The MCP endpoint needs [extra settings](#turn-on-mcp).                                                                                                                                                                                                                                                                     |
 

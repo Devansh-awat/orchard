@@ -119,12 +119,24 @@ test("a stock render names nobody else's domain or registry", { skip: !helmAvail
 });
 
 test(
-  'an app domain renders the wildcard listener and Certificate',
+  'an app domain renders the wildcard Certificate and no Gateway',
   { skip: !helmAvailable() },
   () => {
     const out = render(['gateway.http.appDomain=apps.example.com']);
-    assert.match(out, /hostname: "\*\.apps\.example\.com"/);
     assert.match(out, /commonName: "\*\.apps\.example\.com"/);
+    assert.doesNotMatch(out, /gateway\.networking\.k8s\.io/, 'Gateway API is off by default');
+  }
+);
+
+test(
+  'a gateway turned on renders the wildcard listener with the chart labels',
+  { skip: !helmAvailable() },
+  () => {
+    const out = render(['gateway.enabled=true', 'gateway.http.appDomain=apps.example.com']);
+    assert.match(out, /hostname: "\*\.apps\.example\.com"/);
+    assert.match(out, /kind: Gateway\nmetadata:\n  name: db-gateway/);
+    assert.match(out, /app\.kubernetes\.io\/part-of: orchard/);
+    assert.doesNotMatch(out, /leaf\.dev/);
   }
 );
 

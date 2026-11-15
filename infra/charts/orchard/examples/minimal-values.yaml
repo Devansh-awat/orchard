@@ -9,7 +9,6 @@ ingress:
     issuerRef: { name: letsencrypt, kind: ClusterIssuer }
 gateway:
   http:
-    enabled: false
     appDomain: apps.example.com
 certificates:
   enabled: false

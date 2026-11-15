@@ -655,16 +655,14 @@ logs:
       requests: { cpu: "50m", memory: "128Mi" }
       limits: { cpu: "500m", memory: "512Mi" }
 
-# Shared L7 Gateway API gateway for app HTTP/HTTPS traffic.
-# Replaces the raw manifest that used to live at k8s/gateway-api/10-http-gateway.yaml.
-# Custom-domain HTTPS listeners are appended at runtime by the server
-# (KubernetesService.ensureCustomDomainListener) — leave that path alone.
+# Gateway API objects. Orchard does not support Gateway API yet: tenant apps
+# route through Ingress and the server creates no HTTPRoute or listener, so these
+# Gateways carry no traffic. Leave enabled false. gateway.http.appDomain below is
+# read either way: it is the app domain.
 gateway:
-  enabled: true
+  enabled: false
   namespace: network
   gatewayClassName: traefik
-  # L7 HTTP/HTTPS gateway. Listeners for custom domains are appended at runtime
-  # by the server (KubernetesService.ensureCustomDomainListener).
   http:
     enabled: true
     name: http-gateway
@@ -677,10 +675,8 @@ gateway:
     #   - pre-existing in {namespace} (set certificates.wildcards.app.enabled: false).
     # Empty derives `wildcard-<appDomain with dots as dashes>-tls`.
     appWildcardSecretName: ""
-  # L4 TCP gateway for managed-database traffic. Listeners are appended at
-  # runtime by the server (KubernetesService.ensureDbGatewayListener); the
-  # placeholder listener below only exists so the Gateway has a non-empty
-  # spec at bootstrap. Do not remove it.
+  # A TCP Gateway with a placeholder listener. Public databases use
+  # LoadBalancer Services, not this Gateway.
   db:
     enabled: true
     name: db-gateway
@@ -720,11 +716,11 @@ certificates:
     size: 256
     rotationPolicy: Always
   wildcards:
-    # *.{gateway.appDomain} — terminates TLS on the shared HTTP gateway.
+    # *.{gateway.http.appDomain}: the wildcard certificate for app hostnames.
     app:
       enabled: true
-      domain: ""       # empty → falls back to gateway.appDomain
-      secretName: ""   # empty → falls back to gateway.appWildcardSecretName
+      domain: ""       # empty → falls back to gateway.http.appDomain
+      secretName: ""   # empty → falls back to gateway.http.appWildcardSecretName
     # *.{db.domain} — used by the server's syncPublicTlsSecret() to copy
     # the wildcard cert into project namespaces for CNPG TLS. No domain, no
     # Certificate.

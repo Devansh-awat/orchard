@@ -10,8 +10,6 @@ metadata:
   namespace: {{ $ns }}
   labels:
     {{- include "orchard.labels" (dict "root" . "name" .Values.gateway.http.name) | nindent 4 }}
-    leaf.dev/managed: "true"
-    leaf.dev/role: http
 spec:
   gatewayClassName: {{ $gcn }}
   listeners:
@@ -47,8 +45,6 @@ metadata:
   namespace: {{ $ns }}
   labels:
     {{- include "orchard.labels" (dict "root" . "name" .Values.gateway.db.name) | nindent 4 }}
-    leaf.dev/managed: "true"
-    leaf.dev/role: db
 spec:
   gatewayClassName: {{ $gcn }}
   listeners:
@@ -60,6 +56,6 @@ spec:
           from: Selector
           selector:
             matchLabels:
-              leaf.dev/never-match: "true"
+              orchard.io/never-match: "true"
 {{- end }}
 {{- end }}

@@ -22,7 +22,6 @@ ingress:
 
 gateway:
   http:
-    enabled: false
     appDomain: apps.127.0.0.1.nip.io
 
 postgres:

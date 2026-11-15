@@ -4,7 +4,6 @@ set -euo pipefail
 CLUSTER=${ORCHARD_CLUSTER:-orchard-dev}
 HTTP_PORT=8080
 HTTPS_PORT=8443
-GATEWAY_API_VERSION=v1.6.1
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 step() { printf '\n\033[1;32m==> %s\033[0m\n' "$*"; }
@@ -27,19 +26,15 @@ k3d cluster create "$CLUSTER" \
   --k3s-arg "--disable=traefik@server:0" \
   --wait
 
-step "Installing Gateway API CRDs"
-kubectl apply -f "https://github.com/kubernetes-sigs/gateway-api/releases/download/$GATEWAY_API_VERSION/standard-install.yaml"
-
 step "Adding helm repos"
 helm repo add traefik https://traefik.github.io/charts >/dev/null
 helm repo add cnpg https://cloudnative-pg.github.io/charts >/dev/null
 helm repo add jetstack https://charts.jetstack.io >/dev/null
 helm repo update >/dev/null
 
-step "Installing Traefik (with Gateway API provider)"
+step "Installing Traefik"
 helm upgrade --install traefik traefik/traefik \
   --namespace traefik --create-namespace \
-  --set providers.kubernetesGateway.enabled=true \
   --set gateway.enabled=false \
   --set accessLog.enabled=true \
   --set accessLog.format=json \

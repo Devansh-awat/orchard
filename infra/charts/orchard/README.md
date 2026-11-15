@@ -14,13 +14,10 @@ missing one fails `helm install`. With the default values the cluster must alrea
 have:
 
 - **CloudNativePG operator**: provides `postgresql.cnpg.io/v1` `Cluster`
-- **Gateway API CRDs** (`gateway.networking.k8s.io/v1`), and a GatewayClass matching
-  `gateway.gatewayClassName`. Set `gateway.enabled: false` if you route without them.
 - **cert-manager** and a DNS-01 `ClusterIssuer` named `letsencrypt-dns01-wildcard`,
   for the wildcard `Certificate`s. Change `certificates.issuer`, or set
   `certificates.enabled: false` and bring the TLS Secrets yourself.
-- **A `network` namespace.** `gateway.namespace` and `certificates.namespace` both
-  default to it. With `createNamespace: true` the chart creates it if missing and
+- **A `network` namespace.** `certificates.namespace` defaults to it. With `createNamespace: true` the chart creates it if missing and
   keeps it on uninstall. With `false`, create it yourself.
 - **An OCI registry** for builds to push to and nodes to pull from (`builders.harbor.*`,
   plus `DOCKER_REGISTRY_PUSH` and `DOCKER_REGISTRY_PULL` in `server.env`).
@@ -78,7 +75,6 @@ ingress:
     issuerRef: { name: letsencrypt, kind: ClusterIssuer }
 gateway:
   http:
-    enabled: false
     appDomain: apps.example.com
 certificates:
   enabled: false
@@ -112,7 +108,6 @@ Replace the hostnames, then check these against your cluster:
 | `tenant.extraDenyCidrs` | `""` | Extra IPv4 addresses or CIDRs added to the egress deny list, as `PLATFORM_EXTRA_DENY_CIDRS`. The server already adds node addresses, apiserver endpoints and pod CIDRs. |
 | `tenant.cnpgOperatorNamespace` | The namespace where CloudNativePG runs, usually `cnpg-system`. With the wrong one, the tenant network policy blocks the operator, and databases show `Instance Status Extraction Error` |
 | `tenant.certClusterIssuer`  | A ClusterIssuer from `kubectl get clusterissuer`, also used in `ingress.tls.issuerRef`                                                                                                                                  |
-| `gateway.http.enabled`      | Leave `false`. App URLs use `Ingress`, and this listener wants a wildcard Secret nothing creates                                                                                                                        |
 | `certificates.enabled`      | Leave `false` unless you have a DNS-01 issuer for wildcards. The default needs one named `letsencrypt-dns01-wildcard`                                                                                                   |
 | `mcp.enabled`               | Leave `false` to start. On, it needs the extra settings below                                                                                                                                                           |
 
@@ -215,7 +210,7 @@ new class on a fresh volume.
 | Namespace          | Resources |
 |--------------------|-----------|
 | `orchard`          | `frontend` / `server` / `mcp` Deployments + Services, Redis Deployment + PVC, Traefik `IngressRoute`s, CNPG `Cluster` (`orchard-db`) |
-| `network`          | Gateways and wildcard `Certificate`s. Created by the chart only with `createNamespace: true`, and kept on uninstall. |
+| `network`          | Wildcard `Certificate`s, and Gateways when `gateway.enabled` is on. Created by the chart only with `createNamespace: true`, and kept on uninstall. |
 | `orchard-builders` | SA, RBAC, Harbor + R2 secrets, BuildKit ConfigMap, ResourceQuota, LimitRange, NetworkPolicy |
 | `orchard-metrics`  | VictoriaMetrics StatefulSet, vmagent, kube-state-metrics, node-exporter DaemonSet, VictoriaLogs StatefulSet, Vector DaemonSet |
 | `orchard-scans`    | Only with `trivy.enabled`: Trivy server Deployment + Service + cache PVC, the scan jobs, server Role for their Secrets, NetworkPolicies |
@@ -782,19 +777,22 @@ server needs egress to download its database (`mirror.gcr.io`, `ghcr.io`).
 
 ### Gateway (`gateway.*`)
 
-Renders the shared Gateway API `Gateway` objects and `ReferenceGrant`s.
+Renders Gateway API `Gateway` objects and `ReferenceGrant`s. Orchard does not support
+Gateway API yet: tenant apps use `Ingress`, and the server creates no `HTTPRoute`, so
+these objects carry no traffic. Leave `gateway.enabled` off. `gateway.http.appDomain` is
+read either way, because it is the app domain.
 
 | Key | Default | Description |
 |---|---|---|
-| `gateway.enabled` | `true` | Master switch. Disable if you wire routing without Gateway API. |
+| `gateway.enabled` | `false` | Master switch. Turning it on needs the Gateway API CRDs and a matching `GatewayClass`. |
 | `gateway.namespace` | `network` | Namespace the Gateways + ReferenceGrants live in. Cert Secrets must be readable from here. |
 | `gateway.gatewayClassName` | `traefik` | `GatewayClass` both Gateways attach to. |
 | `gateway.http.enabled` | `true` | Render the L7 HTTP/HTTPS Gateway. |
-| `gateway.http.name` | `http-gateway` | Gateway object name. The server (`ensureCustomDomainListener`) targets this exact name, so keep them in sync. |
+| `gateway.http.name` | `http-gateway` | Gateway object name. |
 | `gateway.http.appDomain` | `""` | Hostname pattern for autogen user app domains. Must match server `APP_DOMAIN` and frontend `PUBLIC_APP_DOMAIN`. Empty renders no wildcard listener and no wildcard Certificate. |
 | `gateway.http.appWildcardSecretName` | `""` | Secret holding the wildcard TLS cert for `*.{appDomain}`. Empty derives `wildcard-<appDomain with dots as dashes>-tls`, which the chart-managed `Certificate`, the Gateway listener and `PLATFORM_WILDCARD_DOMAINS` all agree on. |
-| `gateway.db.enabled` | `true` | Render the L4 TCP Gateway for managed DBs. |
-| `gateway.db.name` | `db-gateway` | Gateway object name. Targeted by the server's `ensureDbGatewayListener`. |
+| `gateway.db.enabled` | `true` | Render a TCP Gateway with a placeholder listener. Public databases use `LoadBalancer` Services, not this Gateway. |
+| `gateway.db.name` | `db-gateway` | Gateway object name. |
 | `gateway.referenceGrants.enabled` | `false` | Render `ReferenceGrant`s. Only needed if Routes reference cross-namespace *backend Services*, not for parentRefs (covered by `allowedRoutes.namespaces.from: All`). |
 | `gateway.referenceGrants.fromNamespaces` | `[]` | Explicit list of source namespaces. One ReferenceGrant rendered per (namespace × Gateway). Empty = no grants rendered. Gateway API admission rejects empty / wildcard `from.namespace`, so this must be a concrete list. |
 
@@ -813,7 +811,7 @@ Renders `cert-manager.io/v1 Certificate` resources for the configured wildcards.
 | `certificates.privateKey` | `{algorithm: ECDSA, size: 256, rotationPolicy: Always}` | Passed verbatim to `spec.privateKey`. |
 | `certificates.wildcards.app.enabled` | `true` | Issue the wildcard for autogen app domains. |
 | `certificates.wildcards.app.domain` | `""` (→ `gateway.http.appDomain`) | Hostname pattern. Cert covers `*.{domain}` + `{domain}`. |
-| `certificates.wildcards.app.secretName` | `""` (→ `gateway.http.appWildcardSecretName`) | Secret name. Consumed by the Gateway listener. |
+| `certificates.wildcards.app.secretName` | `""` (→ `gateway.http.appWildcardSecretName`) | Secret name. Tenant ingresses reference it, and so does the Gateway listener when `gateway.enabled` is on. |
 | `certificates.wildcards.db.enabled` | `true` | Issue the wildcard for public CNPG TLS. |
 | `certificates.wildcards.db.domain` | `""` | Hostname pattern. Matches server `PUBLIC_DB_DOMAIN`. Empty issues no Certificate. |
 | `certificates.wildcards.db.secretName` | `wildcard-db-orchard-my-tls` | Secret consumed by the server's `syncPublicTlsSecret` reflection. |
@@ -976,7 +974,7 @@ Upgrading to the release with cluster-neutral storage defaults:
 
 ## 8. Troubleshooting checklist
 
-- `helm install` fails with `no matches for kind` → a CRD the chart renders isn't installed. Check the prerequisites at the top. `Gateway` and `Certificate` go away with `gateway.enabled: false` and `certificates.enabled: false`, and `IngressRoute` with `ingress.enabled: false` and `mcp.ingress.enabled: false` (then route to the Services yourself).
+- `helm install` fails with `no matches for kind` → a CRD the chart renders isn't installed. Check the prerequisites at the top. `Certificate` goes away with `certificates.enabled: false`, and `IngressRoute` with `ingress.enabled: false` and `mcp.ingress.enabled: false` (then route to the Services yourself).
 - `kubectl -n orchard get cluster orchard-db` → confirm CNPG `Cluster.status.phase` is `Cluster in healthy state`. If it has no phase, the CNPG operator isn't running or isn't watching this namespace.
 - `kubectl -n orchard describe pod -l app.kubernetes.io/name=server` → look for `ImagePullBackOff` (pull secret) or `CreateContainerConfigError` (missing `orchard-db-app` secret: CNPG hasn't finished bootstrapping yet, retry).
 - `kubectl -n orchard-metrics logs deploy/vmagent` → scrape errors mean the RBAC ClusterRoleBinding didn't apply (cluster-admin needed for install).
