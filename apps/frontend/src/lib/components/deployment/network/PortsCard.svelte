@@ -135,6 +135,8 @@
 							</span>
 						{:else if !tailnet.linked}
 							<a class="link" href="/user/settings">Link your account</a>
+						{:else if tailnet.exposed}
+							<span>Not connected to your tailnet yet</span>
 						{/if}
 					{/snippet}
 					{#snippet actions()}
