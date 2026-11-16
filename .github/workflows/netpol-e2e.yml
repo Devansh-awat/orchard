@@ -2,6 +2,8 @@ name: netpol-e2e
 
 on:
   workflow_dispatch:
+  schedule:
+    - cron: '11 5 * * *'
   push:
     paths:
       - apps/server/src/kubernetes/security-policies.ts

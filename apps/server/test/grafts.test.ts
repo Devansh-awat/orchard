@@ -23,6 +23,7 @@ import { parseManifest } from '../src/grafts/manifest';
 import { loadGrafts } from '../src/grafts/loader';
 import { applyMigrations, readMigrations } from '../src/grafts/migrations';
 import { platformVersion } from '../src/grafts/host-api';
+import { toolAvailable } from './support/tools';
 
 function tmp(prefix: string): string {
   return mkdtempSync(join(tmpdir(), `${prefix}-`));
@@ -329,7 +330,7 @@ async function freePort(): Promise<number> {
   });
 }
 
-const hasPostgres = spawnSync('initdb', ['--version']).status === 0;
+const hasPostgres = toolAvailable('initdb', ['--version']);
 
 describe('migrations', { skip: hasPostgres ? false : 'initdb not on PATH' }, () => {
   let dataDir = '';

@@ -5,16 +5,12 @@ import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { loadAll } from 'js-yaml';
 import { recoveryClusterSpec } from '../src/kubernetes/cnpg-recovery';
+import { toolAvailable } from './support/tools';
 
 const chart = resolve(__dirname, '../../../infra/charts/orchard');
 
 function helmAvailable(): boolean {
-  try {
-    execFileSync('helm', ['version', '--short'], { stdio: 'ignore' });
-    return true;
-  } catch {
-    return false;
-  }
+  return toolAvailable('helm', ['version', '--short']);
 }
 
 const skip = !helmAvailable();

@@ -11,16 +11,12 @@ import {
 } from '../../../grafts/greenhouse/server/src/sandboxes/runners/kubernetes.runner';
 import { PREVIEW_PORTS } from '../../../grafts/greenhouse/server/src/sandboxes/preview/preview-auth';
 import { cniCheck, type DoctorInputs } from '../src/doctor/doctor.checks';
+import { toolAvailable } from './support/tools';
 
 const chart = resolve(__dirname, '../../../infra/charts/orchard');
 
 function helmAvailable(): boolean {
-  try {
-    execFileSync('helm', ['version', '--short'], { stdio: 'ignore' });
-    return true;
-  } catch {
-    return false;
-  }
+  return toolAvailable('helm', ['version', '--short']);
 }
 
 function render(sets: string[]): string {

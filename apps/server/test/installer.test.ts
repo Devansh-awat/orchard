@@ -14,17 +14,13 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { toolAvailable } from './support/tools';
 
 const installer = resolve(__dirname, '../../../install/install.sh');
 const chart = resolve(__dirname, '../../../infra/charts/orchard');
 
 function has(tool: string, flag: string): boolean {
-  try {
-    execFileSync(tool, [flag], { stdio: 'ignore' });
-    return true;
-  } catch {
-    return false;
-  }
+  return toolAvailable(tool, [flag]);
 }
 
 const preamble = `

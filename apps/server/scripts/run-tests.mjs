@@ -24,7 +24,15 @@ const scope = [
   'packages/contracts/',
   'packages/health/',
   'packages/graft-sdk/',
-  'grafts/'
+  'grafts/',
+  'install/',
+  'infra/charts/'
+];
+const everything = [
+  '.github/workflows/ci.yml',
+  'package.json',
+  'pnpm-lock.yaml',
+  'pnpm-workspace.yaml'
 ];
 const ignored = [/\.md$/, /^grafts\/[^/]+\/ui\//, /\.(svelte|css)$/];
 const code = /\.(ts|mts|cts|js|mjs|cjs)$/;
@@ -102,7 +110,10 @@ async function affected(base) {
     encoding: 'utf8'
   })
     .split('\n')
-    .filter((file) => file && scope.some((prefix) => file.startsWith(prefix)))
+    .filter(
+      (file) =>
+        file && (everything.includes(file) || scope.some((prefix) => file.startsWith(prefix)))
+    )
     .filter((file) => !ignored.some((pattern) => pattern.test(file)));
 
   const wide = changed.filter((file) => file === selector || !code.test(file));

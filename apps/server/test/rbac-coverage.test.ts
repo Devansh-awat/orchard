@@ -5,6 +5,7 @@ import { resolve } from 'node:path';
 import { loadAll } from 'js-yaml';
 import { tailscaleRoleRules } from '../src/kubernetes/tailscale-rbac';
 import { tenantSecretsRole } from '../src/kubernetes/tenant-rbac';
+import { toolAvailable } from './support/tools';
 
 type Rule = { apiGroups?: string[]; resources?: string[]; verbs?: string[] };
 type Doc = { kind?: string; metadata?: { name?: string; namespace?: string }; rules?: Rule[] };
@@ -12,12 +13,7 @@ type Doc = { kind?: string; metadata?: { name?: string; namespace?: string }; ru
 const chart = resolve(__dirname, '../../../infra/charts/orchard');
 
 function helmAvailable(): boolean {
-  try {
-    execFileSync('helm', ['version', '--short'], { stdio: 'ignore' });
-    return true;
-  } catch {
-    return false;
-  }
+  return toolAvailable('helm', ['version', '--short']);
 }
 
 function rendered(): Doc[] {

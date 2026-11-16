@@ -54,6 +54,8 @@ jobs:
               - 'packages/health/**'
               - 'packages/graft-sdk/**'
               - 'grafts/**'
+              - 'install/**'
+              - 'infra/charts/**'
               - 'scripts/typecheck.mjs'
               - 'pnpm-lock.yaml'
               - 'pnpm-workspace.yaml'
@@ -63,12 +65,16 @@ jobs:
               - '.github/workflows/**'
             hostctl:
               - 'apps/server/hostctl/**'
+              - 'infra/charts/orchard/values.yaml'
+              - 'apps/server/src/docker/buildkit-image.ts'
+              - 'apps/server/src/docker/image-builder.service.ts'
               - '.github/workflows/**'
             gateway:
               - 'apps/gateway/**'
               - '.github/workflows/**'
             cli:
               - 'apps/cli/**'
+              - 'packages/contracts/**'
               - '.github/workflows/**'
             contracts:
               - 'packages/contracts/**'

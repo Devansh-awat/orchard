@@ -3,16 +3,12 @@ import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import { loadAll } from 'js-yaml';
+import { toolAvailable } from './support/tools';
 
 const chart = resolve(__dirname, '../../../infra/charts/orchard');
 
 function helmAvailable(): boolean {
-  try {
-    execFileSync('helm', ['version', '--short'], { stdio: 'ignore' });
-    return true;
-  } catch {
-    return false;
-  }
+  return toolAvailable('helm', ['version', '--short']);
 }
 
 function render(sets: string[]): any[] {
