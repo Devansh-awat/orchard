@@ -96,7 +96,7 @@ jobs:
           path: report
       - name: Open, update or close the tracking issue
         run: |
-          number=$(gh issue list --state open --search "\"$TITLE\" in:title" --json number,title \
+          number=$(gh issue list --state open --author "app/github-actions" --search "\"$TITLE\" in:title" --json number,title \
             --jq "map(select(.title == \"$TITLE\")) | .[0].number // empty")
           if [ "$STATUS" = clean ]; then
             if [ -n "$number" ]; then

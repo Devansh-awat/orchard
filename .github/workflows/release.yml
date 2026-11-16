@@ -408,7 +408,7 @@ jobs:
   # is automatic. A version already on npm is left alone, so re-runs are safe.
   npm-publish:
     needs: release-please
-    if: github.event_name == 'workflow_dispatch' || needs.release-please.outputs.graft_sdk == 'true' || needs.release-please.outputs.graft_ui == 'true'
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || needs.release-please.outputs.graft_sdk == 'true' || needs.release-please.outputs.graft_ui == 'true')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -418,7 +418,7 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
-      - run: npm install -g npm@latest
+      - run: npm install -g npm@12.2.2
       - name: Publish @orchardlabs/graft-sdk and @orchardlabs/graft-ui
         env:
           SDK_RELEASED: ${{ github.event_name == 'workflow_dispatch' || needs.release-please.outputs.graft_sdk == 'true' }}

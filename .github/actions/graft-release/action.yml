@@ -24,7 +24,7 @@ inputs:
       Version of @orchardlabs/graft-sdk to pack with when the graft does not
       install it itself. A graft that lists it in package.json uses its own.
     required: false
-    default: latest
+    default: 1.4.1
 
 outputs:
   file:
