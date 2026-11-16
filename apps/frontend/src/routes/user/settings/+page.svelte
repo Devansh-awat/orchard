@@ -684,7 +684,10 @@
 		deletingPasskeyId = passkey.id;
 		try {
 			const response = await apiFetch(`/apiv1/auth/passkeys/${passkey.id}`, { method: 'DELETE' });
-			if (!response.ok) throw new Error("Couldn't delete passkey");
+			if (!response.ok) {
+				const data = await response.json().catch(() => ({}));
+				throw new Error(data.message || "Couldn't delete passkey");
+			}
 			toasts.add({ title: 'Passkey removed', color: 'success' });
 			if (editingPasskeyId === passkey.id) cancelRenaming();
 			await fetchPasskeys();

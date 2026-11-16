@@ -1,3 +1,4 @@
+import { stepUp } from './step-up';
 import {
   Controller,
   Get,
@@ -360,6 +361,15 @@ export class OAuthController {
       if (!user) {
         throw new HttpException('User not found', HttpStatus.NOT_FOUND);
       }
+    }
+
+    if (body.passkeyOnly === false && user.passkeyOnly) {
+      const refusal = await stepUp(this.prisma, {
+        action: 'turn email codes back on',
+        user: { id: user.id, passwordHash: null },
+        auth: req['auth']
+      });
+      if (refusal) throw new HttpException(refusal, HttpStatus.FORBIDDEN);
     }
 
     try {

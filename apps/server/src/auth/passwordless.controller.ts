@@ -548,6 +548,12 @@ export class PasswordlessController {
   @Delete('passkeys/:id')
   async deletePasskey(@Param('id') passkeyId: string, @Req() req: any) {
     const user = await this.resolveInternalUser(req.user.sub);
+    const refusal = await stepUp(this.prisma, {
+      action: 'remove a passkey',
+      user: { id: user.id, passwordHash: null },
+      auth: req['auth']
+    });
+    if (refusal) throw new HttpException(refusal, HttpStatus.FORBIDDEN);
 
     await this.passkeyService.deletePasskey(user.id, passkeyId);
     return { success: true };
