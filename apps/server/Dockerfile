@@ -11,7 +11,7 @@
 # can grow: one binary, one command registry, and no yq gymnastics for the
 # values file. Both architectures, because the host picks the one that matches
 # it out of the image.
-FROM golang:1.26-bookworm AS hostctl
+FROM golang:1.26-bookworm@sha256:dc40a13b61304647ed7e5d581d246b86413dfc29d63c6d018310feb93cd98fc0 AS hostctl
 WORKDIR /src
 COPY apps/server/hostctl/go.mod apps/server/hostctl/go.sum ./
 RUN go mod download

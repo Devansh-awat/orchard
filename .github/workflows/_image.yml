@@ -59,6 +59,7 @@ jobs:
             BUILDKIT_INLINE_CACHE=1
           secrets: ${{ inputs.service == 'server' && secrets.HOSTCTL_SIGNING_KEY != '' && format('hostctl_signing_key={0}', secrets.HOSTCTL_SIGNING_KEY) || '' }}
           outputs: type=image,name=ghcr.io/hackclub/orchard/${{ inputs.service }},push-by-digest=true,name-canonical=true,push=true
+          no-cache-filters: ${{ inputs.service == 'server' && 'hostctl' || '' }}
           cache-from: type=registry,ref=ghcr.io/hackclub/orchard/${{ inputs.service }}:buildcache-${{ matrix.arch }}
           cache-to: type=registry,ref=ghcr.io/hackclub/orchard/${{ inputs.service }}:buildcache-${{ matrix.arch }},mode=max,image-manifest=true,oci-mediatypes=true,compression=zstd
       - run: |
