@@ -2498,17 +2498,6 @@ export class DatabasesService {
       { allowViewer: true }
     );
 
-    const anyNewlyCompleted = await this.backupSync
-      .reconcileDatabase(database, { ingest: true })
-      .catch(() => false);
-    if (anyNewlyCompleted) {
-      await this.backupSync.pruneOldBackups({
-        id: database.id,
-        namespace: database.namespace,
-        clusterName: database.clusterName
-      });
-    }
-
     return this.prisma.databaseBackup.findMany({
       where: { databaseId: database.id },
       orderBy: { createdAt: 'desc' }
