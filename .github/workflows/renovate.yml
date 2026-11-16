@@ -35,6 +35,7 @@ jobs:
       (github.event.issue.title == 'Dependency Dashboard' && github.event.issue.user.login == 'leafdbot[bot]' &&
       github.event.sender.type != 'Bot'))
     runs-on: ubuntu-latest
+    environment: release
     steps:
       - uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
         id: app-token
