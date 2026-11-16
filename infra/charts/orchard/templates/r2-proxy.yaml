@@ -195,8 +195,9 @@ spec:
   policyTypes: [Ingress]
   ingress:
     # Barman sidecars run in tenant namespaces, which carry the managed label.
-    # The server and the CNPG operator are the other callers. Builds, sandboxes
-    # and image scans have no business here.
+    # The server, the CNPG operator and the build namespace (its S3 cache goes
+    # through the proxy with a per-tenant key) are the other callers.
+    # Sandboxes and image scans have no business here.
     - from:
         - namespaceSelector:
             matchExpressions:
@@ -210,6 +211,11 @@ spec:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: {{ .Values.tenant.cnpgOperatorNamespace | default "postgresql" }}
+        {{- if .Values.builders.enabled }}
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.builders.namespace }}
+        {{- end }}
       ports:
         - port: 9000
           protocol: TCP
