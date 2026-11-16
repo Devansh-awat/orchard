@@ -283,7 +283,12 @@ export class NotificationsService {
     });
   }
 
-  async notifyDbStorage(databaseId: string, state: 'pressure' | 'recovered', detail?: string) {
+  async notifyDbStorage(
+    databaseId: string,
+    state: 'pressure' | 'recovered',
+    detail?: string,
+    nodeDisk = false
+  ) {
     const db = await this.prisma.database.findUnique({
       where: { id: databaseId },
       select: {
@@ -312,9 +317,11 @@ export class NotificationsService {
       message: {
         event: pressure ? 'db.storage_pressure' : 'db.storage_recovered',
         title: pressure ? `Storage running out: ${db.name}` : `Storage back to normal: ${db.name}`,
-        body: pressure
-          ? `${db.name} is running out of disk${detail ? `: ${truncate(detail, 300)}` : '.'} Postgres refuses to start once the volume is full, so expand storage${db.storageSize ? ` (currently ${db.storageSize})` : ''} before that happens.`
-          : `${db.name} has free disk space again.`,
+        body: !pressure
+          ? `${db.name} has free disk space again.`
+          : nodeDisk
+            ? `${db.name} is running out of disk${detail ? `: ${truncate(detail, 300)}` : '.'} Its volume lives on the node's own disk, so expanding storage won't help: free space on the node before Postgres can no longer write.`
+            : `${db.name} is running out of disk${detail ? `: ${truncate(detail, 300)}` : '.'} Postgres refuses to start once the volume is full, so expand storage${db.storageSize ? ` (currently ${db.storageSize})` : ''} before that happens.`,
         url: `${this.frontendUrl}/${db.project.organization.slug}/databases/${db.id}`,
         projectId: db.project.id,
         projectName: db.project.name,

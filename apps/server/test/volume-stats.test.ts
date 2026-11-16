@@ -77,3 +77,23 @@ test('a paused database names the smallest size that brings it under eighty-five
   assert.equal(sizeToResumeWrites({ usedBytes: 1, capacityBytes: 0 }, '20Gi'), null);
   assert.equal(sizeToResumeWrites({ usedBytes: 1, capacityBytes: 1 }, 'nope'), null);
 });
+
+test('a claim the kubelet reports as the node filesystem is marked shared', () => {
+  const usage = parseKubeletSummary({
+    node: { fs: { capacityBytes: 196 * GI, usedBytes: 99 * GI } },
+    pods: [
+      {
+        volume: [
+          {
+            usedBytes: 99 * GI,
+            capacityBytes: 196 * GI,
+            pvcRef: { name: 'pg-a-1', namespace: 'ns' }
+          },
+          { usedBytes: 1 * GI, capacityBytes: 3 * GI, pvcRef: { name: 'pg-b-1', namespace: 'ns' } }
+        ]
+      }
+    ]
+  });
+  assert.equal(usage.get('ns/pg-a-1')?.shared, true);
+  assert.equal(usage.get('ns/pg-b-1')?.shared, undefined);
+});

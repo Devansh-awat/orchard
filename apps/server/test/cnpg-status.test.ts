@@ -213,7 +213,7 @@ test('the sampler writes the columns, emits once, and never runs twice inside th
   assert.equal(updates[0].walPendingSegments, 3);
   assert.ok(updates[0].statsAt instanceof Date);
   assert.deepEqual(emits, [{ stats: true }]);
-  assert.deepEqual(notified, [['db-1', 'pressure', 'the volume is 90% full']]);
+  assert.deepEqual(notified, [['db-1', 'pressure', 'the volume is 90% full', false]]);
 
   svc.lastSample.clear();
   sample = { ...sample, volumeUsedBytes: 800 };
@@ -223,7 +223,7 @@ test('the sampler writes the columns, emits once, and never runs twice inside th
   svc.lastSample.clear();
   sample = { ...sample, volumeUsedBytes: 500 };
   await svc.sampleStats(ctx, 'db-1-1', 'ns');
-  assert.deepEqual(notified[1], ['db-1', 'recovered', undefined]);
+  assert.deepEqual(notified[1], ['db-1', 'recovered', undefined, false]);
 
   svc.lastSample.clear();
   sample = { ...sample, volumeUsedBytes: null, volumeCapacityBytes: null };
@@ -319,4 +319,57 @@ test('a paused cluster says what size resumes writes, an unpaused one does not',
     buildCnpgLiveStatus({ ...paused, storageSize: undefined }, [pod()], stats, NOW).resumeWritesAt,
     null
   );
+});
+
+test('a shared volume is guarded on the fuller of its own allowance and the node disk', async () => {
+  const GI = 1024 ** 3;
+  const run = async (nodeUsed: number, ownUsed: number) => {
+    const guards: unknown[] = [];
+    const updates: unknown[] = [];
+    const svc = Object.create(CnpgConsumer.prototype) as any;
+    Object.assign(svc, {
+      logger: { warn() {}, log() {} },
+      storageState: new Map(),
+      notifications: { notifyDbStorage: async () => {} },
+      cnpg: {
+        listVolumeUsage: async () => ({
+          nodesFailed: 0,
+          usage: new Map([
+            [
+              'ns/pg-a-1',
+              { usedBytes: nodeUsed, capacityBytes: 100 * GI, availableBytes: null, shared: true }
+            ]
+          ])
+        })
+      },
+      prisma: {
+        database: {
+          findMany: async () => [
+            {
+              id: 'db-1',
+              namespace: 'ns',
+              clusterName: 'pg-a',
+              storageSize: '10Gi',
+              walPendingSegments: 0,
+              volumeUsedBytes: BigInt(ownUsed),
+              volumeCapacityBytes: BigInt(10 * GI),
+              projectId: 'p',
+              project: { organizationId: 'o' }
+            }
+          ],
+          update: async (args: any) => updates.push(args.data)
+        },
+        k8sObject: { findMany: async () => [] }
+      },
+      applyWriteGuard: async (_db: unknown, decision: string, used: number, cap: number) =>
+        guards.push([decision, used / cap])
+    });
+    await svc.sweepVolumes();
+    return { guards, updates };
+  };
+  const nodeFull = await run(93 * GI, 1 * GI);
+  assert.deepEqual(nodeFull.guards, [['on', 0.93]]);
+  assert.deepEqual(nodeFull.updates, []);
+  assert.deepEqual((await run(40 * GI, 9.5 * GI)).guards, [['on', 0.95]]);
+  assert.deepEqual((await run(40 * GI, 1 * GI)).guards, []);
 });

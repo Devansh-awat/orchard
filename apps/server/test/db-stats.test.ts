@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   dbStatsCommand,
+  nodeDiskPressure,
   parseDbStatsOutput,
   storagePressure,
   storagePressureDetail
@@ -92,4 +93,28 @@ test('the detail names whichever side is under pressure', () => {
     }),
     'the volume is 90% full and 64 WAL segments (1.0 GiB) are waiting to be archived'
   );
+});
+
+test('a data dir on the node disk is measured with du, and a full node disk alone is pressure', () => {
+  assert.deepEqual(
+    parseDbStatsOutput('2048|1|0\n196318593024 98864812032\nshared 663314378\n')?.shared,
+    {
+      dataDirBytes: 663314378
+    }
+  );
+  assert.equal(parseDbStatsOutput('2048|1|0\n21003583488 11811160064\n')?.shared, undefined);
+  const nodeFull = {
+    volumeUsedBytes: 600,
+    volumeCapacityBytes: 3000,
+    nodeDiskUsedBytes: 90,
+    nodeDiskCapacityBytes: 100,
+    walPendingSegments: 0
+  };
+  assert.equal(storagePressure(undefined, nodeFull), true);
+  assert.equal(nodeDiskPressure(nodeFull), true);
+  assert.equal(storagePressureDetail(nodeFull), 'the node disk it shares is 90% full');
+  const ownFull = { ...nodeFull, volumeUsedBytes: 2700, nodeDiskUsedBytes: 50 };
+  assert.equal(storagePressure(undefined, ownFull), true);
+  assert.equal(nodeDiskPressure(ownFull), false);
+  assert.equal(storagePressure(undefined, { ...nodeFull, nodeDiskUsedBytes: 50 }), false);
 });

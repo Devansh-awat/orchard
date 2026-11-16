@@ -8,6 +8,26 @@ export interface VolumeUsage {
   usedBytes: number;
   capacityBytes: number;
   availableBytes: number | null;
+  shared?: boolean;
+}
+
+export interface DiskUsage {
+  usedBytes: number;
+  capacityBytes: number;
+}
+
+const SHARED_USED_TOLERANCE = 0.01;
+
+function onFilesystem(used: number, capacity: number, fs: any): boolean {
+  const fsCapacity = Number(fs?.capacityBytes);
+  const fsUsed = Number(fs?.usedBytes);
+  if (!(fsCapacity > 0) || !Number.isFinite(fsUsed) || fsCapacity !== capacity) return false;
+  return Math.abs(fsUsed - used) <= capacity * SHARED_USED_TOLERANCE;
+}
+
+export function fullerOf(a: DiskUsage, b: DiskUsage | null): DiskUsage {
+  if (!b || !(b.capacityBytes > 0)) return a;
+  return b.usedBytes / b.capacityBytes > a.usedBytes / a.capacityBytes ? b : a;
 }
 
 export function volumeKey(namespace: string, pvcName: string): string {
@@ -17,6 +37,8 @@ export function volumeKey(namespace: string, pvcName: string): string {
 export function parseKubeletSummary(summary: unknown): Map<string, VolumeUsage> {
   const out = new Map<string, VolumeUsage>();
   const pods: any[] = Array.isArray((summary as any)?.pods) ? (summary as any).pods : [];
+  const nodeFs = (summary as any)?.node?.fs;
+  const imageFs = (summary as any)?.node?.runtime?.imageFs;
   for (const pod of pods) {
     const volumes: any[] = Array.isArray(pod?.volume) ? pod.volume : [];
     for (const vol of volumes) {
@@ -26,10 +48,12 @@ export function parseKubeletSummary(summary: unknown): Map<string, VolumeUsage> 
       const capacity = Number(vol?.capacityBytes);
       if (!ns || !name || !Number.isFinite(used) || !(capacity > 0)) continue;
       const available = Number(vol?.availableBytes);
+      const shared = onFilesystem(used, capacity, nodeFs) || onFilesystem(used, capacity, imageFs);
       out.set(volumeKey(ns, name), {
         usedBytes: used,
         capacityBytes: capacity,
-        availableBytes: Number.isFinite(available) ? available : null
+        availableBytes: Number.isFinite(available) ? available : null,
+        ...(shared ? { shared: true } : {})
       });
     }
   }

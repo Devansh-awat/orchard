@@ -10,8 +10,20 @@ import { computePodStatus } from '../pod-status';
 import { PodLogCaptureService } from '../../kubernetes/pod-log-capture.service';
 import { cnpgScheduleName, K8sCnpgService } from '../../kubernetes/k8s-cnpg.service';
 import { clusterSnapshot, WRITE_GUARD_ANNOTATION } from '../../kubernetes/cnpg-status';
-import { storagePressure, storagePressureDetail } from '../../kubernetes/db-stats';
-import { dataVolumesOf, fullestVolume, writeGuardDecision } from '../../kubernetes/volume-stats';
+import {
+  nodeDiskPressure,
+  storagePressure,
+  storagePressureDetail,
+  type StoragePressureInput
+} from '../../kubernetes/db-stats';
+import {
+  dataVolumesOf,
+  fullerOf,
+  fullestVolume,
+  writeGuardDecision,
+  type DiskUsage
+} from '../../kubernetes/volume-stats';
+import { parseMemory } from '../../kubernetes/quantity';
 import { DatabasesService } from '../../projects/databases.service';
 import { DatabaseCheckpointsService } from '../../projects/database-checkpoints.service';
 import { QuotasService } from '../../quotas/quotas.service';
@@ -52,6 +64,17 @@ interface PendingEmit {
   ctx: Ctx;
   payload: unknown;
   timer: ReturnType<typeof setTimeout>;
+}
+
+function measuredAllowance(db: {
+  storageSize: string | null;
+  volumeUsedBytes: bigint | null;
+  volumeCapacityBytes: bigint | null;
+}): DiskUsage | null {
+  const capacityBytes = parseMemory(db.storageSize ?? '');
+  if (!(capacityBytes > 0) || db.volumeUsedBytes == null) return null;
+  if (Number(db.volumeCapacityBytes) !== capacityBytes) return null;
+  return { usedBytes: Number(db.volumeUsedBytes), capacityBytes };
 }
 
 @Injectable()
@@ -485,6 +508,8 @@ export class CnpgConsumer implements OnModuleDestroy {
         status: true,
         projectId: true,
         walPendingSegments: true,
+        volumeUsedBytes: true,
+        volumeCapacityBytes: true,
         project: { select: { organizationId: true } }
       }
     });
@@ -509,25 +534,38 @@ export class CnpgConsumer implements OnModuleDestroy {
         projectId: db.projectId
       };
       try {
-        await this.prisma.database.update({
-          where: { id: db.id },
-          data: {
-            volumeUsedBytes: BigInt(Math.round(volume.usedBytes)),
-            volumeCapacityBytes: BigInt(Math.round(volume.capacityBytes))
-          }
-        });
-        await this.trackStorage(ctx, {
-          volumeUsedBytes: volume.usedBytes,
-          volumeCapacityBytes: volume.capacityBytes,
-          walPendingSegments: db.walPendingSegments
-        });
+        let guardUsage: DiskUsage = volume;
+        if (volume.shared) {
+          const own = measuredAllowance(db);
+          await this.trackStorage(ctx, {
+            volumeUsedBytes: own?.usedBytes ?? null,
+            volumeCapacityBytes: own?.capacityBytes ?? null,
+            nodeDiskUsedBytes: volume.usedBytes,
+            nodeDiskCapacityBytes: volume.capacityBytes,
+            walPendingSegments: db.walPendingSegments
+          });
+          guardUsage = fullerOf(volume, own);
+        } else {
+          await this.prisma.database.update({
+            where: { id: db.id },
+            data: {
+              volumeUsedBytes: BigInt(Math.round(volume.usedBytes)),
+              volumeCapacityBytes: BigInt(Math.round(volume.capacityBytes))
+            }
+          });
+          await this.trackStorage(ctx, {
+            volumeUsedBytes: volume.usedBytes,
+            volumeCapacityBytes: volume.capacityBytes,
+            walPendingSegments: db.walPendingSegments
+          });
+        }
         const decision = writeGuardDecision(
           guardOn.get(db.id) ?? false,
-          volume.usedBytes,
-          volume.capacityBytes
+          guardUsage.usedBytes,
+          guardUsage.capacityBytes
         );
         if (decision) {
-          await this.applyWriteGuard(db, decision, volume.usedBytes, volume.capacityBytes);
+          await this.applyWriteGuard(db, decision, guardUsage.usedBytes, guardUsage.capacityBytes);
           guarded += 1;
         }
       } catch (err) {
@@ -609,29 +647,43 @@ export class CnpgConsumer implements OnModuleDestroy {
     try {
       const db = await this.prisma.database.findUnique({
         where: { id: ctx.databaseId },
-        select: { dbName: true }
+        select: { dbName: true, storageSize: true }
       });
       if (!db) return;
       const stats = await this.cnpg.sampleDatabaseStats(namespace, pod, db.dbName);
       if (!stats) return;
       this.lastSample.set(ctx.databaseId, Date.now());
+      const allowance = parseMemory(db.storageSize ?? '');
+      const own: DiskUsage | null = !stats.shared
+        ? stats.volumeUsedBytes == null || stats.volumeCapacityBytes == null
+          ? null
+          : { usedBytes: stats.volumeUsedBytes, capacityBytes: stats.volumeCapacityBytes }
+        : stats.shared.dataDirBytes == null || !(allowance > 0)
+          ? null
+          : { usedBytes: stats.shared.dataDirBytes, capacityBytes: allowance };
       await this.prisma.database.update({
         where: { id: ctx.databaseId },
         data: {
           sizeBytes: BigInt(Math.round(stats.sizeBytes)),
           connections: stats.connections,
           statsAt: new Date(),
-          volumeUsedBytes:
-            stats.volumeUsedBytes == null ? null : BigInt(Math.round(stats.volumeUsedBytes)),
-          volumeCapacityBytes:
-            stats.volumeCapacityBytes == null
-              ? null
-              : BigInt(Math.round(stats.volumeCapacityBytes)),
+          volumeUsedBytes: own ? BigInt(Math.round(own.usedBytes)) : null,
+          volumeCapacityBytes: own ? BigInt(Math.round(own.capacityBytes)) : null,
           walPendingSegments: stats.walPendingSegments ?? null
         }
       });
       this.scheduleEmit(ctx, { stats: true });
-      await this.trackStorage(ctx, stats);
+      await this.trackStorage(ctx, {
+        volumeUsedBytes: own?.usedBytes ?? null,
+        volumeCapacityBytes: own?.capacityBytes ?? null,
+        walPendingSegments: stats.walPendingSegments,
+        ...(stats.shared
+          ? {
+              nodeDiskUsedBytes: stats.volumeUsedBytes,
+              nodeDiskCapacityBytes: stats.volumeCapacityBytes
+            }
+          : {})
+      });
     } catch (err) {
       this.logger.warn(`sampleStats(${ctx.databaseId}) failed: ${(err as Error)?.message ?? err}`);
     } finally {
@@ -880,14 +932,7 @@ export class CnpgConsumer implements OnModuleDestroy {
     }
   }
 
-  private async trackStorage(
-    ctx: Ctx,
-    stats: {
-      volumeUsedBytes: number | null;
-      volumeCapacityBytes: number | null;
-      walPendingSegments: number | null;
-    }
-  ): Promise<void> {
+  private async trackStorage(ctx: Ctx, stats: StoragePressureInput): Promise<void> {
     const prev = this.storageState.get(ctx.databaseId);
     const pressured = storagePressure(prev, stats);
     this.storageState.set(ctx.databaseId, pressured);
@@ -896,7 +941,8 @@ export class CnpgConsumer implements OnModuleDestroy {
       .notifyDbStorage(
         ctx.databaseId,
         pressured ? 'pressure' : 'recovered',
-        pressured ? storagePressureDetail(stats) : undefined
+        pressured ? storagePressureDetail(stats) : undefined,
+        pressured && nodeDiskPressure(stats)
       )
       .catch(() => {});
   }

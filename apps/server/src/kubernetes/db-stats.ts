@@ -16,6 +16,7 @@ export interface SampledDbStats {
   walPendingSegments: number | null;
   volumeCapacityBytes: number | null;
   volumeUsedBytes: number | null;
+  shared?: { dataDirBytes: number | null };
 }
 
 export function dbStatsCommand(dbName: string): string[] {
@@ -26,7 +27,10 @@ export function dbStatsCommand(dbName: string): string[] {
   return [
     'sh',
     '-c',
-    `psql -U postgres -tA -c "${sql}"; df -B1 --output=size,used ${DATA_VOLUME_MOUNT} 2>/dev/null | tail -n 1`
+    `psql -U postgres -tA -c "${sql}"; df -B1 --output=size,used ${DATA_VOLUME_MOUNT} 2>/dev/null | tail -n 1; ` +
+      `ds=$(df -B1 --output=size ${DATA_VOLUME_MOUNT} 2>/dev/null | tail -n 1 | tr -d ' '); ` +
+      `rs=$(df -B1 --output=size / 2>/dev/null | tail -n 1 | tr -d ' '); ` +
+      `if [ -n "$ds" ] && [ "$ds" = "$rs" ]; then echo "shared $(du -sxb ${DATA_VOLUME_MOUNT} 2>/dev/null | cut -f1)"; fi`
   ];
 }
 
@@ -52,12 +56,14 @@ export function parseDbStatsOutput(stdout: string): SampledDbStats | null {
       volumeUsedBytes = used;
     }
   }
+  const shared = lines.map((l) => /^shared(?:\s+(\d+))?$/.exec(l)).find(Boolean);
   return {
     sizeBytes,
     connections: Number.isFinite(connections) ? connections : 0,
     walPendingSegments: Number.isFinite(pending) ? pending : null,
     volumeCapacityBytes,
-    volumeUsedBytes
+    volumeUsedBytes,
+    ...(shared ? { shared: { dataDirBytes: shared[1] ? Number(shared[1]) : null } } : {})
   };
 }
 
@@ -65,13 +71,32 @@ export interface StoragePressureInput {
   volumeUsedBytes?: number | bigint | null;
   volumeCapacityBytes?: number | bigint | null;
   walPendingSegments?: number | null;
+  nodeDiskUsedBytes?: number | bigint | null;
+  nodeDiskCapacityBytes?: number | bigint | null;
+}
+
+function fractionOf(
+  usedBytes: number | bigint | null | undefined,
+  capacityBytes: number | bigint | null | undefined
+): number | null {
+  const cap = Number(capacityBytes ?? 0);
+  const used = Number(usedBytes ?? -1);
+  if (!(cap > 0) || used < 0) return null;
+  return used / cap;
 }
 
 export function volumeFraction(input: StoragePressureInput): number | null {
-  const cap = Number(input.volumeCapacityBytes ?? 0);
-  const used = Number(input.volumeUsedBytes ?? -1);
-  if (!(cap > 0) || used < 0) return null;
-  return used / cap;
+  const own = fractionOf(input.volumeUsedBytes, input.volumeCapacityBytes);
+  const node = fractionOf(input.nodeDiskUsedBytes, input.nodeDiskCapacityBytes);
+  if (own == null) return node;
+  if (node == null) return own;
+  return Math.max(own, node);
+}
+
+export function nodeDiskPressure(input: StoragePressureInput): boolean {
+  const own = fractionOf(input.volumeUsedBytes, input.volumeCapacityBytes);
+  const node = fractionOf(input.nodeDiskUsedBytes, input.nodeDiskCapacityBytes);
+  return node != null && node >= STORAGE_PRESSURE_EXIT && (own == null || node > own);
 }
 
 export function storagePressure(prev: boolean | undefined, input: StoragePressureInput): boolean {
@@ -89,9 +114,13 @@ export function storagePressure(prev: boolean | undefined, input: StoragePressur
 
 export function storagePressureDetail(input: StoragePressureInput): string {
   const parts: string[] = [];
-  const fraction = volumeFraction(input);
-  if (fraction != null && fraction >= STORAGE_PRESSURE_EXIT) {
-    parts.push(`the volume is ${Math.round(fraction * 100)}% full`);
+  const own = fractionOf(input.volumeUsedBytes, input.volumeCapacityBytes);
+  if (own != null && own >= STORAGE_PRESSURE_EXIT) {
+    parts.push(`the volume is ${Math.round(own * 100)}% full`);
+  }
+  const node = fractionOf(input.nodeDiskUsedBytes, input.nodeDiskCapacityBytes);
+  if (node != null && node >= STORAGE_PRESSURE_EXIT) {
+    parts.push(`the node disk it shares is ${Math.round(node * 100)}% full`);
   }
   const pending = input.walPendingSegments ?? 0;
   if (pending >= WAL_BACKLOG_EXIT_SEGMENTS) {
