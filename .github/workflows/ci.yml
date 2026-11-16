@@ -244,6 +244,8 @@ jobs:
         run: pnpm --filter frontend exec svelte-kit sync
       - name: Typecheck (TypeScript 7)
         run: node scripts/typecheck.mjs
+      - name: Contracts tests
+        run: pnpm --filter @orchard/contracts test
 
   server-build-test:
     needs: changes
