@@ -1,0 +1,733 @@
+name: release-e2e
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 3 * * *'
+  pull_request:
+    paths:
+      - .release-please-manifest.json
+      - .github/workflows/release-e2e.yml
+      - .github/e2e/**
+
+concurrency:
+  group: release-e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  gate:
+    name: decide whether to run
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.decide.outputs.run }}
+    steps:
+      - name: Run on dispatch, on schedule, and on release PRs that bump a major version
+        id: decide
+        env:
+          EVENT: ${{ github.event_name }}
+          HEAD_REF: ${{ github.head_ref }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT" != pull_request ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          case "$HEAD_REF" in
+            release-please--*) ;;
+            *)
+              echo "run=true" >> "$GITHUB_OUTPUT"
+              exit 0
+              ;;
+          esac
+          manifest() {
+            curl -fsSL -H "authorization: Bearer $GH_TOKEN" -H 'accept: application/vnd.github.raw+json' \
+              "https://api.github.com/repos/$REPO/contents/.release-please-manifest.json?ref=$1"
+          }
+          manifest "$BASE_SHA" > "$RUNNER_TEMP/base.json"
+          manifest "$HEAD_SHA" > "$RUNNER_TEMP/head.json"
+          majors=$(jq -rn --slurpfile base "$RUNNER_TEMP/base.json" --slurpfile head "$RUNNER_TEMP/head.json" '
+            def major: split(".")[0] | tonumber;
+            $head[0] | to_entries[]
+            | select($base[0][.key] != null)
+            | select((.value | major) > ($base[0][.key] | major))
+            | "\(.key) \($base[0][.key]) -> \(.value)"')
+          if [ -n "$majors" ]; then
+            echo "Major version bumps:"
+            echo "$majors"
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No major version bump in this release PR."
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  images:
+    name: build images
+    needs: gate
+    if: needs.gate.outputs.run == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Free disk for the builds
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/share/boost
+          df -h /var/lib
+
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+
+      - name: Build server image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: .
+          file: apps/server/Dockerfile
+          load: true
+          provenance: false
+          build-args: VERSION=0.0.0-e2e
+          tags: ghcr.io/hackclub/orchard/server:e2e
+          cache-from: type=gha,scope=e2e-server-amd64
+          cache-to: type=gha,mode=max,scope=e2e-server-amd64
+
+      - name: Build frontend image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: .
+          file: apps/frontend/Dockerfile
+          load: true
+          provenance: false
+          build-args: VERSION=0.0.0-e2e
+          tags: ghcr.io/hackclub/orchard/frontend:e2e
+          cache-from: type=gha,scope=e2e-frontend-amd64
+          cache-to: type=gha,mode=max,scope=e2e-frontend-amd64
+
+      - name: Save the images for k3s
+        run: |
+          mkdir -p "$RUNNER_TEMP/images"
+          docker save ghcr.io/hackclub/orchard/server:e2e ghcr.io/hackclub/orchard/frontend:e2e \
+            | zstd -T0 -3 -q -o "$RUNNER_TEMP/images/orchard-e2e.tar.zst"
+          ls -lh "$RUNNER_TEMP/images"
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: orchard-e2e-images
+          path: ${{ runner.temp }}/images/orchard-e2e.tar.zst
+          compression-level: 0
+          retention-days: 1
+
+  full:
+    name: full install (${{ matrix.mode }})
+    needs: images
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [lan, public, tunnel]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 100
+    env:
+      MODE: ${{ matrix.mode }}
+      KUBECTL: sudo k3s kubectl
+      WEB_REPO: https://github.com/docker/welcome-to-docker
+      WEB_BRANCH: main
+      WEB_TITLE: <title>Welcome to Docker</title>
+      CLIENT_IMAGE: public.ecr.aws/docker/library/postgres:17-alpine
+      E2E_TUNNEL_TOKEN: ${{ secrets.E2E_TUNNEL_TOKEN }}
+      E2E_TUNNEL_DOMAIN: ${{ vars.E2E_TUNNEL_DOMAIN }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Free disk for the installer's 20G floor
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/share/boost
+          df -h /var/lib
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: orchard-e2e-images
+          path: ${{ runner.temp }}/images
+
+      - name: Preload the images into k3s
+        run: |
+          sudo mkdir -p /var/lib/rancher/k3s/agent/images
+          sudo mv "$RUNNER_TEMP/images/orchard-e2e.tar.zst" /var/lib/rancher/k3s/agent/images/
+          docker system prune -af >/dev/null
+          sudo systemctl stop docker.socket docker
+          sudo iptables -P FORWARD ACCEPT
+
+      - name: Pick the tunnel token
+        if: matrix.mode == 'tunnel'
+        run: |
+          if [ -n "$E2E_TUNNEL_TOKEN" ] && [ -n "$E2E_TUNNEL_DOMAIN" ]; then
+            echo "Using the real tunnel from the E2E_TUNNEL_TOKEN secret."
+            {
+              echo "TUNNEL_REAL=true"
+              echo "TUNNEL_DOMAIN=$E2E_TUNNEL_DOMAIN"
+            } >> "$GITHUB_ENV"
+            exit 0
+          fi
+          echo "::notice::No E2E_TUNNEL_TOKEN secret: tunnel mode runs with a well-formed fake token, so Cloudflare never carries traffic."
+          id=$(cat /proc/sys/kernel/random/uuid)
+          account=$(head -c 16 /dev/urandom | od -An -tx1 | tr -d ' \n')
+          secret=$(head -c 32 /dev/urandom | base64 -w0)
+          token=$(printf '{"a":"%s","t":"%s","s":"%s"}' "$account" "$id" "$secret" | base64 -w0)
+          {
+            echo "TUNNEL_REAL=false"
+            echo "TUNNEL_DOMAIN=orchard.e2e.example.com"
+            echo "TUNNEL_ID=$id"
+            echo "FAKE_TUNNEL_TOKEN=$token"
+          } >> "$GITHUB_ENV"
+
+      - name: Run the installer in ${{ matrix.mode }} mode
+        run: |
+          sudo apt-get install -y -qq apache2-utils jq >/dev/null
+          sudo rm -f "$(command -v helm)"
+          args=(--mcp false --metrics false --chart ./infra/charts/orchard --image-tag e2e --image-pull-policy IfNotPresent)
+          case "$MODE" in
+            lan) args+=(--mode lan) ;;
+            public) args+=(--mode public --email none) ;;
+            tunnel) args+=(--mode tunnel --domain "$TUNNEL_DOMAIN") ;;
+          esac
+          if [ "$MODE" = tunnel ] && [ "$TUNNEL_REAL" = true ]; then
+            export ORCHARD_TUNNEL_TOKEN=$E2E_TUNNEL_TOKEN
+          else
+            export ORCHARD_TUNNEL_TOKEN=${FAKE_TUNNEL_TOKEN:-}
+          fi
+          sudo --preserve-env=ORCHARD_TUNNEL_TOKEN ORCHARD_ASSUME_YES=true ORCHARD_NO_PACING=1 NO_COLOR=1 \
+            bash install/install.sh "${args[@]}"
+          sudo rm -f /var/lib/rancher/k3s/agent/images/orchard-e2e.tar.zst
+          df -h /var/lib/rancher
+
+      - name: Find the way in
+        run: |
+          source .github/e2e/lib.sh
+          node_ip=$(ip -4 -o addr show scope global | awk '{print $4}' | cut -d/ -f1 | head -1)
+          host=$(sudo yq -r '.ingress.host' /etc/orchard/values.yaml)
+          insecure=false
+          case "$MODE" in
+            lan) scheme=http; port=80; addr=$node_ip ;;
+            public) scheme=https; port=443; addr=$node_ip; insecure=true ;;
+            tunnel)
+              if [ "$TUNNEL_REAL" = true ]; then
+                scheme=https; port=443; addr=''
+              else
+                scheme=http; port=18080; addr=127.0.0.1
+                sudo nohup bash -c 'while :; do k3s kubectl -n traefik port-forward svc/traefik 18080:80 --address 127.0.0.1; sleep 1; done' \
+                  > "$RUNNER_TEMP/port-forward.log" 2>&1 &
+              fi
+              ;;
+          esac
+          {
+            echo "NODE_IP=$node_ip"
+            echo "DASH_HOST=$host"
+            echo "SCHEME=$scheme"
+            echo "PORT=$port"
+            echo "ADDR=$addr"
+            echo "INSECURE=$insecure"
+          } >> "$GITHUB_ENV"
+          export DASH_HOST=$host SCHEME=$scheme PORT=$port ADDR=$addr INSECURE=$insecure
+          base=$(edge_url "$host" /apiv1)
+          echo "BASE=$base" >> "$GITHUB_ENV"
+          echo "The API is at $base"
+          retry 36 edge "$host" -fo /dev/null -m 10 "$base/auth/config"
+
+      - name: The mode's ingress is wired the way it says
+        run: |
+          source .github/e2e/lib.sh
+          settings=$($KUBECTL -n orchard exec deploy/server -- node dist/scripts/install-settings.js show)
+          echo "$settings"
+          frontend_url=$(sudo yq -r '.server.env[] | select(.name == "FRONTEND_URL") | .value' /etc/orchard/values.yaml)
+          echo "FRONTEND_URL=$frontend_url"
+          traefik_type=$($KUBECTL -n traefik get svc traefik -o jsonpath='{.spec.type}')
+          echo "traefik service: $traefik_type"
+          case "$MODE" in
+            lan)
+              test "$frontend_url" = "http://$NODE_IP"
+              test "$traefik_type" = LoadBalancer
+              ;;
+            public)
+              [[ "$frontend_url" == https://*.sslip.io ]]
+              test "$traefik_type" = LoadBalancer
+              test "$(sudo yq -r '.ingress.tls.enabled' /etc/orchard/values.yaml)" = true
+              $KUBECTL get clusterissuer letsencrypt -o json | jq -e '.spec.acme.server | test("letsencrypt")'
+              retry 36 bash -c "$KUBECTL -n orchard get certificate -o name | grep -q ."
+              $KUBECTL -n orchard get certificate -o wide
+              retry 36 bash -c "$KUBECTL get orders.acme.cert-manager.io -A -o name | grep -q ."
+              $KUBECTL get orders.acme.cert-manager.io,challenges.acme.cert-manager.io -A -o wide || true
+              ;;
+            tunnel)
+              test "$frontend_url" = "https://$TUNNEL_DOMAIN"
+              test "$traefik_type" = ClusterIP
+              test -z "$($KUBECTL -n kube-system get ds -o name | grep svclb-traefik || true)"
+              if curl -s -m 5 -o /dev/null "http://$NODE_IP/"; then echo "something answers on :80"; exit 1; fi
+              if curl -sk -m 5 -o /dev/null "https://$NODE_IP/"; then echo "something answers on :443"; exit 1; fi
+              $KUBECTL -n traefik get networkpolicy tunnel-only-ingress
+              $KUBECTL -n cloudflared get deploy cloudflared -o json \
+                | jq -e '.spec.template.spec.containers[0].env[] | select(.name == "TUNNEL_TOKEN") | .valueFrom.secretKeyRef == {"name": "tunnel-token", "key": "token"}'
+              $KUBECTL -n cloudflared get pods -o wide
+              if [ "$TUNNEL_REAL" != true ]; then
+                $KUBECTL -n cloudflared logs deploy/cloudflared --tail=5 || true
+                test "$($KUBECTL -n cloudflared get secret tunnel-token -o jsonpath='{.data.token}' | base64 -d)" = "$FAKE_TUNNEL_TOKEN"
+                grep -qx "cname=$TUNNEL_ID.cfargotunnel.com" <<<"$settings"
+              fi
+              if $KUBECTL get ns cert-manager >/dev/null 2>&1; then echo "cert-manager installed in tunnel mode"; exit 1; fi
+              ;;
+          esac
+
+      - name: Claim the instance and get an API token
+        run: |
+          source .github/e2e/lib.sh
+          claim
+
+      - name: Create a project with a database, a built app and a database client
+        run: |
+          source .github/e2e/lib.sh
+          ORG=$(api "$BASE/organizations/user" | jq -r '.[0].id')
+          PROJECT=$(api -d "{\"organizationId\":\"$ORG\",\"name\":\"release-e2e-a\"}" "$BASE/projects" | jq -r .id)
+          OTHER_PROJECT=$(api -d "{\"organizationId\":\"$ORG\",\"name\":\"release-e2e-other\"}" "$BASE/projects" | jq -r .id)
+          DB=$(api -d '{"name":"appdb"}' "$BASE/projects/$PROJECT/databases" | jq -r .id)
+          web=$(api -d "$(jq -n --arg repo "$WEB_REPO" --arg branch "$WEB_BRANCH" \
+            '{name:"a-web",repoUrl:$repo,branch:$branch,buildType:"dockerfile",dockerfilePath:"Dockerfile",port:3000,autoUrl:true}')" \
+            "$BASE/projects/$PROJECT/deployments/from-github")
+          WEB=$(jq -r .id <<<"$web")
+          echo "The create response names the URL $(jq -r '.url // .ingresses[0].url // "nothing"' <<<"$web")"
+          echo "CREATED_URL=$(jq -r '.url // .ingresses[0].url // ""' <<<"$web")" >> "$GITHUB_ENV"
+          CLIENT=$(api -d "$(jq -n --arg image "$CLIENT_IMAGE" '{name:"a-client",image:$image,startCommand:"sleep 86400",autoUrl:false}')" \
+            "$BASE/projects/$PROJECT/deployments" | jq -r .id)
+          for id in "$ORG" "$PROJECT" "$OTHER_PROJECT" "$DB" "$WEB" "$CLIENT"; do
+            [[ "$id" =~ ^[0-9a-f-]{36}$ ]] || { echo "expected an id, got '$id'"; exit 1; }
+          done
+          {
+            echo "ORG=$ORG"
+            echo "PROJECT=$PROJECT"
+            echo "OTHER_PROJECT=$OTHER_PROJECT"
+            echo "DB=$DB"
+            echo "WEB=$WEB"
+            echo "CLIENT=$CLIENT"
+          } >> "$GITHUB_ENV"
+
+      - name: The app builds in-cluster
+        timeout-minutes: 30
+        run: |
+          source .github/e2e/lib.sh
+          wait_build "$WEB"
+          rollout "$WEB"
+          echo "IMAGE_ONE=$(dep_json "$WEB" | jq -r .image)" >> "$GITHUB_ENV"
+
+      - name: The database comes up and an app reads and writes it
+        timeout-minutes: 20
+        run: |
+          source .github/e2e/lib.sh
+          wait_database "$DB"
+          rollout "$CLIENT"
+          api -d "{\"resourceType\":\"database\",\"resourceId\":\"$DB\",\"envKey\":\"DATABASE_URL\"}" \
+            "$BASE/deployments/$CLIENT/bindings" | jq -c '{name, resourceType, addedEnvKey}'
+          has_url() { rollout "$CLIENT" >/dev/null && kexec "$CLIENT" 'test -n "$DATABASE_URL"'; }
+          retry 60 has_url
+          kexec "$CLIENT" 'psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "create table e2e (v text primary key)" -c "insert into e2e values ('"'"'written-by-the-app'"'"')"'
+          got=$(kexec "$CLIENT" 'psql "$DATABASE_URL" -tAc "select v from e2e"')
+          echo "the database holds: $got"
+          test "$got" = written-by-the-app
+
+      - name: The app answers through the ingress
+        timeout-minutes: 10
+        run: |
+          source .github/e2e/lib.sh
+          dep=$(dep_json "$WEB")
+          jq '.ingresses | map({host, url, protectionMode, tlsEnabled})' <<<"$dep"
+          HOST=$(app_host "$WEB")
+          test -n "$HOST"
+          echo "WEB_HOST=$HOST" >> "$GITHUB_ENV"
+          url=$(jq -r '.ingresses[0].url' <<<"$dep")
+          [[ "$url" == http*://"$HOST"* ]]
+          if [ "$MODE" != lan ] && [[ "$url" != https://* ]]; then
+            echo "::warning::$MODE mode: the API calls the app $url, but the world reaches it over https"
+          fi
+          [[ -z "$CREATED_URL" || "${CREATED_URL%/}" == "${url%/}" ]] || echo "::warning::$MODE mode: the create response said $CREATED_URL, the deployment says $url"
+          if [ "$(jq -r '.ingresses[0].protectionMode' <<<"$dep")" != none ]; then
+            code=$(app_body "$HOST")
+            echo "unauthenticated request to the protected app: $code"
+            if grep -q "$WEB_TITLE" "$RUNNER_TEMP/app-body"; then echo "a protected app served its page to a stranger"; exit 1; fi
+          fi
+          make_public "$WEB"
+          retry 36 app_serves "$HOST" "$WEB_TITLE"
+          if [ "$MODE" = public ]; then
+            $KUBECTL get certificates -A -o json \
+              | jq -e --arg host "$HOST" '[.items[].spec.dnsNames[]?] | any(. == $host or (startswith("*.") and ($host | endswith(.[1:]))))'
+          fi
+
+      - name: A second tenant signs in through an invitation
+        run: |
+          source .github/e2e/lib.sh
+          email=tenant-b@example.com
+          ORG_B=$(session "$RUNNER_TEMP/jar" -d "{\"name\":\"Tenant B\",\"slug\":\"tenant-b-e2e\",\"primaryOwnerEmail\":\"$email\"}" \
+            "$BASE/admin/organizations" | jq -r '.organization.id // .id')
+          [[ "$ORG_B" =~ ^[0-9a-f-]{36}$ ]]
+          code=$($KUBECTL -n orchard exec deploy/server -- node -e '
+            const { PrismaClient } = require("@prisma/client");
+            const otp = require("./dist/auth/otp-code");
+            const prisma = new PrismaClient();
+            const code = otp.generateOtpCode();
+            prisma.otpCode
+              .create({ data: { email: process.argv[1], code: otp.hashOtpCode(code), expiresAt: new Date(Date.now() + otp.OTP_EXPIRY_MINUTES * 60000), attempts: 0, used: false } })
+              .then(() => { console.log(code); return prisma.$disconnect(); });
+          ' "$email")
+          echo "::add-mask::$code"
+          edge "$DASH_HOST" --fail-with-body -D "$RUNNER_TEMP/jar-b.headers" -H 'content-type: application/json' \
+            -d "{\"email\":\"$email\",\"code\":\"$code\"}" "$BASE/auth/otp/verify" | jq -c '.user | {email}'
+          save_cookies "$RUNNER_TEMP/jar-b.headers" "$RUNNER_TEMP/jar-b"
+          invitation=$(session "$RUNNER_TEMP/jar-b" -d '{}' "$BASE/invitations/accept-pending" \
+            | jq -r '.invitations[] | select(.orgSlug == "tenant-b-e2e") | .id')
+          test -n "$invitation"
+          session "$RUNNER_TEMP/jar-b" -d '{}' "$BASE/invitations/by-id/$invitation/accept" >/dev/null
+          TOKEN_B=$(session "$RUNNER_TEMP/jar-b" -d '{"name":"tenant-b","scopes":["exec"]}' "$BASE/auth/tokens" | jq -r .token)
+          [[ "$TOKEN_B" == orch_* ]]
+          echo "::add-mask::$TOKEN_B"
+          orgs=$(api_as "$TOKEN_B" "$BASE/organizations/user" | jq -c '[.[].id]')
+          echo "tenant B belongs to $orgs"
+          test "$orgs" = "[\"$ORG_B\"]"
+          PROJECT_B=$(api_as "$TOKEN_B" -d "{\"organizationId\":\"$ORG_B\",\"name\":\"release-e2e-b\"}" "$BASE/projects" | jq -r .id)
+          PROBE=$(api_as "$TOKEN_B" -d "$(jq -n --arg image "$CLIENT_IMAGE" '{name:"b-probe",image:$image,startCommand:"sleep 86400",autoUrl:false}')" \
+            "$BASE/projects/$PROJECT_B/deployments" | jq -r .id)
+          [[ "$PROBE" =~ ^[0-9a-f-]{36}$ ]]
+          {
+            echo "ORG_B=$ORG_B"
+            echo "TOKEN_B=$TOKEN_B"
+            echo "PROJECT_B=$PROJECT_B"
+            echo "PROBE=$PROBE"
+          } >> "$GITHUB_ENV"
+
+      - name: Another tenant gets 404 for everything of ours, the same as for ids that don't exist
+        run: |
+          source .github/e2e/lib.sh
+          ns=$(dep_json "$WEB" | jq -r .namespace)
+          random=$(cat /proc/sys/kernel/random/uuid)
+          image=$CLIENT_IMAGE
+          failed=0
+          check() {
+            local token=$1 who=$2 method=$3 path=$4 body=${5:-} foreign missing
+            foreign=$(status_as "$token" "$method" "$path" "$body")
+            if grep -qE "release-e2e-a|$ns|a-web|a-client|appdb|ci@example.com" "$RUNNER_TEMP/last-body"; then
+              echo "LEAK  $who $method $path: $(head -c 300 "$RUNNER_TEMP/last-body")"
+              failed=1
+            fi
+            missing=$(status_as "$token" "$method" "$(sed -E "s/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/$random/g" <<<"$path")" "$body")
+            if [ "$foreign" = 404 ] && [ "$missing" = 404 ]; then
+              echo "ok    $who $method $path: 404"
+            else
+              echo "FAIL  $who $method $path: $foreign for ours, $missing for an unknown id"
+              failed=1
+            fi
+          }
+          probe_all() {
+            local token=$1 who=$2
+            check "$token" "$who" GET "/organizations/$ORG"
+            check "$token" "$who" GET "/organizations/$ORG/members"
+            check "$token" "$who" GET "/projects/$PROJECT"
+            check "$token" "$who" GET "/projects/$PROJECT/databases"
+            check "$token" "$who" GET "/deployments/$WEB"
+            check "$token" "$who" GET "/deployments/$WEB/logs"
+            check "$token" "$who" GET "/deployments/$WEB/image-history"
+            check "$token" "$who" GET "/deployments/$CLIENT/bindings"
+            check "$token" "$who" GET "/databases/$DB"
+            check "$token" "$who" GET "/databases/$DB/connection"
+            check "$token" "$who" PUT "/deployments/$WEB/env" '{"env":[{"key":"PWNED","value":"1"}]}'
+            check "$token" "$who" POST "/deployments/$WEB/restart" '{}'
+            check "$token" "$who" POST "/deployments/$WEB/rollback" '{}'
+            check "$token" "$who" POST "/projects/$PROJECT/deployments" "{\"name\":\"intruder\",\"image\":\"$image\"}"
+            check "$token" "$who" DELETE "/deployments/$CLIENT"
+            check "$token" "$who" DELETE "/databases/$DB"
+          }
+          probe_all "$TOKEN_B" tenant-b
+          restricted=$(session "$RUNNER_TEMP/jar" -d "{\"name\":\"other-project-only\",\"scopes\":[\"exec\"],\"restrictedProjectIds\":[\"$OTHER_PROJECT\"]}" \
+            "$BASE/auth/tokens" | jq -r .token)
+          [[ "$restricted" == orch_* ]]
+          echo "::add-mask::$restricted"
+          test "$(status_as "$restricted" GET "/projects/$OTHER_PROJECT")" = 200
+          check "$restricted" other-project GET "/projects/$PROJECT"
+          check "$restricted" other-project GET "/deployments/$WEB"
+          check "$restricted" other-project GET "/databases/$DB"
+          check "$restricted" other-project PUT "/deployments/$WEB/env" '{"env":[{"key":"PWNED","value":"1"}]}'
+          listed=$(api_as "$TOKEN_B" "$BASE/projects" | jq -c '[.. | objects | .id? // empty]')
+          if grep -q "$PROJECT" <<<"$listed"; then echo "tenant B lists our project"; failed=1; fi
+          for path in "/projects?orgId=$ORG" "/deployments?orgId=$ORG"; do
+            code=$(status_as "$TOKEN_B" GET "$path")
+            echo "tenant B listing $path: $code"
+            if grep -qE "$PROJECT|$WEB|$CLIENT" "$RUNNER_TEMP/last-body"; then echo "tenant B sees our resources in $path"; failed=1; fi
+          done
+          test "$failed" = 0
+          dep_json "$CLIENT" >/dev/null
+          api "$BASE/databases/$DB" >/dev/null
+          if dep_json "$WEB" | jq -e '[.envVars[]?.key] | index("PWNED")' >/dev/null; then echo "a foreign env write landed"; exit 1; fi
+
+      - name: Another tenant's pods cannot reach our app or database over the network
+        timeout-minutes: 10
+        run: |
+          source .github/e2e/lib.sh
+          rollout "$PROBE"
+          ns=$(dep_json "$WEB" | jq -r .namespace)
+          name=$(dep_json "$WEB" | jq -r .name)
+          selector=$($KUBECTL -n "$ns" get deploy "$name" -o json | jq -r '.spec.selector.matchLabels | to_entries | map("\(.key)=\(.value)") | join(",")')
+          pod_ip=$($KUBECTL -n "$ns" get pods -l "$selector" --field-selector=status.phase=Running -o jsonpath='{.items[0].status.podIP}')
+          svc_ip=$($KUBECTL -n "$ns" get svc -o json | jq -r '[.items[] | select(any(.spec.ports[]; .targetPort == 3000 or .port == 3000))][0].spec.clusterIP')
+          svc_port=$($KUBECTL -n "$ns" get svc -o json | jq -r '[.items[] | select(any(.spec.ports[]; .targetPort == 3000 or .port == 3000))][0].spec.ports[0].port')
+          db_ns=$(api "$BASE/databases/$DB" | jq -r '.namespace // empty')
+          db_ns=${db_ns:-$ns}
+          db_ip=$($KUBECTL -n "$db_ns" get svc -o json | jq -r '[.items[] | select(.metadata.name | endswith("-rw"))][0].spec.clusterIP')
+          echo "app pod $pod_ip:3000, app service $svc_ip:$svc_port, database $db_ip:5432 in $db_ns"
+          for v in "$pod_ip" "$svc_ip" "$svc_port" "$db_ip"; do [ -n "$v" ] && [ "$v" != null ]; done
+          kexec "$CLIENT" "wget -q -T 5 -O - http://$pod_ip:3000/ | grep -q 'Welcome to Docker'"
+          kexec "$CLIENT" "wget -q -T 5 -O - http://$svc_ip:$svc_port/ | grep -q 'Welcome to Docker'"
+          kexec "$CLIENT" "pg_isready -h $db_ip -p 5432 -t 5"
+          echo "our own pods reach all three"
+          kexec "$PROBE" true
+          failed=0
+          if kexec "$PROBE" "wget -q -T 5 -O /dev/null http://$pod_ip:3000/"; then echo "tenant B reached our pod"; failed=1; fi
+          if kexec "$PROBE" "wget -q -T 5 -O /dev/null http://$svc_ip:$svc_port/"; then echo "tenant B reached our service"; failed=1; fi
+          if kexec "$PROBE" "pg_isready -h $db_ip -p 5432 -t 5"; then echo "tenant B reached our database"; failed=1; fi
+          test "$failed" = 0
+          echo "tenant B reaches none of them"
+
+      - name: Change an env var and the app rolls with it
+        timeout-minutes: 10
+        run: |
+          source .github/e2e/lib.sh
+          stage_is() { rollout "$WEB" >/dev/null && test "$(kexec "$WEB" 'printenv E2E_STAGE || true')" = "$1"; }
+          api -X PUT -d '{"env":[{"key":"E2E_STAGE","value":"one"}]}' "$BASE/deployments/$WEB/env" >/dev/null
+          retry 60 stage_is one
+          api -X PUT -d '{"env":[{"key":"E2E_STAGE","value":"two"}]}' "$BASE/deployments/$WEB/env" >/dev/null
+          retry 60 stage_is two
+          retry 24 app_serves "$WEB_HOST" "$WEB_TITLE"
+
+      - name: Redeploy builds a new image and keeps the env
+        timeout-minutes: 30
+        run: |
+          source .github/e2e/lib.sh
+          api -X POST "$BASE/deployments/$WEB/rebuild" >/dev/null
+          wait_build "$WEB" "$IMAGE_ONE"
+          image_two=$(dep_json "$WEB" | jq -r .image)
+          echo "IMAGE_TWO=$image_two" >> "$GITHUB_ENV"
+          running_is() {
+            local ns name
+            ns=$(dep_json "$WEB" | jq -r .namespace)
+            name=$(dep_json "$WEB" | jq -r .name)
+            rollout "$WEB" >/dev/null
+            test "$($KUBECTL -n "$ns" get deploy "$name" -o jsonpath='{.spec.template.spec.containers[0].image}')" = "$1"
+          }
+          retry 60 running_is "$image_two"
+          test "$(kexec "$WEB" 'printenv E2E_STAGE')" = two
+          retry 24 app_serves "$WEB_HOST" "$WEB_TITLE"
+
+      - name: Roll back to the first image
+        timeout-minutes: 15
+        run: |
+          source .github/e2e/lib.sh
+          result=$(api -X POST -d '{}' "$BASE/deployments/$WEB/rollback")
+          jq -c '.rolledBackTo' <<<"$result"
+          test "$(jq -r .rolledBackTo.image <<<"$result")" = "$IMAGE_ONE"
+          running_is() {
+            local ns name
+            ns=$(dep_json "$WEB" | jq -r .namespace)
+            name=$(dep_json "$WEB" | jq -r .name)
+            rollout "$WEB" >/dev/null
+            test "$($KUBECTL -n "$ns" get deploy "$name" -o jsonpath='{.spec.template.spec.containers[0].image}')" = "$1"
+          }
+          retry 60 running_is "$IMAGE_ONE"
+          test "$(kexec "$WEB" 'printenv E2E_STAGE')" = two
+          retry 24 app_serves "$WEB_HOST" "$WEB_TITLE"
+
+      - name: Delete the app and it is gone everywhere
+        timeout-minutes: 10
+        run: |
+          source .github/e2e/lib.sh
+          ns=$(dep_json "$WEB" | jq -r .namespace)
+          name=$(dep_json "$WEB" | jq -r .name)
+          api -X DELETE "$BASE/deployments/$WEB" >/dev/null
+          api_gone() { test "$(status_as "$TOKEN" GET "/deployments/$WEB")" = 404; }
+          k8s_gone() {
+            ! $KUBECTL -n "$ns" get deploy "$name" -o name 2>/dev/null \
+              && ! $KUBECTL get ingress -A -o json | jq -e --arg host "$WEB_HOST" 'any(.items[].spec.rules[]?; .host == $host)' >/dev/null
+          }
+          retry 60 api_gone
+          retry 60 k8s_gone
+          retry 36 app_gone "$WEB_HOST"
+          dep_json "$CLIENT" >/dev/null
+          test "$(kexec "$CLIENT" 'psql "$DATABASE_URL" -tAc "select v from e2e"')" = written-by-the-app
+
+      - name: Diagnostics
+        if: failure()
+        run: |
+          source .github/e2e/lib.sh || true
+          set +e
+          diagnostics
+          tail -20 "$RUNNER_TEMP/port-forward.log" 2>/dev/null || true
+
+  upgrade:
+    name: upgrade from the latest release (lan)
+    needs: images
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      MODE: lan
+      KUBECTL: sudo k3s kubectl
+      WEB_IMAGE: public.ecr.aws/docker/library/nginx:alpine
+      WEB_TITLE: <title>Welcome to nginx!</title>
+      CLIENT_IMAGE: public.ecr.aws/docker/library/postgres:17-alpine
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Free disk for the installer's 20G floor
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/share/boost
+          df -h /var/lib
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: orchard-e2e-images
+          path: ${{ runner.temp }}/images
+
+      - name: Stop Docker
+        run: |
+          docker system prune -af >/dev/null
+          sudo systemctl stop docker.socket docker
+          sudo iptables -P FORWARD ACCEPT
+
+      - name: Install the latest published release
+        run: |
+          sudo apt-get install -y -qq apache2-utils jq >/dev/null
+          sudo rm -f "$(command -v helm)"
+          curl -fsSL https://assets.orchard.my/install.sh -o "$RUNNER_TEMP/published-install.sh"
+          ghcr=$(curl -fsS "https://ghcr.io/token?scope=repository:hackclub/orchard/charts/orchard:pull" | jq -r .token)
+          version=$(curl -fsS -H "authorization: Bearer $ghcr" "https://ghcr.io/v2/hackclub/orchard/charts/orchard/tags/list?n=10000" \
+            | jq -r '.tags[]' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1)
+          echo "latest published chart: $version"
+          test -n "$version"
+          sudo ORCHARD_ASSUME_YES=true ORCHARD_NO_PACING=1 NO_COLOR=1 bash "$RUNNER_TEMP/published-install.sh" \
+            --mode lan \
+            --mcp false \
+            --metrics false \
+            --chart-version "$version"
+          from=$(sudo helm --kubeconfig /etc/rancher/k3s/k3s.yaml -n orchard list -o json | jq -r '.[] | select(.name == "orchard") | .chart')
+          server=$($KUBECTL -n orchard get deploy server -o jsonpath='{.spec.template.spec.containers[0].image}')
+          echo "installed $from, server image $server"
+          [[ "$server" =~ :v?[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          echo "FROM_CHART=$from" >> "$GITHUB_ENV"
+
+      - name: Find the way in
+        run: |
+          source .github/e2e/lib.sh
+          node_ip=$(ip -4 -o addr show scope global | awk '{print $4}' | cut -d/ -f1 | head -1)
+          {
+            echo "NODE_IP=$node_ip"
+            echo "DASH_HOST=$node_ip"
+            echo "SCHEME=http"
+            echo "PORT=80"
+            echo "ADDR=$node_ip"
+            echo "INSECURE=false"
+            echo "BASE=http://$node_ip/apiv1"
+          } >> "$GITHUB_ENV"
+          retry 36 curl -fsS -o /dev/null -m 10 "http://$node_ip/apiv1/auth/config"
+
+      - name: Claim the instance and get an API token
+        run: |
+          source .github/e2e/lib.sh
+          claim
+
+      - name: Create an app with a URL, an env var, and a database holding a row
+        timeout-minutes: 25
+        run: |
+          source .github/e2e/lib.sh
+          ORG=$(api "$BASE/organizations/user" | jq -r '.[0].id')
+          PROJECT=$(api -d "{\"organizationId\":\"$ORG\",\"name\":\"upgrade-e2e\"}" "$BASE/projects" | jq -r .id)
+          DB=$(api -d '{"name":"keepdb"}' "$BASE/projects/$PROJECT/databases" | jq -r .id)
+          WEB=$(api -d "$(jq -n --arg image "$WEB_IMAGE" '{name:"keep-web",image:$image,port:80,autoUrl:true}')" \
+            "$BASE/projects/$PROJECT/deployments" | jq -r .id)
+          CLIENT=$(api -d "$(jq -n --arg image "$CLIENT_IMAGE" '{name:"keep-client",image:$image,startCommand:"sleep 86400",autoUrl:false}')" \
+            "$BASE/projects/$PROJECT/deployments" | jq -r .id)
+          for id in "$ORG" "$PROJECT" "$DB" "$WEB" "$CLIENT"; do
+            [[ "$id" =~ ^[0-9a-f-]{36}$ ]] || { echo "expected an id, got '$id'"; exit 1; }
+          done
+          {
+            echo "ORG=$ORG"
+            echo "PROJECT=$PROJECT"
+            echo "DB=$DB"
+            echo "WEB=$WEB"
+            echo "CLIENT=$CLIENT"
+          } >> "$GITHUB_ENV"
+          rollout "$WEB"
+          api -X PUT -d '{"env":[{"key":"E2E_KEEP","value":"before-upgrade"}]}' "$BASE/deployments/$WEB/env" >/dev/null
+          kept() { rollout "$WEB" >/dev/null && test "$(kexec "$WEB" 'printenv E2E_KEEP || true')" = before-upgrade; }
+          retry 60 kept
+          HOST=$(app_host "$WEB")
+          test -n "$HOST"
+          echo "WEB_HOST=$HOST" >> "$GITHUB_ENV"
+          make_public "$WEB"
+          retry 36 app_serves "$HOST" "$WEB_TITLE"
+          wait_database "$DB"
+          rollout "$CLIENT"
+          api -d "{\"resourceType\":\"database\",\"resourceId\":\"$DB\",\"envKey\":\"DATABASE_URL\"}" \
+            "$BASE/deployments/$CLIENT/bindings" >/dev/null
+          has_url() { rollout "$CLIENT" >/dev/null && kexec "$CLIENT" 'test -n "$DATABASE_URL"'; }
+          retry 60 has_url
+          kexec "$CLIENT" 'psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "create table e2e (v text primary key)" -c "insert into e2e values ('"'"'before-upgrade'"'"')"'
+
+      - name: Upgrade to the images built from this commit
+        run: |
+          source .github/e2e/lib.sh
+          zstd -dc "$RUNNER_TEMP/images/orchard-e2e.tar.zst" | sudo k3s ctr -n k8s.io images import -
+          rm -f "$RUNNER_TEMP/images/orchard-e2e.tar.zst"
+          sudo ORCHARD_ASSUME_YES=true ORCHARD_NO_PACING=1 NO_COLOR=1 bash install/install.sh \
+            --chart ./infra/charts/orchard \
+            --image-tag e2e \
+            --image-pull-policy IfNotPresent
+          $KUBECTL -n orchard rollout status deploy/server --timeout=5m
+          $KUBECTL -n orchard rollout status deploy/frontend --timeout=5m
+          for svc in server frontend; do
+            image=$($KUBECTL -n orchard get deploy "$svc" -o jsonpath='{.spec.template.spec.containers[0].image}')
+            echo "$svc runs $image"
+            test "$image" = "ghcr.io/hackclub/orchard/$svc:e2e"
+          done
+          echo "upgraded from $FROM_CHART to $(sudo helm --kubeconfig /etc/rancher/k3s/k3s.yaml -n orchard list -o json | jq -r '.[] | select(.name == "orchard") | .chart')"
+
+      - name: The app, its env, its URL and its data survived
+        timeout-minutes: 15
+        run: |
+          source .github/e2e/lib.sh
+          retry 36 api -o /dev/null "$BASE/organizations/user"
+          api "$BASE/projects/$PROJECT/databases" | jq -c '[.[] | {name, status}]'
+          wait_database "$DB"
+          rollout "$WEB"
+          test "$(kexec "$WEB" 'printenv E2E_KEEP')" = before-upgrade
+          retry 36 app_serves "$WEB_HOST" "$WEB_TITLE"
+          rollout "$CLIENT"
+          read_row() { test "$(kexec "$CLIENT" 'psql "$DATABASE_URL" -tAc "select v from e2e"')" = before-upgrade; }
+          retry 36 read_row
+          kexec "$CLIENT" 'psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "insert into e2e values ('"'"'after-upgrade'"'"')"'
+
+      - name: The upgraded control plane still deploys
+        timeout-minutes: 10
+        run: |
+          source .github/e2e/lib.sh
+          AFTER=$(api -d "$(jq -n --arg image "$WEB_IMAGE" '{name:"after-web",image:$image,port:80,autoUrl:true}')" \
+            "$BASE/projects/$PROJECT/deployments" | jq -r .id)
+          rollout "$AFTER"
+          host=$(app_host "$AFTER")
+          test -n "$host"
+          make_public "$AFTER"
+          retry 36 app_serves "$host" "$WEB_TITLE"
+
+      - name: Diagnostics
+        if: failure()
+        run: |
+          source .github/e2e/lib.sh || true
+          set +e
+          diagnostics
