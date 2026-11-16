@@ -59,7 +59,9 @@ install/               one-command installer
 docs/                  design and architecture notes
 ```
 
-To learn how the system works before you change it, read [DEVELOPERS.md](DEVELOPERS.md).
+Each app, package and graft has its own README with how to run, test and ship it. To learn how the
+system works before you change it, read [DEVELOPERS.md](DEVELOPERS.md). To add a template to the
+gallery, follow [registry/README.md](registry/README.md).
 
 ## Commits
 
@@ -84,27 +86,16 @@ The scope picks the service that gets released, and the allowed scopes are in
 a `!` after the type or scope (`feat!:` or `feat(server)!:`). release-please reads the `!`, so the
 subject line still carries everything and no footer is needed.
 
-## Sign your commits
+## License of contributions
 
-Orchard uses the [Developer Certificate of Origin](DCO). Signing off a commit certifies that you
-wrote it or otherwise have the right to submit it under the project's license. Add the line with `-s`:
-
-```bash
-git commit -s -m "fix(server): stop thingy crashing on Tuesdays"
-```
-
-Git adds `Signed-off-by: Your Name <you@example.com>`, using your configured name and email. It must
-match the commit's author email, and it is the only thing that goes in the commit body. A check on
-each pull request verifies it. If you forgot, sign off the whole branch and force-push it:
-
-```bash
-git rebase --signoff origin/main
-git push --force-with-lease
-```
+Orchard is licensed under [AGPL-3.0](LICENSE). By opening a pull request, you agree that your
+contribution is licensed under the same terms, and that you wrote it or otherwise have the right to
+submit it.
 
 ## Pull requests
 
-- Branch from `main`, open PRs against `main`.
+- Branch from `main`, open PRs against `main`. PRs are squash-merged or rebased; `main` has no merge
+  commits.
 - CI runs only the jobs for the apps you touched. Lint and format always run (oxlint + oxfmt). Fork
   PRs get a check-only format job; same-repo PRs auto-apply oxfmt. Run `pnpm format` before pushing
   if you are on a fork.
@@ -114,11 +105,17 @@ git push --force-with-lease
 ## Checks to run locally
 
 ```bash
-pnpm lint                                  # oxlint + frontend design guardrails
-pnpm format:check                          # oxfmt across the workspace
-pnpm --filter server test:auth-coverage    # route/auth snapshot, no database needed
-cd apps/cli && go test ./...
+pnpm lint                                         # oxlint + frontend design guardrails
+pnpm format:check                                 # oxfmt across the workspace
+pnpm --filter server test:auth-coverage           # route/auth snapshot, no database needed
+pnpm --filter server test:isolation:matrix        # every route has a tenant isolation class
+pnpm --filter frontend test
+cd apps/<module> && go test ./...                 # for each Go module you touched
 ```
+
+The server has no single `test` script. Its suites are the `test:*` scripts in
+`apps/server/package.json`; run the ones for the area you changed, or one file with
+`pnpm --filter server exec tsx --test test/<name>.test.ts`.
 
 A few server suites write real rows and refuse to run against `localhost:5432`. See
 [apps/server/test/README.md](apps/server/test/README.md) for pointing them at a throwaway Postgres.
@@ -131,11 +128,17 @@ change. [AGENTS.md](AGENTS.md) has the full table.
 
 ```bash
 UPDATE_SNAPSHOT=1 pnpm --filter server test:auth-coverage    # after adding or changing a route
+UPDATE_ISOLATION_MATRIX=1 pnpm --filter server test:isolation:matrix
 pnpm --filter @orchard/contracts bootstrap
 pnpm --filter @orchard/contracts generate
 pnpm --filter docs generate
+pnpm --filter @orchard/health sync                           # after changing packages/health
 pnpm credits                                                 # after adding or upgrading a dependency
 ```
+
+The isolation matrix writes new routes as `unclassified`. Give each one a class by hand, as
+[docs/isolation-testing.md](docs/isolation-testing.md) describes. Run `pnpm credits` with the Go
+version from the `go.mod` files, or every Go notice file changes.
 
 ## Third-party pins and advisories
 

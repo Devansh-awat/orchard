@@ -60,24 +60,77 @@ Everything else:
   `infra/charts/orchard/templates/metrics.yaml`, and extend `ingress-metrics.test.ts`. The server
   detects the adapter per app; `INGRESS_METRICS` forces one.
 
+## Architecture rules
+
+How the server talks to the cluster and the dashboard. `DEVELOPERS.md` has the full story; these are
+the rules that are easy to break. Paths are under `apps/server/src`.
+
+- **Read cluster state from the mirror.** The engine (`engine/`) watches the cluster and mirrors it
+  into Postgres: `k8s_objects` (`prisma.k8sObject`) plus the tables its consumers derive (`pods`,
+  `k8s_workloads`, `nodes`). Request paths read those, never the Kubernetes API; a page load should
+  not call the apiserver. A live read is an explicit opt-in, as with `?live=1` on
+  `GET /kubernetes/pods`. Mirrored Secrets have their data stripped, so secret values never come from
+  the mirror.
+- **Watch new kinds through the engine.** Add an `EngineResource` to a shard in `engine/shards.ts`
+  and a consumer in `engine/consumers/`; grafts use `registerEngineShard` through the kube door. Do
+  not add another `makeInformer` service: the `*-informer.service.ts` files are legacy and the pod,
+  CNPG and job ones only run with `ENGINE_DISABLED=true`. `onEvent` must throw on failure, because a
+  swallowed error marks the version derived and it is never retried. The engine only sees labelled
+  objects (`app.kubernetes.io/managed-by=orchard`, `leaf.dev/managed=true` on ingresses,
+  `orchard.my/managed=true` on Cilium policies), so a new object without its label never reaches the
+  mirror.
+- **Only a live 404 means gone.** Use `readLive` (`engine/consumers/live-object.ts`), which answers
+  `present`, `absent` or `unknown`, and never treat `unknown` as `absent`. A row younger than
+  `rowMayBePending` may not have its object yet, so it is not drift.
+- **Write through the `K8s*Service` layer.** Feature code calls `K8sWorkloadService`,
+  `K8sNetworkService`, `K8sNamespaceService` and `K8sCnpgService` in `kubernetes/` instead of making
+  its own API client. Writes are server-side apply with field manager `orchard`. A write that must
+  survive a failed call goes on `ApplyQueueService.enqueue` with a `dedupeKey`; a newer write for the
+  same key replaces the older one. Tenant namespaces are created only with
+  `K8sNamespaceService.createNamespace`, which fails closed if the default-deny policy does not
+  apply.
+- **Adopt edits, don't revert them.** When someone changes an Orchard object with `kubectl`, the
+  consumer writes the change back into Orchard's rows. Security objects are the exception: a new
+  tenant security object belongs in `engine/guard/desired.ts`, or the guard will not restore it.
+- **Live updates go through `OrgEventsService`.** Prisma writes to the watched models (deployment,
+  database, project, ingress, build runs and a few more) emit events through `PrismaEventsBridge`.
+  Anything else calls `OrgEventsService.emit`, which goes through Redis so every replica sees it;
+  `emitLocal` does not. Include `projectId`, or project-restricted members never see the event. An
+  `updateMany` without `where.id`, or raw SQL, emits nothing.
+- **Gate background work on the lease.** Work for one replica checks
+  `LeaderElectionService.isLeader()` (or `onAcquired` for startup work); work every member may do
+  checks `LeaseService.canCoordinate`. Never gate on having a kubeconfig.
+- **New routes are superadmin-only until decorated.** Use `@Auth()` or `@Public()` from
+  `auth/decorators.ts`. Without `@RequireScope`, API tokens need `read` for GET and `deploy` for
+  anything else, so a GET must never change state. Authorize in the service with
+  `AuthorizationService` (`requireProjectView`, `requireProjectEdit`, `requireOrgMember`,
+  `requireOrgAdmin`) before validating input, and answer 404, not 403, when the caller has no access,
+  so ids from other tenants look like unknown ids. SSE routes check access with `@SsePreflight`.
+- **Stable graft doors never change shape.** Add `name@N+1` beside the old door instead, and keep a
+  removed door until its `removeIn` release. Grafts import `@orchardlabs/graft-sdk/server`, never
+  `apps/server/src`.
+- **Secrets are encrypted and write-only.** A new secret column goes through
+  `SecretCryptoService.encryptIfSecret`, and read APIs never return it.
+
 ## Generated files
 
-Update these in the same change. CI catches stale routes, docs and doors, but nothing catches stale
-credits.
+Update these in the same change. CI catches stale routes, docs, doors, the isolation matrix and the
+health copy, but nothing catches stale credits. Run `pnpm credits` with the Go version in the
+`go.mod` files, or every Go notice file churns.
 
-| When you change                                   | Run                                                                                                                           |
-| ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| An API route                                      | `UPDATE_SNAPSHOT=1 pnpm --filter server test:auth-coverage`, then `pnpm --filter @orchard/contracts bootstrap` and `generate` |
-| Routes, CLI commands, MCP tools or `.env.example` | `pnpm --filter docs generate`                                                                                                 |
-| The graft door surface                            | `UPDATE_SNAPSHOT=1 pnpm --filter server test:grafts`                                                                          |
-| A dependency                                      | `pnpm credits`, and fix anything it reports                                                                                   |
+| When you change                                   | Run                                                                                                                                         |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| An API route                                      | `UPDATE_SNAPSHOT=1 pnpm --filter server test:auth-coverage`, then `pnpm --filter @orchard/contracts bootstrap` and `generate`               |
+| Routes, CLI commands, MCP tools or `.env.example` | `pnpm --filter docs generate`                                                                                                               |
+| The graft door surface                            | `UPDATE_SNAPSHOT=1 pnpm --filter server test:grafts`                                                                                        |
+| A dependency                                      | `pnpm credits`, and fix anything it reports                                                                                                 |
+| An API route's access                             | `UPDATE_ISOLATION_MATRIX=1 pnpm --filter server test:isolation:matrix`, then classify the new entries by hand (`docs/isolation-testing.md`) |
+| `packages/health/src/health.ts`                   | `pnpm --filter @orchard/health sync`                                                                                                        |
 
 ## Conventions
 
 - Commits are Conventional Commits, checked by commitlint in CI, and release-please cuts per-service
-  releases from them. Use `feat:`, `fix:` or `chore:`, subject line only. The one
-  exception is pull requests from contributors, whose commits need a `Signed-off-by` trailer for the
-  DCO (`git commit -s`). The scope picks the service
+  releases from them. Use `feat:`, `fix:` or `chore:`, subject line only. The scope picks the service
   (allowed scopes are in `commitlint.config.cjs`), and an unscoped `feat:` or `fix:` bumps every
   service.
 - Migrations: `pnpm --filter server prisma:migrate`. Never hand-write migration SQL or edit an
