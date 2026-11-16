@@ -1574,7 +1574,7 @@ export class OrganizationsService {
   async getPendingInvitationsForUser(clerkId: string, userData?: any) {
     const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
 
-    if (!user) {
+    if (!user || !user.emailVerified) {
       return [];
     }
 
