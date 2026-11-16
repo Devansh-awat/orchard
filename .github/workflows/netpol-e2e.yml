@@ -38,7 +38,7 @@ defaults:
 
 jobs:
   cnpg-restart:
-    if: ${{ !startsWith(github.head_ref, 'release-please--') }}
+    if: ${{ !(startsWith(github.head_ref, 'release-please--') && github.event.pull_request.user.login == 'leafdbot[bot]') }}
     name: managed postgres restarts under tenant policies (k3s, ${{ matrix.node }} node ip)
     strategy:
       fail-fast: false

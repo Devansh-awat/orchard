@@ -18,19 +18,19 @@ jobs:
   changes:
     runs-on: ubuntu-latest
     outputs:
-      frontend: ${{ steps.filter.outputs.frontend == 'true' && !startsWith(github.head_ref, 'release-please--') }}
-      server: ${{ steps.filter.outputs.server == 'true' && !startsWith(github.head_ref, 'release-please--') }}
-      hostctl: ${{ steps.filter.outputs.hostctl == 'true' && !startsWith(github.head_ref, 'release-please--') }}
-      gateway: ${{ steps.filter.outputs.gateway == 'true' && !startsWith(github.head_ref, 'release-please--') }}
-      cli: ${{ steps.filter.outputs.cli == 'true' && !startsWith(github.head_ref, 'release-please--') }}
-      contracts: ${{ steps.filter.outputs.contracts == 'true' && !startsWith(github.head_ref, 'release-please--') }}
-      r2_proxy: ${{ steps.filter.outputs.r2_proxy == 'true' && !startsWith(github.head_ref, 'release-please--') }}
-      fc_builder: ${{ steps.filter.outputs.fc_builder == 'true' && !startsWith(github.head_ref, 'release-please--') }}
-      registry: ${{ steps.filter.outputs.registry == 'true' && !startsWith(github.head_ref, 'release-please--') }}
+      frontend: ${{ steps.filter.outputs.frontend == 'true' && !(startsWith(github.head_ref, 'release-please--') && github.event.pull_request.user.login == 'leafdbot[bot]') }}
+      server: ${{ steps.filter.outputs.server == 'true' && !(startsWith(github.head_ref, 'release-please--') && github.event.pull_request.user.login == 'leafdbot[bot]') }}
+      hostctl: ${{ steps.filter.outputs.hostctl == 'true' && !(startsWith(github.head_ref, 'release-please--') && github.event.pull_request.user.login == 'leafdbot[bot]') }}
+      gateway: ${{ steps.filter.outputs.gateway == 'true' && !(startsWith(github.head_ref, 'release-please--') && github.event.pull_request.user.login == 'leafdbot[bot]') }}
+      cli: ${{ steps.filter.outputs.cli == 'true' && !(startsWith(github.head_ref, 'release-please--') && github.event.pull_request.user.login == 'leafdbot[bot]') }}
+      contracts: ${{ steps.filter.outputs.contracts == 'true' && !(startsWith(github.head_ref, 'release-please--') && github.event.pull_request.user.login == 'leafdbot[bot]') }}
+      r2_proxy: ${{ steps.filter.outputs.r2_proxy == 'true' && !(startsWith(github.head_ref, 'release-please--') && github.event.pull_request.user.login == 'leafdbot[bot]') }}
+      fc_builder: ${{ steps.filter.outputs.fc_builder == 'true' && !(startsWith(github.head_ref, 'release-please--') && github.event.pull_request.user.login == 'leafdbot[bot]') }}
+      registry: ${{ steps.filter.outputs.registry == 'true' && !(startsWith(github.head_ref, 'release-please--') && github.event.pull_request.user.login == 'leafdbot[bot]') }}
       chart: ${{ steps.filter.outputs.chart }}
-      docs: ${{ steps.filter.outputs.docs == 'true' && !startsWith(github.head_ref, 'release-please--') }}
-      landing: ${{ steps.filter.outputs.landing == 'true' && !startsWith(github.head_ref, 'release-please--') }}
-      deps: ${{ steps.filter.outputs.deps == 'true' && !startsWith(github.head_ref, 'release-please--') }}
+      docs: ${{ steps.filter.outputs.docs == 'true' && !(startsWith(github.head_ref, 'release-please--') && github.event.pull_request.user.login == 'leafdbot[bot]') }}
+      landing: ${{ steps.filter.outputs.landing == 'true' && !(startsWith(github.head_ref, 'release-please--') && github.event.pull_request.user.login == 'leafdbot[bot]') }}
+      deps: ${{ steps.filter.outputs.deps == 'true' && !(startsWith(github.head_ref, 'release-please--') && github.event.pull_request.user.login == 'leafdbot[bot]') }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: dorny/paths-filter@0e4a8c6effa4802afeda77dc8d303f8176d7dfad # v3.0.4

@@ -65,5 +65,9 @@
       matchPackageNames: ['pnpm'],
       groupName: 'pnpm',
     },
+    {
+      matchManagers: ['dockerfile'],
+      pinDigests: true,
+    },
   ],
 }

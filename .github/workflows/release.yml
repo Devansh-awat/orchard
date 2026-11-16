@@ -351,12 +351,6 @@ jobs:
       attestations: write
     env:
       NODE_OPTIONS: --max-old-space-size=6144
-      R2_ENDPOINT: ${{ secrets.REGISTRY_R2_ENDPOINT }}
-      R2_BUCKET: ${{ secrets.REGISTRY_R2_BUCKET }}
-      R2_ACCESS_KEY: ${{ secrets.REGISTRY_R2_ACCESS_KEY }}
-      R2_SECRET_KEY: ${{ secrets.REGISTRY_R2_SECRET_KEY }}
-      REGISTRY_PREFIX: registry
-      GRAFT_SIGNING_KEY: ${{ secrets.GRAFT_SIGNING_KEY }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
@@ -368,15 +362,24 @@ jobs:
         with:
           go-version-file: apps/registry/go.mod
       - run: pnpm install --frozen-lockfile
-      - name: Pack, sign and publish new versions
+      - name: Pack grafts
+        run: |
+          scripts/grafts-pack.sh "$RUNNER_TEMP/grafts" https://assets.orchard.my/registry
+          go build -C apps/registry -o "$RUNNER_TEMP/registry" .
+      - name: Sign and publish new versions
         id: publish
+        env:
+          R2_ENDPOINT: ${{ secrets.REGISTRY_R2_ENDPOINT }}
+          R2_BUCKET: ${{ secrets.REGISTRY_R2_BUCKET }}
+          R2_ACCESS_KEY: ${{ secrets.REGISTRY_R2_ACCESS_KEY }}
+          R2_SECRET_KEY: ${{ secrets.REGISTRY_R2_SECRET_KEY }}
+          REGISTRY_PREFIX: registry
+          GRAFT_SIGNING_KEY: ${{ secrets.GRAFT_SIGNING_KEY }}
         run: |
           if [ -z "$GRAFT_SIGNING_KEY" ]; then
             echo "::warning::GRAFT_SIGNING_KEY is not set in the registry environment, so nothing was published. Grafts are never published unsigned."
             exit 0
           fi
-          scripts/grafts-pack.sh "$RUNNER_TEMP/grafts" https://assets.orchard.my/registry
-          go build -C apps/registry -o "$RUNNER_TEMP/registry" .
           "$RUNNER_TEMP/registry" publish-grafts \
             -grafts "$RUNNER_TEMP/grafts" \
             -public https://assets.orchard.my/registry \
