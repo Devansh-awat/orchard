@@ -16,10 +16,11 @@ merged template shows up in the hosted instance and in self-hosted ones alike.
    template's page) and `registry/templates/<name>.png` (a 1200x675 preview
    shown in the gallery). Sidecars are matched by name across every template
    directory, which is how the built-in templates get their previews from here.
-3. Run `go run ./apps/registry validate -templates registry/templates`, and
+3. Run `go run -C apps/registry . validate -templates ../../registry/templates`, and
    deploy the template on a real instance once.
 4. Commit it as `feat(templates): add <name>` and open a pull request. CI runs
-   the same validator; a merge publishes it within a minute.
+   the same validator. After the merge, it publishes with the next `templates`
+   release, when its release pull request is merged.
 
 Every deployment and database needs a recommended size under `config`, which
 is what the deploy form starts from and what people can change before deploying:
@@ -50,7 +51,8 @@ template's name (`blog`, `newsletter`, `helpdesk`, `key-value`).
 
 The catalogue is its own release-please package (tags `templates/vX.Y.Z`), so
 merges show up in a changelog and `templates/index.json` carries the catalogue
-version. Publishing does not wait for a release.
+version. Publishing runs when a `templates` or `server` release is cut, and once
+a week.
 
 ## Listing a graft
 
@@ -82,5 +84,5 @@ overwritten, which is where mutable things such as an install script belong.
 
 The built-in templates in `apps/server/src/templates/built-in` are published
 too, from the same job. The server is `apps/registry`; run
-`go run ./apps/registry validate -templates registry/templates` locally to
+`go run -C apps/registry . validate -templates ../../registry/templates` locally to
 check a template before pushing.

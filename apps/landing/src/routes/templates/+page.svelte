@@ -46,7 +46,7 @@
 	const SUBMIT = [
 		{ kind: 'cmd', text: 'ls registry/templates' },
 		{ kind: 'dim', text: 'ghost.yaml  ghost.md' },
-		{ kind: 'cmd', text: 'go run ./apps/registry validate -templates registry/templates' },
+		{ kind: 'cmd', text: 'go run -C apps/registry . validate -templates ../../registry/templates' },
 		{ kind: 'ok', text: 'ghost  1.0.0  registry/templates/ghost.yaml' },
 		{ kind: 'cmd', text: 'git commit -am "feat(templates): add ghost"' },
 		{ kind: 'cmd', text: 'gh pr create --fill' },

@@ -221,11 +221,11 @@ You cannot edit or delete imported templates from the instance. An import does n
 3. Validate the template:
 
    ```sh
-   go run ./apps/registry validate -templates registry/templates
+   go run -C apps/registry . validate -templates ../../registry/templates
    ```
 
 4. Commit with the message `feat(templates): add <name>`.
-5. Open a pull request. CI runs the same validator. A merge publishes the template within a minute.
+5. Open a pull request. CI runs the same validator. After the merge, the template publishes with the next templates release.
 
 Published versions cannot change. To ship a change, increase `metadata.version`. Every version stays available:
 
