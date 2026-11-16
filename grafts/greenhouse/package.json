@@ -9,7 +9,7 @@
     "build": "pnpm prebuild && graft build",
     "pack": "pnpm prebuild && graft pack",
     "dev": "graft dev",
-    "test": "node --import tsx --test test/*.test.ts",
+    "test": "node --import tsx --test 'test/*.test.ts' 'ui/src/**/*.test.ts'",
     "smoke:bootstrap": "tsx scripts/sandbox-bootstrap-smoke.ts",
     "live:vercel": "tsx scripts/sandbox-vercel-live.ts"
   },
