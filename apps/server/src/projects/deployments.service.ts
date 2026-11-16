@@ -7571,7 +7571,13 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         triggerType: 'manual',
         triggeredById: user.id
       },
-      await this.githubService.getValidUserToken(user.id)
+      await this.githubCloneToken({
+        userId: user.id,
+        repoUrl,
+        branch,
+        boundInstallationId: null,
+        linkedBy: user.id
+      })
     ).catch((error) => {
       console.error(`[Projects] Async build failed for deployment ${deployment.id}:`, error);
     });
@@ -9229,6 +9235,40 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     };
   }
 
+  /**
+   * Token the build pod clones with. Prefer a read-only token minted from the
+   * GitHub App installation that covers the repo, as the auto-deploy path
+   * does: it works for org repos where the linking user's OAuth token is
+   * blocked or lacks access. Fall back to the user's own token when no
+   * installation covers the repo or minting fails.
+   */
+  private async githubCloneToken(input: {
+    userId: string;
+    repoUrl: string | null | undefined;
+    branch: string | null | undefined;
+    boundInstallationId: bigint | null;
+    linkedBy: string | null;
+  }): Promise<string | undefined> {
+    const repoInfo = input.repoUrl ? this.githubService.parseRepoUrl(input.repoUrl) : null;
+    if (repoInfo) {
+      try {
+        const access = await this.githubService.resolveCloneAccess({
+          owner: repoInfo.owner,
+          repo: repoInfo.repo,
+          branch: input.branch || 'main',
+          boundInstallationId: input.boundInstallationId,
+          linkedBy: input.linkedBy
+        });
+        if (access) return access.token;
+      } catch (e) {
+        console.warn(
+          `[Projects] Installation clone token failed for ${repoInfo.owner}/${repoInfo.repo}, using user token: ${(e as Error).message}`
+        );
+      }
+    }
+    return (await this.githubService.getValidUserToken(input.userId)) ?? undefined;
+  }
+
   async rebuildDeployment(
     deploymentId: string,
     clerkId: string,
@@ -9379,7 +9419,15 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         triggerType: 'manual',
         triggeredById: user.id
       },
-      await this.githubService.getValidUserToken(user.id)
+      deployment.gitConnectionId
+        ? undefined
+        : await this.githubCloneToken({
+            userId: user.id,
+            repoUrl: deployment.githubRepo,
+            branch: deployment.githubBranch,
+            boundInstallationId: deployment.githubInstallationId,
+            linkedBy: deployment.repoLinkedBy ?? deployment.createdBy
+          })
     ).catch((error) => {
       console.error(`[Projects] Rebuild failed for deployment ${deploymentId}:`, error);
     });
