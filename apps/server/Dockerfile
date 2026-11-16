@@ -31,7 +31,7 @@ FROM node:22.23.5-alpine AS base
 
 RUN apk add --no-cache openssl ca-certificates
 
-RUN corepack enable && corepack prepare pnpm@10 --activate
+RUN corepack enable && corepack prepare pnpm@11.1.2 --activate
 
 FROM base AS deps
 WORKDIR /app
