@@ -17,6 +17,15 @@
     enabled: true,
     schedule: ['* * * * 1'],
   },
+  customManagers: [
+    {
+      customType: 'regex',
+      managerFilePatterns: ['/(^|/)Dockerfile[^/]*$/'],
+      matchStrings: ['corepack prepare pnpm@(?<currentValue>[0-9][^ ]*)'],
+      depNameTemplate: 'pnpm',
+      datasourceTemplate: 'npm',
+    },
+  ],
   packageRules: [
     {
       matchDatasources: ['npm', 'go'],
@@ -51,6 +60,10 @@
     {
       matchUpdateTypes: ['digest', 'pin', 'pinDigest'],
       addLabels: ['type/digest'],
+    },
+    {
+      matchPackageNames: ['pnpm'],
+      groupName: 'pnpm',
     },
   ],
 }

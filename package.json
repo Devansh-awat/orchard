@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "license": "AGPL-3.0-only",
-  "packageManager": "pnpm@11.1.2",
+  "packageManager": "pnpm@11.11.0",
   "scripts": {
     "dev": "pnpm --parallel --stream --filter frontend --filter server --filter gateway dev",
     "dev:server": "pnpm --filter server dev",
