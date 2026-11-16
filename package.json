@@ -22,11 +22,6 @@
     "build:docs": "pnpm --filter docs build",
     "credits": "node scripts/credits/index.mjs"
   },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "esbuild"
-    ]
-  },
   "dependencies": {
     "@types/js-yaml": "^4.0.9",
     "js-yaml": "^4.3.2"
