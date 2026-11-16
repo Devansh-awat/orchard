@@ -8,7 +8,7 @@
     "url": "git+https://github.com/hackclub/orchard.git",
     "directory": "packages/graft-ui"
   },
-  "homepage": "https://orchard.hackclub.com/extensions",
+  "homepage": "https://docs.orchard.hackclub.com/grafts/build/ui/",
   "type": "module",
   "files": [
     "src"

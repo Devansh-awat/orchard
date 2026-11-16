@@ -34,6 +34,6 @@ listening.
 If you don't want pnpm to manage it:
 
 ```sh
-cd gateway
+cd apps/gateway
 go run .
 ```
