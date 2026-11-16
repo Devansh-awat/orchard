@@ -9235,13 +9235,6 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     };
   }
 
-  /**
-   * Token the build pod clones with. Prefer a read-only token minted from the
-   * GitHub App installation that covers the repo, as the auto-deploy path
-   * does: it works for org repos where the linking user's OAuth token is
-   * blocked or lacks access. Fall back to the user's own token when no
-   * installation covers the repo or minting fails.
-   */
   private async githubCloneToken(input: {
     userId: string;
     repoUrl: string | null | undefined;
