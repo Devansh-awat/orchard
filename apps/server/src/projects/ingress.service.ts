@@ -917,7 +917,8 @@ export class IngressService implements OnModuleInit {
           }
         );
         if (result) {
-          (result as any).url = `https://${host}`;
+          const created = ((result as any).ingresses ?? []).find((i: any) => i.host === host);
+          (result as any).url = created?.url || `https://${host}`;
         }
         return result;
       } catch (error) {
