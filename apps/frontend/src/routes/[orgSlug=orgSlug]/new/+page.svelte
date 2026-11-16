@@ -15,12 +15,14 @@
 	import Stack from '$lib/components/ui/Stack.svelte';
 	import EmptyState from '$lib/components/ui/EmptyState.svelte';
 	import SectionTitle from '$lib/components/ui/SectionTitle.svelte';
-	import FeatureHero, { type FeatureItem } from '$lib/components/patterns/FeatureHero.svelte';
+	import List from '$lib/components/ui/List.svelte';
+	import ListRow from '$lib/components/ui/ListRow.svelte';
 	import Dock, { type DockItem } from '$lib/components/patterns/Dock.svelte';
 	import Shelf, { type ShelfItem } from '$lib/components/patterns/Shelf.svelte';
 	import { IMG_ICONS } from '$lib/components/org-dashboard/helpers.svelte';
 	import { templateCategory } from '$lib/utils/template-categories';
 	import { prefetchGitHubRepos } from '$lib/queries/github';
+	import { featureFlag } from '$lib/posthog';
 
 	interface Template {
 		id: string;
@@ -34,9 +36,6 @@
 
 	type Source = 'github' | 'image' | 'database';
 
-	const FEATURED = ['n8n', 'ghost', 'uptime-kuma', 'plausible', 'open-webui'];
-	const POPULAR = 8;
-
 	const orgSlug = $derived($page.params.orgSlug);
 	const orgId = $derived($selectedOrganization?.id ?? '');
 	const preselectedProject = $page.url.searchParams.get('projectSlug');
@@ -47,36 +46,17 @@
 	let projects = $state<{ id: string; name: string; slug: string }[]>([]);
 	let templates = $state<Template[]>([]);
 	let loading = $state(true);
+	let templateError = $state(false);
 	let busy = $state<string | null>(null);
 	let query = $state('');
 	let projectSlug = $state('');
+	let collapsedCategories = $state<string[]>([]);
 	const currentProject = $derived(projects.find((p) => p.slug === projectSlug));
 
 	const label = (t: Template) => templateCategory(t.category);
+	const hq = featureFlag('hq');
 
-	let spotlight = $state<Template[]>([]);
-
-	function shuffle<T>(list: T[]) {
-		const out = [...list];
-		for (let i = out.length - 1; i > 0; i--) {
-			const j = Math.floor(Math.random() * (i + 1));
-			[out[i], out[j]] = [out[j], out[i]];
-		}
-		return out;
-	}
-
-	const featured = $derived<FeatureItem[]>(
-		spotlight.map((t) => ({
-			id: t.id,
-			title: t.displayName,
-			eyebrow: label(t),
-			description: t.description,
-			icon: t.icon,
-			href: templateHref(t)
-		}))
-	);
-
-	const redis = $derived(templates.find((t) => t.name === 'redis-oss'));
+	const nephthys = $derived($hq ? templates.find((t) => t.name === 'nephthys-plus') : undefined);
 
 	const dock = $derived<DockItem[]>([
 		{
@@ -103,14 +83,14 @@
 			image: IMG_ICONS.postgres,
 			href: sourceHref('database')
 		},
-		...(redis
+		...(nephthys
 			? [
 					{
-						id: `template:${redis.id}`,
-						label: 'Redis',
-						hint: 'Cache, queues and sessions',
-						image: IMG_ICONS.redis,
-						href: templateHref(redis)
+						id: `template:${nephthys.id}`,
+						label: nephthys.displayName,
+						hint: 'Support and ticket manager, for any program',
+						image: nephthys.icon ?? undefined,
+						href: templateHref(nephthys)
 					}
 				]
 			: [])
@@ -128,44 +108,35 @@
 		href: sourceHref('database')
 	});
 
+	const toItem = (t: Template): ShelfItem => ({
+		id: t.id,
+		title: t.displayName,
+		subtitle: label(t),
+		description: t.description,
+		icon: t.icon,
+		href: templateHref(t)
+	});
+
 	const shelves = $derived.by(() => {
-		const toItem = (t: Template): ShelfItem => ({
-			id: t.id,
-			title: t.displayName,
-			subtitle: label(t),
-			description: t.description,
-			icon: t.icon,
-			href: templateHref(t)
-		});
-		const popular = [
-			...FEATURED.map((n) => templates.find((t) => t.name === n)).filter((t): t is Template => !!t),
-			...templates.filter((t) => !FEATURED.includes(t.name))
-		].slice(0, POPULAR);
 		const groups = new Map<string, Template[]>();
 		for (const t of templates) {
 			const key = label(t);
 			groups.set(key, [...(groups.get(key) ?? []), t]);
 		}
-		const sorted = [...groups.entries()].sort((a, b) => {
-			if (a[0] === 'Databases') return -1;
-			if (b[0] === 'Databases') return 1;
-			return b[1].length - a[1].length;
-		});
-		const big = sorted.filter(([, list]) => list.length >= 3);
-		const shown = new Set(popular.map((t) => t.id));
-		const rest = sorted
-			.filter(([, list]) => list.length < 3)
-			.flatMap(([, list]) => list)
-			.filter((t) => !shown.has(t.id));
-		const withManaged = (title: string, items: ShelfItem[]) =>
-			title === 'Databases' ? [managedPostgres, ...items] : items;
-		const hasDatabases = big.some(([title]) => title === 'Databases');
-		return [
-			{ title: 'Popular', items: popular.map(toItem) },
-			...(hasDatabases ? [] : [{ title: 'Databases', items: [managedPostgres] }]),
-			...big.map(([title, list]) => ({ title, items: withManaged(title, list.map(toItem)) })),
-			...(rest.length ? [{ title: 'More templates', items: rest.map(toItem) }] : [])
-		];
+		return [...groups.entries()]
+			.sort((a, b) => {
+				if (a[0] === 'Databases') return -1;
+				if (b[0] === 'Databases') return 1;
+				return a[0].localeCompare(b[0]);
+			})
+			.map(([title, list]) => ({
+				title,
+				items: list
+					.toSorted(
+						(a, b) => Number(b.name === 'nephthys-plus') - Number(a.name === 'nephthys-plus')
+					)
+					.map(toItem)
+			}));
 	});
 
 	const results = $derived.by<ShelfItem[]>(() => {
@@ -183,16 +154,11 @@
 				(t) =>
 					t.displayName.toLowerCase().includes(q) ||
 					(t.description?.toLowerCase().includes(q) ?? false) ||
-					t.tags.some((tag) => tag.toLowerCase().includes(q))
+					(t.tags ?? []).some((tag) => tag.toLowerCase().includes(q)) ||
+					label(t).toLowerCase().includes(q) ||
+					(t.category?.toLowerCase().includes(q) ?? false)
 			)
-			.map((t) => ({
-				id: t.id,
-				title: t.displayName,
-				subtitle: label(t),
-				description: t.description,
-				icon: t.icon,
-				href: templateHref(t)
-			}));
+			.map(toItem);
 		return [...managed, ...found];
 	});
 
@@ -260,6 +226,12 @@
 		openTemplate(item.id);
 	}
 
+	function toggleCategory(title: string) {
+		collapsedCategories = collapsedCategories.includes(title)
+			? collapsedCategories.filter((category) => category !== title)
+			: [...collapsedCategories, title];
+	}
+
 	function openTemplate(id: string) {
 		go(id, (slug) => `/${orgSlug}/projects/${slug}/templates/deploy/${id}`);
 	}
@@ -305,9 +277,9 @@
 			const tplRes = await tplEarly;
 			if (tplRes?.ok) {
 				templates = await tplRes.json();
-				const withIcons = templates.filter((t) => t.icon);
-				spotlight = shuffle(withIcons.length >= 3 ? withIcons : templates).slice(0, 5);
-			}
+			} else if (!preset) templateError = true;
+		} catch {
+			templateError = true;
 		} finally {
 			loading = false;
 		}
@@ -335,48 +307,91 @@
 				{/each}
 			</Menu>
 		{/if}
-		<SearchField placeholder="Search templates" shortcut="/" bind:value={query} />
 	{/snippet}
 
-	{#if query.trim()}
-		{#if results.length}
-			<Shelf
-				title="Templates matching “{query.trim()}”"
-				items={results}
-				columns={4}
-				plain
-				onSelect={pick}
-			/>
-		{:else}
-			<EmptyState
-				title="No templates match “{query.trim()}”"
-				description="Try a name like Ghost or Postgres, or start from a repo or an image."
-			>
-				{#snippet icon()}<LayoutTemplate size={22} />{/snippet}
-			</EmptyState>
-		{/if}
-	{:else}
-		<Stack gap="xl">
-			{#if loading}
-				<Skeleton height="18rem" rounded="1.875rem" />
-			{:else if featured.length}
-				<FeatureHero items={featured} columns={4} onSelect={(item) => openTemplate(item.id)} />
-			{/if}
-
-			<Stack gap="md">
-				<SectionTitle title="Start from scratch" size="md" />
-				<Dock label="Start from scratch" items={dock} columns={4} {busy} onSelect={openSource} />
-			</Stack>
-
+	<Stack gap="xl">
+		<SearchField placeholder="Search templates" shortcut="/" bind:value={query} />
+		<Stack gap="md">
+			<SectionTitle title="Get started" size="md" />
+			<Dock label="Get started" items={dock} columns={4} {busy} wrapHints onSelect={openSource} />
+		</Stack>
+		{#if query.trim()}
 			{#if loading}
 				<Skeleton height="12rem" rounded="1.25rem" />
+			{:else if templateError}
+				<EmptyState title="Couldn't load templates" description="Refresh the page to try again." />
+			{:else if results.length}
+				<Shelf
+					title="Templates matching “{query.trim()}”"
+					items={results}
+					columns={4}
+					plain
+					onSelect={pick}
+				/>
 			{:else}
-				{#each shelves as shelf (shelf.title)}
-					<Shelf title={shelf.title} items={shelf.items} columns={4} plain onSelect={pick} />
-				{/each}
+				<EmptyState
+					title="No templates match “{query.trim()}”"
+					description="Try a name like Ghost or Postgres, or start from a repo or an image."
+				>
+					{#snippet icon()}<LayoutTemplate size={22} />{/snippet}
+				</EmptyState>
 			{/if}
-		</Stack>
-	{/if}
+		{:else}
+			{#if loading}
+				<Skeleton height="12rem" rounded="1.25rem" />
+			{:else if templateError}
+				<EmptyState title="Couldn't load templates" description="Refresh the page to try again." />
+			{:else if !templates.length}
+				<EmptyState title="No templates available" />
+			{:else}
+				<Shelf
+					title="All templates"
+					items={templates.map(toItem)}
+					columns={4}
+					plain
+					autoScroll
+					compact
+					onSelect={pick}
+				/>
+				<SectionTitle title="Categories" size="md" />
+				<div class="categories">
+					{#each shelves as shelf (shelf.title)}
+						{@const expanded = !collapsedCategories.includes(shelf.title)}
+						<section class="category" aria-label={shelf.title}>
+							<SectionTitle title={shelf.title} count={shelf.items.length} />
+							<List inset={false} label={shelf.title}>
+								{#each expanded ? shelf.items : shelf.items.slice(0, 3) as item (item.id)}
+									<ListRow
+										title={item.title}
+										subtitle={item.description}
+										href={item.href === '#' ? undefined : item.href}
+										onclick={item.href === '#' ? () => pick(item) : undefined}
+										flush
+									>
+										{#snippet leading()}
+											<span class="category-icon">
+												<AppIcon name={item.title} icon={item.icon} size="lg" />
+											</span>
+										{/snippet}
+									</ListRow>
+								{/each}
+							</List>
+							{#if shelf.items.length > 3}
+								<Button
+									variant="ghost"
+									size="sm"
+									aria-expanded={expanded}
+									onclick={() => toggleCategory(shelf.title)}
+								>
+									{expanded ? 'Show less' : `Show all ${shelf.items.length}`}
+								</Button>
+							{/if}
+						</section>
+					{/each}
+				</div>
+			{/if}
+		{/if}
+	</Stack>
 </Page>
 
 <style>
@@ -386,5 +401,16 @@
 	.into strong {
 		font-weight: var(--weight-medium);
 		color: var(--text-default);
+	}
+	.categories {
+		columns: 3 16rem;
+		column-gap: 2rem;
+	}
+	.category {
+		break-inside: avoid;
+		margin-bottom: 2rem;
+	}
+	.category-icon {
+		zoom: 1.45;
 	}
 </style>

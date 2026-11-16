@@ -17,6 +17,8 @@
 		seeAllHref = undefined,
 		columns = undefined,
 		plain = false,
+		autoScroll = false,
+		compact = false,
 		onSelect = undefined
 	}: {
 		items: ShelfItem[];
@@ -24,6 +26,8 @@
 		seeAllHref?: string;
 		columns?: number;
 		plain?: boolean;
+		autoScroll?: boolean;
+		compact?: boolean;
 		onSelect?: (item: ShelfItem) => void;
 	} = $props();
 
@@ -75,6 +79,8 @@
 	let track = $state<HTMLElement>();
 	let canPrev = $state(false);
 	let canNext = $state(false);
+	let hovered = false;
+	let focused = false;
 
 	function measure() {
 		const el = scroller;
@@ -91,7 +97,26 @@
 		ro.observe(el);
 		if (el.firstElementChild) ro.observe(el.firstElementChild);
 		el.addEventListener('scroll', measure, { passive: true });
+		let frame = 0;
+		let last = 0;
+		let position = el.scrollLeft;
+		function tick(time: number) {
+			if (last && autoScroll && !hovered && !focused && decorativeMotion() && !document.hidden) {
+				const max = el.scrollWidth - el.clientWidth;
+				if (max > 0) {
+					position = Math.abs(position - el.scrollLeft) > 2 ? el.scrollLeft : position;
+					position = position >= max - 1 ? 0 : Math.min(max, position + (time - last) * 0.025);
+					el.scrollLeft = position;
+				}
+			} else {
+				position = el.scrollLeft;
+			}
+			last = time;
+			frame = requestAnimationFrame(tick);
+		}
+		if (autoScroll) frame = requestAnimationFrame(tick);
 		return () => {
+			cancelAnimationFrame(frame);
 			ro.disconnect();
 			el.removeEventListener('scroll', measure);
 		};
@@ -112,15 +137,22 @@
 	class="shelf"
 	class:shelf--plain={plain}
 	class:shelf--grid={!!columns}
+	class:shelf--auto={autoScroll}
+	class:shelf--compact={compact}
 	style:--cols={columns}
 	aria-label={title}
+	onmouseenter={() => (hovered = true)}
+	onmouseleave={() => (hovered = false)}
+	onfocusin={() => (focused = true)}
+	onfocusout={(event) =>
+		(focused = event.currentTarget.contains(event.relatedTarget as Node | null))}
 >
 	<SectionTitle {title} size="md">
 		{#snippet actions()}
 			{#if seeAllHref}<a class="see-all" href={seeAllHref}
 					><span class="see-all-label">See all</span><ChevronRight size={14} /></a
 				>{/if}
-			{#if canPrev || canNext}
+			{#if !autoScroll && (canPrev || canNext)}
 				<span class="pager">
 					<button
 						type="button"
@@ -308,6 +340,9 @@
 	.scroller::-webkit-scrollbar {
 		display: none;
 	}
+	.shelf--auto .scroller {
+		scroll-snap-type: none;
+	}
 	.scroller--start {
 		--fade-start: 3rem;
 	}
@@ -326,7 +361,10 @@
 		container-type: inline-size;
 	}
 	.shelf--grid .slot {
-		flex-basis: calc((100cqi - (var(--cols) - 1) * 1rem) / var(--cols));
+		flex-basis: max(10rem, (100cqi - (var(--cols) - 1) * 1rem) / var(--cols));
+	}
+	.shelf--compact.shelf--grid .slot {
+		flex-basis: max(15rem, (100cqi - (var(--cols) - 1) * 1rem) / var(--cols));
 	}
 	.shelf--grid .art {
 		aspect-ratio: 1.618;
@@ -350,6 +388,22 @@
 	}
 	.tile:focus-visible {
 		outline: none;
+	}
+	.shelf--compact .tile {
+		flex-direction: row;
+		align-items: flex-start;
+		gap: 0.75rem;
+	}
+	.shelf--compact .art {
+		flex: 0 0 3.5rem;
+		aspect-ratio: 1;
+	}
+	.shelf--compact .art-icon {
+		zoom: 0.7;
+	}
+	.shelf--compact .caption {
+		flex: 1;
+		gap: 0.25rem;
 	}
 
 	.art {

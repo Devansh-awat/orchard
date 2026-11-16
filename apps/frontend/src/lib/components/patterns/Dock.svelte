@@ -24,12 +24,14 @@
 		label,
 		columns = 4,
 		busy = null,
+		wrapHints = false,
 		onSelect = undefined
 	}: {
 		items: DockItem[];
 		label: string;
 		columns?: number;
 		busy?: string | null;
+		wrapHints?: boolean;
 		onSelect?: (item: DockItem) => void;
 	} = $props();
 
@@ -40,7 +42,7 @@
 	}
 </script>
 
-<nav class="dock" aria-label={label} style:--cols={columns}>
+<nav class="dock" class:dock--wrap-hints={wrapHints} aria-label={label} style:--cols={columns}>
 	{#each items as item (item.id)}
 		{@const Glyph = item.icon}
 		<a
@@ -203,5 +205,8 @@
 		color: var(--text-muted);
 		text-overflow: ellipsis;
 		white-space: nowrap;
+	}
+	.dock--wrap-hints .hint {
+		white-space: normal;
 	}
 </style>

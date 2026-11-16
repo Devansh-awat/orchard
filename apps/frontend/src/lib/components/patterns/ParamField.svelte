@@ -90,7 +90,13 @@
 		{/if}
 	</Field>
 {:else if param.type === 'secret'}
-	<Field label={param.displayName} {error} for={id} required={param.required}>
+	<Field
+		label={param.displayName}
+		hint={param.description}
+		{error}
+		for={id}
+		required={param.required}
+	>
 		<SecretInput
 			{id}
 			{disabled}

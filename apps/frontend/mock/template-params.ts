@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { load } from 'js-yaml';
 import type { MockTemplate } from './templates.ts';
 
 type Option = { label: string; value: string };
@@ -21,7 +23,11 @@ export type MockParameter = {
 	options?: Option[];
 };
 
-export type MockResource = { name: string; type: 'deployment' | 'database' | 'ingress' };
+export type MockResource = {
+	name: string;
+	type: 'deployment' | 'database' | 'ingress';
+	config?: { resources?: { cpu?: string; memory?: string } };
+};
 
 const appName = (fallback: string): MockParameter => ({
 	name: 'appName',
@@ -356,5 +362,13 @@ function generic(t: MockTemplate) {
 }
 
 export function templateSpec(t: MockTemplate) {
+	if (t.name === 'nephthys-plus') {
+		const yaml = readFileSync(
+			new URL('../../../registry/templates/nephthys-plus.yaml', import.meta.url),
+			'utf8'
+		);
+		const spec = load(yaml) as { parameters: MockParameter[]; resources: MockResource[] };
+		return { parameters: spec.parameters, resources: spec.resources };
+	}
 	return SPECIFIC[t.name] ?? generic(t);
 }

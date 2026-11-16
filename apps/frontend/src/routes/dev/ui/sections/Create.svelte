@@ -137,6 +137,10 @@
 	<Shelf title={TEMPLATE_SHELVES[1].title} items={TEMPLATE_SHELVES[1].items} />
 </SectionCard>
 
+<SectionCard title="Auto-scrolling shelf">
+	<Shelf title="All templates" items={TEMPLATE_SHELVES[0].items} autoScroll compact />
+</SectionCard>
+
 <SectionCard
 	title="Product header"
 	description="The top of a template or product page: a big icon tile, what it is, and the one decision to make before going on."

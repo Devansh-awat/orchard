@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto';
+import { parseCpu, parseMemory } from '../../../server/src/kubernetes/quantity.ts';
 import { TEMPLATES, templateRow } from '../templates.ts';
 import { templateSpec } from '../template-params.ts';
 import { ago, freshId, sha, slugify, uid } from '../ids.ts';
@@ -572,9 +573,17 @@ export function projectRoutes(r: Router, { store }: MockContext) {
 			resources: spec.resources.map((resource) =>
 				resource.type === 'ingress'
 					? { ...resource, cpuMilli: null, memoryBytes: null }
-					: resource.type === 'database'
-						? { ...resource, cpuMilli: 500, memoryBytes: 1024 ** 3 }
-						: { ...resource, cpuMilli: 1000, memoryBytes: 1024 ** 3 }
+					: {
+							...resource,
+							cpuMilli: resource.config?.resources?.cpu
+								? parseCpu(resource.config.resources.cpu)
+								: resource.type === 'database'
+									? 500
+									: 1000,
+							memoryBytes: resource.config?.resources?.memory
+								? parseMemory(resource.config.resources.memory)
+								: 1024 ** 3
+						}
 			)
 		};
 	});

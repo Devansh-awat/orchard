@@ -8,6 +8,13 @@ export type MockTemplate = {
 
 export const TEMPLATES: MockTemplate[] = [
 	{
+		name: 'nephthys-plus',
+		displayName: 'Nephthys Plus',
+		description: 'Support and ticket manager, for any program',
+		icon: 'https://github.com/hackclub.png?size=256',
+		category: 'bot'
+	},
+	{
 		name: 'n8n',
 		displayName: 'n8n',
 		description: 'Workflow automation with a visual editor and hundreds of integrations.',
@@ -136,7 +143,7 @@ export const TEMPLATES: MockTemplate[] = [
 		description:
 			'A Slack help desk bot: questions in a channel become tickets your team can claim and close.',
 		icon: null,
-		category: 'automation'
+		category: 'bot'
 	},
 	{
 		name: 'pocketbase',
