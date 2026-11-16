@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -58,6 +59,7 @@ func deployCmd() *cobra.Command {
 		deployAutoDeployCmd(),
 		deployWebhookTokenCmd(),
 		deployGithubDeploymentsCmd(),
+		deployIconCmd(),
 	)
 	return c
 }
@@ -871,4 +873,37 @@ func deployMetricLatest(v any) string {
 		return "-"
 	}
 	return strconv.FormatFloat(y, 'f', 1, 64)
+}
+
+func deployIconCmd() *cobra.Command {
+	c := &cobra.Command{
+		Use:   "icon",
+		Short: "Manage the app picture",
+	}
+	c.AddCommand(deployIconSetCmd())
+	return c
+}
+
+func deployIconSetCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "set <id> <file>",
+		Short: "Upload an app picture (jpeg/png/gif/webp)",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cl, _, err := client()
+			if err != nil {
+				return err
+			}
+			f, err := os.Open(args[1])
+			if err != nil {
+				return err
+			}
+			defer f.Close()
+			if _, err := cl.Upload(cmd.Context(), deployPath(args[0], "icon"), "file", filepath.Base(args[1]), f); err != nil {
+				return err
+			}
+			output.Successf("app picture updated for %s", args[0])
+			return nil
+		},
+	}
 }

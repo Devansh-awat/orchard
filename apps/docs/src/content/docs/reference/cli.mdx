@@ -15,7 +15,7 @@ brew install --cask leafdtk/tap/orchard-cli
 ```
 
 Every command accepts `-o json` for machine-readable output, and `--org` / `--env` to
-override the saved context. **426 commands** are available.
+override the saved context. **428 commands** are available.
 
 ## alert
 
@@ -1656,6 +1656,22 @@ orchard deploy history <id>
 | Flag | Type | Default | Description |
 | --- | --- | --- | --- |
 | `--logs` | string |  | print build logs for one image history entry |
+
+### `orchard deploy icon`
+
+Manage the app picture
+
+```bash
+orchard deploy icon
+```
+
+### `orchard deploy icon set`
+
+Upload an app picture (jpeg/png/gif/webp)
+
+```bash
+orchard deploy icon set <id> <file>
+```
 
 ### `orchard deploy image`
 
