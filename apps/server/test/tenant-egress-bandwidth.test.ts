@@ -85,7 +85,10 @@ test('app pods are untouched when the setting is off', async () => {
       image: 'registry.example.com/org/app:1',
       ports: [{ name: 'http', containerPort: 8080, servicePort: 80, protocol: 'TCP' }]
     });
-    assert.equal(w.created().spec.template.metadata.annotations, undefined);
+    assert.equal(
+      w.created().spec.template.metadata.annotations?.[EGRESS_BANDWIDTH_ANNOTATION],
+      undefined
+    );
     assert.equal(JSON.stringify(w.created()).includes('egress-bandwidth'), false);
     await w.service.updateDeploymentImage('web', 'project', 'registry.example.com/org/app:2');
     assert.equal(w.patched().spec.template.metadata, undefined);

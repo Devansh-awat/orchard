@@ -8,6 +8,7 @@ import {
 import { parseKubeletSummary, type VolumeUsage } from './volume-stats';
 import * as k8s from '@kubernetes/client-node';
 import * as https from 'https';
+import { isDeepStrictEqual } from 'node:util';
 import { PassThrough } from 'stream';
 import { ServiceType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -77,6 +78,11 @@ import {
 import { k8sErrorMessage, k8sHttpException } from './k8s-error';
 import { livenessProbe, probesFor, readinessProbe, startupProbe } from './probes';
 import { pinToBuildArch } from '../docker/build-platform';
+import {
+  MANAGED_VOLUMES_ANNOTATION,
+  recordedVolumeNames,
+  buildVolumeReplacePatch
+} from './volume-patch';
 
 /**
  * Workloads + pods + tailscale sidecar: Deployments and Pods CRUD, env/
@@ -1025,7 +1031,10 @@ export class K8sWorkloadService {
           template: {
             metadata: {
               labels,
-              annotations: tenantPodAnnotations()
+              annotations: {
+                ...tenantPodAnnotations(),
+                [MANAGED_VOLUMES_ANNOTATION]: JSON.stringify(volumes.map((vol) => vol.name).sort())
+              }
             },
             spec: {
               // Tenant pods do not need to talk to the kube-apiserver. The
@@ -1603,47 +1612,85 @@ export class K8sWorkloadService {
     }
   }
 
+  private async managedVolumeNames(deployment: k8s.V1Deployment): Promise<Set<string>> {
+    const names = recordedVolumeNames(deployment);
+    if (
+      deployment.spec?.template?.metadata?.annotations?.[MANAGED_VOLUMES_ANNOTATION] !== undefined
+    ) {
+      return names;
+    }
+    const spec = deployment.spec?.template?.spec;
+    const mounts = new Set((spec?.containers?.[0]?.volumeMounts ?? []).map((mount) => mount.name));
+    const claims = new Map<string, string>();
+    for (const volume of spec?.volumes ?? []) {
+      const claimName = volume.persistentVolumeClaim?.claimName;
+      if (claimName && mounts.has(volume.name)) claims.set(claimName, volume.name);
+    }
+    if (claims.size === 0) return names;
+    const mirrored = await this.prisma.k8sObject.findMany({
+      where: {
+        kind: 'PersistentVolumeClaim',
+        namespace: deployment.metadata!.namespace!,
+        name: { in: [...claims.keys()] }
+      },
+      select: { name: true, manifest: true }
+    });
+    for (const row of mirrored) {
+      const labels = (row.manifest as k8s.V1PersistentVolumeClaim)?.metadata?.labels;
+      if (labels?.['app.kubernetes.io/managed-by'] === 'orchard') names.add(claims.get(row.name)!);
+    }
+    return names;
+  }
+
+  private async mirroredDeployment(
+    name: string,
+    namespace: string
+  ): Promise<k8s.V1Deployment | null> {
+    const row = await this.prisma.k8sObject.findFirst({
+      where: { kind: 'Deployment', apiVersion: 'apps/v1', namespace, name },
+      select: { manifest: true }
+    });
+    return (row?.manifest as k8s.V1Deployment | undefined) ?? null;
+  }
+
   /**
-   * The volume set a live Deployment is actually running with.
+   * The volume set the mirrored Deployment is running with.
    *
    * Returned as a canonical signature rather than raw objects so a caller can
    * ask the only question that matters: does the cluster match what the
-   * database says it should be? Null means the Deployment does not exist yet,
+   * database says it should be? Null means the mirror has no Deployment yet,
    * which is a different answer from "it exists with no volumes".
    */
   async getDeploymentVolumeSignature(
     deploymentName: string,
-    namespace: string
+    namespace: string,
+    desiredNames: string[] = []
   ): Promise<string | null> {
-    this.ensureKubeConfig();
+    const existing = await this.mirroredDeployment(
+      String(deploymentName || '').trim(),
+      String(namespace || '').trim()
+    );
+    if (!existing) return null;
+    const spec = existing.spec?.template?.spec;
+    const mounts = spec?.containers?.[0]?.volumeMounts ?? [];
+    const managedNames = await this.managedVolumeNames(existing);
+    for (const name of desiredNames) managedNames.add(name);
+    const mountByName = new Map(mounts.map((m) => [m.name, m]));
 
-    const cleanName = String(deploymentName || '').trim();
-    const cleanNamespace = String(namespace || '').trim();
-
-    try {
-      const appsApi = this.kc.makeApiClient(k8s.AppsV1Api);
-      const existing = await appsApi.readNamespacedDeployment(cleanName, cleanNamespace);
-      const spec = existing.body.spec?.template?.spec;
-      const mounts = spec?.containers?.[0]?.volumeMounts ?? [];
-      const mountByName = new Map(mounts.map((m) => [m.name, m]));
-
-      return (spec?.volumes ?? [])
-        .map((vol) => {
-          const mount = mountByName.get(vol.name);
-          const claim = vol.persistentVolumeClaim?.claimName ?? '';
-          return [
-            vol.name,
-            claim ? `pvc:${claim}` : 'emptyDir',
-            mount?.mountPath ?? '',
-            mount?.readOnly ? 'ro' : 'rw'
-          ].join('|');
-        })
-        .sort()
-        .join(',');
-    } catch (error) {
-      if (error.response?.statusCode === 404) return null;
-      throw error;
-    }
+    return (spec?.volumes ?? [])
+      .filter((vol) => managedNames.has(vol.name) && mountByName.has(vol.name))
+      .map((vol) => {
+        const mount = mountByName.get(vol.name);
+        const claim = vol.persistentVolumeClaim?.claimName ?? '';
+        return [
+          vol.name,
+          claim ? `pvc:${claim}` : 'emptyDir',
+          mount?.mountPath ?? '',
+          mount?.readOnly ? 'ro' : 'rw'
+        ].join('|');
+      })
+      .sort()
+      .join(',');
   }
 
   /** The same signature, computed from what the database says should be running. */
@@ -1754,40 +1801,41 @@ export class K8sWorkloadService {
         });
       }
 
-      const containerName = containers[0].name;
-
-      // Force Recreate when a PVC is in the new volume set; otherwise honour
-      // whatever the caller passed (or fall back to RollingUpdate).
-      const hasPvcVolume = volumesList.some((v) => v.type === 'pvc');
-      const effectiveStrategy = hasPvcVolume
-        ? 'recreate'
-        : (options.deployStrategy ?? 'rollingUpdate');
-      const strategy: k8s.V1DeploymentStrategy =
-        effectiveStrategy === 'recreate'
+      const managedNames = await this.managedVolumeNames(existing.body);
+      const desiredNames = new Set(volumesList.map((volume) => volume.name));
+      for (const volume of existing.body.spec?.template?.spec?.volumes ?? []) {
+        if (!desiredNames.has(volume.name) || managedNames.has(volume.name)) continue;
+        const desired = k8sVolumes.find((candidate) => candidate.name === volume.name);
+        const mount = containers[0].volumeMounts?.find(
+          (candidate) => candidate.name === volume.name
+        );
+        const desiredMount = volumeMounts.find((candidate) => candidate.name === volume.name);
+        if (
+          JSON.stringify(volume) === JSON.stringify(desired) &&
+          mount &&
+          desiredMount &&
+          isDeepStrictEqual(
+            { ...mount, readOnly: Boolean(mount.readOnly) },
+            { ...desiredMount, readOnly: Boolean(desiredMount.readOnly) }
+          )
+        )
+          managedNames.add(volume.name);
+      }
+      const requestedStrategy =
+        options.deployStrategy === 'recreate'
           ? { type: 'Recreate', rollingUpdate: null as any }
           : rollingUpdateStrategy();
-
-      const patch = {
-        spec: {
-          strategy,
-          template: {
-            metadata: {
-              annotations: {
-                'orchard.my/volumes-updated-at': new Date().toISOString()
-              }
-            },
-            spec: {
-              containers: [
-                {
-                  name: containerName,
-                  volumeMounts: volumeMounts.length > 0 ? volumeMounts : []
-                }
-              ],
-              volumes: k8sVolumes.length > 0 ? k8sVolumes : []
-            }
-          }
-        }
-      };
+      const replacement = buildVolumeReplacePatch({
+        deployment: existing.body,
+        managedNames,
+        volumes: k8sVolumes,
+        mounts: volumeMounts,
+        strategy: requestedStrategy,
+        stamp: new Date().toISOString()
+      });
+      const effectiveStrategy =
+        replacement.strategy.type === 'Recreate' ? 'recreate' : 'rollingUpdate';
+      const patch = replacement.operations;
 
       await appsApi.patchNamespacedDeployment(
         cleanName,
@@ -1799,7 +1847,7 @@ export class K8sWorkloadService {
         undefined,
         undefined,
         {
-          headers: { 'Content-Type': 'application/strategic-merge-patch+json' }
+          headers: { 'Content-Type': 'application/json-patch+json' }
         }
       );
 

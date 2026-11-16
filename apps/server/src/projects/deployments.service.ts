@@ -8188,7 +8188,11 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
   ): Promise<void> {
     try {
       const desired = await this.currentVolumes(deploymentId);
-      const live = await this.k8sWorkload.getDeploymentVolumeSignature(name, namespace);
+      const live = await this.k8sWorkload.getDeploymentVolumeSignature(
+        name,
+        namespace,
+        desired.map((volume) => volume.name)
+      );
       if (live === null) return;
       if (live === K8sWorkloadService.volumeSignature(desired)) return;
 
