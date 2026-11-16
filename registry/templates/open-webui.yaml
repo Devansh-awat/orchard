@@ -30,7 +30,7 @@ parameters:
     displayName: 'API base URL'
     description: 'Any OpenAI-compatible endpoint'
     type: string
-    default: 'https://ai.hackclub.com/proxy/v1'
+    default: 'https://api.openai.com/v1'
     required: true
   - name: apiKey
     displayName: 'API key'

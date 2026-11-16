@@ -29,7 +29,7 @@ parameters:
   - name: openaiBaseUrl
     displayName: 'OpenAI-compatible base URL'
     type: string
-    default: 'https://ai.hackclub.com/proxy/v1'
+    default: 'https://api.openai.com/v1'
     required: true
   - name: openaiApiKey
     displayName: 'API key'

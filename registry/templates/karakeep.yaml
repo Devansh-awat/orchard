@@ -43,7 +43,7 @@ parameters:
     description: 'Optional, for automatic tagging'
     type: string
     default: ''
-    placeholder: 'https://ai.hackclub.com/proxy/v1'
+    placeholder: 'https://api.openai.com/v1'
   - name: openaiApiKey
     displayName: 'API key'
     type: string
