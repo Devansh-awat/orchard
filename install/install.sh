@@ -3454,10 +3454,10 @@ EOF
 
 registry_htpasswd() {
   if command -v htpasswd >/dev/null 2>&1; then
-    htpasswd -nbB "$REGISTRY_USER" "$REGISTRY_PASSWORD"
+    printf '%s\n' "$REGISTRY_PASSWORD" | htpasswd -niB "$REGISTRY_USER"
   else
-    kubectl run zot-htpasswd --rm -i --quiet --restart=Never --image=httpd:2.4.71-alpine@sha256:32bd0639bcc4917ef1fd9363a1d9dd2dd9c498565118b062a10d51e43a5c3a24 \
-      --command -- htpasswd -nbB "$REGISTRY_USER" "$REGISTRY_PASSWORD"
+    printf '%s\n' "$REGISTRY_PASSWORD" | kubectl run zot-htpasswd --rm -i --quiet --restart=Never --image=httpd:2.4.71-alpine@sha256:32bd0639bcc4917ef1fd9363a1d9dd2dd9c498565118b062a10d51e43a5c3a24 \
+      --command -- htpasswd -niB "$REGISTRY_USER"
   fi
 }
 
@@ -3624,8 +3624,8 @@ install_tunnel() {
   fi
 
   kubectl create namespace cloudflared >/dev/null 2>&1 || true
-  kubectl -n cloudflared create secret generic tunnel-token \
-    --from-literal=token="$ORCHARD_TUNNEL_TOKEN" \
+  printf '%s' "$ORCHARD_TUNNEL_TOKEN" | kubectl -n cloudflared create secret generic tunnel-token \
+    --from-file=token=/dev/stdin \
     --dry-run=client -o yaml | kubectl apply -f - >/dev/null
 
   kubectl apply -f - >/dev/null <<'EOF'
