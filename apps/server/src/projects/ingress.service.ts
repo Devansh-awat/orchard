@@ -235,6 +235,29 @@ export class IngressService implements OnModuleInit {
     }, 10_000);
   }
 
+  private async settleServiceDomains(namespace: string, oldHost: string) {
+    if (!oldHost) return;
+    const services = await this.prisma.service.findMany({
+      where: { domain: oldHost, deployment: { namespace } },
+      select: { id: true, deploymentId: true }
+    });
+    for (const svc of services) {
+      const routes = await this.prisma.ingress.findMany({
+        where: {
+          namespace,
+          OR: [{ serviceId: svc.id }, { serviceId: null, deploymentId: svc.deploymentId }]
+        },
+        select: { host: true },
+        orderBy: { createdAt: 'asc' }
+      });
+      if (routes.some((r) => r.host === oldHost)) continue;
+      await this.prisma.service.update({
+        where: { id: svc.id },
+        data: { domain: routes[0]?.host ?? null }
+      });
+    }
+  }
+
   async dnsRecordsFor(domain: string): Promise<DnsRecordHint[]> {
     const target = (this.instanceConfig.value(INGRESS, 'cname') || '')
       .toLowerCase()
@@ -2299,6 +2322,8 @@ export class IngressService implements OnModuleInit {
       }
     }
 
+    await this.settleServiceDomains(ingress.namespace, ingress.host);
+
     this.warmFavicon(rawHost);
 
     void this.audit.log({
@@ -2384,6 +2409,8 @@ export class IngressService implements OnModuleInit {
     } catch (error) {
       if ((error as { code?: string })?.code !== 'P2025') throw error;
     }
+
+    await this.settleServiceDomains(ingress.namespace, ingress.host);
 
     const result = await this.prisma.deployment.findUnique({
       where: { id: deploymentId },
@@ -2514,6 +2541,8 @@ export class IngressService implements OnModuleInit {
     } catch (error) {
       if ((error as { code?: string })?.code !== 'P2025') throw error;
     }
+
+    await this.settleServiceDomains(ingress.namespace, ingress.host);
 
     void this.audit.log({
       action: 'ingress.deleted',
@@ -2843,6 +2872,8 @@ export class IngressService implements OnModuleInit {
         }
       });
     }
+
+    await this.settleServiceDomains(ingress.namespace, ingress.host);
 
     const result = await this.prisma.deployment.findUnique({
       where: { id: deploymentId },
