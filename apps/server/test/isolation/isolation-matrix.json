@@ -5073,6 +5073,15 @@
     "bodyIds": [],
     "unseeded": []
   },
+  "POST /deployments/:id/icon": {
+    "class": "resource-scoped",
+    "auth": "authenticated",
+    "handler": "DeploymentsController.uploadDeploymentIcon",
+    "params": ["id:deployment"],
+    "queryIds": [],
+    "bodyIds": [],
+    "unseeded": []
+  },
   "POST /deployments/:id/ingresses": {
     "class": "resource-scoped",
     "auth": "authenticated",
