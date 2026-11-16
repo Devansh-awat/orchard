@@ -47,6 +47,8 @@ const FRESH_TRANSITION_MS = 10 * 60 * 1000;
 const CRASH_CONFIRM_MS = 30_000;
 const RECOVER_CONFIRM_MS = 60_000;
 const STATS_MIN_GAP_MS = 10 * 1000;
+
+const DATA_DIR_MEASURE_EVERY_MS = 5 * 60 * 1000;
 const CONFIRM_AFTER_MS = 90 * 1000;
 const SETTLING_STATUSES = new Set(['deleting', 'restoring', 'provisioning', 'error']);
 
@@ -94,6 +96,8 @@ export class CnpgConsumer implements OnModuleDestroy {
   private readonly storageState = new Map<string, boolean>();
 
   private readonly lastSample = new Map<string, number>();
+
+  private lastDataDirMeasure = new Map<string, number>();
 
   private readonly sampling = new Set<string>();
 
@@ -647,20 +651,37 @@ export class CnpgConsumer implements OnModuleDestroy {
     try {
       const db = await this.prisma.database.findUnique({
         where: { id: ctx.databaseId },
-        select: { dbName: true, storageSize: true }
+        select: {
+          dbName: true,
+          storageSize: true,
+          volumeUsedBytes: true,
+          volumeCapacityBytes: true
+        }
       });
       if (!db) return;
-      const stats = await this.cnpg.sampleDatabaseStats(namespace, pod, db.dbName);
+      this.lastDataDirMeasure ??= new Map();
+      const measureDataDir =
+        now - (this.lastDataDirMeasure.get(ctx.databaseId) ?? 0) >= DATA_DIR_MEASURE_EVERY_MS;
+      const stats = await this.cnpg.sampleDatabaseStats(namespace, pod, db.dbName, {
+        measureDataDir
+      });
       if (!stats) return;
       this.lastSample.set(ctx.databaseId, Date.now());
+      if (stats.shared && measureDataDir) this.lastDataDirMeasure.set(ctx.databaseId, now);
       const allowance = parseMemory(db.storageSize ?? '');
+      const previous =
+        allowance > 0 && db.volumeUsedBytes != null && Number(db.volumeCapacityBytes) === allowance
+          ? { usedBytes: Number(db.volumeUsedBytes), capacityBytes: allowance }
+          : null;
       const own: DiskUsage | null = !stats.shared
         ? stats.volumeUsedBytes == null || stats.volumeCapacityBytes == null
           ? null
           : { usedBytes: stats.volumeUsedBytes, capacityBytes: stats.volumeCapacityBytes }
-        : stats.shared.dataDirBytes == null || !(allowance > 0)
+        : !(allowance > 0)
           ? null
-          : { usedBytes: stats.shared.dataDirBytes, capacityBytes: allowance };
+          : stats.shared.dataDirBytes == null
+            ? previous
+            : { usedBytes: stats.shared.dataDirBytes, capacityBytes: allowance };
       await this.prisma.database.update({
         where: { id: ctx.databaseId },
         data: {

@@ -19,7 +19,13 @@ export interface SampledDbStats {
   shared?: { dataDirBytes: number | null };
 }
 
-export function dbStatsCommand(dbName: string): string[] {
+export const DATA_DIR_DU_TIMEOUT_SECONDS = 30;
+
+export function dbStatsCommand(dbName: string, opts: { measureDataDir?: boolean } = {}): string[] {
+  const measure =
+    opts.measureDataDir !== false
+      ? `$(timeout ${DATA_DIR_DU_TIMEOUT_SECONDS} nice -n 19 du -sxb ${DATA_VOLUME_MOUNT} 2>/dev/null | cut -f1)`
+      : '';
   const sql =
     `SELECT pg_database_size('${dbName}') || '|' || ` +
     `(SELECT count(*) FROM pg_stat_activity WHERE datname = '${dbName}') || '|' || ` +
@@ -30,7 +36,7 @@ export function dbStatsCommand(dbName: string): string[] {
     `psql -U postgres -tA -c "${sql}"; df -B1 --output=size,used ${DATA_VOLUME_MOUNT} 2>/dev/null | tail -n 1; ` +
       `ds=$(df -B1 --output=size ${DATA_VOLUME_MOUNT} 2>/dev/null | tail -n 1 | tr -d ' '); ` +
       `rs=$(df -B1 --output=size / 2>/dev/null | tail -n 1 | tr -d ' '); ` +
-      `if [ -n "$ds" ] && [ "$ds" = "$rs" ]; then echo "shared $(du -sxb ${DATA_VOLUME_MOUNT} 2>/dev/null | cut -f1)"; fi`
+      `if [ -n "$ds" ] && [ "$ds" = "$rs" ]; then echo "shared ${measure}"; fi`
   ];
 }
 

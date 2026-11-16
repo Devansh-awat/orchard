@@ -118,3 +118,14 @@ test('a data dir on the node disk is measured with du, and a full node disk alon
   assert.equal(nodeDiskPressure(ownFull), false);
   assert.equal(storagePressure(undefined, { ...nodeFull, nodeDiskUsedBytes: 50 }), false);
 });
+
+test('the data dir is measured at low priority with a timeout, and skipped when asked', () => {
+  const measured = dbStatsCommand('app')[2];
+  assert.match(measured, /timeout 30 nice -n 19 du -sxb \/var\/lib\/postgresql\/data/);
+  const skipped = dbStatsCommand('app', { measureDataDir: false })[2];
+  assert.doesNotMatch(skipped, /du -sxb/);
+  assert.match(skipped, /echo "shared "/);
+  assert.deepEqual(parseDbStatsOutput('2048|1|0\n196318593024 98864812032\nshared\n')?.shared, {
+    dataDirBytes: null
+  });
+});

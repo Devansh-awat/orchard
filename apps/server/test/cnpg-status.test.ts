@@ -373,3 +373,62 @@ test('a shared volume is guarded on the fuller of its own allowance and the node
   assert.deepEqual((await run(40 * GI, 9.5 * GI)).guards, [['on', 0.95]]);
   assert.deepEqual((await run(40 * GI, 1 * GI)).guards, []);
 });
+
+test('a database on the node disk is measured with du at most every five minutes and keeps its last reading in between', async () => {
+  const updates: any[] = [];
+  const asked: boolean[] = [];
+  let row: any = {
+    dbName: 'app',
+    storageSize: '10Gi',
+    volumeUsedBytes: null,
+    volumeCapacityBytes: null
+  };
+  let dataDirBytes: number | null = 2 * 1024 ** 3;
+  const svc = Object.create(CnpgConsumer.prototype) as any;
+  Object.assign(svc, {
+    logger: { warn() {} },
+    lastSample: new Map(),
+    sampling: new Set(),
+    storageState: new Map(),
+    prisma: {
+      database: {
+        findUnique: async () => row,
+        update: async (args: any) => {
+          updates.push(args.data);
+          row = { ...row, ...args.data };
+          return {};
+        }
+      }
+    },
+    cnpg: {
+      sampleDatabaseStats: async (_ns: string, _pod: string, _db: string, opts: any) => {
+        asked.push(opts.measureDataDir);
+        return {
+          sizeBytes: 1,
+          connections: 1,
+          walPendingSegments: 0,
+          volumeUsedBytes: 50,
+          volumeCapacityBytes: 100,
+          shared: { dataDirBytes: opts.measureDataDir ? dataDirBytes : null }
+        };
+      }
+    },
+    notifications: { notifyDbStorage: async () => {} },
+    scheduleEmit: () => {}
+  });
+  const ctx = { databaseId: 'db-1', orgId: 'o', projectId: 'p' };
+  await svc.sampleStats(ctx, 'db-1-1', 'ns');
+  svc.lastSample.clear();
+  dataDirBytes = 9 * 1024 ** 3;
+  await svc.sampleStats(ctx, 'db-1-1', 'ns');
+  assert.deepEqual(asked, [true, false]);
+  assert.equal(updates[0].volumeUsedBytes, BigInt(2 * 1024 ** 3));
+  assert.equal(updates[1].volumeUsedBytes, BigInt(2 * 1024 ** 3));
+  assert.equal(updates[1].volumeCapacityBytes, BigInt(10 * 1024 ** 3));
+
+  svc.lastSample.clear();
+  svc.lastDataDirMeasure.set('db-1', Date.now() - 6 * 60 * 1000);
+  await svc.sampleStats(ctx, 'db-1-1', 'ns');
+  assert.equal(asked.at(-1), true);
+  assert.equal(updates.at(-1).volumeUsedBytes, BigInt(9 * 1024 ** 3));
+});

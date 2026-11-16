@@ -2053,11 +2053,12 @@ export class K8sCnpgService implements OnApplicationBootstrap {
   async sampleDatabaseStats(
     namespace: string,
     pod: string,
-    dbName: string
+    dbName: string,
+    opts: { measureDataDir?: boolean } = {}
   ): Promise<SampledDbStats | null> {
     const safeDb = dbName.replace(/[^a-zA-Z0-9_]/g, '');
     if (safeDb !== dbName) return null;
-    const r = await this.execInPod(namespace, pod, 'postgres', dbStatsCommand(safeDb));
+    const r = await this.execInPod(namespace, pod, 'postgres', dbStatsCommand(safeDb, opts));
     if (!r.success) return null;
     return parseDbStatsOutput(r.stdout);
   }
