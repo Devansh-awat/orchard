@@ -63,6 +63,8 @@ export class LeaseElector extends EventEmitter implements Elector {
 
   private holding = false;
 
+  private validUntil = 0;
+
   private renewFailures = 0;
 
   private stopped = true;
@@ -80,6 +82,7 @@ export class LeaseElector extends EventEmitter implements Elector {
   }
 
   isHolder(): boolean {
+    this.dropIfStale();
     return this.holding;
   }
 
@@ -124,15 +127,18 @@ export class LeaseElector extends EventEmitter implements Elector {
 
   private async tick(): Promise<void> {
     if (this.stopped) return;
+    this.dropIfStale();
+    const started = Date.now();
     try {
       const lease = await this.readLease();
+      if (this.stopped) return;
       if (!lease) {
         if (this.shouldAcquire && !this.shouldAcquire()) {
           this.setHolding(false);
           return;
         }
         await this.createLease();
-        this.onRenewed(true);
+        this.onRenewed(true, started);
         return;
       }
       const holder = lease.spec?.holderIdentity;
@@ -140,7 +146,7 @@ export class LeaseElector extends EventEmitter implements Elector {
         lease.spec!.renewTime = new k8s.V1MicroTime();
         lease.spec!.leaseDurationSeconds = this.leaseDurationSeconds;
         await this.api.replaceNamespacedLease(this.name, this.namespace, lease);
-        this.onRenewed(false);
+        this.onRenewed(false, started);
         return;
       }
       if (!holder || this.isExpired(lease)) {
@@ -156,7 +162,7 @@ export class LeaseElector extends EventEmitter implements Elector {
           leaseTransitions: (lease.spec?.leaseTransitions ?? 0) + 1
         };
         await this.api.replaceNamespacedLease(this.name, this.namespace, lease);
-        this.onRenewed(true);
+        this.onRenewed(true, started);
         return;
       }
       this.renewFailures = 0;
@@ -206,8 +212,18 @@ export class LeaseElector extends EventEmitter implements Elector {
     return ageMs > (lease.spec?.leaseDurationSeconds ?? this.leaseDurationSeconds) * 1000;
   }
 
-  private onRenewed(acquired: boolean): void {
+  private dropIfStale(): void {
+    if (this.holding && Date.now() >= this.validUntil) this.setHolding(false);
+  }
+
+  private onRenewed(acquired: boolean, started: number): void {
+    if (this.stopped) {
+      void this.release();
+      return;
+    }
     this.renewFailures = 0;
+    const window = this.leaseDurationSeconds * 1000;
+    this.validUntil = started + Math.max(window / 2, window - this.renewIntervalMs);
     if (acquired && !this.holding) {
       this.logger.log(`acquired lease (${this.identity})`);
     }

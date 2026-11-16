@@ -338,11 +338,46 @@ test('starting twice does not run a second renewal loop', async () => {
   await e.stop();
 });
 
-test.todo('a renewal still in flight when the elector stops does not claim the lease afterwards');
+test('a renewal still in flight when the elector stops does not claim the lease afterwards', async () => {
+  let resolveRead!: () => void;
+  const pendingRead = new Promise<void>((r) => (resolveRead = r));
+  const c = cluster({ pendingRead });
+  const { e, events } = elector(c.kc);
+  e.start();
+  await flush();
+  await e.stop();
+  resolveRead();
+  await flush();
+  await flush();
+  assert.equal(e.isHolder(), false);
+  assert.deepEqual(events, []);
+  assert.equal(c.calls.creates.length, 0);
+});
 
-test.todo(
-  'a holder whose renewals hang stops reporting itself as holder once its last renewal is older than the lease duration'
-);
+test('a holder whose renewals hang stops reporting itself as holder before its lease can expire', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: 1_000_000 });
+  const c = cluster({ lease: held(ME, 0) });
+  const e = new LeaseElector(c.kc, {
+    namespace: NS,
+    name: NAME,
+    identity: ME,
+    leaseDurationSeconds: 15,
+    renewIntervalMs: 5_000,
+    logger: quiet
+  });
+  const events: string[] = [];
+  e.on('lost', () => events.push('lost'));
+  e.start();
+  await flush();
+  await flush();
+  assert.equal(e.isHolder(), true);
+  t.mock.timers.tick(9_000);
+  assert.equal(e.isHolder(), true);
+  t.mock.timers.tick(1_000);
+  assert.equal(e.isHolder(), false);
+  assert.deepEqual(events, ['lost']);
+  await e.stop();
+});
 
 test('a static non-holder never acquires and a static holder announces itself once started', async () => {
   const never = new StaticElector(false);
