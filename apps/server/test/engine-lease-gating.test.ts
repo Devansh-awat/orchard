@@ -79,6 +79,7 @@ function harness(opts: Opts = {}) {
   const prisma: any = {
     $transaction: async (fn: any) => {
       calls.transactions += 1;
+      if (Array.isArray(fn)) return Promise.all(fn);
       return fn({ $executeRaw: async () => 0 });
     },
     k8sMirrorHeartbeat: {
