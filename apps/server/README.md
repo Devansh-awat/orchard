@@ -57,13 +57,17 @@ pnpm --filter server mcp:remote   # HTTP on MCP_PORT, default 3100
 
 ## Tests
 
-There is no single test script. Each suite has a `test:*` script in `package.json`, and you can run
-any file directly:
+`pnpm --filter server test` runs every unit test, and `test:postgres` runs the suites that need a
+database. Set `TEST_BASE` to a git ref to run only the test files that import, directly or not, a
+file changed since that ref, as pull requests do in CI:
 
 ```bash
-pnpm --filter server test:auth-coverage
-pnpm --filter server exec tsx --test test/health-sync.test.ts
+TEST_BASE=origin/main pnpm --filter server test
+pnpm --filter server exec tsx --test test/<name>.test.ts
 ```
+
+A change to anything that is not TypeScript, such as `schema.prisma`, `package.json` or a fixture,
+runs every test. Pushes to `main` always run every test.
 
 Most suites are pure. The few that write real rows refuse to run against `localhost:5432`, because
 that port is often a forward to production. [test/README.md](test/README.md) shows how to point them

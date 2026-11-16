@@ -113,9 +113,17 @@ pnpm --filter frontend test
 cd apps/<module> && go test ./...                 # for each Go module you touched
 ```
 
-The server has no single `test` script. Its suites are the `test:*` scripts in
-`apps/server/package.json`; run the ones for the area you changed, or one file with
-`pnpm --filter server exec tsx --test test/<name>.test.ts`.
+`pnpm --filter server test` runs every unit test, and `test:postgres` runs the suites that need a
+database. Set `TEST_BASE` to a git ref to run only the test files that import, directly or not, a
+file changed since that ref, as pull requests do in CI:
+
+```bash
+TEST_BASE=origin/main pnpm --filter server test
+pnpm --filter server exec tsx --test test/<name>.test.ts
+```
+
+A change to anything that is not TypeScript, such as `schema.prisma`, `package.json` or a fixture,
+runs every test. Pushes to `main` always run every test.
 
 A few server suites write real rows and refuse to run against `localhost:5432`. See
 [apps/server/test/README.md](apps/server/test/README.md) for pointing them at a throwaway Postgres.

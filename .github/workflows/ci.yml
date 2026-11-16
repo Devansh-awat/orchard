@@ -253,6 +253,8 @@ jobs:
           --health-interval 5s --health-timeout 5s --health-retries 10
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 2
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
@@ -268,6 +270,7 @@ jobs:
       - name: Server tests
         env:
           TEST_REDIS_URL: redis://localhost:16379
+          TEST_BASE: ${{ github.event_name == 'pull_request' && 'HEAD^1' || '' }}
         run: |
           export PATH="$(ls -d /usr/lib/postgresql/*/bin | sort -V | tail -1):$PATH"
           pnpm --filter server test
@@ -308,6 +311,8 @@ jobs:
       SSO_ENCRYPTION_KEY: '0000000000000000000000000000000000000000000000000000000000000000'
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 2
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
@@ -327,6 +332,8 @@ jobs:
       # Engine SQL (batch upsert, natural-key replacement, array-bound
       # stale sweep, tombstones) and the debounced crash/recovery state machine.
       - name: Postgres-backed tests
+        env:
+          TEST_BASE: ${{ github.event_name == 'pull_request' && 'HEAD^1' || '' }}
         run: pnpm --filter server test:postgres
       - name: Cross-tenant isolation replay
         run: pnpm --filter server test:isolation
