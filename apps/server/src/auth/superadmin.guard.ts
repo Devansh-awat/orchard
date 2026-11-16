@@ -19,7 +19,7 @@ import {
   ApiTokenScopeName
 } from './decorators';
 import { hashApiToken } from './api-tokens.service';
-import { ORG_SCOPED_DENY, deviceOrgScope } from './org-scoped-devices';
+import { ORG_SCOPED_DENY, deviceOrgScope, isScopedDevice } from './org-scoped-devices';
 import {
   requestAuthStorage,
   RequestAuthContext,
@@ -290,7 +290,10 @@ export class SuperAdminGuard implements CanActivate {
         throw new UnauthorizedException("Acting user doesn't own that session");
       }
       const gatewayOrgScope = deviceOrgScope(actingSession.deviceName);
-      if (gatewayOrgScope && deniedToOrgScopedSession(request.method, request.path)) {
+      if (
+        (gatewayOrgScope || isScopedDevice(actingSession.deviceName)) &&
+        deniedToOrgScopedSession(request.method, request.path)
+      ) {
         throw new ForbiddenException('This token is scoped to a single organization');
       }
       request['auth'] = {

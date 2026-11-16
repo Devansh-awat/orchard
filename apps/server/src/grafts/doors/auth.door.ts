@@ -1,3 +1,4 @@
+import { mcpScopeClaim } from '../../mcp/mcp-scopes';
 import { ForbiddenException, Inject, Injectable, Scope } from '@nestjs/common';
 import { INQUIRER } from '@nestjs/core';
 import type { IncomingMessage } from 'node:http';
@@ -189,6 +190,7 @@ export class AuthDoorV1 {
       }));
     return new SignJWT({
       type: 'mcp',
+      scope: mcpScopeClaim('deploy'),
       email: user.email,
       name: user.username,
       externalAuthId: user.externalAuthId,

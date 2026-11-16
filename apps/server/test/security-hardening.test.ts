@@ -23,9 +23,13 @@ import {
   MCP_ORG_DEVICE,
   deviceLabel,
   deviceOrgScope,
+  isScopedDevice,
   orgScopedDevice,
   plainDeviceName
 } from '../src/auth/org-scoped-devices';
+import { AuthDoorV1 } from '../src/grafts/doors/auth.door';
+import { scopeFromClaim } from '../src/mcp/mcp-scopes';
+import { jwtVerify } from 'jose';
 import { tenantDenyPolicy } from '../src/kubernetes/security-policies';
 import { assertIngressNameFree } from '../src/projects/image-ownership';
 import { ApiThrottlerGuard } from '../src/auth/api-throttler.guard';
@@ -104,6 +108,42 @@ test('an org SSO session may mint what carries its org, and nothing else', () =>
     ['GET', '/apiv1/admin/users']
   ]) {
     assert.equal(deniedToOrgSsoSession(method, path), true, path);
+  }
+});
+
+test('a personal device token is not tied to an org but is still kept off account routes', () => {
+  const personal = orgScopedDevice(MCP_ORG_DEVICE, null, 'x');
+  assert.equal(deviceOrgScope(personal), undefined);
+  assert.equal(isScopedDevice(personal), true);
+  assert.equal(isScopedDevice(plainDeviceName(personal)), false);
+  assert.equal(isScopedDevice('Chrome on macOS'), false);
+  assert.equal(deniedToOrgScopedSession('POST', '/apiv1/ssh-identities'), true);
+});
+
+test('device tokens minted for grafts carry the deploy scope, not exec', async () => {
+  const prev = process.env.JWT_SECRET;
+  process.env.JWT_SECRET = 'x'.repeat(48);
+  try {
+    const door = Object.create(AuthDoorV1.prototype);
+    Object.assign(door, {
+      graft: { id: 'greenhouse', claims: {} },
+      prisma: {
+        user: {
+          findUnique: async () => ({ email: 'a@x.dev', username: 'a', externalAuthId: null })
+        },
+        session: { findFirst: async () => null, create: async () => ({ id: 'sess-1' }) }
+      }
+    });
+    const token = await door.mintDeviceToken({
+      userId: 'u1',
+      deviceName: 'greenhouse.machine:personal:s1',
+      ttlDays: 1
+    });
+    const { payload } = await jwtVerify(token, new TextEncoder().encode(process.env.JWT_SECRET));
+    assert.equal(payload.type, 'mcp');
+    assert.equal(scopeFromClaim(payload.scope), 'deploy');
+  } finally {
+    process.env.JWT_SECRET = prev;
   }
 });
 

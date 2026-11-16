@@ -48,6 +48,14 @@ export function deviceLabel(deviceName: string | null): string | null {
   return deviceName.slice(prefix.length).split(':').slice(1).join(':');
 }
 
+export function isScopedDevice(deviceName: string | null | undefined): boolean {
+  if (!deviceName) return false;
+  for (const prefix of devicePrefixes) {
+    if (deviceName.startsWith(`${prefix}:`)) return true;
+  }
+  return false;
+}
+
 export function deviceOrgScope(deviceName: string | null | undefined): string | undefined {
   if (!deviceName) return undefined;
   for (const prefix of devicePrefixes) {
