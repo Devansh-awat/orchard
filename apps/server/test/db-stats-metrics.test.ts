@@ -123,3 +123,44 @@ test('node disk pressure seen by the exec holds through the metrics-only samples
   }
   assert.deepEqual(notes, ['pressure']);
 });
+
+test('without a metrics store the sampler never queries one, and after a failure it backs off', async () => {
+  const prev = process.env.VICTORIAMETRICS_URL;
+  let queries = 0;
+  let failing = true;
+  const svc = Object.create(CnpgConsumer.prototype) as any;
+  Object.assign(svc, {
+    logger: { warn() {} },
+    statsFallbackWarnedAt: 0,
+    metricsBackoffUntil: 0,
+    vm: {
+      queryInstantVector: async () => {
+        queries += 1;
+        if (failing) throw new Error('getaddrinfo ENOTFOUND victoriametrics');
+        return [];
+      }
+    }
+  });
+  const primaries = [{ namespace: 'ns', pod: 'pg-1', dbName: 'app' }];
+  try {
+    delete process.env.VICTORIAMETRICS_URL;
+    assert.equal((await svc.statsFromMetrics(primaries)).size, 0);
+    assert.equal(queries, 0);
+
+    process.env.VICTORIAMETRICS_URL = 'http://vm:8428';
+    await svc.statsFromMetrics(primaries);
+    const afterFailure = queries;
+    assert.ok(afterFailure > 0);
+    failing = false;
+    await svc.statsFromMetrics(primaries);
+    await svc.statsFromMetrics(primaries);
+    assert.equal(queries, afterFailure);
+
+    svc.metricsBackoffUntil = Date.now() - 1;
+    await svc.statsFromMetrics(primaries);
+    assert.ok(queries > afterFailure);
+  } finally {
+    if (prev === undefined) delete process.env.VICTORIAMETRICS_URL;
+    else process.env.VICTORIAMETRICS_URL = prev;
+  }
+});

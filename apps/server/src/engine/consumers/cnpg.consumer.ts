@@ -55,6 +55,7 @@ const STATS_REFRESH_MS = 60 * 1000;
 const STATS_QUERY_TIMEOUT_MS = 10 * 1000;
 const DATA_DIR_MEASURE_EVERY_MS = 5 * 60 * 1000;
 const STATS_FALLBACK_WARN_MS = 10 * 60 * 1000;
+const METRICS_BACKOFF_MS = 5 * 60 * 1000;
 const CONFIRM_AFTER_MS = 90 * 1000;
 const SETTLING_STATUSES = new Set(['deleting', 'restoring', 'provisioning', 'error']);
 
@@ -112,6 +113,8 @@ export class CnpgConsumer implements OnModuleDestroy {
   private readonly vm = new VictoriaMetricsService();
 
   private statsFallbackWarnedAt = 0;
+
+  private metricsBackoffUntil = 0;
 
   private readonly scheduleAbsentSince = new Map<string, number>();
 
@@ -676,6 +679,8 @@ export class CnpgConsumer implements OnModuleDestroy {
     primaries: { namespace: string; pod: string; dbName: string }[]
   ): Promise<Map<string, SampledDbStats>> {
     if (primaries.length === 0) return new Map();
+    if (!process.env.VICTORIAMETRICS_URL) return new Map();
+    if (Date.now() < this.metricsBackoffUntil) return new Map();
     try {
       const [size, connections, walPending] = await Promise.all([
         this.vm.queryInstantVector(DB_STATS_METRIC_QUERIES.size, STATS_QUERY_TIMEOUT_MS),
@@ -691,8 +696,9 @@ export class CnpgConsumer implements OnModuleDestroy {
       }
       return sampled;
     } catch (err) {
+      this.metricsBackoffUntil = Date.now() + METRICS_BACKOFF_MS;
       this.warnStatsFallback(
-        `metrics store unavailable (${(err as Error)?.message ?? err}); sampling ${primaries.length} databases by exec`
+        `metrics store unavailable (${(err as Error)?.message ?? err}); sampling ${primaries.length} databases by exec for the next five minutes`
       );
       return new Map();
     }
