@@ -1,10 +1,16 @@
 const SHARE_TOKEN_PATH_RE = /(\/share\/[a-z][a-z0-9-]*\/)(?!sessions(?:[/?#]|$))[^/?#]+/g;
+const DEPLOY_WEBHOOK_PATH_RE = /(\/webhooks\/deploy\/)[^/?#]+/g;
 
 export const REDACTED_SEGMENT = '[redacted]';
 
 export function redactSensitivePath(url: string): string {
-  if (typeof url !== 'string' || !url.includes('/share/')) return url;
-  return url.replace(SHARE_TOKEN_PATH_RE, `$1${REDACTED_SEGMENT}`);
+  if (typeof url !== 'string') return url;
+  let out = url;
+  if (out.includes('/share/')) out = out.replace(SHARE_TOKEN_PATH_RE, `$1${REDACTED_SEGMENT}`);
+  if (out.includes('/webhooks/deploy/')) {
+    out = out.replace(DEPLOY_WEBHOOK_PATH_RE, `$1${REDACTED_SEGMENT}`);
+  }
+  return out;
 }
 
 const SPAN_URL_TAGS = ['http.url', 'http.endpoint'] as const;

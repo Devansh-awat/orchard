@@ -1,3 +1,8 @@
+import {
+  REDACTED_SEGMENT,
+  redactSensitivePath,
+  redactSpanUrls
+} from '../src/analytics/url-redaction';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
@@ -583,6 +588,46 @@ test('responses, errors and audit entries from a trigger never carry the raw tok
   }
 });
 
-test.todo('webhook tokens in the deploy URL path are redacted from Datadog span URLs');
+test('webhook tokens in the deploy URL path are redacted from Datadog span URLs', () => {
+  const token = 'a'.repeat(64);
+  for (const url of [
+    `/apiv1/webhooks/deploy/${token}`,
+    `https://orchard.example/apiv1/webhooks/deploy/${token}?x=1`,
+    `/apiv1/webhooks/deploy/${token}#frag`
+  ]) {
+    const redacted = redactSensitivePath(url);
+    assert.ok(!redacted.includes(token), url);
+    assert.ok(redacted.includes(`/webhooks/deploy/${REDACTED_SEGMENT}`), url);
+  }
+  const tags: Record<string, unknown> = {
+    'http.url': `https://o.example/apiv1/webhooks/deploy/${token}`
+  };
+  redactSpanUrls({
+    context: () => ({ getTag: (key: string) => tags[key] }),
+    setTag: (key: string, value: unknown) => (tags[key] = value)
+  });
+  assert.ok(!String(tags['http.url']).includes(token));
+});
 
-test.todo('a tag-only webhook keeps the registry host when the current image names a port');
+test('a tag-only webhook keeps the registry host and repository of the current image', async () => {
+  const pull = process.env.DOCKER_REGISTRY_PULL;
+  const push = process.env.DOCKER_REGISTRY_PUSH;
+  const ported = `${REGISTRY}:5000`;
+  process.env.DOCKER_REGISTRY_PULL = ported;
+  process.env.DOCKER_REGISTRY_PUSH = ported;
+  try {
+    const w = world();
+    const a = await w.mint('depA', 'alice');
+    w.deployments.depA.image = `${ported}/orchard/acme-web:v1`;
+    await w.service.triggerWebhookDeploy(a.token, undefined as any, 'v2');
+    w.deployments.depA.image = `${ported}/orchard/acme-web@sha256:${'b'.repeat(64)}`;
+    await w.service.triggerWebhookDeploy(a.token, undefined as any, 'v3');
+    assert.deepEqual(
+      w.imageUpdates.map((u: any) => u.image),
+      [`${ported}/orchard/acme-web:v2`, `${ported}/orchard/acme-web:v3`]
+    );
+  } finally {
+    process.env.DOCKER_REGISTRY_PULL = pull;
+    process.env.DOCKER_REGISTRY_PUSH = push;
+  }
+});

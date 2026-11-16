@@ -16,6 +16,7 @@ import { AuditService } from '../audit/audit.service';
 import { AuthorizationService } from '../auth/authorization.service';
 import { QuotasService } from '../quotas/quotas.service';
 import { assertImageOwnedByProject } from '../projects/image-ownership';
+import { parseImageRef } from '../projects/image-ref';
 
 // H-3: Webhook bearer tokens are persisted as a SHA-256 hex digest. The
 // plaintext is only ever held in memory long enough to return it from
@@ -352,8 +353,15 @@ export class WebhooksService {
     }
 
     if (image || tag) {
-      const currentImage = deployment.image || '';
-      const baseImage = image ?? currentImage.split(':')[0];
+      let baseImage = image;
+      if (!baseImage) {
+        const current = parseImageRef(deployment.image || '');
+        if (!current) {
+          writeAudit('failure', 'rejected', { reason: 'unparseable_current_image' });
+          throw new BadRequestException('This app has no image to retag. Send the image too.');
+        }
+        baseImage = current.host ? `${current.host}/${current.repository}` : current.repository;
+      }
       const resolvedTag = tag ?? 'latest';
       const fullImage = `${baseImage}:${resolvedTag}`;
 
