@@ -8,11 +8,16 @@
   "packages": {
     "apps/server": {
       "release-type": "node",
-      "component": "server"
+      "component": "server",
+      "exclude-paths": [
+        "apps/server/THIRD_PARTY_NOTICES.txt",
+        "apps/server/hostctl/internal/notices/THIRD_PARTY_NOTICES.txt"
+      ]
     },
     "apps/frontend": {
       "release-type": "node",
-      "component": "frontend"
+      "component": "frontend",
+      "exclude-paths": ["apps/frontend/static/third-party-notices.txt"]
     },
     "apps/gateway": {
       "release-type": "go",
@@ -20,19 +25,26 @@
     },
     "apps/cli": {
       "release-type": "go",
-      "component": "cli"
+      "component": "cli",
+      "exclude-paths": [
+        "apps/cli/internal/notices/THIRD_PARTY_NOTICES.txt",
+        "apps/cli/tofu-provider/THIRD_PARTY_NOTICES.txt"
+      ]
     },
     "apps/r2-proxy": {
       "release-type": "go",
-      "component": "r2-proxy"
+      "component": "r2-proxy",
+      "exclude-paths": ["apps/r2-proxy/THIRD_PARTY_NOTICES.txt"]
     },
     "apps/fc-builder": {
       "release-type": "go",
-      "component": "fc-builder"
+      "component": "fc-builder",
+      "exclude-paths": ["apps/fc-builder/THIRD_PARTY_NOTICES.txt"]
     },
     "apps/registry": {
       "release-type": "go",
-      "component": "registry"
+      "component": "registry",
+      "exclude-paths": ["apps/registry/THIRD_PARTY_NOTICES.txt"]
     },
     "registry": {
       "release-type": "simple",
