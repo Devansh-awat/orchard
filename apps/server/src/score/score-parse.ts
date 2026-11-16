@@ -1,4 +1,4 @@
-import { load as loadYaml } from 'js-yaml';
+import { loadUntrustedYaml } from '../security/untrusted-yaml';
 
 export const SCORE_FILES = ['score.yaml', 'score.yml'] as const;
 export const SCORE_API_VERSION = 'score.dev/v1b1';
@@ -124,7 +124,7 @@ export function parseScore(contents: string | null | undefined): ScorePlan | nul
   if (!contents) return null;
   let doc: any;
   try {
-    doc = loadYaml(contents);
+    doc = loadUntrustedYaml(contents);
   } catch {
     return null;
   }

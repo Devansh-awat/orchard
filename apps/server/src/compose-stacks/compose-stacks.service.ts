@@ -5,7 +5,7 @@ import {
   ForbiddenException,
   Logger
 } from '@nestjs/common';
-import * as yaml from 'js-yaml';
+import { loadUntrustedYaml } from '../security/untrusted-yaml';
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProjectsService } from '../projects/projects.service';
@@ -195,7 +195,7 @@ export class ComposeStacksService {
   private parseCompose(composeYaml: string, composePath: string): ParsedComposeService[] {
     let parsed: any;
     try {
-      parsed = yaml.load(composeYaml);
+      parsed = loadUntrustedYaml(composeYaml);
     } catch (e: any) {
       throw new BadRequestException(`Invalid compose YAML: ${e.message}`);
     }
