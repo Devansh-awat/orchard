@@ -108,7 +108,7 @@ export class OAuthController {
 
     if (error) {
       this.clearOauthStateCookie(res);
-      return res.redirect(`${process.env.FRONTEND_URL}?error=${encodeURIComponent(error)}`);
+      return res.redirect(`${frontendBase}?error=${encodeURIComponent(error)}`);
     }
 
     if (!code) {
@@ -203,12 +203,10 @@ export class OAuthController {
 
       setSessionCookie(res, sessionToken);
 
-      return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}/oauth/callback`);
+      return res.redirect(`${frontendBase}/oauth/callback`);
     } catch (err) {
       console.error('OAuth callback error:', err);
-      return res.redirect(
-        `${process.env.FRONTEND_URL}?error=${encodeURIComponent('Authentication failed')}`
-      );
+      return res.redirect(`${frontendBase}?error=${encodeURIComponent('Authentication failed')}`);
     }
   }
 

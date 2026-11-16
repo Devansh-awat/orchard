@@ -424,9 +424,14 @@ test('an IdP error is passed home URL-encoded and cannot steer the redirect off 
   });
 });
 
-test.todo(
-  'an IdP error or failed exchange with FRONTEND_URL unset lands on the default frontend, not a relative "undefined" path'
-);
+test('an IdP error with FRONTEND_URL unset lands on the default frontend, not a relative "undefined" path', async () => {
+  await withEnv({ FRONTEND_URL: undefined }, async () => {
+    const { controller } = oauthWorld();
+    const { res, out } = response();
+    await controller.callback(undefined as any, 'access_denied', undefined as any, cbReq(), res);
+    assert.equal(new URL(out.redirects[0]).origin, 'http://localhost:3000');
+  });
+});
 
 test('a callback with no code is a 400 and exchanges nothing', async () => {
   await withEnv({}, async () => {
