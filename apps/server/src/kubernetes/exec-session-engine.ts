@@ -264,10 +264,11 @@ export async function authenticateUpgrade(
     if (!token.startsWith('orch_')) return unauthorized;
     const apiToken = await deps.prisma.apiToken.findUnique({
       where: { tokenHash: hashApiToken(token) },
-      include: { user: { select: { id: true, email: true } } }
+      include: { user: { select: { id: true, email: true, disabledAt: true } } }
     });
     if (!apiToken) return unauthorized;
     if (apiToken.expiresAt && apiToken.expiresAt < new Date()) return unauthorized;
+    if (apiToken.user.disabledAt) return unauthorized;
     const scopes = Array.isArray(apiToken.scopes) ? (apiToken.scopes as string[]) : [];
     if (!scopes.includes('exec')) return { reject: 403, message: 'Forbidden' };
     const restrictedProjectIds = Array.isArray(apiToken.restrictedProjectIds)

@@ -100,10 +100,11 @@ export async function authenticateUpgrade(
   }
   const apiToken = await deps.prisma.apiToken.findUnique({
     where: { tokenHash: hashApiToken(token) },
-    include: { user: { select: { id: true, email: true } } }
+    include: { user: { select: { id: true, email: true, disabledAt: true } } }
   });
   if (!apiToken) return null;
   if (apiToken.expiresAt && apiToken.expiresAt < new Date()) return null;
+  if (apiToken.user.disabledAt) return null;
   const scopes = Array.isArray(apiToken.scopes) ? (apiToken.scopes as string[]) : [];
   if (!scopes.includes(deps.requiredScope)) return null;
   const restricted = Array.isArray(apiToken.restrictedProjectIds)

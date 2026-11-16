@@ -550,9 +550,13 @@ test('a failed lastUsedAt write does not break an accepted upgrade', async () =>
   await new Promise((r) => setImmediate(r));
 });
 
-test.todo(
-  'an API token whose owner is turned off is refused, as the HTTP guard does with user.disabledAt'
-);
+test('an API token whose owner is turned off is refused, as the HTTP guard does', async () => {
+  const { deps } = withToken(
+    tokenRow({ user: { id: USER_ID, email: 'ada@example.com', disabledAt: new Date() } })
+  );
+  const identity = await authenticateUpgrade(req({ authorization: `Bearer ${API_TOKEN}` }), deps);
+  assert.equal(identity, null);
+});
 
 test('the first session_token cookie wins over a later duplicate', () => {
   assert.equal(parseCookies('session_token=first; session_token=second').session_token, 'first');
