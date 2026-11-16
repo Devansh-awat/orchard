@@ -3172,7 +3172,11 @@ fi
                 `involvedObject.name=${podName}`
               )
               .catch(() => null);
-            startupMessage = sandboxStartFailure(events?.body.items ?? []) ?? undefined;
+            startupMessage =
+              sandboxStartFailure(events?.body.items ?? [], {
+                runtimeClassName: pod.spec?.runtimeClassName,
+                annotations: pod.metadata?.annotations
+              }) ?? undefined;
           }
 
           railpackInfoLog = await this.readRailpackInfoLog(
