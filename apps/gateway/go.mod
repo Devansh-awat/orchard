@@ -1,3 +1,3 @@
-module gateway // v0.1.1
+module gateway
 
 go 1.26.11

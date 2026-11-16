@@ -1,4 +1,4 @@
-module github.com/hackclub/orchard/cli // v0.1.1
+module github.com/hackclub/orchard/cli
 
 go 1.26.11
 
