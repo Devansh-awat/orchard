@@ -159,19 +159,24 @@ test('cilium entities are admitted only where cilium policies render', options, 
   assert.deepEqual(cnp.spec.ingress[0].fromEntities, ['host', 'remote-node', 'ingress']);
 });
 
-test('r2-proxy only takes connections from tenants, the server and the operator', options, () => {
-  const policy = find(render([]), 'NetworkPolicy', 'r2-proxy-ingress');
-  const from = policy.spec.ingress[0].from;
-  assert.ok(from.length > 0 && from.every((p: any) => p.namespaceSelector));
-  const tenant = namespaceLabels('acme-web', { 'orchard.my/managed': 'true' });
-  const reaches = (labels: Record<string, string>) =>
-    from.some((p: any) => matches(p.namespaceSelector, labels));
-  assert.equal(reaches(tenant), true);
-  assert.equal(reaches(namespaceLabels('orchard')), true);
-  assert.equal(reaches(namespaceLabels('postgresql')), true);
-  assert.equal(reaches(namespaceLabels('orchard-builders')), false);
-  assert.equal(reaches(namespaceLabels('some-other-namespace')), false);
-});
+test(
+  'r2-proxy only takes connections from tenants, builds, the server and the operator',
+  options,
+  () => {
+    const policy = find(render([]), 'NetworkPolicy', 'r2-proxy-ingress');
+    const from = policy.spec.ingress[0].from;
+    assert.ok(from.length > 0 && from.every((p: any) => p.namespaceSelector));
+    const tenant = namespaceLabels('acme-web', { 'orchard.my/managed': 'true' });
+    const reaches = (labels: Record<string, string>) =>
+      from.some((p: any) => matches(p.namespaceSelector, labels));
+    assert.equal(reaches(tenant), true);
+    assert.equal(reaches(namespaceLabels('orchard')), true);
+    assert.equal(reaches(namespaceLabels('postgresql')), true);
+    assert.equal(reaches(namespaceLabels('orchard-builders')), true);
+    assert.equal(reaches(namespaceLabels('orchard-sandboxes')), false);
+    assert.equal(reaches(namespaceLabels('some-other-namespace')), false);
+  }
+);
 
 test('redis requires a password that the server receives through the environment', options, () => {
   const docs = render([]);
