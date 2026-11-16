@@ -166,7 +166,7 @@ values for you.
 | `REGISTRY_IMAGE_POLICY` |  | What the cluster does with a pod naming another project's image: enforce, warn or off. Unset enforces unless an existing image would be refused, in which case it warns. |
 | `REGISTRY_PULL_SECRET_NAME` |  |  |
 | `REGISTRY_HTTP_HOSTS` |  | Comma-separated registry hosts reached over plain HTTP. Anything not listed is HTTPS. |
-| `HARBOR_USERNAME` |  |  |
+| `HARBOR_USERNAME` |  | Login for the registry above (Harbor, zot or any OCI registry). It needs pull, push and delete: Orchard keeps the ten newest builds of each app and deletes older ones, so without delete the registry fills up. On Harbor, give the robot Delete Artifact and Delete Tag. |
 | `HARBOR_PASSWORD` |  |  |
 | `HARBOR_API_URL` |  | Harbor API base for vulnerability scan results (the app Security tab). Defaults to `https://$DOCKER_REGISTRY_PULL`; set it to reach Harbor's core service in-cluster. |
 | `HARBOR_API_TIMEOUT_MS` |  |  |

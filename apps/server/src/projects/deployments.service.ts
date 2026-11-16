@@ -38,6 +38,7 @@ import { disruptionBudgetActive } from '../kubernetes/disruption-budget';
 import { publicDeploymentPorts } from '../kubernetes/security-policies';
 import { UsersService } from '../users/users.service';
 import { DockerService } from '../docker/docker.service';
+import { RegistryPruneService } from '../docker/registry-prune.service';
 import { FcUnavailableError } from '../docker/fc/fc-client';
 import { isBuilderOverride } from '../docker/fc/build-backend-router';
 import { BuildJobInformerService } from '../docker/build-job-informer.service';
@@ -218,7 +219,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     private readonly instanceConfig: InstanceConfigService,
     private readonly releases: ReleasesService,
     @Optional() private readonly buildJobInformer?: BuildJobInformerService,
-    @Optional() private readonly checkpoints?: DatabaseCheckpointsService
+    @Optional() private readonly checkpoints?: DatabaseCheckpointsService,
+    @Optional() private readonly registryPrune?: RegistryPruneService
   ) {}
 
   async runQueuedBuild(run: {
@@ -8439,23 +8441,16 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
             const allImages = await tx.imageHistory.findMany({
               where: { deploymentId },
               orderBy: { createdAt: 'desc' },
-              select: { id: true, image: true }
+              select: { id: true }
             });
 
             if (allImages.length > 10) {
-              const imagesToRemove = allImages.slice(10);
-              const idsToRemove = imagesToRemove.map((img) => img.id);
-
               await tx.imageHistory.deleteMany({
-                where: { id: { in: idsToRemove } }
-              });
-
-              const imageRefs = imagesToRemove.map((img) => img.image);
-              this.dockerService.deleteArtifactsFromRegistry(imageRefs).catch((err) => {
-                console.error(`[Projects] Failed to delete old artifacts from registry:`, err);
+                where: { id: { in: allImages.slice(10).map((img) => img.id) } }
               });
             }
           })
+          .then(() => this.registryPrune?.pruneSoon(image))
           .catch((err) => {
             console.error('[Projects] Image history save failed:', err);
           });

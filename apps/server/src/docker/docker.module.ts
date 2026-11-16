@@ -11,6 +11,7 @@ import { LeaderElectionService } from '../events/leader-election.service';
 import { FirecrackerClient } from './fc/fc-client';
 import { BuildBackendRouter } from './fc/build-backend-router';
 import { BuildCacheService } from './build-cache.service';
+import { RegistryPruneService } from './registry-prune.service';
 import { BuildCacheController } from './build-cache.controller';
 import { KubernetesModule } from '../kubernetes/kubernetes.module';
 
@@ -24,7 +25,8 @@ import { KubernetesModule } from '../kubernetes/kubernetes.module';
     BuildJobInformerService,
     FirecrackerClient,
     BuildBackendRouter,
-    BuildCacheService
+    BuildCacheService,
+    RegistryPruneService
   ],
   exports: [
     DockerService,
@@ -33,7 +35,8 @@ import { KubernetesModule } from '../kubernetes/kubernetes.module';
     BuildJobInformerService,
     FirecrackerClient,
     BuildBackendRouter,
-    BuildCacheService
+    BuildCacheService,
+    RegistryPruneService
   ]
 })
 export class DockerModule implements OnModuleInit, OnModuleDestroy {

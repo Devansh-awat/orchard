@@ -102,6 +102,8 @@ import { daemonTenantLabel, TENANT_KEY_LABEL } from './buildkit-daemon-policy';
 import { depotOutputFlags, depotScriptTail, depotSessionAuths } from './depot-session';
 import { BuildJobInformerService } from './build-job-informer.service';
 import { isUnseenTerminalSignal, remainingIntervalMs } from './build-poll-pacing';
+import { platformRegistryApi } from './registry-api';
+import { deleteTags, platformImage } from './registry-prune.service';
 import {
   ALPINE_GIT_IMAGE,
   ALPINE_IMAGE,
@@ -4714,94 +4716,6 @@ fi
     return { authHeader, registryUrl };
   }
 
-  /**
-   * Delete a specific artifact (tag) from a Harbor repository.
-   * Used when pruning old images while keeping the repository intact.
-   */
-  async deleteArtifactFromRegistry(image: string): Promise<void> {
-    try {
-      const parsed = this.parseImageRef(image);
-      if (!parsed?.tag) {
-        console.warn(`[ImageBuilder] Not deleting an image Orchard didn't build: ${image}`);
-        return;
-      }
-      const { repoName, tag } = parsed;
-
-      const auth = this.getHarborAuth();
-      if (!auth) return;
-
-      const artifactsUrl = `${auth.registryUrl}/api/v2.0/projects/${this.harborProject}/repositories/${encodeURIComponent(repoName)}/artifacts`;
-      const headers = { Authorization: auth.authHeader };
-
-      const lookup = await fetch(`${artifactsUrl}/${encodeURIComponent(tag)}`, { headers }).catch(
-        () => null
-      );
-      if (!lookup || lookup.status === 404) {
-        const scheme = this.plainHttpRegistries.has(this.harborRegistryPush) ? 'http' : 'https';
-        const res = await fetch(
-          `${scheme}://${this.harborRegistryPush}/v2/${this.harborProject}/${repoName}/manifests/${encodeURIComponent(tag)}`,
-          { method: 'DELETE', headers }
-        );
-        console.log(
-          `[ImageBuilder] Registry tag delete ${this.harborProject}/${repoName}:${tag}: ${res.status}`
-        );
-        return;
-      }
-      if (!lookup.ok) {
-        const body = await lookup.text();
-        console.error(
-          `[ImageBuilder] Failed to look up artifact: ${this.harborProject}/${repoName}:${tag}, status: ${lookup.status}, body: ${body}`
-        );
-        return;
-      }
-      const { digest } = (await lookup.json()) as { digest: string };
-
-      const untag = await fetch(
-        `${artifactsUrl}/${encodeURIComponent(digest)}/tags/${encodeURIComponent(tag)}`,
-        { method: 'DELETE', headers }
-      );
-      if (!untag.ok && untag.status !== 404) {
-        const body = await untag.text();
-        console.error(
-          `[ImageBuilder] Failed to delete tag: ${this.harborProject}/${repoName}:${tag}, status: ${untag.status}, body: ${body}`
-        );
-        return;
-      }
-      console.log(
-        `[ImageBuilder] Deleted tag from registry: ${this.harborProject}/${repoName}:${tag}`
-      );
-
-      const remaining = await fetch(`${artifactsUrl}/${encodeURIComponent(digest)}?with_tag=true`, {
-        headers
-      });
-      if (!remaining.ok) return;
-      const { tags } = (await remaining.json()) as { tags?: { name: string }[] | null };
-      if (tags && tags.length > 0) {
-        console.log(
-          `[ImageBuilder] Kept artifact ${this.harborProject}/${repoName}@${digest}, still tagged ${tags.map((t) => t.name).join(', ')}`
-        );
-        return;
-      }
-
-      const response = await fetch(`${artifactsUrl}/${encodeURIComponent(digest)}`, {
-        method: 'DELETE',
-        headers
-      });
-      if (response.ok || response.status === 404) {
-        console.log(
-          `[ImageBuilder] Deleted untagged artifact from registry: ${this.harborProject}/${repoName}@${digest}`
-        );
-      } else {
-        const body = await response.text();
-        console.error(
-          `[ImageBuilder] Failed to delete artifact: ${this.harborProject}/${repoName}@${digest}, status: ${response.status}, body: ${body}`
-        );
-      }
-    } catch (error) {
-      console.error(`[ImageBuilder] Error deleting artifact from registry: ${image}`, error);
-    }
-  }
-
   private async deleteRepositoryTags(repoName: string, authHeader: string): Promise<void> {
     const host = this.harborRegistryPush;
     if (!host) return;
@@ -4860,8 +4774,29 @@ fi
   }
 
   async deleteArtifactsFromRegistry(images: string[]): Promise<void> {
+    const api = platformRegistryApi();
+    if (!api) return;
+    const byRepository = new Map<string, string[]>();
     for (const image of images) {
-      await this.deleteArtifactFromRegistry(image);
+      const target = platformImage(image);
+      if (!target?.tag) {
+        console.warn(`[ImageBuilder] Not deleting an image Orchard didn't build: ${image}`);
+        continue;
+      }
+      byRepository.set(target.repository, [
+        ...(byRepository.get(target.repository) ?? []),
+        target.tag
+      ]);
+    }
+    for (const [repository, tags] of byRepository) {
+      try {
+        const deleted = await deleteTags(api, repository, tags);
+        console.log(
+          `[ImageBuilder] Deleted ${deleted.length} manifests for ${tags.length} tags from ${repository}`
+        );
+      } catch (error) {
+        console.error(`[ImageBuilder] Failed to delete tags from ${repository}:`, error);
+      }
     }
   }
 
