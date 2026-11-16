@@ -9,9 +9,5 @@ const strip = (s: string) => s.replace(/^\/\/ generated[^\n]*\n/, '').replace(/[
 test('the server copy of computeHealth matches packages/health', () => {
   const canonical = readFileSync(resolve(root, 'packages/health/src/health.ts'), 'utf8');
   const copy = readFileSync(resolve(root, 'apps/server/src/health/health.generated.ts'), 'utf8');
-  assert.equal(
-    strip(copy),
-    strip(canonical),
-    'run `tsx packages/health/scripts/sync.ts` and format the server copy'
-  );
+  assert.equal(strip(copy), strip(canonical), 'run `pnpm --filter @orchard/health sync`');
 });
