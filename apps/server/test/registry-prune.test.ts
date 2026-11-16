@@ -259,7 +259,7 @@ test('deleting a tag that is already gone deletes nothing', async () => {
 test('talks to the push host over plain http when it is listed', () => {
   const harbor = platformRegistryApi({
     DOCKER_REGISTRY_PUSH: 'harbor-core.harbor.svc.cluster.local',
-    REGISTRY_HTTP_HOSTS: 'harbor-core.harbor.svc.cluster.local,178.156.144.127'
+    REGISTRY_HTTP_HOSTS: 'harbor-core.harbor.svc.cluster.local,203.0.113.10'
   });
   assert.equal((harbor as any).endpoint.baseUrl, 'http://harbor-core.harbor.svc.cluster.local');
   const zot = platformRegistryApi({
