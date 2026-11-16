@@ -337,12 +337,16 @@ export class ProjectOrgTransferService {
         .catch((e) => this.logger.error(`Failed to tag namespace ${ns}: ${e?.message ?? e}`));
     }
 
-    await this.registryCredentials.syncProject(project.id);
-
     // Membership caches key on org; drop both so evicted/gained access resolves.
     this.membershipCache.invalidateOrg(sourceOrgId);
     this.membershipCache.invalidateOrg(destOrg.id);
     for (const id of losingIds) this.membershipCache.revoked(sourceOrgId, id);
+
+    await this.registryCredentials
+      .syncProject(project.id)
+      .catch((e) =>
+        this.logger.error(`Registry credential sync failed for ${project.id}: ${e?.message ?? e}`)
+      );
 
     // Re-push every environment namespace's quotas under the destination's caps.
     await this.quotas

@@ -227,6 +227,7 @@ function world(
   opts: {
     failOn?: string;
     tagFails?: boolean;
+    syncFails?: boolean;
     usage?: { cpuMilli: number; memoryBytes: number };
   } = {}
 ) {
@@ -296,6 +297,7 @@ function world(
   const registryCredentials = {
     syncProject: async (id: string) => {
       calls.synced.push(id);
+      if (opts.syncFails) throw new Error('registry down');
     }
   };
   const service = new ProjectOrgTransferService(
@@ -633,9 +635,16 @@ test('backups follow only when the destination has storage, and pause when it ha
   assert.deepEqual(toStored.calls.repointed, [['p1', 'orgB']]);
 });
 
-test.todo(
-  'a registry credential sync failure after the commit still drops caches, re-applies quota, re-points backups and audits the move'
-);
+test('a registry credential sync failure after the commit still drops caches, re-applies quota, re-points backups and audits the move', async () => {
+  const w = world({ syncFails: true });
+  await w.service.transfer('p1', 'orgB', 'moved', 'ada');
+  assert.equal(w.state.projects.p1.organizationId, 'orgB');
+  assert.deepEqual(w.calls.synced, ['p1']);
+  assert.deepEqual(w.calls.invalidatedOrgs, ['orgA', 'orgB']);
+  assert.deepEqual(w.calls.revoked.map(([, u]) => u).sort(), ['cal', 'oli']);
+  assert.deepEqual(w.calls.quotaApplied, ['p1']);
+  assert.equal(w.calls.audits.length, 2);
+});
 
 test.todo(
   'a failed backup re-point or pull secret rewrite is retried, so source org credentials do not stay in a namespace the destination now owns'
