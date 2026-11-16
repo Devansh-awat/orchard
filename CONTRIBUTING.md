@@ -128,6 +128,21 @@ runs every test. Pushes to `main` always run every test.
 A few server suites write real rows and refuse to run against `localhost:5432`. See
 [apps/server/test/README.md](apps/server/test/README.md) for pointing them at a throwaway Postgres.
 
+## End-to-end tests
+
+These run on GitHub Actions against a real k3s cluster, not on your machine:
+
+- `installer-e2e` installs Orchard with `install/install.sh` on amd64 and arm64 and deploys a
+  Dockerfile app and a Railpack app. It runs on pull requests that touch the installer, the chart,
+  the Dockerfiles or the build code, and every night.
+- `netpol-e2e` checks that tenant NetworkPolicies hold and managed Postgres survives a restart. It
+  runs on changes to the policy code and every night.
+- `release-e2e` is the full scenario: it installs in `lan`, `public` and `tunnel` mode, then deploys
+  an app through the ingress, uses a managed database, checks that a second organization gets 404
+  and cannot reach the first one's pods, changes env, rebuilds, rolls back and deletes. Another job
+  installs the latest release and upgrades it to the current commit. It runs every night, on any
+  release pull request that bumps a major version, and on demand from the Actions tab.
+
 ## Generated files
 
 Reference docs are generated from the thing they document: the OpenAPI contract, the CLI's command
