@@ -7,7 +7,7 @@ export const GET: APIRoute = async () => {
   const entries = sortEntries(await getCollection('docs')).filter((entry) => entry.id !== '404');
 
   const parts = [
-    '# Orchard documentation',
+    '# Hack Club Orchard documentation',
     '',
     'Orchard is a self-hosted platform. It installs on a Linux server or a Kubernetes',
     'cluster and deploys apps from a repository or an image.',

@@ -41,11 +41,11 @@ To ask, open an [issue](https://github.com/hackclub/orchard/issues) or email
 
 ## Assets covered
 
-| Assets                      | Paths                                                                                                                                    |
-| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| Orchard logos               | `apps/frontend/static/logo/`, `apps/landing/static/logo/`, `apps/docs/public/logo/`, `apps/docs/src/assets/logocolor*.svg`               |
-| Favicons and app icons      | `apps/frontend/static/favicon/`, `apps/landing/static/favicon/`, `apps/docs/public/favicon/`, `apps/frontend/src/lib/assets/favicon.svg` |
-| Orchard and Hack Club brand | `apps/landing/static/brand/`                                                                                                             |
-| Hack Club imagery           | `apps/landing/static/hackclub/`                                                                                                          |
-| Repository banner           | `.github/assets/banner.png`                                                                                                              |
-| Logo components in code     | `apps/landing/src/lib/components/Logo.svelte`, `HackClub.svelte`, `HackClubFlag.svelte`, `apps/landing/src/lib/mark.ts`, `mark3d.ts`     |
+| Assets                      | Paths                                                                                                                                                                               |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Orchard logos               | `apps/frontend/static/logo/`, `apps/landing/static/logo/`, `apps/docs/public/logo/`, `apps/docs/src/assets/logocolor*.svg`                                                          |
+| Favicons and app icons      | `apps/frontend/static/favicon/`, `apps/landing/static/favicon/`, `apps/docs/public/favicon/`, `apps/frontend/src/lib/assets/favicon.svg`                                            |
+| Orchard and Hack Club brand | `apps/landing/static/brand/`                                                                                                                                                        |
+| Hack Club imagery           | `apps/landing/static/hackclub/`                                                                                                                                                     |
+| Repository banner           | `.github/assets/banner.png`                                                                                                                                                         |
+| Logo components in code     | `apps/landing/src/lib/components/Logo.svelte`, `HackClub.svelte`, `HackClubFlag.svelte`, `apps/landing/src/lib/mark.ts`, `mark3d.ts`, `apps/docs/src/components/HackClubFlag.astro` |

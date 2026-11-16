@@ -18,7 +18,7 @@ export default defineConfig({
   devToolbar: { enabled: false },
   integrations: [
     starlight({
-      title: 'Orchard Docs',
+      title: 'Hack Club Orchard Docs',
       description:
         'Install Orchard on a Linux server or a Kubernetes cluster, then deploy your apps.',
       favicon: '/favicon/favicon.ico',

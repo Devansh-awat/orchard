@@ -13,7 +13,7 @@ export const GET: APIRoute = async () => {
   }
 
   const lines = [
-    '# Orchard',
+    '# Hack Club Orchard',
     '',
     '> Orchard is an open-source, self-hosted platform as a service (PaaS) from Hack Club. One',
     '> command installs it on a Linux server, with no Kubernetes knowledge needed, and it',

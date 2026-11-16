@@ -16,7 +16,7 @@ function indent(text: string): string {
 
 export function homeMarkdown(): string {
   const parts = [
-    '# Orchard Docs',
+    '# Hack Club Orchard Docs',
     '',
     `> ${HERO_TEXT}`,
     '',
