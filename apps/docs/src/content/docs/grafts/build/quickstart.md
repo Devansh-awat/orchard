@@ -84,6 +84,8 @@ Keep the private key secret. To let people trust your grafts, share the public k
 
 `@orchardlabs/graft-sdk` is MIT licensed, so a graft that only imports it can use any license. `@orchardlabs/graft-ui` is licensed under AGPL-3.0-only. A graft that imports `@orchardlabs/graft-ui` must be released under a license compatible with AGPL-3.0-only, and the AGPL's source-sharing terms apply to it. To use another license, build the graft's UI with `@orchardlabs/graft-sdk` and your own components.
 
+`graft init` adds `@orchardlabs/graft-ui` to the new graft, and the starter `ui/src/Home.svelte` imports it, so a scaffolded graft is under AGPL-3.0-only as it stands. To use another license, remove the dependency from `package.json` and the import from `Home.svelte`.
+
 ## Next steps
 
 - [Review each field of the manifest](/grafts/build/manifest/)
