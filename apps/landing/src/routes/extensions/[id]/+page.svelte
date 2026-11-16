@@ -13,6 +13,9 @@
 	let { data }: PageProps = $props();
 
 	const m = $derived(data.manifest);
+	const homepage = $derived(
+		typeof m.homepage === 'string' && /^https:\/\//i.test(m.homepage) ? m.homepage : null
+	);
 	const community = $derived(data.tier === 'community');
 	const v = $derived(data.latest);
 	const caps = $derived(new Set(v.capabilities ?? m.capabilities ?? []));
@@ -138,15 +141,15 @@
 					full control of your server.
 				</p>
 			{/if}
-			{#if m.homepage || data.repo}
+			{#if homepage || data.repo}
 				<div class="title-in mt-8 flex flex-wrap gap-3" style:animation-delay="0.3s">
 					{#if data.repo}
 						<a href="https://github.com/{data.repo}" class="ghost-button">
 							Source on GitHub <ArrowUpRight size={16} aria-hidden="true" />
 						</a>
 					{/if}
-					{#if m.homepage && m.homepage !== `https://github.com/${data.repo}`}
-						<a href={m.homepage} class="ghost-button">
+					{#if homepage && homepage !== `https://github.com/${data.repo}`}
+						<a href={homepage} class="ghost-button">
 							Project site <ArrowUpRight size={16} aria-hidden="true" />
 						</a>
 					{/if}

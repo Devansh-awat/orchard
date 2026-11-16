@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -144,6 +145,12 @@ func parseGraftArtifact(raw []byte, source string) (graftArtifact, error) {
 		return a, fmt.Errorf("%s: invalid version %q", source, a.doc.Version)
 	case a.doc.Engines["platform"] == "" || a.doc.Engines["sdk"] == "":
 		return a, fmt.Errorf("%s: engines.platform and engines.sdk are required", source)
+	}
+	if a.doc.Homepage != "" {
+		u, err := url.Parse(a.doc.Homepage)
+		if err != nil || u.Scheme != "https" || u.Host == "" {
+			return a, fmt.Errorf("%s: homepage %q must be an https url", source, a.doc.Homepage)
+		}
 	}
 	return a, nil
 }

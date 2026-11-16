@@ -101,3 +101,18 @@ func TestReadGraftArtifactRejectsBadManifests(t *testing.T) {
 		t.Fatal("expected non-gzip to be rejected")
 	}
 }
+
+func TestGraftHomepageMustBeHTTPS(t *testing.T) {
+	dir := t.TempDir()
+	for _, homepage := range []string{"javascript:alert(1)", "http://example.com", "data:text/html,x", "//example.com"} {
+		path := packGraft(t, dir, "notes", "1.0.0", true, `","homepage":"`+homepage)
+		if _, err := readGraftArtifact(path); err == nil || !strings.Contains(err.Error(), "must be an https url") {
+			t.Fatalf("homepage %q was accepted: %v", homepage, err)
+		}
+	}
+	path := packGraft(t, dir, "notes", "1.0.0", true, `","homepage":"https://example.com/notes`)
+	a, err := readGraftArtifact(path)
+	if err != nil || a.doc.Homepage != "https://example.com/notes" {
+		t.Fatalf("https homepage refused: %v", err)
+	}
+}
