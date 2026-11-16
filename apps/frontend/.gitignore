@@ -24,3 +24,5 @@ vite.config.ts.timestamp-*
 
 # TypeScript build info
 *.tsbuildinfo
+test-results
+playwright-report
