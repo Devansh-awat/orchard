@@ -140,7 +140,7 @@ jobs:
       WEB_REPO: https://github.com/docker/welcome-to-docker
       WEB_BRANCH: main
       WEB_TITLE: <title>Welcome to Docker</title>
-      CLIENT_IMAGE: public.ecr.aws/docker/library/postgres:17-alpine
+      CLIENT_IMAGE: mirror.gcr.io/library/postgres:17-alpine
       E2E_TUNNEL_TOKEN: ${{ secrets.E2E_TUNNEL_TOKEN }}
       E2E_TUNNEL_DOMAIN: ${{ vars.E2E_TUNNEL_DOMAIN }}
     steps:
@@ -579,9 +579,9 @@ jobs:
     env:
       MODE: lan
       KUBECTL: sudo k3s kubectl
-      WEB_IMAGE: public.ecr.aws/docker/library/nginx:alpine
+      WEB_IMAGE: mirror.gcr.io/library/nginx:alpine
       WEB_TITLE: <title>Welcome to nginx!</title>
-      CLIENT_IMAGE: public.ecr.aws/docker/library/postgres:17-alpine
+      CLIENT_IMAGE: mirror.gcr.io/library/postgres:17-alpine
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
