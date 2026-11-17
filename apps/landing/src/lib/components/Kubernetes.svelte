@@ -229,13 +229,22 @@
 			);
 		};
 
+		const warm = new IntersectionObserver(
+			(entries) => {
+				if (!entries.some((e) => e.isIntersecting)) return;
+				warm.disconnect();
+				import('$lib/mark3d').catch(() => {});
+			},
+			{ rootMargin: '900px 0px' }
+		);
+		warm.observe(el);
 		const near = new IntersectionObserver(
 			(entries) => {
 				if (!entries.some((e) => e.isIntersecting)) return;
 				near.disconnect();
 				boot();
 			},
-			{ rootMargin: '900px 0px' }
+			{ rootMargin: '300px 0px' }
 		);
 		near.observe(el);
 		if (still) handled = FEATURES.length;
@@ -245,6 +254,7 @@
 
 		return () => {
 			disposed = true;
+			warm.disconnect();
 			near.disconnect();
 			window.removeEventListener('resize', onResize);
 			cleanups.forEach((fn) => fn());
