@@ -21,6 +21,10 @@ You can hand work to an agent from where the work is reported, without opening t
 | Linear  | In **Account settings** > **Greenhouse** > **Connected accounts**, select **Connect** next to **Linear** and paste a personal API key. In Linear, create the key under **Settings** > **Account** > **Security & Access** > **Personal API keys**. Read access is enough to select issues. |
 | Slack   | In Slack, run `/greenhouse link`. Open the link that Slack shows you while signed in to Orchard, and confirm. The link works once and expires after 10 minutes.                                                                                                                            |
 
+:::note
+If Slack says `/greenhouse is not a valid command`, the Greenhouse app is not installed in that Slack workspace yet. An instance admin sets it up once. Refer to [Set up Slack](/operate/greenhouse/#slack).
+:::
+
 A Linear or Slack account can be linked to one Orchard user. To unlink Slack, run `/greenhouse unlink`, or select **Unlink** in **Settings** > **Integrations**. To disconnect Linear, select **Disconnect** in **Connected accounts**.
 
 ## Start a session from the home page

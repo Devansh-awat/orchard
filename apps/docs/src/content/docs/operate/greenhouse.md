@@ -240,7 +240,10 @@ An App that Orchard created for you, with **Connect a GitHub App** on **Instance
 
 ### Slack
 
-1. Create a Slack app from this manifest. Replace the host.
+Slack sends slash commands and mentions to your instance over HTTPS, so the instance must be reachable from the internet. Public and tunnel installs work. A LAN-only install cannot receive Slack requests.
+
+1. Go to [api.slack.com/apps](https://api.slack.com/apps) and select **Create New App** > **From a manifest**.
+2. Select the workspace, then paste this manifest. Replace `orchard.example.com` with your Orchard address in both URLs.
 
    ```yaml
    display_information:
@@ -272,13 +275,24 @@ An App that Orchard created for you, with **Connect a GitHub App** on **Instance
      token_rotation_enabled: false
    ```
 
-2. Install the app to the workspace.
-3. Go to **Instance admin** > **Configuration** > **Slack app**.
-4. Enter the **Signing secret** from Slack's **Basic Information** page.
-5. Enter the **Bot token** (`xoxb-...`) from Slack's **OAuth & Permissions** page.
-6. (Optional) Enter the **App id** from **Basic Information**. Orchard then ignores events from any other app.
+3. Create the app, then select **Install to Workspace** and allow it.
+4. In Orchard, go to **Instance admin** > **Configuration** > **Slack app**.
+5. Enter the **Signing secret** from Slack's **Basic Information** page.
+6. Enter the **Bot token** (`xoxb-...`) from Slack's **OAuth & Permissions** page.
+7. (Optional) Enter the **App id** from **Basic Information**. Orchard then ignores events from any other app.
+8. Save. Slack shows **URL verification failed** under **Event Subscriptions** until the signing secret is saved in Orchard. After you save it, select **Retry** on that page.
+9. In Slack, run `/greenhouse help` to check the app responds.
 
-People then run `/greenhouse link` once each.
+You can set the same values with `SLACK_SIGNING_SECRET`, `SLACK_BOT_TOKEN` and `SLACK_APP_ID` instead. Refer to [Settings reference](#settings-reference).
+
+Then each person runs `/greenhouse link` once to connect their Slack account to their Orchard account. The link opens on the address in `FRONTEND_URL`, so that must be your Orchard address. To get mentions and thread updates in a channel, invite the app with `/invite @Greenhouse`.
+
+| Problem                                               | Cause                                                                                                                                          |
+| ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/greenhouse is not a valid command`                  | The app is not installed in this Slack workspace. Do steps 1 to 3 in that workspace.                                                           |
+| `/greenhouse failed with the error "dispatch_failed"` | Slack could not reach the commands URL. Check that the URL in the manifest is your Orchard address and that it is reachable from the internet. |
+| The link points to `localhost`                        | `FRONTEND_URL` is not set on the server.                                                                                                       |
+| Mentions get no reply                                 | The app is not in the channel, or Event Subscriptions is not verified. Invite the app and retry the verification.                              |
 
 ### Linear
 
