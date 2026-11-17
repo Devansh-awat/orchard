@@ -2,7 +2,11 @@ import { Controller, Get, Param, Query, Req, Res } from '@nestjs/common';
 import type { Response } from 'express';
 import { randomBytes, timingSafeEqual } from 'crypto';
 import { Public } from '../auth/decorators';
-import { setGitOauthStateCookie, clearGitOauthStateCookie } from '../auth/cookies';
+import {
+  setGitOauthStateCookie,
+  clearGitOauthStateCookie,
+  readSessionCookie
+} from '../auth/cookies';
 import { GitHubService } from '../github/github.service';
 import { UsersService } from '../users/users.service';
 import { GitConnectionsService } from './git-connections.service';
@@ -46,7 +50,7 @@ export class GitOauthController {
   async start(@Param('provider') raw: string, @Req() req: any, @Res() res: Response) {
     const provider = this.providerOrNull(raw);
     if (!provider) return back(res, `error=${encodeURIComponent('Unknown provider')}`);
-    const token = req.cookies?.session_token;
+    const token = readSessionCookie(req.cookies);
     if (!token) return back(res, `error=${encodeURIComponent('Not authenticated')}`);
     try {
       const payload = await this.github.verifySessionToken(token);
@@ -95,7 +99,7 @@ export class GitOauthController {
         `error=${encodeURIComponent("Couldn't verify this link request. Try connecting again.")}`
       );
     }
-    const token = req.cookies?.session_token;
+    const token = readSessionCookie(req.cookies);
     if (!token) return back(res, `error=${encodeURIComponent('Not authenticated')}`);
     try {
       const payload = await this.github.verifySessionToken(token);

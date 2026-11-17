@@ -22,7 +22,11 @@ import { ProjectsService } from '../projects/projects.service';
 import { GithubAppConfigService } from './github-app-config.service';
 import { DeploymentsService } from '../projects/deployments.service';
 import { Public, Auth } from '../auth/decorators';
-import { setGithubOauthStateCookie, clearGithubOauthStateCookie } from '../auth/cookies';
+import {
+  setGithubOauthStateCookie,
+  clearGithubOauthStateCookie,
+  readSessionCookie
+} from '../auth/cookies';
 import { changedFilesFromPush, partitionByWatchPaths } from './watch-paths';
 import { autoDeployMatchesBranch, pushCommitSha } from './auto-deploy-match';
 import { RepoSearchError, repoSearchErrorResponse } from './repo-search';
@@ -92,7 +96,7 @@ export class GitHubController {
   @Get('link')
   async initiateLink(@Req() req: any, @Res() res: Response, @Query('redirect') redirect?: string) {
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-    const token = req.cookies?.session_token;
+    const token = readSessionCookie(req.cookies);
 
     if (!token) {
       return res.redirect(
@@ -165,7 +169,7 @@ export class GitHubController {
         );
       }
 
-      const token = req.cookies?.session_token;
+      const token = readSessionCookie(req.cookies);
 
       if (!token) {
         return res.redirect(

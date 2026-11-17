@@ -11,6 +11,8 @@ import {
   clearSessionCookie,
   clearSsoStartCookie,
   isSessionCookieSecure,
+  readSessionCookie,
+  sessionCookieName,
   setGitOauthStateCookie,
   setGithubOauthStateCookie,
   setSessionCookie,
@@ -111,6 +113,7 @@ test('without COOKIE_DOMAIN the session cookie is host-only', async () => {
   await withEnv({ NODE_ENV: 'production', COOKIE_DOMAIN: undefined }, async () => {
     const [header] = await setCookieHeader((res) => setSessionCookie(res, 'jwt'));
     assert.equal(/domain=/i.test(header), false, header);
+    assert.equal(header.split('; ')[0], '__Host-session_token=jwt');
     const { res, out } = response();
     setSessionCookie(res, 'jwt');
     assert.equal(out.cookies[0].opts.domain, undefined);
@@ -142,6 +145,7 @@ test('SESSION_COOKIE_SECURE overrides the environment either way, and anything e
 test('clearing the session cookie uses the same attributes it was set with, so browsers drop it', async () => {
   for (const env of [
     { NODE_ENV: 'production', COOKIE_DOMAIN: '.orchard.test' },
+    { NODE_ENV: 'production', COOKIE_DOMAIN: undefined },
     { NODE_ENV: 'development', COOKIE_DOMAIN: undefined }
   ]) {
     await withEnv(env, () => {
@@ -150,10 +154,40 @@ test('clearing the session cookie uses the same attributes it was set with, so b
       clearSessionCookie(res);
       const { maxAge, ...setOpts } = out.cookies[0].opts;
       assert.equal(maxAge, WEEK_MS);
-      assert.equal(out.cleared[0].name, 'session_token');
+      assert.equal(out.cleared[0].name, out.cookies[0].name);
       assert.deepEqual(out.cleared[0].opts, setOpts);
     });
   }
+});
+
+test('a secure host-only instance names the session cookie __Host- and reads nothing else', async () => {
+  const cases: [Record<string, string | undefined>, string][] = [
+    [{ NODE_ENV: 'production', COOKIE_DOMAIN: undefined }, '__Host-session_token'],
+    [{ NODE_ENV: 'production', COOKIE_DOMAIN: '.orchard.test' }, 'session_token'],
+    [{ NODE_ENV: 'development', COOKIE_DOMAIN: undefined }, 'session_token'],
+    [{ NODE_ENV: 'development', SESSION_COOKIE_SECURE: 'true' }, '__Host-session_token']
+  ];
+  for (const [env, name] of cases) {
+    await withEnv({ SESSION_COOKIE_SECURE: undefined, ...env }, () => {
+      assert.equal(sessionCookieName(), name, JSON.stringify(env));
+      const other = name === 'session_token' ? '__Host-session_token' : 'session_token';
+      assert.equal(readSessionCookie({ [name]: 'mine' }), 'mine');
+      assert.equal(readSessionCookie({ [other]: 'tossed' }), undefined);
+      assert.equal(readSessionCookie({ [other]: 'tossed', [name]: 'mine' }), 'mine');
+      assert.equal(readSessionCookie(undefined), undefined);
+    });
+  }
+});
+
+test('logging out of a __Host- instance also drops a leftover legacy cookie', async () => {
+  await withEnv({ NODE_ENV: 'production', COOKIE_DOMAIN: undefined }, () => {
+    const { res, out } = response();
+    clearSessionCookie(res);
+    assert.deepEqual(
+      out.cleared.map((c) => c.name),
+      ['__Host-session_token', 'session_token']
+    );
+  });
 });
 
 test('OAuth state cookies are HttpOnly, short-lived, scoped to their callback path and never shared across subdomains', async () => {

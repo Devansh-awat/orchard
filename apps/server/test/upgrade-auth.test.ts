@@ -447,6 +447,27 @@ test('a session cookie under a look-alike name is ignored', async () => {
   }
 });
 
+test('a secure host-only instance takes the session from __Host-session_token alone', async () => {
+  const saved = { NODE_ENV: process.env.NODE_ENV, COOKIE_DOMAIN: process.env.COOKIE_DOMAIN };
+  process.env.NODE_ENV = 'production';
+  delete process.env.COOKIE_DOMAIN;
+  try {
+    const { deps } = harness();
+    const jwt = await sessionJwt();
+    const identity = await authenticateUpgrade(
+      req({ cookie: `__Host-session_token=${jwt}`, origin: 'https://orchard.example' }),
+      deps
+    );
+    assert.equal(identity?.via, 'cookie');
+    assert.equal(await authenticateUpgrade(req({ cookie: `session_token=${jwt}` }), deps), null);
+  } finally {
+    for (const [key, value] of Object.entries(saved)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+});
+
 test('a valid API token with the required scope authenticates as an api-token identity', async () => {
   const { deps, calls } = withToken(tokenRow({ scopeOrganizationId: ORG_ID }));
   const identity = await authenticateUpgrade(req({ authorization: `Bearer ${API_TOKEN}` }), deps);

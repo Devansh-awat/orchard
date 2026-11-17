@@ -24,7 +24,7 @@ import { StorageService } from '../organizations/storage.service';
 import { UsersService } from '../users/users.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthorizationService } from './authorization.service';
-import { setSessionCookie, clearSessionCookie } from './cookies';
+import { setSessionCookie, clearSessionCookie, readSessionCookie } from './cookies';
 import { Public, Auth } from './decorators';
 import { getClientIp } from './client-ip';
 import { signupMode, signupDeniedError } from './signup-mode';
@@ -230,7 +230,7 @@ export class OAuthController {
   async logout(@Req() req: Request, @Res() res: Response) {
     // Try to revoke the session if there's a valid token
     try {
-      const token = req.cookies?.session_token;
+      const token = readSessionCookie(req.cookies);
       if (token) {
         const oauthService = this.oauthService;
         const payload = await oauthService.verifySessionSignature(token);

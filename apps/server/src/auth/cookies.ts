@@ -14,8 +14,23 @@ export function isSessionCookieSecure(): boolean {
   return process.env.NODE_ENV === 'production';
 }
 
+const LEGACY_SESSION_COOKIE = 'session_token';
+const HOST_SESSION_COOKIE = '__Host-session_token';
+
+export function sessionCookieName(): string {
+  return isSessionCookieSecure() && !process.env.COOKIE_DOMAIN
+    ? HOST_SESSION_COOKIE
+    : LEGACY_SESSION_COOKIE;
+}
+
+export function readSessionCookie(
+  cookies: Record<string, string | undefined> | undefined | null
+): string | undefined {
+  return cookies?.[sessionCookieName()] || undefined;
+}
+
 export function setSessionCookie(res: Response, token: string): void {
-  res.cookie('session_token', token, {
+  res.cookie(sessionCookieName(), token, {
     httpOnly: true,
     secure: isSessionCookieSecure(),
     sameSite: 'lax',
@@ -26,13 +41,21 @@ export function setSessionCookie(res: Response, token: string): void {
 }
 
 export function clearSessionCookie(res: Response): void {
-  res.clearCookie('session_token', {
+  res.clearCookie(sessionCookieName(), {
     httpOnly: true,
     secure: isSessionCookieSecure(),
     sameSite: 'lax',
     path: '/',
     domain: process.env.COOKIE_DOMAIN || undefined
   });
+  if (sessionCookieName() !== LEGACY_SESSION_COOKIE) {
+    res.clearCookie(LEGACY_SESSION_COOKIE, {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'lax',
+      path: '/'
+    });
+  }
 }
 
 const GITHUB_OAUTH_STATE_COOKIE = 'github_oauth_state';

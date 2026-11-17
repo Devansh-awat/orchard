@@ -486,7 +486,7 @@ scope, owner or superadmin only, machine running. Binary frames carry raw TCP to
 
 `WS /apiv1/sandboxes/:id/live?sid=<session>`, JSON text frames, 64 KB max.
 
-- **Auth:** `session_token` cookie or bearer (session JWT, or `orch_` token with
+- **Auth:** session cookie (`session_token`, or `__Host-session_token` on a secure host-only instance) or bearer (session JWT, or `orch_` token with
   `exec` and no project restriction). `Origin` must be `FRONTEND_URL` or in
   `PLATFORM_ORIGINS`; a missing origin is only accepted for bearer and API-token
   auth. Org-scoped sessions only reach machines of that org.
@@ -584,7 +584,7 @@ upgrade handler, matches `Host: <port>-<id8>.<previewDomain>`.
   `previewRequestAllowed` (Origin must be the same preview host; cross-site
   `Sec-Fetch-Site` only for top-level GET navigations), then are piped through
   `runner.openTcp(ref, port)` for HTTP and WebSocket. `Authorization`, cookies
-  named `orchard*`, `session_token`, OAuth state cookies, `X-Orchard-*` and
+  named `orchard*`, both session cookie names, OAuth state cookies, `X-Orchard-*` and
   forwarding headers are stripped upstream; `Set-Cookie` loses `Domain` and
   `orchard*` cookies downstream.
 - Ports: 3000, 3001, 4173, 5173, 8000, 8080, 8787, on both runners, plus the

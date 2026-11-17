@@ -407,7 +407,9 @@ test('preview tokens are single use and bound to their host and port', async () 
 
 test('previews never forward Orchard cookies and refuse cross-site requests', () => {
   assert.equal(
-    forwardableCookies(`session_token=abc; ${PREVIEW_COOKIE}=sig; app=1; orchard_x=2`),
+    forwardableCookies(
+      `session_token=abc; __Host-session_token=def; ${PREVIEW_COOKIE}=sig; app=1; orchard_x=2`
+    ),
     'app=1'
   );
   const host = parsePreviewHost(`3000-${SANDBOX.slice(0, 8)}.preview.test`, 'preview.test')!;

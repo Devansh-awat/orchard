@@ -4,6 +4,7 @@ import type { PrismaService } from '../prisma/prisma.service';
 import type { SessionsService } from './sessions.service';
 import { hashApiToken } from './api-tokens.service';
 import { assertBrowserSession } from './session-jwt';
+import { readSessionCookie } from './cookies';
 
 export interface UpgradeIdentity {
   userId: string;
@@ -68,7 +69,7 @@ export async function authenticateUpgrade(
     typeof authHeader === 'string' && authHeader.startsWith('Bearer ')
       ? authHeader.slice(7).trim()
       : undefined;
-  const cookieToken = cookies['session_token'];
+  const cookieToken = readSessionCookie(cookies);
   const token = cookieToken || bearer;
   if (!token) return null;
   const via: UpgradeIdentity['via'] = cookieToken ? 'cookie' : 'bearer';

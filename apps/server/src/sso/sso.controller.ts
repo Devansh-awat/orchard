@@ -19,6 +19,7 @@ import { SsoLoginService, SsoLoginResult } from './sso-login.service';
 import { Public } from '../auth/decorators';
 import {
   clearSsoStartCookie,
+  readSessionCookie,
   setSessionCookie,
   setSsoStartCookie,
   ssoStartCookie
@@ -85,7 +86,7 @@ export class SsoController {
       const { url, startToken } = await this.login.startLogin(
         providerId,
         returnTo,
-        req.cookies?.session_token
+        readSessionCookie(req.cookies)
       );
       setSsoStartCookie(res, startToken);
       return res.redirect(url);

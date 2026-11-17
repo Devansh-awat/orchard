@@ -2,6 +2,7 @@ import * as http from 'http';
 import * as net from 'net';
 import { randomUUID } from 'crypto';
 import WebSocket from 'ws';
+import { readSessionCookie } from '../auth/cookies';
 import { jwtVerify, SignJWT } from 'jose';
 import { PassThrough, type Writable } from 'stream';
 import { INestApplication } from '@nestjs/common';
@@ -213,9 +214,10 @@ export async function authenticateUpgrade(
     typeof authHeader === 'string' && authHeader.startsWith('Bearer ')
       ? authHeader.slice(7)
       : undefined;
-  const token = cookies['session_token'] || bearer;
+  const cookieToken = readSessionCookie(cookies);
+  const token = cookieToken || bearer;
   if (!token) return unauthorized;
-  if (cookies['session_token'] && !originAllowed(req.headers.origin, platformOrigins(), 'cookie')) {
+  if (cookieToken && !originAllowed(req.headers.origin, platformOrigins(), 'cookie')) {
     return { reject: 403, message: 'Forbidden' };
   }
   try {

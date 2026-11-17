@@ -16,6 +16,7 @@ const DOMAIN_RE =
 const STRIPPED_COOKIES = new Set([
   PREVIEW_COOKIE,
   'session_token',
+  '__Host-session_token',
   'github_oauth_state',
   'git_oauth_state'
 ]);

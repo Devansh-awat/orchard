@@ -28,6 +28,7 @@ import {
 } from './request-context';
 import { setTraceUser } from '../analytics/datadog';
 import { scopeFromHeader } from '../mcp/mcp-scopes';
+import { readSessionCookie } from './cookies';
 import { accountEmail } from '../users/account-scope';
 
 /**
@@ -584,7 +585,7 @@ export class SuperAdminGuard implements CanActivate {
 
   private extractToken(request: Request): string | undefined {
     const authHeader = request.headers.authorization;
-    const cookieToken = request.cookies?.session_token;
+    const cookieToken = readSessionCookie(request.cookies);
 
     return authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : cookieToken;
   }
