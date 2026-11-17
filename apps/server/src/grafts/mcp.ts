@@ -3,6 +3,8 @@ import { join } from 'node:path';
 import { canUseName } from './claims';
 import { failGraft, loadedGrafts, type GraftRecord } from './graft-registry';
 import { loadGrafts } from './loader';
+import { graftToolScope, scopeAllows } from '../mcp/catalog';
+import type { McpScope } from '../mcp/client';
 
 type Registrar = (
   server: unknown,
@@ -36,7 +38,7 @@ export async function loadMcpGrafts(): Promise<void> {
   }
 }
 
-function guard(server: object, record: GraftRecord): object {
+function guard(server: object, record: GraftRecord, scope: McpScope): object {
   return new Proxy(server, {
     get(target, prop, receiver) {
       const value = Reflect.get(target, prop, receiver) as unknown;
@@ -48,6 +50,8 @@ function guard(server: object, record: GraftRecord): object {
               `graft ${record.id} registered MCP tool "${name}" outside its namespace; claim it in mcpTools`
             );
           }
+          const config = prop === 'registerTool' ? rest[0] : undefined;
+          if (!scopeAllows(scope, graftToolScope(config))) return undefined;
           return (value as (...args: unknown[]) => unknown).call(target, name, ...rest);
         };
       }
@@ -75,12 +79,16 @@ export async function graftsHiddenFrom(
 export function registerGraftMcpTools(
   server: object,
   client: unknown,
-  include: (graftId: string) => boolean = () => true
+  include: (graftId: string) => boolean = () => true,
+  scope: McpScope = 'exec'
 ): void {
   for (const { record, register } of registrars) {
     if (!include(record.id)) continue;
     try {
-      register(guard(server, record), client, { graftId: record.id, apiBase: `/${record.id}` });
+      register(guard(server, record, scope), client, {
+        graftId: record.id,
+        apiBase: `/${record.id}`
+      });
     } catch (err) {
       logger.error(`${record.id} failed to register MCP tools: ${(err as Error).message}`);
     }

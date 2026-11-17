@@ -11,6 +11,8 @@ export function json(value: unknown) {
 const sandboxId = z.string().uuid().describe('The sandbox (Greenhouse machine) UUID');
 const sessionId = z.string().uuid().describe('The session UUID (from list_sandbox_sessions)');
 
+const execScope = { 'orchard/scope': 'exec' };
+
 const sandboxPath = (id: string, ...rest: string[]) =>
   [`/sandboxes/${encodeURIComponent(id)}`, ...rest.map(encodeURIComponent)].join('/');
 
@@ -83,6 +85,7 @@ export function registerSandboxTools(server: McpServer, client: OrchardClient) {
     {
       description: `Start a new agent session on a running Greenhouse machine: creates a git worktree for \`repo\` on a fresh branch and an agent chat in it. Pass \`agent\` to pick the coding agent: "opencode" (the default), or "acp:claude", "acp:opencode", "acp:fx", "acp:codex" for agents driven over the Agent Client Protocol. When \`prompt\` is given it is sent as your first prompt (attributed to you, like prompt_sandbox_session) and the agent starts working right away. Requires guest access or higher.`,
       annotations: { readOnlyHint: false, destructiveHint: false },
+      _meta: execScope,
       inputSchema: {
         sandboxId,
         repo: z
@@ -111,6 +114,7 @@ export function registerSandboxTools(server: McpServer, client: OrchardClient) {
     {
       description: `Send a prompt to the agent in a session. The prompt is recorded as yours (it shows your avatar in the shared transcript) and the agent runs with the host's credentials, so this needs guest access or higher. Returns as soon as the agent accepts it; read progress with get_sandbox_session_transcript and list_sandbox_sessions (activity).`,
       annotations: { readOnlyHint: false, destructiveHint: false },
+      _meta: execScope,
       inputSchema: {
         sandboxId,
         sessionId,
@@ -126,6 +130,7 @@ export function registerSandboxTools(server: McpServer, client: OrchardClient) {
     {
       description: `Read what a session changed: the list of changed files with line counts, and the unified diff of uncommitted work in its worktree (capped at 200KB, \`truncated\` says when). Pass \`file\` to diff a single file. The machine must be running.`,
       annotations: { readOnlyHint: true, idempotentHint: true },
+      _meta: execScope,
       inputSchema: {
         sandboxId,
         sessionId,
@@ -148,6 +153,7 @@ export function registerSandboxTools(server: McpServer, client: OrchardClient) {
     {
       description: `Read the latest messages of a session's agent chat as plain text: your and your teammates' prompts (with who sent them) and the agent's replies. Tool calls and reasoning are left out.`,
       annotations: { readOnlyHint: true, idempotentHint: true },
+      _meta: execScope,
       inputSchema: {
         sandboxId,
         sessionId,
@@ -173,6 +179,7 @@ export function registerSandboxTools(server: McpServer, client: OrchardClient) {
     {
       description: `Open a GitHub pull request for a session's branch, using the caller's own linked GitHub account (host or guest). Pushes the branch first, as the caller, when it has no upstream on origin or has unpushed commits. Fails with github_not_linked if the caller hasn't linked GitHub. Commit the work first (the agent can when asked); uncommitted changes aren't included.`,
       annotations: { readOnlyHint: false, destructiveHint: false },
+      _meta: execScope,
       inputSchema: {
         sandboxId,
         sessionId,

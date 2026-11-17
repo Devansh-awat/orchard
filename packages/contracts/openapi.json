@@ -65189,7 +65189,7 @@
     },
     "/projects/{id}/ingresses/{ingressId}/protection": {
       "get": {
-        "description": "Auth: authenticated (scope: read)",
+        "description": "Auth: authenticated (scope: deploy)",
         "operationId": "projects_ingresses_protection_get",
         "parameters": [
           {
@@ -67179,7 +67179,7 @@
     },
     "/projects/ingresses/validate-dns": {
       "post": {
-        "description": "Auth: authenticated (scope: read)",
+        "description": "Auth: authenticated (scope: deploy)",
         "operationId": "projects_ingresses_validate_dns",
         "requestBody": {
           "content": {

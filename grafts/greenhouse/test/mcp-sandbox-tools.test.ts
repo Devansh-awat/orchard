@@ -80,6 +80,24 @@ test('every requested Greenhouse tool is registered with the right hints', () =>
   assert.equal(tools.get('stop_sandbox')!.config.annotations.destructiveHint, true);
 });
 
+test('tools behind exec routes declare the exec scope', () => {
+  const { tools } = harness();
+  const exec = [
+    'create_sandbox_session',
+    'prompt_sandbox_session',
+    'get_sandbox_session_diff',
+    'get_sandbox_session_transcript',
+    'create_sandbox_session_pr'
+  ];
+  for (const [name, tool] of tools) {
+    assert.equal(
+      tool.config._meta?.['orchard/scope'],
+      exec.includes(name) ? 'exec' : undefined,
+      name
+    );
+  }
+});
+
 test('ids are validated before any request is made', () => {
   const { tools } = harness();
   const schema = tools.get('prompt_sandbox_session')!.config.inputSchema;

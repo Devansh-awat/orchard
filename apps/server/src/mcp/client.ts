@@ -67,9 +67,12 @@ export class OrchardClient {
 
   private usesServiceToken: boolean;
 
-  constructor(baseUrl?: string, token?: string, actingUser?: ActingUser) {
+  private scopeCap?: McpScope;
+
+  constructor(baseUrl?: string, token?: string, actingUser?: ActingUser, scopeCap?: McpScope) {
     this.baseUrl = (baseUrl || API_URL).replace(/\/$/, '');
     this.actingUser = actingUser;
+    this.scopeCap = scopeCap;
 
     if (actingUser && SERVICE_TOKEN) {
       this.token = SERVICE_TOKEN;
@@ -107,6 +110,8 @@ export class OrchardClient {
       if (this.actingUser.externalAuthId) {
         headers['X-Acting-User-HackClub-Id'] = this.actingUser.externalAuthId;
       }
+    } else if (this.scopeCap) {
+      headers['X-Acting-User-Scope'] = this.scopeCap;
     }
 
     const res = await fetch(url, {

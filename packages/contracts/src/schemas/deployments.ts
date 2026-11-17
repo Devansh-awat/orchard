@@ -1093,7 +1093,7 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
   },
   'GET /projects/:id/ingresses/:ingressId/protection': {
     summary: 'Get ingress protection settings',
-    scope: 'read',
+    scope: 'deploy',
     response: protectionResponse
   },
   'PUT /projects/:id/ingresses/:ingressId/protection': {
@@ -1107,7 +1107,7 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
   },
   'POST /projects/ingresses/validate-dns': {
     summary: 'Validate that a custom domain points at the ingress CNAME',
-    scope: 'read',
+    scope: 'deploy',
     request: z.object({ projectId: z.string(), domain: z.string() }),
     response: z.object({ valid: z.boolean(), message: z.string() }).passthrough()
   },

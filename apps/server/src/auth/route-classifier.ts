@@ -5,6 +5,7 @@ const METHOD_METADATA = 'method';
 const IS_PUBLIC_KEY = 'isPublic';
 const REQUIRES_AUTH_KEY = 'requiresAuth';
 const REQUIRES_SUPERADMIN_KEY = 'requires_superadmin';
+const REQUIRED_SCOPE_KEY = 'required_scope';
 
 export const HTTP_METHODS = [
   'GET',
@@ -20,6 +21,8 @@ export const HTTP_METHODS = [
 
 export type RouteClassification = 'public' | 'authenticated' | 'superadmin';
 
+export type RouteScope = 'read' | 'deploy' | 'exec';
+
 type AuthMeta = { isPublic?: boolean; requiresAuth?: boolean; requiresSuperadmin?: boolean };
 
 export type ClassifiedRoute = {
@@ -28,6 +31,7 @@ export type ClassifiedRoute = {
   path: string;
   classification: RouteClassification;
   handler: string;
+  scope?: RouteScope;
 };
 
 export function classifyRoute(handlerMeta: AuthMeta, classMeta: AuthMeta): RouteClassification {
@@ -74,6 +78,8 @@ export function classifyController(
       conflicts.push(`${cls.name}.${methodName} has BOTH @Auth() and @Public()`);
     }
     const classification = classifyRoute(handlerMeta, classMeta);
+    const scope = (Reflect.getMetadata(REQUIRED_SCOPE_KEY, handler) ??
+      Reflect.getMetadata(REQUIRED_SCOPE_KEY, cls)) as RouteScope | undefined;
     const method = HTTP_METHODS[httpMethod] ?? `UNKNOWN(${httpMethod})`;
     const subPaths =
       (Reflect.getMetadata(PATH_METADATA, handler) as string | string[] | undefined) ?? '';
@@ -85,7 +91,8 @@ export function classifyController(
           method,
           path,
           classification,
-          handler: `${cls.name}.${methodName}`
+          handler: `${cls.name}.${methodName}`,
+          ...(scope ? { scope } : {})
         });
       }
     }
@@ -105,6 +112,23 @@ export function routeTable(
       );
     }
     table[route.key] = route.classification;
+  }
+  return Object.fromEntries(Object.entries(table).sort(([a], [b]) => a.localeCompare(b)));
+}
+
+export function scopeTable(
+  routes: ClassifiedRoute[],
+  conflicts: string[] = []
+): Record<string, RouteScope> {
+  const table: Record<string, RouteScope> = {};
+  for (const route of routes) {
+    if (!route.scope) continue;
+    if (route.key in table && table[route.key] !== route.scope) {
+      conflicts.push(
+        `${route.key} declared with conflicting scopes (${table[route.key]} vs ${route.scope})`
+      );
+    }
+    table[route.key] = route.scope;
   }
   return Object.fromEntries(Object.entries(table).sort(([a], [b]) => a.localeCompare(b)));
 }

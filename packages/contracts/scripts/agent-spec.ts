@@ -2,14 +2,9 @@ import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import {
-  REQUIRED_SCOPES,
-  isAgentVisible,
-  isDestructiveOperation,
-  isSensitiveOperation
-} from '../src/agent-flags';
+import { isAgentVisible, isDestructiveOperation, isSensitiveOperation } from '../src/agent-flags';
 import { assignOperationIds } from '../src/operation-ids';
-import { registry } from '../src/registry';
+import { registry, requiredScopeOf } from '../src/registry';
 import type { AgentOperation, AgentParam, AgentSpec } from '../src/agent-search';
 
 type Json = Record<string, unknown>;
@@ -59,11 +54,6 @@ function toOpenApiPath(path: string): string {
   return path.replace(/:([A-Za-z0-9_]+)/g, '{$1}');
 }
 
-function scopeFor(method: string, explicit?: string): AgentOperation['scope'] {
-  if (explicit === 'read' || explicit === 'deploy' || explicit === 'exec') return explicit;
-  return method === 'GET' ? 'read' : 'deploy';
-}
-
 const operationIds = assignOperationIds(registry);
 const paths = openapi.paths as Record<string, Record<string, Json>>;
 const operations: AgentOperation[] = [];
@@ -97,10 +87,7 @@ for (const route of registry) {
     path: route.path,
     summary: route.summary ?? '',
     tags: (doc.tags as string[] | undefined) ?? [],
-    scope: scopeFor(
-      route.method,
-      REQUIRED_SCOPES.get(`${route.method} ${route.path}`) ?? route.scope
-    )
+    scope: requiredScopeOf(route)
   };
   if (pathParams.length || queryParams.length) {
     operation.params = {};

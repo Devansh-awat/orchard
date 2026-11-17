@@ -67,3 +67,12 @@ export function capScope(granted: McpScope, cap: string | null | undefined): Mcp
   const limit = cap ? fromToken(cap) : null;
   return limit && RANK[limit] < RANK[granted] ? limit : granted;
 }
+
+export function capTokenScopes(scopes: string[], header: unknown): string[] {
+  const raw = Array.isArray(header) ? header[0] : header;
+  if (typeof raw !== 'string' || !raw.trim()) return scopes;
+  const limit = fromToken(raw) ?? 'read';
+  const held = highestScope(scopes.map(fromToken).filter((s): s is McpScope => s !== null));
+  if (held === null || RANK[limit] >= RANK[held]) return scopes;
+  return [limit];
+}

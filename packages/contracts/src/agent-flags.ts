@@ -11,15 +11,6 @@ export const SENSITIVE_OPERATIONS = new Set<string>([
   'POST /pods/:podName/exec'
 ]);
 
-export const REQUIRED_SCOPES = new Map<string, 'read' | 'deploy' | 'exec'>([
-  ['GET /databases/:id/connection', 'deploy'],
-  ['GET /databases/:id/activity', 'deploy'],
-  ['POST /databases/:id/users', 'deploy'],
-  ['GET /projects/:id/ingresses/:ingressId/protection', 'deploy'],
-  ['GET /users/me/git-connections/:connectionId/webhook-secret', 'deploy'],
-  ['POST /pods/:podName/exec', 'exec']
-]);
-
 export const DESTRUCTIVE_OPERATIONS = new Set<string>([
   'POST /databases/:id/upgrade',
   'PUT /deployments/:id/env',

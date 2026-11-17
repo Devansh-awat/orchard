@@ -27,7 +27,7 @@ import {
   holdsSuperAdminPower
 } from './request-context';
 import { setTraceUser } from '../analytics/datadog';
-import { scopeFromHeader } from '../mcp/mcp-scopes';
+import { capTokenScopes, scopeFromHeader } from '../mcp/mcp-scopes';
 import { readSessionCookie } from './cookies';
 import { accountEmail } from '../users/account-scope';
 
@@ -477,7 +477,10 @@ export class SuperAdminGuard implements CanActivate {
       const user = apiToken.user;
       const name = [user.firstName, user.lastName].filter(Boolean).join(' ') || user.username;
 
-      const scopes = Array.isArray(apiToken.scopes) ? (apiToken.scopes as string[]) : [];
+      const scopes = capTokenScopes(
+        Array.isArray(apiToken.scopes) ? (apiToken.scopes as string[]) : [],
+        request.headers['x-acting-user-scope']
+      );
       const restrictedProjectIds = Array.isArray(apiToken.restrictedProjectIds)
         ? (apiToken.restrictedProjectIds as string[])
         : [];

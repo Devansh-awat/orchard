@@ -19,6 +19,8 @@ export const DEFAULT_TOOLSETS: Toolset[] = [...TOOLSETS];
 
 export const SENSITIVE_META_KEY = 'orchard/sensitive';
 
+export const SCOPE_META_KEY = 'orchard/scope';
+
 type Kind = 'read' | 'create' | 'update' | 'action' | 'destructive' | 'dangerous';
 
 export interface ToolSpec {
@@ -280,6 +282,20 @@ const SCOPE_RANK: Record<McpScope, number> = { read: 0, deploy: 1, exec: 2 };
 
 export function scopeAllows(granted: McpScope, required: McpScope): boolean {
   return SCOPE_RANK[granted] >= SCOPE_RANK[required];
+}
+
+function isScope(value: unknown): value is McpScope {
+  return value === 'read' || value === 'deploy' || value === 'exec';
+}
+
+export function graftToolScope(config: unknown): McpScope {
+  const record = (config ?? {}) as {
+    _meta?: Record<string, unknown>;
+    annotations?: { readOnlyHint?: unknown };
+  };
+  const declared = record._meta?.[SCOPE_META_KEY];
+  if (declared !== undefined) return isScope(declared) ? declared : 'exec';
+  return record.annotations?.readOnlyHint === true ? 'read' : 'deploy';
 }
 
 export function titleFor(name: string): string {

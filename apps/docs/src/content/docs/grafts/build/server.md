@@ -97,6 +97,8 @@ Tools run in Orchard's [MCP server](/mcp/) and call the graft's API as the signe
 
 A tool's name must start with the graft's ID, with dashes turned into underscores, or be listed under `claims.mcpTools`.
 
+A connection only sees the tools its scope allows. A tool with `annotations: { readOnlyHint: true }` needs `read`, and any other tool needs `deploy`. If the tool calls a route that has `@RequireScope('exec')`, set `_meta: { 'orchard/scope': 'exec' }` in the tool config.
+
 :::note
 If a graft has both MCP tools and the `flags` capability, and the instance has PostHog configured, Orchard treats the graft as gated on a flag named after its ID. Accounts without that flag do not see the graft's tools.
 :::

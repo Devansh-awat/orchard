@@ -31,6 +31,7 @@ import {
   classifyController,
   isController,
   routeTable,
+  scopeTable,
   type ClassifiedRoute,
   type RouteClassification
 } from '../src/auth/route-classifier';
@@ -38,6 +39,7 @@ import {
 const SRC_ROOT = path.resolve(__dirname, '../src');
 const GRAFTS_ROOT = path.resolve(__dirname, '../../../grafts');
 const SNAPSHOT_PATH = path.join(__dirname, 'auth-coverage.snapshot.json');
+const SCOPE_SNAPSHOT_PATH = path.join(__dirname, 'auth-scope.snapshot.json');
 
 function findControllerFiles(root: string): string[] {
   const results: string[] = [];
@@ -83,12 +85,14 @@ test('every endpoint matches the auth-coverage snapshot', async () => {
   }
 
   const current = routeTable(routes, conflicts);
+  const scopes = scopeTable(routes, conflicts);
 
   assert.equal(conflicts.length, 0, `Decorator conflicts:\n  ${conflicts.join('\n  ')}`);
 
   const writeSnapshot = process.env.UPDATE_SNAPSHOT === '1' || !existsSync(SNAPSHOT_PATH);
   if (writeSnapshot) {
     writeFileSync(SNAPSHOT_PATH, JSON.stringify(current, null, 2) + '\n');
+    writeFileSync(SCOPE_SNAPSHOT_PATH, JSON.stringify(scopes, null, 2) + '\n');
     console.log(
       `✓ Wrote ${Object.keys(current).length} endpoints to ${path.relative(process.cwd(), SNAPSHOT_PATH)}`
     );
@@ -119,6 +123,15 @@ test('every endpoint matches the auth-coverage snapshot', async () => {
       '\n\nIf the change is intentional, regenerate the snapshot:\n  UPDATE_SNAPSHOT=1 pnpm test:auth-coverage';
     throw new Error(msg);
   }
+
+  const scopeSnapshot = existsSync(SCOPE_SNAPSHOT_PATH)
+    ? (JSON.parse(readFileSync(SCOPE_SNAPSHOT_PATH, 'utf8')) as Record<string, string>)
+    : {};
+  assert.deepEqual(
+    scopes,
+    scopeSnapshot,
+    '@RequireScope declarations changed. Regenerate the snapshot:\n  UPDATE_SNAPSHOT=1 pnpm test:auth-coverage'
+  );
 });
 
 test('no endpoint mixes @Auth() with @Public() at the handler level', () => {

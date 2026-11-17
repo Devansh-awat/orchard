@@ -30,7 +30,12 @@ export interface OrchardMcpOptions {
 
 export function orchardClientFor(options: OrchardMcpOptions = {}): OrchardClient {
   return options.token || options.actingUser
-    ? new OrchardClient(process.env.ORCHARD_API_URL, options.token, options.actingUser)
+    ? new OrchardClient(
+        process.env.ORCHARD_API_URL,
+        options.token,
+        options.actingUser,
+        options.scope ?? options.actingUser?.scope
+      )
     : new OrchardClient();
 }
 
@@ -72,7 +77,8 @@ export function createOrchardMcpServer(options: OrchardMcpOptions = {}) {
     server,
     client,
     (graftId) =>
-      !options.hiddenGrafts?.has(graftId) && (selection.allGrafts || selection.grafts.has(graftId))
+      !options.hiddenGrafts?.has(graftId) && (selection.allGrafts || selection.grafts.has(graftId)),
+    scope
   );
 
   return server;

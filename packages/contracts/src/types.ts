@@ -10,6 +10,7 @@ export interface GeneratedRoute {
   method: Method;
   path: string;
   auth: Auth;
+  requiredScope?: Scope;
 }
 
 export interface RouteAttachment {
