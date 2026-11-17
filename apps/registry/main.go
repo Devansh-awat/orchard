@@ -73,6 +73,7 @@ func usage() {
   registry publish [flags]             validate templates and sync them to the bucket
   registry validate [flags]            validate templates without touching the bucket
   registry publish-grafts [flags]      publish packed .graft files to the Extension Marketplace
+  registry sign-grafts [flags]         sign packed .graft files with GRAFT_SIGNING_KEY before publish-grafts
   registry validate-grafts [flags]     check packed .graft files without touching the bucket
   registry sync-community [flags]      publish community listings and their GitHub releases
   registry validate-community [flags]  check community listing files without touching the bucket
@@ -159,6 +160,24 @@ func main() {
 		}
 		for _, t := range cat.Templates {
 			log.Printf("published %-24s %-10s %s", t.Name, t.Version, t.Yaml)
+		}
+	case "sign-grafts":
+		fs := flag.NewFlagSet(command, flag.ExitOnError)
+		var dirs multiFlag
+		fs.Var(&dirs, "grafts", "directory of packed <id>-<version>.graft files (repeatable)")
+		fs.Parse(args)
+		if len(dirs) == 0 {
+			log.Fatal("at least one -grafts directory is required")
+		}
+		key, err := parseSigningKey(os.Getenv("GRAFT_SIGNING_KEY"))
+		if err != nil {
+			log.Fatal(err)
+		}
+		if !isOfficialKey(key.Public().(ed25519.PublicKey)) {
+			log.Fatal("GRAFT_SIGNING_KEY is not one of the Orchard keys servers trust")
+		}
+		if err := signGrafts(dirs, key, log.Printf); err != nil {
+			log.Fatal(err)
 		}
 	case "publish-grafts", "validate-grafts":
 		fs := flag.NewFlagSet(command, flag.ExitOnError)
