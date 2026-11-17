@@ -1038,7 +1038,7 @@ builderSandbox:
   #   skopeo copy docker://quay.io/skopeo/stable:v1.24.1 \
   #               docker://registry.example.com/orchard/skopeo:v1.24.1
   # Then set pusherImage: registry.example.com/orchard/skopeo:v1.24.1
-  pusherImage: quay.io/skopeo/stable:v1.24.1@sha256:1b069d441808768b6fa4fbafd288e970ce052598c9c6e396148c0076f7bb0cf9
+  pusherImage: quay.io/skopeo/stable:v1.24.1@sha256:4b440098ada2bc2623308b0f60f5a5454084b98683e9e7dcecd77bba69797c56
   # Back workspace and output emptyDirs with tmpfs (memory) instead of disk.
   # Bypasses virtio-fs overhead in kata VMs — filesystem ops happen at memory
   # speed inside the guest. Counts against the container's memory limit.
