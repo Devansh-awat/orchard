@@ -65,7 +65,7 @@ export class PrismaService
           IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'orchard_r2_proxy') THEN
             GRANT USAGE ON SCHEMA public TO orchard_r2_proxy;
             GRANT SELECT ON TABLE databases, projects, organizations TO orchard_r2_proxy;
-            GRANT SELECT (access_key, secret, write_prefix, read_prefixes, expires_at)
+            GRANT SELECT (access_key, secret, write_prefix, read_prefixes, expires_at, purpose)
               ON TABLE storage_access_keys TO orchard_r2_proxy;
           END IF;
         END
