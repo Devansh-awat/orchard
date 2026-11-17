@@ -17,6 +17,7 @@ export interface HackClubUserData {
   email: string;
   name: string;
   slackId?: string;
+  emailVerified?: boolean;
 }
 
 // Auto-generated usernames must satisfy the same format rule updateProfile
@@ -84,6 +85,7 @@ export class UsersService {
   }
 
   async findOrCreateByExternalAuthId(hackClubUser: HackClubUserData) {
+    const verified = hackClubUser.emailVerified === true;
     let user = await this.prisma.user.findUnique({
       where: { externalAuthId: hackClubUser.id }
     });
@@ -94,7 +96,7 @@ export class UsersService {
       });
 
       if (user) {
-        if (user.externalAuthId && user.externalAuthId !== hackClubUser.id) {
+        if (!verified || (user.externalAuthId && user.externalAuthId !== hackClubUser.id)) {
           // Email row is already linked to a different Hack Club identity.
           throw new ConflictException(
             'An account with this email already exists. Sign in with your email first, then link your Hack Club account from settings.'
@@ -137,10 +139,8 @@ export class UsersService {
             username,
             firstName,
             lastName,
-            // Hack Club OAuth asserts the email; mark it verified so the user
-            // can accept org invitations without a separate email flow.
-            emailVerified: true,
-            emailVerifiedAt: new Date()
+            emailVerified: verified,
+            emailVerifiedAt: verified ? new Date() : null
           }
         });
         void this.audit.log({
@@ -155,15 +155,23 @@ export class UsersService {
     } else {
       // Only sync email; do not overwrite firstName/lastName
       // as the user may have manually updated them via profile settings.
+      const emailChanged = user.email.toLowerCase() !== hackClubUser.email.toLowerCase();
+      const previous = user;
       user = await this.prisma.user.update({
         where: { externalAuthId: hackClubUser.id },
         data: {
           email: hackClubUser.email,
-          // Backfill verification for existing Hack Club OAuth users created
-          // before email was auto-verified.
-          ...(user.emailVerified ? {} : { emailVerified: true, emailVerifiedAt: new Date() })
+          ...(emailChanged
+            ? { emailVerified: verified, emailVerifiedAt: verified ? new Date() : null }
+            : !user.emailVerified && verified
+              ? { emailVerified: true, emailVerifiedAt: new Date() }
+              : {})
         }
       });
+      if (emailChanged) {
+        this.invalidateUserCache(previous);
+        this.invalidateUserCache(user);
+      }
     }
 
     // Import a Gravatar/Libravatar picture if they have one. Deliberately not

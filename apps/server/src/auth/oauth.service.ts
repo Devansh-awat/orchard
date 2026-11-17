@@ -7,6 +7,7 @@ export interface HackClubUser {
   email: string;
   name: string;
   slackId?: string;
+  emailVerified: boolean;
 }
 
 export interface TokenPayload {
@@ -27,6 +28,7 @@ interface OAuthEndpoints {
   authorizeUrl: string;
   tokenUrl: string;
   userinfoUrl: string;
+  pkce?: boolean;
 }
 
 const HACKCLUB_ENDPOINTS: OAuthEndpoints = {
@@ -158,12 +160,22 @@ export class OAuthService {
     this.oidcEndpoints = {
       authorizeUrl: discovery.authorization_endpoint,
       tokenUrl: discovery.token_endpoint,
-      userinfoUrl: discovery.userinfo_endpoint
+      userinfoUrl: discovery.userinfo_endpoint,
+      pkce:
+        Array.isArray(discovery.code_challenge_methods_supported) &&
+        discovery.code_challenge_methods_supported.includes('S256')
     };
     return this.oidcEndpoints;
   }
 
-  async getAuthorizationUrl(state?: string): Promise<string> {
+  async usesPkce(): Promise<boolean> {
+    const setting = process.env.AUTH_OAUTH_PKCE?.trim().toLowerCase();
+    if (setting === 'true') return true;
+    if (setting === 'false') return false;
+    return (await this.getEndpoints()).pkce === true;
+  }
+
+  async getAuthorizationUrl(state?: string, codeChallenge?: string): Promise<string> {
     const endpoints = await this.getEndpoints();
     const params = new URLSearchParams({
       client_id: this.clientId!,
@@ -175,11 +187,15 @@ export class OAuthService {
     if (state) {
       params.append('state', state);
     }
+    if (codeChallenge) {
+      params.append('code_challenge', codeChallenge);
+      params.append('code_challenge_method', 'S256');
+    }
 
     return `${endpoints.authorizeUrl}?${params.toString()}`;
   }
 
-  async exchangeCodeForToken(code: string): Promise<string> {
+  async exchangeCodeForToken(code: string, codeVerifier?: string): Promise<string> {
     const endpoints = await this.getEndpoints();
     const params = new URLSearchParams({
       client_id: this.clientId!,
@@ -188,6 +204,7 @@ export class OAuthService {
       code,
       grant_type: 'authorization_code'
     });
+    if (codeVerifier) params.append('code_verifier', codeVerifier);
 
     const response = await fetch(endpoints.tokenUrl, {
       method: 'POST',
@@ -226,7 +243,8 @@ export class OAuthService {
         id: identity.id,
         email: identity.primary_email,
         name: `${identity.first_name} ${identity.last_name}`,
-        slackId: identity.slack_id
+        slackId: identity.slack_id,
+        emailVerified: true
       };
     }
 
@@ -241,14 +259,19 @@ export class OAuthService {
     if (!id || !email) {
       throw new Error('OIDC userinfo response is missing the id or email claim');
     }
-    if (claimPath(data, 'email_verified') === false) {
+    const emailVerified = claimPath(data, 'email_verified');
+    if (emailVerified === false || emailVerified === 'false') {
       throw new Error('OIDC provider reports this email as unverified');
     }
 
     return {
       id: String(id),
       email: String(email),
-      name: String(name)
+      name: String(name),
+      emailVerified:
+        emailVerified === true ||
+        emailVerified === 'true' ||
+        process.env.AUTH_OAUTH_TRUST_EMAIL === 'true'
     };
   }
 

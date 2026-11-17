@@ -47,7 +47,7 @@ export class OAuthController {
    * SuperAdmins always have access.
    */
   private async hasPrivateBetaAccess(
-    email: string,
+    email: string | null,
     existingUser: { id: string; isSuperAdmin: boolean } | null
   ): Promise<boolean> {
     if (signupMode() === 'open') return true;
@@ -60,7 +60,7 @@ export class OAuthController {
       if (membership) return true;
     }
 
-    if (signupMode() === 'closed') return false;
+    if (signupMode() === 'closed' || !email) return false;
 
     const invitation = await this.prisma.organizationInvitation.findFirst({
       where: {
@@ -78,19 +78,27 @@ export class OAuthController {
       return res.redirect(`${frontendBase}?error=${encodeURIComponent('oauth_disabled')}`);
     }
     const state = crypto.randomBytes(32).toString('hex');
-    res.cookie('oauth_state', state, {
+    const cookie = {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      sameSite: 'lax' as const,
       maxAge: 10 * 60 * 1000,
       path: '/apiv1/auth'
-    });
-    const authUrl = await this.oauthService.getAuthorizationUrl(state);
+    };
+    res.cookie('oauth_state', state, cookie);
+    let challenge: string | undefined;
+    if (await this.oauthService.usesPkce()) {
+      const verifier = crypto.randomBytes(32).toString('base64url');
+      challenge = crypto.createHash('sha256').update(verifier).digest('base64url');
+      res.cookie('oauth_pkce', verifier, cookie);
+    }
+    const authUrl = await this.oauthService.getAuthorizationUrl(state, challenge);
     return res.redirect(authUrl);
   }
 
   private clearOauthStateCookie(res: Response) {
     res.clearCookie('oauth_state', { path: '/apiv1/auth' });
+    res.clearCookie('oauth_pkce', { path: '/apiv1/auth' });
   }
 
   private getClientIp(req: Request): string {
@@ -135,10 +143,11 @@ export class OAuthController {
         `${frontendBase}/oauth/callback?error=${encodeURIComponent('invalid_state')}`
       );
     }
+    const codeVerifier = (req as any).cookies?.oauth_pkce as string | undefined;
     this.clearOauthStateCookie(res);
 
     try {
-      const accessToken = await this.oauthService.exchangeCodeForToken(code);
+      const accessToken = await this.oauthService.exchangeCodeForToken(code, codeVerifier);
       const hackClubUser = await this.oauthService.getUserInfo(accessToken);
 
       let existingUser = await this.prisma.user.findUnique({
@@ -150,7 +159,10 @@ export class OAuthController {
           where: accountEmail(hackClubUser.email)
         });
         if (emailOwner) {
-          if (emailOwner.externalAuthId && emailOwner.externalAuthId !== hackClubUser.id) {
+          if (
+            !hackClubUser.emailVerified ||
+            (emailOwner.externalAuthId && emailOwner.externalAuthId !== hackClubUser.id)
+          ) {
             // Existing account is already linked to a different Hack Club
             // identity: refuse with a generic error to avoid an enumeration
             // oracle.
@@ -184,7 +196,10 @@ export class OAuthController {
         );
       }
 
-      const hasAccess = await this.hasPrivateBetaAccess(hackClubUser.email, existingUser);
+      const hasAccess = await this.hasPrivateBetaAccess(
+        hackClubUser.emailVerified ? hackClubUser.email : null,
+        existingUser
+      );
       if (!hasAccess) {
         return res.redirect(
           `${frontendBase}/oauth/callback?error=${encodeURIComponent(signupDeniedError())}`

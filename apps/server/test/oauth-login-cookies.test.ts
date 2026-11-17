@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { AddressInfo } from 'node:net';
@@ -212,7 +213,7 @@ test('the SSO start cookie is HttpOnly and host-only, and only drops SameSite to
   assert.equal(ssoStartCookie({}), undefined);
 });
 
-type Identity = { id: string; email: string; name: string };
+type Identity = { id: string; email: string; name: string; emailVerified?: boolean };
 
 function oauthWorld(
   opts: {
@@ -224,21 +225,32 @@ function oauthWorld(
     instanceSso?: boolean;
     exchangeFails?: boolean;
     enabled?: boolean;
+    pkce?: boolean;
   } = {}
 ) {
-  const identity = opts.identity ?? { id: 'hc-1', email: 'ada@example.com', name: 'Ada L' };
+  const identity = opts.identity ?? {
+    id: 'hc-1',
+    email: 'ada@example.com',
+    name: 'Ada L',
+    emailVerified: true
+  };
   const users = opts.users ?? [];
   const calls = {
     exchanged: [] as string[],
+    verifiers: [] as (string | undefined)[],
     sessions: [] as any[],
     revoked: [] as [string, string][],
     linked: [] as Identity[]
   };
   const oauthService: any = {
     oauthEnabled: opts.enabled ?? true,
-    getAuthorizationUrl: async (state: string) => `https://auth.idp.test/authorize?state=${state}`,
-    exchangeCodeForToken: async (code: string) => {
+    usesPkce: async () => opts.pkce ?? false,
+    getAuthorizationUrl: async (state: string, challenge?: string) =>
+      `https://auth.idp.test/authorize?state=${state}` +
+      (challenge ? `&code_challenge=${challenge}&code_challenge_method=S256` : ''),
+    exchangeCodeForToken: async (code: string, verifier?: string) => {
       calls.exchanged.push(code);
+      calls.verifiers.push(verifier);
       if (opts.exchangeFails) throw new Error('bad code');
       return 'access-token';
     },
@@ -299,6 +311,10 @@ const cbReq = (cookies: Record<string, string> = {}) =>
   ({ cookies, headers: { 'user-agent': 'test' }, socket: { remoteAddress: '203.0.113.9' } }) as any;
 
 const STATE = 'a'.repeat(64);
+const STATE_CLEARED = [
+  { name: 'oauth_state', opts: { path: '/apiv1/auth' } },
+  { name: 'oauth_pkce', opts: { path: '/apiv1/auth' } }
+];
 
 function noSession(out: ReturnType<typeof response>['out']) {
   assert.equal(
@@ -331,6 +347,8 @@ test('starting the platform OAuth login binds a fresh random state to an HttpOnl
       'the state sent to the IdP is the one bound to this browser'
     );
     assert.notEqual(second.out.cookies[0].value, cookie.value);
+    assert.equal(first.out.cookies.length, 1, 'no PKCE cookie when the IdP does not do PKCE');
+    assert.equal(new URL(first.out.redirects[0]).searchParams.get('code_challenge'), null);
   });
 });
 
@@ -360,7 +378,7 @@ test('a callback whose state does not match the browser cookie is refused before
       const { res, out } = response();
       await controller.callback('code', undefined as any, state as any, cbReq(cookies), res);
       assert.deepEqual(out.redirects, [`${FRONTEND}/oauth/callback?error=invalid_state`]);
-      assert.deepEqual(out.cleared, [{ name: 'oauth_state', opts: { path: '/apiv1/auth' } }]);
+      assert.deepEqual(out.cleared, STATE_CLEARED);
       assert.deepEqual(calls.exchanged, []);
       assert.deepEqual(calls.sessions, []);
       noSession(out);
@@ -381,7 +399,7 @@ test('a matching state signs the user in and always lands on the platform fronte
     const session = out.cookies.find((c) => c.name === 'session_token');
     assert.equal(session?.value, 'jwt-for-sess-1');
     assert.equal(session?.opts.httpOnly, true);
-    assert.deepEqual(out.cleared, [{ name: 'oauth_state', opts: { path: '/apiv1/auth' } }]);
+    assert.deepEqual(out.cleared, STATE_CLEARED);
   });
 });
 
@@ -620,10 +638,63 @@ test('the profile routes on the public auth controller still demand a credential
   });
 });
 
-test.todo(
-  'the platform OAuth login sends a PKCE challenge and proves the verifier at the code exchange'
-);
+test('the platform OAuth login sends a PKCE challenge and proves the verifier at the code exchange', async () => {
+  await withEnv({ NODE_ENV: 'production', SIGNUP_MODE: 'open' }, async () => {
+    const { controller, calls } = oauthWorld({ pkce: true });
+    const login = response();
+    await controller.login(login.res);
+    const verifier = login.out.cookies.find((c) => c.name === 'oauth_pkce');
+    assert.ok(verifier, 'the verifier is bound to this browser');
+    assert.match(verifier.value, /^[A-Za-z0-9_-]{43}$/);
+    assert.deepEqual(verifier.opts, login.out.cookies[0].opts);
+    const url = new URL(login.out.redirects[0]);
+    assert.equal(url.searchParams.get('code_challenge_method'), 'S256');
+    assert.equal(
+      url.searchParams.get('code_challenge'),
+      createHash('sha256').update(verifier.value).digest('base64url')
+    );
+    const state = login.out.cookies[0].value;
 
-test.todo(
-  'a platform OIDC identity whose userinfo omits email_verified does not adopt an existing account by email'
-);
+    const { res, out } = response();
+    await controller.callback(
+      'code-1',
+      undefined as any,
+      state,
+      cbReq({ oauth_state: state, oauth_pkce: verifier.value }),
+      res
+    );
+    assert.deepEqual(calls.verifiers, [verifier.value]);
+    assert.deepEqual(out.cleared, STATE_CLEARED);
+    assert.deepEqual(out.redirects, [`${FRONTEND}/oauth/callback`]);
+  });
+});
+
+test('a platform OIDC identity whose userinfo omits email_verified does not adopt an existing account by email', async () => {
+  await withEnv({ SIGNUP_MODE: 'invite' }, async () => {
+    const { controller, calls } = oauthWorld({
+      identity: { id: 'idp-9', email: 'ada@example.com', name: 'Ada', emailVerified: false },
+      users: [{ id: 'u-ada', email: 'ada@example.com', externalAuthId: null, isSuperAdmin: false }],
+      invitation: true
+    });
+    const { res, out } = response();
+    await controller.callback('code', undefined as any, STATE, cbReq({ oauth_state: STATE }), res);
+    assert.deepEqual(out.redirects, [`${FRONTEND}/oauth/callback?error=oauth_failed`]);
+    assert.deepEqual(calls.linked, []);
+    assert.deepEqual(calls.sessions, []);
+    noSession(out);
+  });
+});
+
+test('an unverified email does not count as an invitation outside open signup', async () => {
+  await withEnv({ SIGNUP_MODE: 'invite' }, async () => {
+    const { controller, calls } = oauthWorld({
+      identity: { id: 'idp-9', email: 'invited@example.com', name: 'X', emailVerified: false },
+      invitation: true
+    });
+    const { res, out } = response();
+    await controller.callback('code', undefined as any, STATE, cbReq({ oauth_state: STATE }), res);
+    assert.equal(out.redirects[0].startsWith(`${FRONTEND}/oauth/callback?error=`), true);
+    assert.deepEqual(calls.sessions, []);
+    noSession(out);
+  });
+});

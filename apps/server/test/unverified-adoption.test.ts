@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { OtpService } from '../src/auth/otp.service';
 import { UsersService } from '../src/users/users.service';
 import { hashOtpCode } from '../src/auth/otp-code';
+import { ConflictException } from '@nestjs/common';
 
 process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-secret';
 
@@ -95,7 +96,8 @@ test('OAuth sign-in adopting an unverified row discards every prior credential',
   const found = await users.findOrCreateByExternalAuthId({
     id: 'ext-1',
     email: 'victim@example.com',
-    name: 'Victim'
+    name: 'Victim',
+    emailVerified: true
   });
   assert.equal(found.externalAuthId, 'ext-1');
   assertWiped(state);
@@ -105,11 +107,93 @@ test('OAuth sign-in on an already verified row keeps its credentials', async () 
   const { db, state } = makeDb('victim@example.com', true);
   const users = new UsersService(db, { log: async () => {} } as any, {} as any);
   (users as any).ensureImageUrl = async () => {};
-  await users.findOrCreateByExternalAuthId({ id: 'ext-1', email: 'victim@example.com', name: 'V' });
+  await users.findOrCreateByExternalAuthId({
+    id: 'ext-1',
+    email: 'victim@example.com',
+    name: 'V',
+    emailVerified: true
+  });
   assert.equal(state.user.passwordHash, 'admin-chosen-hash');
   assert.equal(state.passkeys.length, 1);
   assert.equal(state.identities.length, 1);
   assert.ok(state.sessions.every((s) => s.revokedAt === null));
+});
+
+for (const rowVerified of [true, false]) {
+  test(`an identity whose provider did not verify the email never adopts a ${rowVerified ? 'verified' : 'unverified'} row`, async () => {
+    const { db, state } = makeDb('victim@example.com', rowVerified);
+    const before = structuredClone(state);
+    const users = new UsersService(db, { log: async () => {} } as any, {} as any);
+    (users as any).ensureImageUrl = async () => {};
+    await assert.rejects(
+      users.findOrCreateByExternalAuthId({ id: 'ext-1', email: 'victim@example.com', name: 'V' }),
+      ConflictException
+    );
+    assert.deepEqual(state, before);
+  });
+}
+
+function linkedDb(user: Record<string, unknown> | null) {
+  const created: any[] = [];
+  const updated: any[] = [];
+  const db: any = {
+    user: {
+      findUnique: async ({ where }: any) =>
+        user && where.externalAuthId === user.externalAuthId ? user : null,
+      create: async ({ data }: any) => {
+        created.push(data);
+        return { id: 'new', ...data };
+      },
+      update: async ({ data }: any) => {
+        updated.push(data);
+        return { ...user, ...data };
+      }
+    }
+  };
+  const users = new UsersService(db, { log: async () => {} } as any, {} as any);
+  (users as any).ensureImageUrl = async () => {};
+  return { users, created, updated };
+}
+
+test('a new identity is only as verified as its provider says', async () => {
+  for (const emailVerified of [true, false, undefined]) {
+    const { users, created } = linkedDb(null);
+    await users.findOrCreateByExternalAuthId({
+      id: 'ext-9',
+      email: 'new@example.com',
+      name: 'New Person',
+      emailVerified
+    });
+    assert.equal(created[0].emailVerified, emailVerified === true);
+    assert.equal(created[0].emailVerifiedAt instanceof Date, emailVerified === true);
+  }
+});
+
+test('a linked identity whose email changes keeps verification only if the provider vouches', async () => {
+  for (const emailVerified of [true, false]) {
+    const { users, updated } = linkedDb({
+      id: 'u1',
+      externalAuthId: 'ext-1',
+      email: 'old@example.com',
+      emailVerified: true
+    });
+    await users.findOrCreateByExternalAuthId({
+      id: 'ext-1',
+      email: 'moved@example.com',
+      name: 'V',
+      emailVerified
+    });
+    assert.equal(updated[0].email, 'moved@example.com');
+    assert.equal(updated[0].emailVerified, emailVerified);
+  }
+  const { users, updated } = linkedDb({
+    id: 'u1',
+    externalAuthId: 'ext-1',
+    email: 'same@example.com',
+    emailVerified: true
+  });
+  await users.findOrCreateByExternalAuthId({ id: 'ext-1', email: 'same@example.com', name: 'V' });
+  assert.equal(updated[0].emailVerified, undefined);
 });
 
 test('OTP verification of an unverified row discards every prior credential', async () => {
