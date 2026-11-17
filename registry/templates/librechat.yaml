@@ -5,7 +5,7 @@ metadata:
   displayName: 'LibreChat'
   description: 'A ChatGPT-style interface for many providers with agents, files and search. Brings its own MongoDB and Meilisearch.'
   icon: message-square
-  version: '1.1.0'
+  version: '1.1.1'
   category: ai
   tags: ['llm', 'chat', 'openai']
   keywords: ['chatgpt', 'open webui', 'ai assistant', 'hack club ai']

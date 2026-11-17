@@ -5,7 +5,7 @@ metadata:
   displayName: 'Karakeep'
   description: 'A bookmark-everything app with AI tagging and full-page archives. Brings its own Meilisearch and headless Chrome.'
   icon: https://github.com/karakeep-app.png?size=256
-  version: '1.1.0'
+  version: '1.1.1'
   category: reader
   tags: ['bookmarks', 'archive', 'ai']
   keywords: ['hoarder', 'pocket', 'raindrop', 'read later', 'ai tagging']

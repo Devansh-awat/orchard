@@ -5,7 +5,7 @@ metadata:
   displayName: 'Open WebUI'
   description: 'A chat interface for any OpenAI-compatible API, with accounts, history and document uploads.'
   icon: https://github.com/open-webui.png?size=256
-  version: '1.1.0'
+  version: '1.1.1'
   category: ai
   tags: ['llm', 'chat', 'openai', 'ollama']
   keywords: ['chatgpt', 'gpt', 'claude', 'ai assistant', 'rag', 'hack club ai']
