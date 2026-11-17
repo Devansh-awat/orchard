@@ -836,6 +836,12 @@ r2Proxy:
   # fails and the proxy refuses to start instead. Requests for any other bucket
   # are refused, whatever an organization names as its backup bucket.
   allowedBuckets: []
+  # The bucket the proxy binds build cache keys to, rendered as
+  # BUILD_CACHE_BUCKET. Empty takes BUILDKIT_S3_BUCKET from server.env. With
+  # neither, a cache key may use the backup bucket or a bucket only
+  # allowedBuckets lists. Database keys never reach a bucket named only here
+  # or only in allowedBuckets.
+  buildCacheBucket: ""
   # Password for the read-only orchard_r2_proxy postgres role. Left empty, the
   # chart keeps whatever the orchard-r2-proxy-db secret already holds, or mints
   # one on first install.

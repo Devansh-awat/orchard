@@ -102,6 +102,9 @@ spec:
               containerPort: 9000
           env:
             - { name: PROXY_LISTEN, value: ":9000" }
+            {{- with include "orchard.buildCacheBucket" . }}
+            - { name: BUILD_CACHE_BUCKET, value: {{ . | quote }} }
+            {{- end }}
           envFrom:
             - secretRef:
                 name: r2-proxy-upstream

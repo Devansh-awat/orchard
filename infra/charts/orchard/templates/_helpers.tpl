@@ -64,6 +64,16 @@ domain once instead of keeping four values in sync.
 {{- end -}}
 {{- end -}}
 
+{{- define "orchard.buildCacheBucket" -}}
+{{- $set := .Values.r2Proxy.buildCacheBucket | default "" -}}
+{{- if not $set -}}
+{{- range .Values.server.env -}}
+{{- if eq .name "BUILDKIT_S3_BUCKET" }}{{ $set = .value | default "" }}{{ end -}}
+{{- end -}}
+{{- end -}}
+{{- $set -}}
+{{- end -}}
+
 {{/*
 The public origin of the Orchard UI. An explicit server.env FRONTEND_URL wins,
 because it is the one the server itself signs callbacks against, and it is not

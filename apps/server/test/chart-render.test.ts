@@ -730,6 +730,29 @@ test(
 );
 
 test(
+  'the backup proxy learns the build cache bucket from its value or the server env',
+  { skip: !helmAvailable() },
+  () => {
+    const base = [
+      'r2Proxy.upstream.endpoint=https://x.example.com',
+      'r2Proxy.defaultBucket=platform-backups',
+      'r2Proxy.databasePassword=p'
+    ];
+    const proxyDeployment = (sets: string[]) =>
+      docs(render([...base, ...sets])).find(
+        (d) => d.includes('kind: Deployment') && d.includes('name: r2-proxy')
+      )!;
+    assert.ok(!proxyDeployment([]).includes('BUILD_CACHE_BUCKET'));
+    const fromServer = ['server.env[0].name=BUILDKIT_S3_BUCKET', 'server.env[0].value=cache'];
+    assert.match(proxyDeployment(fromServer), /name: BUILD_CACHE_BUCKET, value: "cache"/);
+    assert.match(
+      proxyDeployment([...fromServer, 'r2Proxy.buildCacheBucket=explicit']),
+      /name: BUILD_CACHE_BUCKET, value: "explicit"/
+    );
+  }
+);
+
+test(
   'an upstream endpoint without a bucket allowlist does not render',
   { skip: !helmAvailable() },
   () => {

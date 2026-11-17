@@ -522,6 +522,7 @@ Both off by default, and both need the runtime on every node first, or pods fail
 | `r2Proxy.upstream.*` | | Endpoint, region and the real R2 key pair. Only the proxy ever holds these. Empty with `objectStorage.local.enabled` points the proxy at the local store. |
 | `r2Proxy.defaultBucket` | `""` | Bucket for organizations without their own. Also the default of the proxy's `ALLOWED_BUCKETS`. Required, unless `r2Proxy.allowedBuckets` is set, when `r2Proxy.upstream.endpoint` is set: the render fails otherwise. |
 | `r2Proxy.allowedBuckets` | `[]` | The only buckets the proxy signs with the platform credentials, rendered as `ALLOWED_BUCKETS`. An empty allowlist never means "every bucket": the chart refuses to render and the proxy refuses to start. A bucket an organization names as its backup bucket does not widen this list. |
+| `r2Proxy.buildCacheBucket` | `""` | The bucket the proxy binds build cache keys to, rendered as `BUILD_CACHE_BUCKET`. Empty takes `BUILDKIT_S3_BUCKET` from `server.env`. With neither, a cache key may use the backup bucket or a bucket only `allowedBuckets` lists. Database keys only reach backup buckets: `defaultBucket` and the buckets saved under Instance admin. |
 | `r2Proxy.databasePassword` | `""` | Password for the read-only `orchard_r2_proxy` postgres role. Empty keeps whatever the `orchard-r2-proxy-db` secret already holds, or mints one on first install. |
 | `r2Proxy.databaseUrl` | `""` | Full override for a database the chart does not run. Give it a read-only role. |
 
