@@ -18,6 +18,7 @@
     "apps/frontend/AGENTS.md",
     "**/*.generated.ts",
     "**/*.generated.json",
+    "grafts/*/graft.json",
     "packages/contracts/openapi.json",
     "packages/contracts/agent-spec.json",
     "packages/contracts/test/fixtures/**",
