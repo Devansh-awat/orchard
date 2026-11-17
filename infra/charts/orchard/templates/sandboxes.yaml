@@ -1,10 +1,13 @@
 {{- if include "orchard.sandboxInstalled" . }}
 {{- $sns := .Values.sandbox.namespace -}}
 {{- $appNs := .Values.namespace -}}
-# PSA privileged for the same reason as orchard-builders: the sandbox
-# container mounts/formats its block-device home in-guest, and the kata VM
-# is the real host boundary. The NetworkPolicy below is the actual
-# containment surface.
+{{- $psa := ternary "privileged" "baseline" (not (empty .Values.sandbox.runtimeClassName)) -}}
+# With a runtimeClassName, PSA is privileged for the same reason as
+# orchard-builders: the sandbox container mounts/formats its block-device home
+# in-guest, and the kata VM is the real host boundary. Without one, machines
+# run on runc with a reduced capability set and RuntimeDefault seccomp, and the
+# namespace enforces baseline. Must match namespaceManifest() in the server's
+# kubernetes runner, which re-applies this object on every leader election.
 apiVersion: v1
 kind: Namespace
 metadata:
@@ -12,9 +15,9 @@ metadata:
   labels:
     app.kubernetes.io/managed-by: leaf
     purpose: ai-sandboxes
-    pod-security.kubernetes.io/enforce: privileged
-    pod-security.kubernetes.io/audit: privileged
-    pod-security.kubernetes.io/warn: privileged
+    pod-security.kubernetes.io/enforce: {{ $psa }}
+    pod-security.kubernetes.io/audit: {{ $psa }}
+    pod-security.kubernetes.io/warn: {{ $psa }}
 ---
 apiVersion: v1
 kind: ResourceQuota

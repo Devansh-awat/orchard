@@ -118,6 +118,31 @@ export const SANDBOX_INGRESS_PORTS: readonly number[] = [
 ];
 export const SANDBOX_NETPOL_KEY = 'sandboxes:netpol';
 
+export const RUNC_MACHINE_CAPABILITIES: readonly string[] = [
+  'AUDIT_WRITE',
+  'CHOWN',
+  'DAC_OVERRIDE',
+  'FOWNER',
+  'FSETID',
+  'KILL',
+  'NET_BIND_SERVICE',
+  'SETGID',
+  'SETUID',
+  'SYS_CHROOT'
+];
+
+export function runcMachineSecurityContext(): Record<string, any> {
+  return {
+    privileged: false,
+    seccompProfile: { type: 'RuntimeDefault' },
+    capabilities: { drop: ['ALL'], add: [...RUNC_MACHINE_CAPABILITIES] }
+  };
+}
+
+export function sandboxPodSecurityLevel(): 'privileged' | 'baseline' {
+  return process.env.SANDBOX_RUNTIME_CLASS ? 'privileged' : 'baseline';
+}
+
 export function sandboxHomeMode(): 'block' | 'filesystem' {
   const mode = process.env.SANDBOX_HOME_MODE || 'auto';
   if (mode === 'block' || mode === 'filesystem') return mode;
@@ -553,6 +578,7 @@ export class KubernetesSandboxRunner implements SandboxRunner {
   }
 
   namespaceManifest(): k8s.KubernetesObject {
+    const level = sandboxPodSecurityLevel();
     return {
       apiVersion: 'v1',
       kind: 'Namespace',
@@ -560,9 +586,9 @@ export class KubernetesSandboxRunner implements SandboxRunner {
         name: this.namespace,
         labels: {
           'app.kubernetes.io/managed-by': 'Helm',
-          'pod-security.kubernetes.io/enforce': 'privileged',
-          'pod-security.kubernetes.io/audit': 'privileged',
-          'pod-security.kubernetes.io/warn': 'privileged'
+          'pod-security.kubernetes.io/enforce': level,
+          'pod-security.kubernetes.io/audit': level,
+          'pod-security.kubernetes.io/warn': level
         },
         annotations: {
           'meta.helm.sh/release-name': 'orchard',
@@ -1076,6 +1102,7 @@ export class KubernetesSandboxRunner implements SandboxRunner {
       container.securityContext = { privileged: true };
     } else {
       container.volumeMounts.push({ name: 'home', mountPath: '/persist' });
+      if (!runtimeClass) container.securityContext = runcMachineSecurityContext();
     }
     const labels = this.labels(spec, instanceId);
     return {

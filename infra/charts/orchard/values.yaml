@@ -1070,8 +1070,15 @@ builderSandbox:
 #      them).
 #   2. For VM isolation: a kata RuntimeClass on the nodes (same requirement
 #      as builderSandbox). Leave runtimeClassName empty on clusters without
-#      kata; machines then run unprivileged on runc with a Filesystem-mode
-#      home PVC (slower, no block-device fast path).
+#      kata; machines then run on runc with a Filesystem-mode home PVC
+#      (slower, no block-device fast path). On runc the machine's init runs
+#      as root and its user has passwordless sudo, so the boundary is the
+#      container: every capability dropped except AUDIT_WRITE, CHOWN,
+#      DAC_OVERRIDE, FOWNER, FSETID, KILL, NET_BIND_SERVICE, SETGID, SETUID
+#      and SYS_CHROOT, RuntimeDefault seccomp, and a namespace that enforces
+#      the baseline Pod Security Standard. Machines share the node kernel, so
+#      a kernel escape reaches every machine on the node; use kata when
+#      machine users are not trusted.
 #   3. For forking: a VolumeSnapshotClass whose driver matches the home
 #      volume StorageClass. Without one, forking is not offered.
 # The default image ships sshd, git, tmux, Node.js, every supported agent

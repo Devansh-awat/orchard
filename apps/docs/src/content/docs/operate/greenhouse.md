@@ -79,7 +79,7 @@ The runner is on by default.
 
 With a [Kata RuntimeClass](/operate/security/#kernel-isolation), each machine is a lightweight VM. Its home volume is a raw block device, formatted inside the VM, and it needs a privileged container inside the VM. The chart default for `sandbox.runtimeClassName` is `kata`.
 
-Without Kata, set `sandbox.runtimeClassName` to empty. Machines then run on `runc` with a filesystem volume and no privileges. A machine whose home volume is already a block device does not start on `runc`. Restore the RuntimeClass, or delete the machine.
+Without Kata, set `sandbox.runtimeClassName` to empty. Machines then run on `runc` with a filesystem volume. The machine starts as root and its user has passwordless `sudo`, so the container is the boundary: it drops every capability except `AUDIT_WRITE`, `CHOWN`, `DAC_OVERRIDE`, `FOWNER`, `FSETID`, `KILL`, `NET_BIND_SERVICE`, `SETGID`, `SETUID` and `SYS_CHROOT`, uses the `RuntimeDefault` seccomp profile, and the sandbox namespace enforces the `baseline` Pod Security Standard. Machines share the node kernel, so use Kata when machine users are not trusted. A machine whose home volume is already a block device does not start on `runc`. Restore the RuntimeClass, or delete the machine.
 
 ### Storage
 

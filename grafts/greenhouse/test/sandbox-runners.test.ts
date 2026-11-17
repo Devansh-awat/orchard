@@ -564,12 +564,132 @@ test('a block home never runs as a privileged container without a VM runtime', (
     );
     delete process.env.SANDBOX_HOME_MODE;
     const cr = runner.buildCr({ ...ROW, setupScript: null } as never, 'inst-1', null);
-    assert.equal(cr.spec.podTemplate.spec.containers[0].securityContext, undefined);
+    assert.equal(cr.spec.podTemplate.spec.containers[0].securityContext.privileged, false);
   } finally {
     if (prevClass !== undefined) process.env.SANDBOX_RUNTIME_CLASS = prevClass;
     if (prevMode === undefined) delete process.env.SANDBOX_HOME_MODE;
     else process.env.SANDBOX_HOME_MODE = prevMode;
   }
+});
+
+function withSandboxEnv<T>(env: Record<string, string | undefined>, fn: () => T): T {
+  const prev: Record<string, string | undefined> = {};
+  for (const key of Object.keys(env)) {
+    prev[key] = process.env[key];
+    if (env[key] === undefined) delete process.env[key];
+    else process.env[key] = env[key];
+  }
+  try {
+    return fn();
+  } finally {
+    for (const [key, value] of Object.entries(prev)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+}
+
+const BASELINE_CAPABILITIES = new Set([
+  'AUDIT_WRITE',
+  'CHOWN',
+  'DAC_OVERRIDE',
+  'FOWNER',
+  'FSETID',
+  'KILL',
+  'MKNOD',
+  'NET_BIND_SERVICE',
+  'SETFCAP',
+  'SETGID',
+  'SETPCAP',
+  'SETUID',
+  'SYS_CHROOT'
+]);
+
+test('a machine on runc drops capabilities, runs under RuntimeDefault seccomp and keeps sudo', () => {
+  const { runner } = k8sRunner();
+  const cr = withSandboxEnv(
+    { SANDBOX_RUNTIME_CLASS: undefined, SANDBOX_HOME_MODE: undefined },
+    () => runner.buildCr({ ...ROW, setupScript: null } as never, 'inst-1', null)
+  );
+  const pod = cr.spec.podTemplate.spec;
+  assert.equal(pod.runtimeClassName, undefined);
+  assert.equal(pod.hostNetwork, undefined);
+  assert.equal(pod.hostPID, undefined);
+  assert.equal(pod.hostIPC, undefined);
+  assert.equal(pod.automountServiceAccountToken, false);
+  const container = pod.containers[0];
+  assert.equal(container.volumeDevices, undefined);
+  assert.deepEqual(container.securityContext, {
+    privileged: false,
+    seccompProfile: { type: 'RuntimeDefault' },
+    capabilities: {
+      drop: ['ALL'],
+      add: [
+        'AUDIT_WRITE',
+        'CHOWN',
+        'DAC_OVERRIDE',
+        'FOWNER',
+        'FSETID',
+        'KILL',
+        'NET_BIND_SERVICE',
+        'SETGID',
+        'SETUID',
+        'SYS_CHROOT'
+      ]
+    }
+  });
+  assert.ok(!container.securityContext.capabilities.add.includes('NET_RAW'));
+  assert.notEqual(container.securityContext.allowPrivilegeEscalation, false);
+  for (const cap of container.securityContext.capabilities.add) {
+    assert.ok(BASELINE_CAPABILITIES.has(cap), `${cap} is outside the baseline set`);
+  }
+  for (const volume of pod.volumes) assert.equal(volume.hostPath, undefined);
+  const again = withSandboxEnv({ SANDBOX_RUNTIME_CLASS: undefined }, () =>
+    runner.buildCr({ ...ROW, setupScript: null } as never, 'inst-1', null)
+  );
+  again.spec.podTemplate.spec.containers[0].securityContext.capabilities.add.push('NET_RAW');
+  assert.ok(!container.securityContext.capabilities.add.includes('NET_RAW'));
+});
+
+test('a machine under a VM runtime keeps its pod spec and privileged namespace', () => {
+  const { runner } = k8sRunner();
+  const block = withSandboxEnv(
+    { SANDBOX_RUNTIME_CLASS: 'kata', SANDBOX_HOME_MODE: undefined },
+    () => runner.buildCr({ ...ROW, setupScript: null } as never, 'inst-1', null)
+  );
+  assert.equal(block.spec.podTemplate.spec.runtimeClassName, 'kata');
+  assert.deepEqual(block.spec.podTemplate.spec.containers[0].securityContext, {
+    privileged: true
+  });
+  const filesystem = withSandboxEnv(
+    { SANDBOX_RUNTIME_CLASS: 'gvisor', SANDBOX_HOME_MODE: 'filesystem' },
+    () => runner.buildCr({ ...ROW, setupScript: null } as never, 'inst-1', null)
+  );
+  assert.equal(filesystem.spec.podTemplate.spec.runtimeClassName, 'gvisor');
+  assert.equal(filesystem.spec.podTemplate.spec.containers[0].securityContext, undefined);
+  const labels = withSandboxEnv(
+    { SANDBOX_RUNTIME_CLASS: 'kata' },
+    () => (runner.namespaceManifest().metadata as any).labels
+  );
+  assert.equal(labels['pod-security.kubernetes.io/enforce'], 'privileged');
+  assert.equal(labels['pod-security.kubernetes.io/audit'], 'privileged');
+  assert.equal(labels['pod-security.kubernetes.io/warn'], 'privileged');
+});
+
+test('the sandbox namespace enforces baseline when machines run on runc', () => {
+  const { runner } = k8sRunner();
+  const labels = withSandboxEnv(
+    { SANDBOX_RUNTIME_CLASS: undefined },
+    () => (runner.namespaceManifest().metadata as any).labels
+  );
+  assert.equal(labels['pod-security.kubernetes.io/enforce'], 'baseline');
+  assert.equal(labels['pod-security.kubernetes.io/audit'], 'baseline');
+  assert.equal(labels['pod-security.kubernetes.io/warn'], 'baseline');
+  const empty = withSandboxEnv(
+    { SANDBOX_RUNTIME_CLASS: '' },
+    () => (runner.namespaceManifest().metadata as any).labels
+  );
+  assert.equal(empty['pod-security.kubernetes.io/enforce'], 'baseline');
 });
 
 test('file writes carry their content on stdin, not in argv', async () => {

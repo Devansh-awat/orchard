@@ -230,6 +230,37 @@ test(
 );
 
 test(
+  'the chart sandbox namespace Pod Security level matches the one the server applies',
+  { skip: !helmAvailable() },
+  () => {
+    const saved = process.env.SANDBOX_RUNTIME_CLASS;
+    const psa = (labels: Record<string, string>) =>
+      ['enforce', 'audit', 'warn'].map((m) => labels[`pod-security.kubernetes.io/${m}`]);
+    const chartNs = (sets: string[]) =>
+      parsed(render(['sandbox.enabled=true', ...sets])).find(
+        (d) => d.kind === 'Namespace' && d.metadata?.name === 'orchard-sandboxes'
+      );
+    const runner = Object.create(KubernetesSandboxRunner.prototype) as KubernetesSandboxRunner;
+    try {
+      for (const [runtimeClass, level] of [
+        ['kata', 'privileged'],
+        ['', 'baseline']
+      ]) {
+        if (runtimeClass) process.env.SANDBOX_RUNTIME_CLASS = runtimeClass;
+        else delete process.env.SANDBOX_RUNTIME_CLASS;
+        const chart = chartNs([`sandbox.runtimeClassName=${runtimeClass}`]);
+        const server = (runner.namespaceManifest().metadata as any).labels;
+        assert.deepEqual(psa(chart.metadata.labels), [level, level, level]);
+        assert.deepEqual(psa(server), [level, level, level]);
+      }
+    } finally {
+      if (saved === undefined) delete process.env.SANDBOX_RUNTIME_CLASS;
+      else process.env.SANDBOX_RUNTIME_CLASS = saved;
+    }
+  }
+);
+
+test(
   'sandbox previews render no route until a preview domain is set',
   { skip: !helmAvailable() },
   () => {

@@ -51,7 +51,8 @@ git helpers against the live container.
 
   k8s     debian:bookworm, bootstrap is PID 1, /orchard-init and the authorized_keys
           directory are read-only mounts rendered from KubernetesSandboxRunner.buildCr
-          and secretData, /persist is a Docker volume, SANDBOX_HOME_MODE=filesystem.
+          and secretData, /persist is a Docker volume, SANDBOX_HOME_MODE=filesystem,
+          and the container keeps only the capabilities buildCr grants on runc.
           Finishes with a pod restart on the same volume.
   vercel  ubuntu:24.04 with Amazon Linux's /etc/skel shape (no .profile), files staged
           by VercelSandboxRunner.pushInit into ${VERCEL_INIT_STAGE}, SANDBOX_HOME_MODE=none,
@@ -1265,7 +1266,9 @@ async function runK8s(
   const runner: any = Object.create(KubernetesSandboxRunner.prototype);
   Object.defineProperty(runner, 'namespace', { value: 'orchard-sandboxes' });
   const prevMode = process.env.SANDBOX_HOME_MODE;
+  const prevClass = process.env.SANDBOX_RUNTIME_CLASS;
   process.env.SANDBOX_HOME_MODE = 'filesystem';
+  delete process.env.SANDBOX_RUNTIME_CLASS;
   const row = sandboxRow('kubernetes', `sbx-smoke-${tag}`);
   const cr = runner.buildCr(
     {
@@ -1281,6 +1284,7 @@ async function runK8s(
   );
   if (prevMode === undefined) delete process.env.SANDBOX_HOME_MODE;
   else process.env.SANDBOX_HOME_MODE = prevMode;
+  if (prevClass !== undefined) process.env.SANDBOX_RUNTIME_CLASS = prevClass;
   const data: Record<string, string> = runner.secretData(secrets);
   const pod = cr.spec.podTemplate.spec;
   const container = pod.containers[0];
@@ -1323,6 +1327,20 @@ async function runK8s(
       if (v !== undefined) envArgs.push('-e', `${e.name}=${v}`);
     } else envArgs.push('-e', `${e.name}=${e.value ?? ''}`);
   }
+  const sc = container.securityContext ?? {};
+  record(
+    suite,
+    'a runc machine runs under RuntimeDefault seccomp with dropped capabilities',
+    sc.seccompProfile?.type === 'RuntimeDefault' &&
+      sc.privileged === false &&
+      (sc.capabilities?.drop ?? []).includes('ALL'),
+    JSON.stringify(sc)
+  );
+  const securityArgs: string[] = [
+    ...(sc.capabilities?.drop ?? []).flatMap((cap: string) => ['--cap-drop', cap]),
+    ...(sc.capabilities?.add ?? []).flatMap((cap: string) => ['--cap-add', cap]),
+    ...(sc.allowPrivilegeEscalation === false ? ['--security-opt', 'no-new-privileges'] : [])
+  ];
   const volume = `orchard-smoke-${tag}`;
   docker(['volume', 'create', '--label', 'orchard-smoke=1', volume]);
   created.volumes.add(volume);
@@ -1341,6 +1359,7 @@ async function runK8s(
       ...mounts,
       ...stubMounts(stubs),
       ...envArgs,
+      ...securityArgs,
       '--entrypoint',
       container.command[0],
       opts.k8sImage,

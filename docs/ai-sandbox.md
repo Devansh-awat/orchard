@@ -185,8 +185,13 @@ Home volume: a `home` claim template. In `block` mode (default when a
 RuntimeClass is set) it is `volumeMode: Block`, attached at `/dev/sandboxhome`,
 formatted ext4 and mounted at `/persist` inside the guest, which needs a
 privileged container inside the Kata VM. In `filesystem` mode it is mounted at
-`/persist` directly, unprivileged. A fork's claim template has a `dataSource`
-pointing at the VolumeSnapshot.
+`/persist` directly. Without a RuntimeClass the container gets
+`runcMachineSecurityContext()`: `RuntimeDefault` seccomp, every capability
+dropped except `RUNC_MACHINE_CAPABILITIES` (what sshd, `su`, `sudo`, agentd and
+package installs need as root), and the namespace enforces PSA `baseline`
+(`sandboxPodSecurityLevel()`). Privilege escalation stays allowed because `dev`
+has passwordless `sudo`. A fork's claim template has a `dataSource` pointing at
+the VolumeSnapshot.
 
 Stop patches `operatingMode: Suspended`; the controller deletes the pod and keeps
 the PVC. Start applies the CR with `Running`.

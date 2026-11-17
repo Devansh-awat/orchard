@@ -611,7 +611,7 @@ AI dev machines. Off by default. Full operator guide:
 | `sandbox.install` | `null` | Renders the machine namespace, ResourceQuota, LimitRange, NetworkPolicy, RBAC and the `SANDBOX_*` settings below. `null` follows `enabled`. Needed for the kubernetes runner of the `greenhouse` graft. |
 | `sandbox.namespace` | `orchard-sandboxes` | Namespace for kubernetes machines. |
 | `sandbox.image` | `ghcr.io/hackclub/orchard/sandbox:latest` | Ships sshd, git, tmux, Node.js and the supported agents, so a machine boots in seconds. With any other image, a bootstrap script installs what is missing on first boot, which is slow. |
-| `sandbox.runtimeClassName` | `kata` | RuntimeClass for machines. Empty runs them on runc, unprivileged, with a Filesystem home PVC. |
+| `sandbox.runtimeClassName` | `kata` | RuntimeClass for machines. Empty runs them on runc with a Filesystem home PVC, a reduced capability set, RuntimeDefault seccomp and a `baseline` Pod Security namespace. |
 | `sandbox.idleTimeoutMinutes` | `60` | Stop machines with no terminal or SSH activity and no busy agent. `0` never. |
 | `sandbox.maxLifetimeHours` | `168` | Stop machines this long after their last start. `0` never. |
 | `sandbox.maxPerUserDefault` | `1` | Default machines per person; overridable per user in `/admin/greenhouse`. |
