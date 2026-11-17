@@ -186,7 +186,7 @@ func newProxyWithUpstream(t *testing.T, keepBody bool) (*Proxy, *[]upstreamHit) 
 	}
 	store := newBindingStore(nil)
 	store.cache[testAccessKey] = cacheEntry{
-		binding:   Binding{AccessKey: testAccessKey, Secret: testSecret, Prefix: prefix},
+		binding:   Binding{AccessKey: testAccessKey, Secret: testSecret, Buckets: backupBuckets, Prefix: prefix},
 		found:     true,
 		expiresAt: time.Now().Add(time.Hour),
 	}
@@ -444,7 +444,7 @@ func storedProxyFixture(t *testing.T) (*Proxy, *[]capturedRequest, *httptest.Ser
 	}
 	store := newBindingStore(nil)
 	store.cache[testAccessKey] = cacheEntry{
-		binding:   Binding{AccessKey: testAccessKey, Secret: testSecret, Prefix: prefix},
+		binding:   Binding{AccessKey: testAccessKey, Secret: testSecret, Buckets: backupBuckets, Prefix: prefix},
 		found:     true,
 		expiresAt: time.Now().Add(time.Hour),
 	}
@@ -455,9 +455,10 @@ func storedProxyFixture(t *testing.T) (*Proxy, *[]capturedRequest, *httptest.Ser
 	}
 	proxy := &Proxy{upstreamService: "s3", policy: store, client: &http.Client{Transport: transport}}
 	proxy.upstreams.Store(&upstreamTable{
-		base:          &upstream{url: endpoint, region: "auto", accessKey: "local-ak", secretKey: "local-sk", pathStyle: true},
-		baseBuckets:   map[string]bool{"local": true},
-		defaultBucket: "local",
+		base:             &upstream{url: endpoint, region: "auto", accessKey: "local-ak", secretKey: "local-sk", pathStyle: true},
+		baseBuckets:      map[string]bool{"local": true},
+		defaultBucket:    "local",
+		envDefaultBucket: "local",
 	})
 	return proxy, captured, mock, endpoint
 }
@@ -1011,5 +1012,169 @@ func TestVirtualHostedUpstreamForwardsTheSameBytesItSigned(t *testing.T) {
 	hit := (*captured)[0]
 	if hit.host != "new."+endpoint.Host || !hit.verified {
 		t.Fatalf("host %q verified %v", hit.host, hit.verified)
+	}
+}
+
+type bucketHits struct{ buckets []string }
+
+func bucketBoundProxy(t *testing.T, binding Binding, table upstreamTable, storedBuckets ...string) (*Proxy, *bucketHits) {
+	t.Helper()
+	hits := &bucketHits{}
+	mock := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		bucket, _ := splitPathStyle(r.URL.Path)
+		hits.buckets = append(hits.buckets, bucket)
+		_, _ = io.Copy(io.Discard, r.Body)
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(mock.Close)
+	upURL, err := url.Parse(mock.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	up := &upstream{url: upURL, region: "auto", accessKey: upstreamAK, secretKey: upstreamSK, pathStyle: true}
+	table.base = up
+	table.stored = map[string]*upstream{}
+	for _, b := range storedBuckets {
+		table.stored[b] = up
+	}
+	binding.AccessKey, binding.Secret = testAccessKey, testSecret
+	store := newBindingStore(nil)
+	store.cache[testAccessKey] = cacheEntry{binding: binding, found: true, expiresAt: time.Now().Add(time.Hour)}
+	proxy := &Proxy{upstreamService: "s3", policy: store, client: mock.Client()}
+	proxy.upstreams.Store(&table)
+	return proxy, hits
+}
+
+type s3Call struct{ name, method, target, body string }
+
+func everyOperation(bucket, p string) []s3Call {
+	object := "/" + bucket + "/" + p + "base/x"
+	return []s3Call{
+		{"head bucket", "HEAD", "/" + bucket, ""},
+		{"head object", "HEAD", object, ""},
+		{"get object", "GET", object, ""},
+		{"put object", "PUT", object, "x"},
+		{"delete object", "DELETE", object, ""},
+		{"list v2", "GET", "/" + bucket + "?list-type=2&prefix=" + p, ""},
+		{"list v1", "GET", "/" + bucket + "?prefix=" + p, ""},
+		{"multipart initiate", "POST", object + "?uploads", ""},
+		{"multipart upload part", "PUT", object + "?partNumber=1&uploadId=u", "x"},
+		{"multipart list parts", "GET", object + "?uploadId=u", ""},
+		{"multipart complete", "POST", object + "?uploadId=u", "<CompleteMultipartUpload/>"},
+		{"multipart abort", "DELETE", object + "?uploadId=u", ""},
+		{"multi-delete", "POST", "/" + bucket + "?delete", "<Delete><Object><Key>" + p + "wal/1</Key></Object></Delete>"},
+	}
+}
+
+func assertBuckets(t *testing.T, proxy *Proxy, hits *bucketHits, p string, own, others []string) {
+	t.Helper()
+	for _, bucket := range own {
+		for _, op := range everyOperation(bucket, p) {
+			before := len(hits.buckets)
+			rec := serve(proxy, op.method, op.target, op.body, nil)
+			if rec.Code != http.StatusOK || len(hits.buckets) != before+1 || hits.buckets[before] != bucket {
+				t.Errorf("%s on its own bucket %q: status %d, upstream %v", op.name, bucket, rec.Code, hits.buckets[before:])
+			}
+		}
+	}
+	for _, bucket := range others {
+		for _, op := range everyOperation(bucket, p) {
+			before := len(hits.buckets)
+			rec := serve(proxy, op.method, op.target, op.body, nil)
+			if rec.Code != http.StatusForbidden || len(hits.buckets) != before {
+				t.Errorf("%s on bucket %q: status %d, upstream %v", op.name, bucket, rec.Code, hits.buckets[before:])
+			}
+		}
+	}
+}
+
+func boundTable() upstreamTable {
+	return upstreamTable{
+		baseBuckets:      map[string]bool{"backups": true, "cache": true, "dumps": true},
+		defaultBucket:    "backups",
+		envDefaultBucket: "backups",
+		cacheBucket:      "cache",
+	}
+}
+
+func TestDatabaseKeysAreRefusedOnEveryOtherBucket(t *testing.T) {
+	proxy, hits := bucketBoundProxy(t, Binding{Buckets: backupBuckets, Prefix: prefix}, boundTable())
+	assertBuckets(t, proxy, hits, prefix, []string{"backups"}, []string{"cache", "dumps"})
+}
+
+func TestBuildCacheKeysAreRefusedOnEveryOtherBucket(t *testing.T) {
+	cache := "_build-cache/proj-a/"
+	proxy, hits := bucketBoundProxy(t, Binding{Buckets: buildCacheBucket, Prefix: cache}, boundTable())
+	assertBuckets(t, proxy, hits, cache, []string{"cache"}, []string{"backups", "dumps"})
+}
+
+func TestRestoreKeysReadTheSourceOnlyInBackupBuckets(t *testing.T) {
+	b := Binding{Buckets: backupBuckets, Prefix: "ns-a/db-rnew/", ReadPrefixes: []string{"ns-a/db/"}}
+	proxy, hits := bucketBoundProxy(t, b, boundTable(), "old")
+	assertBuckets(t, proxy, hits, "ns-a/db-rnew/", []string{"backups", "old"}, []string{"cache", "dumps"})
+	for _, bucket := range []string{"backups", "old"} {
+		if rec := serve(proxy, "GET", "/"+bucket+"/ns-a/db/base/x", "", nil); rec.Code != http.StatusOK {
+			t.Errorf("source read in %q: status %d", bucket, rec.Code)
+		}
+	}
+	before := len(hits.buckets)
+	for _, target := range []string{"/cache/ns-a/db/base/x", "/dumps/ns-a/db/base/x", "/cache?list-type=2&prefix=ns-a/db/"} {
+		if rec := serve(proxy, "GET", target, "", nil); rec.Code != http.StatusForbidden {
+			t.Errorf("GET %s: status %d", target, rec.Code)
+		}
+	}
+	if len(hits.buckets) != before {
+		t.Fatalf("upstream was reached: %v", hits.buckets[before:])
+	}
+}
+
+func TestDatabaseKeysFollowEveryBackupBucketTheServerStored(t *testing.T) {
+	table := upstreamTable{
+		baseBuckets:      map[string]bool{"local": true, "cache": true},
+		defaultBucket:    "new",
+		envDefaultBucket: "local",
+	}
+	proxy, hits := bucketBoundProxy(t, Binding{Buckets: backupBuckets, Prefix: prefix}, table, "new", "old")
+	assertBuckets(t, proxy, hits, prefix, []string{"new", "old", "local"}, []string{"cache"})
+}
+
+func TestBuildCacheKeysWithoutACacheBucketUseTheDefaultOrAnAllowlistOnlyBucket(t *testing.T) {
+	table := upstreamTable{
+		baseBuckets:      map[string]bool{"local": true, "cache": true},
+		defaultBucket:    "new",
+		envDefaultBucket: "local",
+	}
+	cache := "_build-cache/proj-a/"
+	proxy, hits := bucketBoundProxy(t, Binding{Buckets: buildCacheBucket, Prefix: cache}, table, "new", "old")
+	assertBuckets(t, proxy, hits, cache, []string{"new", "cache"}, []string{"local", "old"})
+}
+
+func TestWithoutADefaultBucketDatabaseKeysKeepTheAllowlist(t *testing.T) {
+	table := upstreamTable{baseBuckets: map[string]bool{"a": true, "b": true}}
+	proxy, hits := bucketBoundProxy(t, Binding{Buckets: backupBuckets, Prefix: prefix}, table)
+	assertBuckets(t, proxy, hits, prefix, []string{"a", "b"}, []string{"c"})
+}
+
+func TestKeysThatNameNoBucketAreRefusedEverywhere(t *testing.T) {
+	proxy, hits := bucketBoundProxy(t, Binding{Prefix: prefix}, boundTable())
+	assertBuckets(t, proxy, hits, prefix, nil, []string{"backups", "cache", "dumps"})
+}
+
+func TestScopedKeyPurposesNameTheirBuckets(t *testing.T) {
+	for purpose, want := range map[string]bucketScope{
+		"build-cache":       buildCacheBucket,
+		"database-fork":     backupBuckets,
+		"database-restore":  backupBuckets,
+		"database-drill":    backupBuckets,
+		"database-undelete": backupBuckets,
+		"database-purge":    backupBuckets,
+		"":                  noBuckets,
+		"Build-Cache":       noBuckets,
+		"databases":         noBuckets,
+		"uploads":           noBuckets,
+	} {
+		if got := scopeForPurpose(purpose); got != want {
+			t.Errorf("purpose %q: scope %d, want %d", purpose, got, want)
+		}
 	}
 }

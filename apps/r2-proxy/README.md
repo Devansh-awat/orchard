@@ -21,7 +21,7 @@ request, the proxy:
 1. Looks up the access key in Orchard's Postgres (`databases` and
    `storage_access_keys`). Lookups are cached for 60s, misses for 5s.
 2. Verifies the SigV4 signature against that key's secret.
-3. Checks the request against the key's bucket and prefix
+3. Checks the request against the key's buckets and prefix
    (`<namespace>/<cluster>/`), and allows only the S3 operations barman and
    the build cache use: HEAD bucket, HEAD/GET/PUT/DELETE object, multi-delete,
    list objects and multipart uploads.
@@ -31,6 +31,24 @@ Restore and recovery jobs get short-lived keys that can read the source
 database's prefix and write only their own. When the build cache goes through
 the proxy (`BUILDKIT_S3_VIA_PROXY`), each build gets a key for its project's
 cache prefix.
+
+Every key is bound to buckets by its kind, and a request for any other bucket
+is refused, even one the proxy serves:
+
+- Database keys (backups, restores, forks, restore tests and purges) reach only
+  backup buckets: the current default bucket, `DEFAULT_BACKUP_BUCKET`, and
+  every bucket in `STORED_UPSTREAMS_FILE`. The server only stores backup
+  targets there, and a database keeps archiving to an older one after the
+  default changes. A bucket named only in `ALLOWED_BUCKETS` is not a backup
+  bucket.
+- Build cache keys reach only `BUILD_CACHE_BUCKET`. Without it, they reach the
+  current default bucket or a bucket named only in `ALLOWED_BUCKETS`.
+- A scoped key whose purpose is neither `build-cache` nor `database-*` is
+  refused.
+
+With no default bucket known, from `DEFAULT_BACKUP_BUCKET` or the stored file,
+database keys fall back to every bucket in `ALLOWED_BUCKETS` and the proxy logs
+a warning at startup.
 
 The proxy connects to Postgres as the read-only `orchard_r2_proxy` role.
 
@@ -45,10 +63,13 @@ The proxy connects to Postgres as the read-only `orchard_r2_proxy` role.
 - `R2_ACCESS_KEY`, `R2_SECRET_KEY`: the real credentials. Required when
   `R2_ENDPOINT` is set.
 - `DEFAULT_BACKUP_BUCKET`: bucket for organizations with no backup storage of
-  their own
+  their own. Database keys are bound to it.
 - `ALLOWED_BUCKETS`: comma-separated buckets the platform credentials serve
   (default `DEFAULT_BACKUP_BUCKET`). With `R2_ENDPOINT` set and no bucket named
   here or in `DEFAULT_BACKUP_BUCKET`, the proxy refuses to start.
+- `BUILD_CACHE_BUCKET`: the bucket build cache keys are bound to. Set it to the
+  server's `BUILDKIT_S3_BUCKET` (the chart does, from `r2Proxy.buildCacheBucket`
+  or `server.env`).
 - `STORED_UPSTREAMS_FILE`: JSON the server writes when storage is set under
   Instance admin or with `orchardctl backups s3` (default
   `/etc/r2-proxy/stored/upstreams.json`). Re-read every 15 seconds.

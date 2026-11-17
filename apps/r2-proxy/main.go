@@ -21,7 +21,9 @@
 //	R2_ACCESS_KEY     real access key id
 //	R2_SECRET_KEY     real secret access key
 //	DATABASE_URL      postgres URL pointing at orchard's database (read-only role recommended)
+//	DEFAULT_BACKUP_BUCKET  the instance backup bucket; database keys are bound to it and to every bucket the server stored
 //	ALLOWED_BUCKETS   comma-separated buckets the platform credentials serve (default: DEFAULT_BACKUP_BUCKET); R2_ENDPOINT with neither set refuses to start
+//	BUILD_CACHE_BUCKET  the bucket build cache keys are bound to (default: the backup bucket or a bucket only ALLOWED_BUCKETS names)
 //	STORED_UPSTREAMS_FILE  JSON the server writes when storage is set in the UI, re-read while running
 //
 // Only the subset of S3 that barman/CNPG actually uses is supported:
@@ -59,11 +61,32 @@ import (
 // Version is set via -ldflags "-X main.Version=..." at build time.
 var Version = "dev"
 
+type bucketScope int
+
+const (
+	noBuckets bucketScope = iota
+	backupBuckets
+	buildCacheBucket
+)
+
+const buildCachePurpose = "build-cache"
+
 type Binding struct {
 	AccessKey    string
 	Secret       string
+	Buckets      bucketScope
 	Prefix       string
 	ReadPrefixes []string
+}
+
+func scopeForPurpose(purpose string) bucketScope {
+	switch {
+	case purpose == buildCachePurpose:
+		return buildCacheBucket
+	case strings.HasPrefix(purpose, "database-"):
+		return backupBuckets
+	}
+	return noBuckets
 }
 
 type cacheEntry struct {
@@ -173,6 +196,7 @@ func (s *bindingStore) lookup(ak string) (Binding, bool, error) {
 		return Binding{}, false, err
 	}
 	b.Prefix = ns + "/" + cluster + "/"
+	b.Buckets = backupBuckets
 	if !validPrefix(b.Prefix) {
 		return Binding{}, false, nil
 	}
@@ -206,6 +230,7 @@ func (s *bindingStore) lookupRestore(ctx context.Context, ak string) (Binding, b
 	}
 	b.Prefix = ns + "/" + restoreCluster + "/"
 	b.ReadPrefixes = []string{ns + "/" + sourceCluster + "/"}
+	b.Buckets = backupBuckets
 	if !validPrefix(b.Prefix) || !validPrefix(b.ReadPrefixes[0]) {
 		return Binding{}, false, nil
 	}
@@ -219,7 +244,8 @@ func (s *bindingStore) lookupScoped(ctx context.Context, ak string) (Binding, bo
 		SELECT k.access_key,
 		       k.secret,
 		       k.write_prefix,
-		       k.read_prefixes
+		       k.read_prefixes,
+		       k.purpose
 		FROM storage_access_keys k
 		WHERE k.access_key = $1
 		  AND k.expires_at > (NOW() AT TIME ZONE 'UTC')
@@ -228,12 +254,17 @@ func (s *bindingStore) lookupScoped(ctx context.Context, ak string) (Binding, bo
 
 	var b Binding
 	var reads pq.StringArray
-	err := s.db.QueryRowContext(ctx, q, ak).Scan(&b.AccessKey, &b.Secret, &b.Prefix, &reads)
+	var purpose string
+	err := s.db.QueryRowContext(ctx, q, ak).Scan(&b.AccessKey, &b.Secret, &b.Prefix, &reads, &purpose)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Binding{}, false, nil
 	}
 	if err != nil {
 		log.Printf("[r2-proxy] scoped binding lookup ak=%s error: %v", ak, err)
+		return Binding{}, false, nil
+	}
+	if b.Buckets = scopeForPurpose(purpose); b.Buckets == noBuckets {
+		log.Printf("[r2-proxy] scoped key ak=%s has purpose %q, which names no bucket", ak, purpose)
 		return Binding{}, false, nil
 	}
 	b.Prefix = withSlash(b.Prefix)
@@ -293,10 +324,12 @@ func (u *upstream) requestURL(bucket, key, path, rawQuery string) *url.URL {
 }
 
 type upstreamTable struct {
-	base          *upstream
-	baseBuckets   map[string]bool
-	stored        map[string]*upstream
-	defaultBucket string
+	base             *upstream
+	baseBuckets      map[string]bool
+	stored           map[string]*upstream
+	defaultBucket    string
+	envDefaultBucket string
+	cacheBucket      string
 }
 
 func (t *upstreamTable) forBucket(bucket string) *upstream {
@@ -307,6 +340,33 @@ func (t *upstreamTable) forBucket(bucket string) *upstream {
 		return t.base
 	}
 	return nil
+}
+
+func (t *upstreamTable) isBackupBucket(bucket string) bool {
+	if bucket == "" {
+		return false
+	}
+	if bucket == t.defaultBucket || bucket == t.envDefaultBucket {
+		return true
+	}
+	_, ok := t.stored[bucket]
+	return ok
+}
+
+func (t *upstreamTable) permits(scope bucketScope, bucket string) bool {
+	if bucket == "" {
+		return false
+	}
+	switch scope {
+	case backupBuckets:
+		return t.isBackupBucket(bucket) || (t.defaultBucket == "" && t.baseBuckets[bucket])
+	case buildCacheBucket:
+		if t.cacheBucket != "" {
+			return bucket == t.cacheBucket
+		}
+		return bucket == t.defaultBucket || (t.baseBuckets[bucket] && !t.isBackupBucket(bucket))
+	}
+	return false
 }
 
 func (t *upstreamTable) isPlatform(bucket string) bool {
@@ -454,6 +514,10 @@ func main() {
 	if base != nil && len(allowed) == 0 {
 		log.Fatal("R2_ENDPOINT is set but neither ALLOWED_BUCKETS nor DEFAULT_BACKUP_BUCKET names a bucket; refusing to start rather than serve every bucket with the platform credentials")
 	}
+	cacheBucket := strings.TrimSpace(os.Getenv("BUILD_CACHE_BUCKET"))
+	if base != nil && defaultBucket == "" {
+		log.Printf("[r2-proxy] DEFAULT_BACKUP_BUCKET is not set: until the server stores a default bucket, database keys are bound to every bucket in ALLOWED_BUCKETS")
+	}
 
 	store := newBindingStore(db)
 	p := &Proxy{
@@ -467,7 +531,13 @@ func main() {
 	}
 
 	storedPath := envDefault("STORED_UPSTREAMS_FILE", "/etc/r2-proxy/stored/upstreams.json")
-	baseTable := upstreamTable{base: base, baseBuckets: allowed, defaultBucket: defaultBucket}
+	baseTable := upstreamTable{
+		base:             base,
+		baseBuckets:      allowed,
+		defaultBucket:    defaultBucket,
+		envDefaultBucket: defaultBucket,
+		cacheBucket:      cacheBucket,
+	}
 	var lastStored []byte
 	p.reloadStored(storedPath, baseTable, &lastStored)
 	go func() {
@@ -535,6 +605,10 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	table := p.upstreams.Load()
+	if !table.permits(binding.Buckets, bucket) {
+		denyAndLog(w, r, authz.AccessKey, "AccessDenied", "bucket not allowed for this key")
+		return
+	}
 	up := table.forBucket(bucket)
 	if up == nil {
 		denyAndLog(w, r, authz.AccessKey, "AccessDenied", "bucket not served by this proxy")
