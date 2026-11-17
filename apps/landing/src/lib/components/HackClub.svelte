@@ -1,4 +1,9 @@
 <script lang="ts">
+	import hackathon from '$lib/assets/hackclub/hackathon.webp';
+	import soldering from '$lib/assets/hackclub/soldering.webp';
+	import crowd from '$lib/assets/hackclub/crowd.webp';
+	import orpheusBoba from '$lib/assets/hackclub/orpheus-boba.webp';
+	import orpheusLeft from '$lib/assets/brand/hackclub-orpheus-left.svg';
 	import { animate, inView, stagger } from 'motion';
 	import { ArrowUpRight } from 'lucide-svelte';
 	import { links } from '$lib/links';
@@ -6,17 +11,17 @@
 
 	const PHOTOS = [
 		{
-			src: '/hackclub/hackathon.webp',
+			src: hackathon,
 			alt: 'Teenagers coding on sticker-covered laptops at a Hack Club hackathon',
 			style: 'left: 0%; top: 9%; width: 57%; --tilt: -4deg; --tape: -6deg'
 		},
 		{
-			src: '/hackclub/soldering.webp',
+			src: soldering,
 			alt: 'Two teenagers building electronics at a Hack Club event',
 			style: 'left: 47%; top: 0%; width: 50%; --tilt: 3.5deg; --tape: 4deg'
 		},
 		{
-			src: '/hackclub/crowd.webp',
+			src: crowd,
 			alt: 'A crowd of Hack Clubbers smiling behind a table of cupcakes',
 			style: 'left: 24%; top: 47%; width: 54%; --tilt: -1.5deg; --tape: -2deg'
 		}
@@ -98,7 +103,7 @@
 <section id="hackclub" class="relative scroll-mt-24 overflow-x-clip pb-[clamp(5rem,9vw,136px)]">
 	<img
 		{@attach reach()}
-		src="/brand/hackclub-orpheus-left.svg"
+		src={orpheusLeft}
 		alt=""
 		width="280"
 		height="158"
@@ -145,7 +150,7 @@
 			{/each}
 			<img
 				data-sticker
-				src="/hackclub/orpheus-boba.webp"
+				src={orpheusBoba}
 				alt=""
 				width="240"
 				height="300"

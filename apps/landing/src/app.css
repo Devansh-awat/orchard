@@ -2,35 +2,40 @@
 
 @font-face {
 	font-family: 'Plus Jakarta Sans';
-	src: url('/fonts/Plus_Jakarta_Sans/PlusJakartaSans-VariableFont_wght.woff2') format('woff2');
+	src: url('./lib/assets/fonts/Plus_Jakarta_Sans/PlusJakartaSans-VariableFont_wght.woff2')
+		format('woff2');
 	font-weight: 200 800;
 	font-style: normal;
 	font-display: swap;
+	unicode-range: U+0020-007E, U+00A0-017F, U+2000-206F, U+20AC, U+2122, U+2190-21FF, U+2212;
 }
 
 @font-face {
 	font-family: 'Plus Jakarta Sans';
-	src: url('/fonts/Plus_Jakarta_Sans/PlusJakartaSans-Italic-VariableFont_wght.woff2')
+	src: url('./lib/assets/fonts/Plus_Jakarta_Sans/PlusJakartaSans-Italic-VariableFont_wght.woff2')
 		format('woff2');
 	font-weight: 200 800;
 	font-style: italic;
 	font-display: swap;
+	unicode-range: U+0020-007E, U+00A0-017F, U+2000-206F, U+20AC, U+2122, U+2190-21FF, U+2212;
 }
 
 @font-face {
 	font-family: 'Space Mono';
-	src: url('/fonts/Space_Mono/SpaceMono-Regular.woff2') format('woff2');
+	src: url('./lib/assets/fonts/Space_Mono/SpaceMono-Regular.woff2') format('woff2');
 	font-weight: 400;
 	font-style: normal;
 	font-display: swap;
+	unicode-range: U+0020-007E, U+00A0-017F, U+2000-206F, U+20AC, U+2122, U+2190-21FF, U+2212;
 }
 
 @font-face {
 	font-family: 'Space Mono';
-	src: url('/fonts/Space_Mono/SpaceMono-Bold.woff2') format('woff2');
+	src: url('./lib/assets/fonts/Space_Mono/SpaceMono-Bold.woff2') format('woff2');
 	font-weight: 700;
 	font-style: normal;
 	font-display: swap;
+	unicode-range: U+0020-007E, U+00A0-017F, U+2000-206F, U+20AC, U+2122, U+2190-21FF, U+2212;
 }
 
 @theme {
@@ -259,6 +264,64 @@ html[data-intro='cascade'] [data-intro-hide] {
 @keyframes intro-bail-in {
 	to {
 		opacity: 1;
+	}
+}
+
+html[data-intro='cascade'] #hero [data-cascade='nav'] {
+	animation: intro-fade 0.35s ease both;
+}
+
+html[data-intro='cascade'] #hero [data-line] {
+	animation: intro-line 0.5s cubic-bezier(0.22, 1.15, 0.36, 1) var(--intro-delay, 0s) both;
+}
+
+html[data-intro='cascade'] #hero [data-cascade='rise'] {
+	animation: intro-rise 0.5s cubic-bezier(0.22, 1.15, 0.36, 1) var(--intro-delay, 0s) both;
+}
+
+html[data-intro='cascade'] #hero [data-cascade='cta'] {
+	animation: intro-pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) var(--intro-delay, 0s) both;
+}
+
+@keyframes intro-fade {
+	from {
+		opacity: 0.01;
+	}
+	to {
+		opacity: 1;
+	}
+}
+
+@keyframes intro-line {
+	from {
+		opacity: 0.01;
+		transform: translateY(105%);
+	}
+	to {
+		opacity: 1;
+		transform: none;
+	}
+}
+
+@keyframes intro-rise {
+	from {
+		opacity: 0.01;
+		translate: 0 18px;
+	}
+	to {
+		opacity: 1;
+		translate: 0 0;
+	}
+}
+
+@keyframes intro-pop {
+	from {
+		opacity: 0.01;
+		scale: 0.92;
+	}
+	to {
+		opacity: 1;
+		scale: 1;
 	}
 }
 

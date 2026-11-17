@@ -425,7 +425,13 @@
 								class="absolute top-[10px] bottom-[10px] left-[10px] flex w-[196px] flex-col rounded-[14px] border border-[#e8e4e4] bg-white p-[10px]"
 							>
 								<div class="flex items-center gap-2 px-1 py-1">
-									<img src="/logo/logoiconcolor.svg" alt="" class="size-7 rounded-[8px]" />
+									<img
+										src="/logo/logoiconcolor.svg"
+										alt=""
+										width="28"
+										height="28"
+										class="size-7 rounded-[8px]"
+									/>
 									<span class="flex-1 text-[14px] font-semibold">Orchard</span>
 									<ChevronDown size={14} class="text-[#75696b]" />
 								</div>

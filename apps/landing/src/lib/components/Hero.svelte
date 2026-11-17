@@ -79,22 +79,6 @@
 		if (!el || !mode) return;
 		const all = (selector: string) => Array.from(el.querySelectorAll<HTMLElement>(selector));
 
-		animate(all('[data-cascade="nav"]'), { opacity: [0, 1] }, { duration: 0.35 });
-		animate(
-			all('[data-line]'),
-			{ opacity: [0, 1], y: ['105%', '0%'] },
-			{ ...transition('smooth'), delay: stagger(0.09, { startDelay: 0.05 }) }
-		);
-		animate(
-			all('[data-cascade="rise"]'),
-			{ opacity: [0, 1], y: [18, 0] },
-			{ ...transition('smooth'), delay: stagger(0.1, { startDelay: 0.28 }) }
-		);
-		animate(
-			all('[data-cascade="cta"]'),
-			{ opacity: [0, 1], scale: [0.92, 1] },
-			{ ...transition('bouncy'), delay: 0.36 }
-		);
 		animate(
 			all('[data-bloom-band]'),
 			{ opacity: [0, 1], scale: [0.82, 1], rotate: [-10, 0] },
@@ -117,7 +101,7 @@
 	<div
 		class="pointer-events-none absolute -z-10 {box
 			? ''
-			: '-right-[130px] -bottom-[69px] w-[813px] max-w-[130%]'}"
+			: 'invisible -right-[130px] -bottom-[69px] w-[813px] max-w-[130%]'}"
 		style:width={box ? `${box.size}px` : undefined}
 		style:left={box ? `${box.left}px` : undefined}
 		style:top={box ? `${box.top}px` : undefined}
@@ -167,12 +151,12 @@
 				class="text-[clamp(2.5rem,5.2vw,4rem)] leading-[1.26] font-medium"
 			>
 				<span class="block overflow-hidden" aria-hidden="true">
-					<span data-line data-intro-hide class="block">
+					<span data-line data-intro-hide class="block" style="--intro-delay: 0.05s">
 						Your <span class="font-extrabold">own</span> cloud
 					</span>
 				</span>
 				<span class="block overflow-hidden" aria-hidden="true">
-					<span data-line data-intro-hide class="block">
+					<span data-line data-intro-hide class="block" style="--intro-delay: 0.14s">
 						in <em class="pr-[0.04em] font-extrabold">one</em> command
 					</span>
 				</span>
@@ -181,13 +165,20 @@
 			<p
 				data-intro-hide
 				data-cascade="rise"
+				style="--intro-delay: 0.28s"
 				data-measure
 				class="mt-2 max-w-[728px] text-[clamp(1.5rem,2.2vw,2rem)] text-balance text-cream"
 			>
 				Turn a Linux box into a private hosting platform.
 			</p>
 
-			<div data-intro-hide data-cascade="cta" data-measure="box" class="mt-7">
+			<div
+				data-intro-hide
+				data-cascade="cta"
+				data-measure="box"
+				class="mt-7"
+				style="--intro-delay: 0.36s"
+			>
 				<PromptCopy />
 			</div>
 		</div>
@@ -196,7 +187,12 @@
 	<div class="absolute inset-x-0 bottom-0 h-[90px]">
 		<WaveEdge fill="#ffdfe3" />
 		<div class="h-[55px] bg-blush"></div>
-		<div data-intro-hide data-cascade="rise" class="absolute -top-[17px] left-1/2 -translate-x-1/2">
+		<div
+			data-intro-hide
+			data-cascade="rise"
+			class="absolute -top-[17px] left-1/2 -translate-x-1/2"
+			style="--intro-delay: 0.38s"
+		>
 			<ScrollChip />
 		</div>
 	</div>

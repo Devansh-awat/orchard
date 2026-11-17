@@ -1,4 +1,5 @@
 <script lang="ts">
+	import logoTile from '$lib/assets/brand/logo-tile.svg';
 	import { onMount } from 'svelte';
 	import { animate } from 'motion';
 	import { fly } from 'svelte/transition';
@@ -95,7 +96,7 @@
 			aria-label="Back to top"
 			class="shrink-0 rounded-lg p-1 focus-visible:outline-3 focus-visible:outline-cream"
 		>
-			<img src="/brand/logo-tile.svg" alt="" width="32" height="32" class="size-8 rounded-md" />
+			<img src={logoTile} alt="" width="32" height="32" class="size-8 rounded-md" />
 		</a>
 		<span class="h-7 w-px shrink-0 bg-white/30" aria-hidden="true"></span>
 		<a
