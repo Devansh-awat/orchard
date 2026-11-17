@@ -1,6 +1,6 @@
-<img src=".github/assets/banner.png" alt="Orchard" width="100%">
+<img src=".github/assets/banner.png" alt="Hack Club Orchard" width="100%">
 
-# Orchard
+# Hack Club Orchard
 
 ### A project made by [Leafd](https://github.com/LeafdTK)
 
@@ -11,7 +11,7 @@
 
 Turn a Linux server into a private hosting platform.
 
-Orchard is an open-source, self-hosted platform as a service (PaaS) from Hack Club. Connect a repository
+Hack Club Orchard is an open-source, self-hosted platform as a service (PaaS). Connect a repository
 from GitHub, GitLab, Gitea or another Git host, and Orchard builds it and runs it behind HTTPS, with a
 Postgres database that has point-in-time restore from S3-compatible storage, logs, metrics and
 rollbacks. Use the dashboard, the CLI, or your AI agent through the MCP server.
@@ -32,7 +32,7 @@ apps on it.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset=".github/assets/screenshots/project-dark.png">
-  <img src=".github/assets/screenshots/project-light.png" alt="An Orchard project with its apps, databases and recent builds" width="100%">
+  <img src=".github/assets/screenshots/project-light.png" alt="A Hack Club Orchard project with its apps, databases and recent builds" width="100%">
 </picture>
 
 ## Installation
@@ -48,7 +48,7 @@ Orchard runs on 2 GiB of RAM, and 8 GiB is recommended. On a smaller server, the
 curl -fsSL https://assets.orchard.my/install.sh -o orchard-install.sh && sudo bash orchard-install.sh
 ```
 
-![Installing Orchard on a Linux server](.github/assets/install.gif)
+![Installing Hack Club Orchard on a Linux server](.github/assets/install.gif)
 
 > [!IMPORTANT]
 > Deployments are network isolated from each other and from the platform by default (on the Helm chart,
@@ -75,7 +75,7 @@ helm install orchard oci://ghcr.io/hackclub/orchard/charts/orchard \
 The [install guide](https://docs.orchard.hackclub.com/start/install/) has a minimal values file, DNS and every
 flag.
 
-## How Orchard compares
+## How Hack Club Orchard compares
 
 Coolify, Dokploy and CapRover run apps as Docker containers and manage them from a web dashboard. Dokku
 gives you git-push deploys on a Docker host, and Kamal deploys containers to servers you manage over SSH.
