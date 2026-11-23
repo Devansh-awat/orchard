@@ -41,11 +41,22 @@ test('parentPodPath walks one level up and stops at the root', () => {
 });
 
 test('parsePodListing reads NUL-separated records in the order the container lists them', () => {
-  const stdout = ['f\tnginx.conf', 'd\tconf.d', 'l\tlatest', 'o\tfifo', '12', ''].join('\0');
+  const stdout = [
+    'f\tnginx.conf',
+    'd\tconf.d',
+    'l\tlatest',
+    'L\tbin',
+    'b\tdangling',
+    'o\tfifo',
+    '12',
+    ''
+  ].join('\0');
   assert.deepEqual(parsePodListing(stdout), [
     { name: 'nginx.conf', kind: 'file', size: 12 },
     { name: 'conf.d', kind: 'dir', size: null },
-    { name: 'latest', kind: 'symlink', size: null },
+    { name: 'latest', kind: 'symlink', size: null, target: 'file' },
+    { name: 'bin', kind: 'symlink', size: null, target: 'dir' },
+    { name: 'dangling', kind: 'symlink', size: null, target: null },
     { name: 'fifo', kind: 'other', size: null }
   ]);
 });
@@ -103,13 +114,17 @@ test('the listing script lists a real directory through POSIX sh', () => {
     writeFileSync(join(dir, 'nginx.conf'), 'hello');
     writeFileSync(join(dir, '.hidden'), '');
     symlinkSync(join(dir, 'nginx.conf'), join(dir, 'link'));
+    symlinkSync(join(dir, 'conf.d'), join(dir, 'linked.d'));
+    symlinkSync(join(dir, 'missing'), join(dir, 'dangling'));
     const out = execFileSync('/bin/sh', ['-c', LIST_SCRIPT, 'sh', dir]).toString('utf8');
     const entries = parsePodListing(out);
-    assert.deepEqual(entries.map((e) => [e.name, e.kind, e.size]).sort(), [
-      ['.hidden', 'file', 0],
-      ['conf.d', 'dir', null],
-      ['link', 'symlink', null],
-      ['nginx.conf', 'file', 5]
+    assert.deepEqual(entries.map((e) => [e.name, e.kind, e.size, e.target]).sort(), [
+      ['.hidden', 'file', 0, undefined],
+      ['conf.d', 'dir', null, undefined],
+      ['dangling', 'symlink', null, null],
+      ['link', 'symlink', null, 'file'],
+      ['linked.d', 'symlink', null, 'dir'],
+      ['nginx.conf', 'file', 5, undefined]
     ]);
   } finally {
     rmSync(dir, { recursive: true, force: true });

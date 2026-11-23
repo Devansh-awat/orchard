@@ -277,9 +277,15 @@ export class KubernetesController {
     @Query('container') container?: string
   ) {
     assertValidPodName(podName);
-    const ns = await this.resolvePodFileAccess(namespace, podName, req, 'list files in pod');
+    const target = await this.resolvePodFileAccess(
+      namespace,
+      podName,
+      container,
+      req,
+      'list files in pod'
+    );
     const dir = normalizePodPath(path);
-    const entries = await this.podFiles.list(ns, podName, dir, container);
+    const entries = await this.podFiles.list(target.namespace, podName, target.container, dir);
     return { path: dir, entries };
   }
 
@@ -294,40 +300,72 @@ export class KubernetesController {
     @Query('container') container?: string
   ) {
     assertValidPodName(podName);
-    const ns = await this.resolvePodFileAccess(namespace, podName, req, 'download files from pod');
+    const target = await this.resolvePodFileAccess(
+      namespace,
+      podName,
+      container,
+      req,
+      'download files from pod'
+    );
     const file = normalizePodPath(path);
     if (file === '/') throw new BadRequestException('path must name a file');
-    await this.podFiles.assertReadableFile(ns, podName, file, container);
-    res.setHeader('Content-Type', 'application/octet-stream');
-    res.setHeader('Content-Disposition', attachmentDisposition(fileNameFromPath(file)));
-    res.setHeader('X-Content-Type-Options', 'nosniff');
+    await this.podFiles.assertReadableFile(target.namespace, podName, target.container, file);
+    const sendHeaders = () => {
+      res.setHeader('Content-Type', 'application/octet-stream');
+      res.setHeader('Content-Disposition', attachmentDisposition(fileNameFromPath(file)));
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+    };
     const abort = new AbortController();
     res.on('close', () => {
       if (!res.writableFinished) abort.abort();
     });
     try {
-      await this.podFiles.streamFile(ns, podName, file, res, abort.signal, container);
-      if (!res.destroyed) res.end();
-    } catch {
+      await this.podFiles.streamFile(
+        target.namespace,
+        podName,
+        target.container,
+        file,
+        res,
+        abort.signal,
+        sendHeaders
+      );
+    } catch (error) {
+      if (!res.headersSent) throw error;
       res.destroy();
+      return;
     }
+    if (res.destroyed) return;
+    if (!res.headersSent) sendHeaders();
+    res.end();
   }
 
   private async resolvePodFileAccess(
     namespace: string | undefined,
     podName: string,
+    container: string | undefined,
     req: any,
     action: string
-  ): Promise<string> {
+  ): Promise<{ namespace: string; container: string }> {
     const ns = (namespace ?? '').trim();
     if (!ns) throw new BadRequestException('namespace query parameter is required');
     await this.resolveNamespace(ns, req, 'edit', action);
+    let pod: Awaited<ReturnType<K8sWorkloadService['getPod']>> | undefined;
     await assertPodExecable(
-      async (n, name) => (await this.k8sWorkload.getPod(name, n)).metadata?.labels,
+      async (n, name) => {
+        pod = await this.k8sWorkload.getPod(name, n);
+        return pod.metadata?.labels;
+      },
       ns,
       podName
     );
-    return ns;
+    const names = (pod?.spec?.containers ?? []).map((c) => c.name);
+    const requested = container?.trim();
+    if (requested && !names.includes(requested)) {
+      throw new NotFoundException(`Container ${requested} not found in pod ${podName}`);
+    }
+    const target = requested || names[0];
+    if (!target) throw new NotFoundException(`Pod ${podName} has no containers`);
+    return { namespace: ns, container: target };
   }
 
   @Get('endpoints')

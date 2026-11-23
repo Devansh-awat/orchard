@@ -58679,7 +58679,7 @@
     },
     "/pods/{podName}/files": {
       "get": {
-        "description": "Auth: authenticated",
+        "description": "Auth: authenticated (scope: exec)",
         "operationId": "pods_files_list",
         "parameters": [
           {
@@ -58689,6 +58689,36 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "description": "Pod namespace",
+            "in": "query",
+            "name": "namespace",
+            "required": true,
+            "schema": {
+              "description": "Pod namespace",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Absolute directory path (default /)",
+            "in": "query",
+            "name": "path",
+            "required": false,
+            "schema": {
+              "description": "Absolute directory path (default /)",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Container name (defaults to the first container in the pod spec)",
+            "in": "query",
+            "name": "container",
+            "required": false,
+            "schema": {
+              "description": "Container name (defaults to the first container in the pod spec)",
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -58697,7 +58727,61 @@
               "application/json": {
                 "schema": {
                   "additionalProperties": {},
-                  "properties": {},
+                  "properties": {
+                    "entries": {
+                      "items": {
+                        "additionalProperties": {},
+                        "properties": {
+                          "kind": {
+                            "enum": [
+                              "file",
+                              "dir",
+                              "symlink",
+                              "other"
+                            ],
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "size": {
+                            "description": "Size in bytes, for readable regular files",
+                            "type": [
+                              "integer",
+                              "null"
+                            ]
+                          },
+                          "target": {
+                            "description": "What a symlink points at; null when it is dangling or neither",
+                            "enum": [
+                              "file",
+                              "dir",
+                              null
+                            ],
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "kind",
+                          "size"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "path": {
+                      "description": "The normalized directory that was listed",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "path",
+                    "entries"
+                  ],
                   "type": "object"
                 }
               }
@@ -58713,7 +58797,7 @@
             "cookieAuth": []
           }
         ],
-        "summary": "GET /pods/:podName/files",
+        "summary": "List a directory inside a running pod",
         "tags": [
           "pods"
         ]
@@ -58721,7 +58805,7 @@
     },
     "/pods/{podName}/files/download": {
       "get": {
-        "description": "Auth: authenticated",
+        "description": "Auth: authenticated (scope: exec)",
         "operationId": "pods_files_download_get",
         "parameters": [
           {
@@ -58729,6 +58813,36 @@
             "name": "podName",
             "required": true,
             "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Pod namespace",
+            "in": "query",
+            "name": "namespace",
+            "required": true,
+            "schema": {
+              "description": "Pod namespace",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Absolute path of a readable regular file",
+            "in": "query",
+            "name": "path",
+            "required": false,
+            "schema": {
+              "description": "Absolute path of a readable regular file",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Container name (defaults to the first container in the pod spec)",
+            "in": "query",
+            "name": "container",
+            "required": false,
+            "schema": {
+              "description": "Container name (defaults to the first container in the pod spec)",
               "type": "string"
             }
           }
@@ -58755,7 +58869,7 @@
             "cookieAuth": []
           }
         ],
-        "summary": "GET /pods/:podName/files/download",
+        "summary": "Download a file from a running pod as application/octet-stream",
         "tags": [
           "pods"
         ]

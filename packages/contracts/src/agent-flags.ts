@@ -8,7 +8,8 @@ export const SENSITIVE_OPERATIONS = new Set<string>([
   'POST /organizations/:id/notification-channels',
   'POST /auth/tokens',
   'POST /organizations/:id/scim/tokens',
-  'POST /pods/:podName/exec'
+  'POST /pods/:podName/exec',
+  'GET /pods/:podName/files/download'
 ]);
 
 export const DESTRUCTIVE_OPERATIONS = new Set<string>([

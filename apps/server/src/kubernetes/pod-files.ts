@@ -4,10 +4,13 @@ export const POD_PATH_MAX_LENGTH = 4096;
 
 export type PodFileKind = 'file' | 'dir' | 'symlink' | 'other';
 
+export type PodFileLinkTarget = 'file' | 'dir' | null;
+
 export interface PodFileEntry {
   name: string;
   kind: PodFileKind;
   size: number | null;
+  target?: PodFileLinkTarget;
 }
 
 export function normalizePodPath(input: unknown): string {
@@ -32,7 +35,10 @@ export const LIST_SCRIPT = [
   'set --',
   'for f in .[!.]* ..?* *; do',
   '  [ -e "$f" ] || [ -L "$f" ] || continue',
-  '  if [ -L "$f" ]; then t=l',
+  '  if [ -L "$f" ]; then',
+  '    if [ -d "$f" ]; then t=L',
+  '    elif [ -f "$f" ] && [ -r "$f" ]; then t=l',
+  '    else t=b; fi',
   '  elif [ -d "$f" ]; then t=d',
   '  elif [ -f "$f" ] && [ -r "$f" ]; then t=f; set -- "$@" "./$f"',
   '  else t=o; fi',
@@ -49,7 +55,15 @@ const KIND_BY_CODE: Record<string, PodFileKind> = {
   f: 'file',
   d: 'dir',
   l: 'symlink',
+  L: 'symlink',
+  b: 'symlink',
   o: 'other'
+};
+
+const LINK_TARGET_BY_CODE: Record<string, PodFileLinkTarget> = {
+  l: 'file',
+  L: 'dir',
+  b: null
 };
 
 export function parsePodListing(stdout: string): PodFileEntry[] {
@@ -62,10 +76,15 @@ export function parsePodListing(stdout: string): PodFileEntry[] {
       sizes.push(record);
       continue;
     }
-    const kind = KIND_BY_CODE[record.slice(0, tab)];
+    const code = record.slice(0, tab);
+    const kind = KIND_BY_CODE[code];
     const name = record.slice(tab + 1);
     if (!kind || !name) continue;
-    entries.push({ name, kind, size: null });
+    entries.push(
+      kind === 'symlink'
+        ? { name, kind, size: null, target: LINK_TARGET_BY_CODE[code] }
+        : { name, kind, size: null }
+    );
   }
   const files = entries.filter((entry) => entry.kind === 'file');
   if (sizes.length === files.length) {

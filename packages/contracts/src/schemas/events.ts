@@ -126,6 +126,29 @@ export const terminalServerFrame = z
     'Server-to-client frame: raw stdout/stderr bytes (binary), or a text notice before close. Close codes: 1000 shell exited, 4401 access revoked mid-session, 1011 exec error'
   );
 
+const podFileQuery = (path: string) =>
+  z.object({
+    namespace: z.string().describe('Pod namespace'),
+    path: z.string().optional().describe(path),
+    container: z
+      .string()
+      .optional()
+      .describe('Container name (defaults to the first container in the pod spec)')
+  });
+
+export const podFileEntry = z
+  .object({
+    name: z.string(),
+    kind: z.enum(['file', 'dir', 'symlink', 'other']),
+    size: z.number().int().nullable().describe('Size in bytes, for readable regular files'),
+    target: z
+      .enum(['file', 'dir'])
+      .nullable()
+      .optional()
+      .describe('What a symlink points at; null when it is dangling or neither')
+  })
+  .passthrough();
+
 export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
   'GET /events/orgs/:orgId': {
     summary:
@@ -139,6 +162,22 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
         )
     }),
     response: orgEventStreamMessage
+  },
+  'GET /pods/:podName/files': {
+    summary: 'List a directory inside a running pod',
+    scope: 'exec',
+    request: podFileQuery('Absolute directory path (default /)'),
+    response: z
+      .object({
+        path: z.string().describe('The normalized directory that was listed'),
+        entries: z.array(podFileEntry)
+      })
+      .passthrough()
+  },
+  'GET /pods/:podName/files/download': {
+    summary: 'Download a file from a running pod as application/octet-stream',
+    scope: 'exec',
+    request: podFileQuery('Absolute path of a readable regular file')
   },
   'POST /pods/:podName/exec': {
     summary: 'Run a one-shot command in a pod (synchronous, non-streaming)',
