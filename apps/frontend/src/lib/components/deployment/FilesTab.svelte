@@ -10,11 +10,14 @@
 		File,
 		FileSymlink,
 		Folder,
+		FolderSymlink,
 		FolderUp
 	} from 'lucide-svelte';
 	import { apiBase, apiFetch } from '$lib/stores/api';
 	import {
 		formatFileSize,
+		isDownloadable,
+		opensAsFolder,
 		sortPodEntries,
 		type PodFileEntry,
 		type PodFileSort
@@ -317,7 +320,7 @@
 							rows={visibleEntries}
 							rowKey={(e: Entry) => e.name}
 							onRowClick={(e: Entry) => open(e.name)}
-							rowActive={(e: Entry) => e.kind === 'dir'}
+							rowActive={(e: Entry) => opensAsFolder(e)}
 							rowLabel={(e: Entry) => `Open ${e.name}`}
 							inset={false}
 							label="Files in {path}"
@@ -327,6 +330,8 @@
 									<span class="name" title={entry.name}>
 										{#if entry.kind === 'dir'}
 											<Folder size={16} aria-hidden="true" />
+										{:else if opensAsFolder(entry)}
+											<FolderSymlink size={16} aria-hidden="true" />
 										{:else if entry.kind === 'symlink'}
 											<FileSymlink size={16} aria-hidden="true" />
 										{:else}
@@ -342,7 +347,7 @@
 											{formatFileSize(entry.size)}
 										{/if}
 									</span>
-								{:else if (entry.kind === 'file' || entry.kind === 'symlink') && !listingQuery.isPlaceholderData}
+								{:else if isDownloadable(entry) && !listingQuery.isPlaceholderData}
 									<a
 										class="download"
 										href={downloadHref(entry.name)}

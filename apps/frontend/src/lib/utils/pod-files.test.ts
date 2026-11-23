@@ -1,6 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { formatFileSize, sortPodEntries, type PodFileEntry } from './pod-files';
+import {
+	formatFileSize,
+	isDownloadable,
+	opensAsFolder,
+	sortPodEntries,
+	type PodFileEntry
+} from './pod-files';
 
 const entries: PodFileEntry[] = [
 	{ name: 'file10.txt', kind: 'file', size: 300 },
@@ -68,4 +74,22 @@ test('formatFileSize keeps one decimal so close sizes read apart', () => {
 	assert.equal(formatFileSize(1460), '1.4 KB');
 	assert.equal(formatFileSize(1.4 * 1024 * 1024), '1.4 MB');
 	assert.equal(formatFileSize(3 * 1024 ** 3), '3.0 GB');
+});
+
+test('symlinks to folders sort and open as folders, others download only when they reach a file', () => {
+	const linked: PodFileEntry[] = [
+		{ name: 'notes.txt', kind: 'file', size: 1 },
+		{ name: 'bin', kind: 'symlink', size: null, target: 'dir' },
+		{ name: 'latest', kind: 'symlink', size: null, target: 'file' },
+		{ name: 'gone', kind: 'symlink', size: null, target: null }
+	];
+	assert.deepEqual(names(sortPodEntries(linked, null)), ['bin', 'notes.txt', 'latest', 'gone']);
+	assert.deepEqual(
+		linked.filter(opensAsFolder).map((e) => e.name),
+		['bin']
+	);
+	assert.deepEqual(
+		linked.filter(isDownloadable).map((e) => e.name),
+		['notes.txt', 'latest']
+	);
 });

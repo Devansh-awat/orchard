@@ -4,6 +4,15 @@ export interface PodFileEntry {
 	name: string;
 	kind: PodFileKind;
 	size: number | null;
+	target?: 'file' | 'dir' | null;
+}
+
+export function opensAsFolder(entry: PodFileEntry): boolean {
+	return entry.kind === 'dir' || (entry.kind === 'symlink' && entry.target === 'dir');
+}
+
+export function isDownloadable(entry: PodFileEntry): boolean {
+	return entry.kind === 'file' || (entry.kind === 'symlink' && entry.target === 'file');
 }
 
 export type PodFileSortKey = 'name' | 'size';
@@ -16,8 +25,8 @@ export interface PodFileSort {
 const naturalName = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
 
 export function sortPodEntries(entries: PodFileEntry[], sort: PodFileSort | null): PodFileEntry[] {
-	const folders = entries.filter((e) => e.kind === 'dir');
-	const files = entries.filter((e) => e.kind !== 'dir');
+	const folders = entries.filter(opensAsFolder);
+	const files = entries.filter((e) => !opensAsFolder(e));
 	if (!sort) return [...folders, ...files];
 	const direction = sort.dir === 'asc' ? 1 : -1;
 	if (sort.key === 'size') {
