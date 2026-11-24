@@ -790,7 +790,7 @@ fcBuilder:
   terminationGracePeriodSeconds: 90
   resources:
     requests: { cpu: "12", memory: 48Gi }
-    limits: { cpu: "32", memory: 84Gi }
+    limits: { cpu: "32", memory: 108Gi }
   storage:
     # Holds every project's cache disk image. A node-local single-replica class
     # keeps VM disk I/O off the network.
@@ -799,7 +799,7 @@ fcBuilder:
   vm:
     maxVms: 6
     vcpus: 8
-    memoryMiB: 12288
+    memoryMiB: 16384
     idleSeconds: 300
     cacheSize: 50G
     minNodeFreeMiB: 32768
@@ -809,6 +809,8 @@ fcBuilder:
     cgroups: true
   # Queue slots for fast builds across all hosts.
   maxConcurrentBuilds: 16
+  # Builds that may share one VM at once; more wait in the queue.
+  maxBuildsPerVm: 2
   registry:
     # Where the push proxy forwards guest pushes. The proxy is the only place
     # registry credentials exist; guests never see them.

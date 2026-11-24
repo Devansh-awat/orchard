@@ -486,11 +486,12 @@ the PostHog flag `firecracker-builder` (or a per-deployment override) picks the 
 | `fcBuilder.nodeSelector` | `orchard-fc-builder: "true"` | Nodes that may host VMs. They need `/dev/kvm`. |
 | `fcBuilder.tolerations` | `[]` | Tolerations. |
 | `fcBuilder.terminationGracePeriodSeconds` | `90` | Grace period. |
-| `fcBuilder.resources` | requests `12/48Gi`, limits `32/84Gi` | Resource block. |
+| `fcBuilder.resources` | requests `12/48Gi`, limits `32/108Gi` | Resource block. |
 | `fcBuilder.storage.storageClass` / `size` | `longhorn-build-scratch` / `1Ti` | Holds every project's cache disk image. |
-| `fcBuilder.vm.*` | `maxVms: 6`, `vcpus: 8`, `memoryMiB: 12288`, `idleSeconds: 300`, `cacheSize: 50G`, `minNodeFreeMiB: 32768`, `memoryOverheadMiB: 1536` | Per-host VM limits. |
+| `fcBuilder.vm.*` | `maxVms: 6`, `vcpus: 8`, `memoryMiB: 16384`, `idleSeconds: 300`, `cacheSize: 50G`, `minNodeFreeMiB: 32768`, `memoryOverheadMiB: 1536` | Per-host VM limits. |
 | `fcBuilder.jailer.{enabled,cgroups}` | `true`, `true` | Run VMs under the Firecracker jailer. |
 | `fcBuilder.maxConcurrentBuilds` | `16` | Queue slots across all hosts. |
+| `fcBuilder.maxBuildsPerVm` | `2` | Builds that may run at once in one environment's VM. More wait in the queue. |
 | `fcBuilder.registry.{upstream,username,password}` | Harbor core, `""`, `""` | Where the push proxy forwards guest pushes. Guests never see these credentials. |
 | `fcBuilder.registryEgress` | Harbor core on 8080 | In-cluster egress besides DNS and the public internet. |
 
