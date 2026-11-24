@@ -16,6 +16,7 @@ export interface QueueSnapshot {
   waiting: number;
   blockedByOwnBuild: boolean;
   blockedByOrgCap: boolean;
+  blockedByVmCap: boolean;
   pool: 'depot' | 'cluster' | 'firecracker';
 }
 
@@ -43,6 +44,11 @@ export function orgBuildLimit(
 }
 
 const NO_ORG_LIMIT = 2147483647;
+
+export function fcBuildsPerVm(override = process.env.MAX_CONCURRENT_FC_BUILDS_PER_VM) {
+  const parsed = Number(override?.trim() || NaN);
+  return Number.isInteger(parsed) && parsed >= 1 ? parsed : 2;
+}
 
 export function claimFairnessLimits(limits: { local: number; depot: number; fc: number }) {
   const pick = (value: number) => (value > 0 ? value : NO_ORG_LIMIT);
@@ -113,6 +119,8 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
     1,
     parseInt(process.env.MAX_CONCURRENT_FC_BUILDS || '16', 10) || 16
   );
+
+  private readonly maxFcPerVm = fcBuildsPerVm();
 
   private limitFor(pool: BuilderKind): number {
     if (pool === 'depot') return this.maxConcurrentDepot;
@@ -269,6 +277,7 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
           name: true,
           githubRepo: true,
           githubInstallationId: true,
+          namespace: true,
           project: { select: { organizationId: true, organization: { select: { slug: true } } } }
         }
       });
@@ -289,11 +298,19 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
             })
           : 0;
       const orgFull = orgLimit > 0 && buildingForOrg >= orgLimit;
+      const namespace = pool === 'firecracker' ? dep?.namespace : undefined;
+      const buildingForVm = namespace
+        ? await tx.buildRun.count({
+            where: { AND: [poolWhere(pool, 'building'), { deployment: { namespace } }] }
+          })
+        : 0;
+      const vmFull = !!namespace && buildingForVm >= this.maxFcPerVm;
       const startNow =
         buildingForDep === 0 &&
         dep?.buildStatus !== 'building' &&
         buildingInPool < limit &&
-        !orgFull;
+        !orgFull &&
+        !vmFull;
 
       // Counted here rather than after the fact so the caller can say why a
       // build has not started. Without it a queued rebuild is indistinguishable
@@ -327,6 +344,7 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
         waiting: startNow ? waiting : waiting + 1,
         blockedByOwnBuild: buildingForDep > 0 || dep?.buildStatus === 'building',
         blockedByOrgCap: orgFull,
+        blockedByVmCap: vmFull,
         pool: snapshotPool(pool)
       };
       return { startNow, runId: run.id, superseded: stale, deployment: dep, queue };
@@ -588,6 +606,13 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
           AND COALESCE(b3.builder, CASE WHEN d3.build_with_depot THEN 'depot' ELSE 'kubernetes' END)
             = COALESCE(br.builder, CASE WHEN d0.build_with_depot THEN 'depot' ELSE 'kubernetes' END)
       )`;
+      const vmRunning = Prisma.sql`(
+        SELECT COUNT(*) FROM build_runs b4
+        JOIN deployments d4 ON d4.id = b4.deployment_id
+        WHERE b4.status = 'building'
+          AND b4.builder = 'firecracker'
+          AND d4.namespace = d0.namespace
+      )`;
       const rows = await tx.$queryRaw<{ id: string }[]>`
         SELECT br.id
         FROM build_runs br
@@ -597,7 +622,7 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
           AND (
             (${localOpen}::boolean AND COALESCE(br.builder, CASE WHEN d0.build_with_depot THEN 'depot' ELSE 'kubernetes' END) = 'kubernetes' AND ${orgRunning} < ${orgCaps.local}::bigint)
             OR (${depotOpen}::boolean AND COALESCE(br.builder, CASE WHEN d0.build_with_depot THEN 'depot' ELSE 'kubernetes' END) = 'depot' AND ${orgRunning} < ${orgCaps.depot}::bigint)
-            OR (${fcOpen}::boolean AND br.builder = 'firecracker' AND ${orgRunning} < ${orgCaps.fc}::bigint)
+            OR (${fcOpen}::boolean AND br.builder = 'firecracker' AND ${orgRunning} < ${orgCaps.fc}::bigint AND ${vmRunning} < ${this.maxFcPerVm}::bigint)
           )
           AND NOT EXISTS (
             SELECT 1 FROM build_runs b2

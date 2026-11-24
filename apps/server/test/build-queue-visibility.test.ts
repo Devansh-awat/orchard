@@ -23,6 +23,7 @@ const full: QueueSnapshot = {
   waiting: 1,
   blockedByOwnBuild: false,
   blockedByOrgCap: false,
+  blockedByVmCap: false,
   pool: 'cluster'
 };
 
@@ -63,4 +64,10 @@ test('every queued message tells the caller not to retry', () => {
     const build = queuedBuild('run-1', { ...full, blockedByOwnBuild: blocked });
     assert.match(build.message, /don't retry/i);
   }
+});
+
+test('waiting on the environment builder says so', () => {
+  const build = queuedBuild('run-1', { ...full, pool: 'firecracker', blockedByVmCap: true });
+  assert.match(build.message, /Other apps in this environment/);
+  assert.doesNotMatch(build.message, /slots are busy on this instance/);
 });

@@ -9249,7 +9249,9 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       ? 'This app is already building. The queued build starts when that one finishes.'
       : queue.blockedByOrgCap
         ? 'This organization is already using its share of the build slots. The queued build starts when one of its builds finishes.'
-        : `All ${queue.limit} build ${queue.limit === 1 ? 'slot is' : 'slots are'} busy on this instance.`;
+        : queue.blockedByVmCap
+          ? "Other apps in this environment are using all of its builder's slots. The queued build starts when one of them finishes."
+          : `All ${queue.limit} build ${queue.limit === 1 ? 'slot is' : 'slots are'} busy on this instance.`;
     return {
       accepted: true,
       started: false,
