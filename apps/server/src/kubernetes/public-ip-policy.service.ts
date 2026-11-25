@@ -87,7 +87,18 @@ export class PublicIpPolicyService {
   async shareWith(namespace: string, ip: string): Promise<ShareWith> {
     if (this.isInstanceDefault(ip) || (await this.sharingAllowed())) return '*';
     const organizationId = await this.orgOfNamespace(namespace);
-    const own = organizationId ? await this.orgNamespaces(organizationId) : [];
-    return [...new Set([namespace, ...own])].sort();
+    const own = [
+      ...new Set([namespace, ...(organizationId ? await this.orgNamespaces(organizationId) : [])])
+    ].sort();
+    let services: k8s.V1Service[];
+    try {
+      services = (await this.kubernetes.getCoreV1Api().listServiceForAllNamespaces()).body.items;
+    } catch {
+      throw new ServiceUnavailableException(
+        "Couldn't check who else holds this IP because Kubernetes didn't answer. Try again shortly."
+      );
+    }
+    if (foreignHolders(services, canonicalIp(ip) ?? ip, new Set(own)).length > 0) return '*';
+    return own;
   }
 }

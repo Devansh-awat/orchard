@@ -178,3 +178,21 @@ test('cross-namespace sharing is scoped to the org unless sharing is allowed', a
   assert.equal(await policy({ sharing: true }).shareWith('a-app', '203.0.113.7'), '*');
   assert.equal(await policy({ defaultIp: '203.0.113.7' }).shareWith('a-app', '203.0.113.7'), '*');
 });
+
+test('an IP other orgs already hold is never narrowed to one org', async () => {
+  const held = [
+    lb('b-app', 'x', '203.0.113.7', { 'lbipam.cilium.io/sharing-cross-namespace': '*' })
+  ];
+  assert.equal(await policy({ services: held }).shareWith('a-app', '203.0.113.7'), '*');
+  assert.deepEqual(
+    await policy({ services: [lb('a-app-staging', 'x', '203.0.113.7')] }).shareWith(
+      'a-app',
+      '203.0.113.7'
+    ),
+    ['a-app', 'a-app-staging']
+  );
+  await assert.rejects(
+    policy({ services: new Error('connection refused') }).shareWith('a-app', '203.0.113.7'),
+    ServiceUnavailableException
+  );
+});
