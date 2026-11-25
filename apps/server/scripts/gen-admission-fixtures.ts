@@ -249,6 +249,11 @@ async function main() {
       .find((c) => c.method.endsWith('Service') && /create|replace/.test(c.method))!
       .args.slice(-1)[0];
     emit('service-public-db-lb', { apiVersion: 'v1', kind: 'Service', ...dblb }, { user: SERVER });
+    emit(
+      'service-public-db-lb-cluster-admin',
+      { apiVersion: 'v1', kind: 'Service', ...dblb },
+      { user: 'admin', groups: 'system:masters,system:authenticated' }
+    );
 
     calls.length = 0;
     await net.enableProtectionProxy(NS, 'app-ing', []);

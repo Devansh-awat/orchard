@@ -136,6 +136,8 @@ spec:
       expression: "variables.pServerUser != ''"
     - name: server
       expression: "variables.serverKnown && request.userInfo.username == variables.pServerUser"
+    - name: privileged
+      expression: "variables.server || (has(request.userInfo.groups) && 'system:masters' in request.userInfo.groups)"
     - name: ipamRequested
       expression: >-
         (has(object.spec.loadBalancerIP) && object.spec.loadBalancerIP != '') ||
@@ -152,10 +154,10 @@ spec:
     - message: "LoadBalancer Services may only be created by the Orchard server (params.allowLoadBalancer)"
       expression: >-
         variables.type != 'LoadBalancer' ||
-        (variables.pAllowLoadBalancer == 'true' && (!variables.serverKnown || variables.server))
+        (variables.pAllowLoadBalancer == 'true' && (!variables.serverKnown || variables.privileged))
     - message: "load balancer IP pinning and IPAM annotations are reserved for the Orchard server"
       expression: >-
-        !variables.ipamRequested || !variables.serverKnown || variables.server
+        !variables.ipamRequested || !variables.serverKnown || variables.privileged
     - message: "selector-less Services are reserved for the Orchard protection proxy"
       expression: >-
         variables.type == 'ExternalName' || (has(object.spec.selector) && size(object.spec.selector) > 0) ||

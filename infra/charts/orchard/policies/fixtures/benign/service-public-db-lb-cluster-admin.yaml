@@ -1,0 +1,25 @@
+# user: admin
+# groups: system:masters,system:authenticated
+apiVersion: v1
+kind: Service
+metadata:
+  name: db-public
+  namespace: orchard-policy-test
+  labels:
+    app.kubernetes.io/managed-by: orchard
+    cnpg.io/cluster: db
+  annotations:
+    lbipam.cilium.io/sharing-key: shared-203-0-113-7
+    lbipam.cilium.io/sharing-cross-namespace: '*'
+spec:
+  type: LoadBalancer
+  loadBalancerIP: 203.0.113.7
+  externalTrafficPolicy: Cluster
+  selector:
+    cnpg.io/cluster: db
+    cnpg.io/instanceRole: primary
+  ports:
+    - name: postgres
+      port: 31235
+      targetPort: 5432
+      protocol: TCP
