@@ -27,9 +27,9 @@ interface ClusterLike {
 }
 
 interface BackupLike {
-  metadata?: { namespace?: string };
+  metadata?: { namespace?: string; creationTimestamp?: string };
   spec?: { cluster?: { name?: string } };
-  status?: { phase?: string; stoppedAt?: string } | null;
+  status?: { phase?: string; startedAt?: string; stoppedAt?: string } | null;
 }
 
 const TERMINAL = new Set(['completed', 'failed']);
@@ -55,6 +55,20 @@ export function backupFleetGauges(
     if (!at) continue;
     const key = `${b.metadata?.namespace}/${b.spec?.cluster?.name}`;
     lastCompleted.set(key, Math.max(lastCompleted.get(key) ?? 0, at));
+  }
+
+  const latestTerminal = new Map<string, { at: number; failed: boolean }>();
+  for (const b of backups) {
+    const phase = b.status?.phase ?? '';
+    if (!TERMINAL.has(phase)) continue;
+    const at =
+      Date.parse(b.status?.stoppedAt ?? '') ||
+      Date.parse(b.status?.startedAt ?? '') ||
+      Date.parse(b.metadata?.creationTimestamp ?? '') ||
+      0;
+    const key = `${b.metadata?.namespace}/${b.spec?.cluster?.name}`;
+    const prev = latestTerminal.get(key);
+    if (!prev || at >= prev.at) latestTerminal.set(key, { at, failed: phase === 'failed' });
   }
 
   const gauges: FleetGauge[] = [];
@@ -84,6 +98,11 @@ export function backupFleetGauges(
     gauges.push({
       metric: 'orchard.cnpg.backups_waiting',
       value: waiting.get(`${namespace}/${name}`) ?? 0,
+      tags
+    });
+    gauges.push({
+      metric: 'orchard.cnpg.backup_failed',
+      value: latestTerminal.get(key)?.failed ? 1 : 0,
       tags
     });
     const archiving = c.status?.conditions?.find((x) => x.type === 'ContinuousArchiving');

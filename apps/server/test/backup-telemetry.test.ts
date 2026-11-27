@@ -100,3 +100,41 @@ test('a cluster with no backups at all is reported unprotected instead of disapp
   assert.equal(get('orchard.cnpg.down', 'pg-new'), 0);
   assert.equal(get('orchard.cnpg.unprotected', 'pg-new'), 0);
 });
+
+test('backup_failed follows the newest finished backup, so a later success clears it', () => {
+  const clusters = ['pg-ok', 'pg-broken', 'pg-recovered', 'pg-none'].map((name) => ({
+    metadata: { name, namespace: 'ns', creationTimestamp: hoursAgo(500) },
+    spec: { backup: { barmanObjectStore: {} } },
+    status: {}
+  }));
+  const backup = (
+    cluster: string,
+    phase: string,
+    stoppedHoursAgo?: number,
+    createdHoursAgo = 400
+  ) => ({
+    metadata: { namespace: 'ns', creationTimestamp: hoursAgo(createdHoursAgo) },
+    spec: { cluster: { name: cluster } },
+    status: {
+      phase,
+      ...(stoppedHoursAgo === undefined ? {} : { stoppedAt: hoursAgo(stoppedHoursAgo) })
+    }
+  });
+  const backups = [
+    backup('pg-ok', 'completed', 5),
+    backup('pg-broken', 'completed', 30),
+    backup('pg-broken', 'failed', undefined, 6),
+    backup('pg-recovered', 'failed', 30),
+    backup('pg-recovered', 'completed', 2),
+    backup('pg-none', 'running')
+  ];
+  const gauges = backupFleetGauges(clusters, backups, now);
+  const failed = (cluster: string) =>
+    gauges.find(
+      (g) => g.metric === 'orchard.cnpg.backup_failed' && g.tags.includes(`cnpg_cluster:${cluster}`)
+    )?.value;
+  assert.equal(failed('pg-ok'), 0);
+  assert.equal(failed('pg-broken'), 1);
+  assert.equal(failed('pg-recovered'), 0);
+  assert.equal(failed('pg-none'), 0);
+});
